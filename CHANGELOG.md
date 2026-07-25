@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added durable admission reservations for every direct agent task launch. File
+  and SQLite backends atomically enforce one active run per task plus optional
+  global, workspace, root-task, provider, and host ceilings for run slots,
+  process slots, and operator-estimated memory. Versioned decisions distinguish
+  retryable overload from terminal policy denial before attempt persistence or
+  provider dispatch. Lease recovery is bound to verified live supervisors,
+  terminal paths release idempotently, and file heartbeat history compacts
+  atomically. Operators can inspect active and recent reservations through
+  read-scoped REST and `vk admission` JSON commands (#1050).
 - Added a first-class workflow definition browser with deep-linked view, edit, and duplicate routes. Definition detail now exposes agents, ordered steps, phases, inputs, acceptance criteria, gates, loops, parallel branches, outputs, and provenance before execution. Server-owned access evidence distinguishes user-owned, shared, and built-in workflows; read-only definitions explain the restriction and offer duplication when permitted. User-owned edits save through Author with version-bound conflict protection that preserves the draft on failure. Starting a run is now a separate configuration step for optional task association and JSON context (#940).
 - Enforced active phase authority across run tool discovery, mediated
   invocation, approvals, completion evidence, REST, CLI, and the task run

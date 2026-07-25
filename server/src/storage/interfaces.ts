@@ -44,6 +44,12 @@ import type {
   RunSupervisorCompareAndSetResult,
   RunSupervisorListQuery,
   RunSupervisorRecord,
+  AdmissionReservation,
+  AdmissionReservationClaimInput,
+  AdmissionReservationClaimResult,
+  AdmissionReservationCompareAndSetInput,
+  AdmissionReservationCompareAndSetResult,
+  AdmissionReservationListQuery,
   RunToolCatalog,
   ToolServerDefinition,
   ToolServerDiscovery,
@@ -422,6 +428,21 @@ export interface RunSupervisorRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Durable Admission Reservation Repository
+// ---------------------------------------------------------------------------
+
+export interface AdmissionReservationRepository {
+  /** Atomically expire stale leases, evaluate aggregate policies, and reserve capacity. */
+  claim(input: AdmissionReservationClaimInput): Promise<AdmissionReservationClaimResult>;
+  get(id: string): Promise<AdmissionReservation | null>;
+  list(query: AdmissionReservationListQuery): Promise<AdmissionReservation[]>;
+  compareAndSet(
+    input: AdmissionReservationCompareAndSetInput
+  ): Promise<AdmissionReservationCompareAndSetResult>;
+  expireLeases(now: string): Promise<AdmissionReservation[]>;
+}
+
+// ---------------------------------------------------------------------------
 // Run-scoped Tool Control Plane Repository
 // ---------------------------------------------------------------------------
 
@@ -453,6 +474,7 @@ export interface StorageProvider {
   readonly runApprovals: RunApprovalRepository;
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
+  readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
   readonly setupContext?: SetupContextRepository;
 

@@ -923,6 +923,52 @@ Use **Settings -> Agents** and **Settings -> Data & Storage -> Budget Tracking**
 
 Soft thresholds create `budget-policy` governance traces and visible warnings. Hard thresholds can pause for review, require approval, downgrade to a configured model, or cancel the run. Completion packets include the final budget decision, usage, threshold events, related trace IDs, and operator override notes when present.
 
+## Execution Admission
+
+Every direct task launch receives a durable `admission-reservation/v1` record
+before Veritas persists an attempt or calls a provider adapter. Reservations
+account for run slots, process slots, and operator-estimated memory across
+optional global, workspace, root-task, provider, and host ceilings. Estimated
+memory is a configured planning value, not a runtime memory prediction.
+An invariant one-run-per-task policy also prevents concurrent duplicate
+launches across server processes.
+
+Configure ceilings through `PATCH /api/settings/features`:
+
+```json
+{
+  "admission": {
+    "global": {
+      "concurrentRuns": 8,
+      "processSlots": 8,
+      "estimatedMemoryMb": 16384
+    },
+    "providers": {
+      "codex-cli": {
+        "concurrentRuns": 4
+      }
+    },
+    "hosts": {
+      "local-process": {
+        "processSlots": 6
+      }
+    }
+  }
+}
+```
+
+An individual request larger than a ceiling receives a terminal policy denial.
+Temporary exhaustion returns a retryable overload decision with the limiting
+scope and bounded retry guidance. Active leases renew while the verified run is
+live; completion, interruption, cancellation, or launch failure releases the
+reservation idempotently. After restart, only a run verified through its
+durable supervisor may reclaim an expired reservation. Caller-supplied
+idempotency values are represented by a stable SHA-256 identity in durable
+records; the original value is not stored.
+
+Inspect reservations with `vk admission list`, `vk admission get <id>`, or the
+matching read-only REST endpoints. Machine consumers should use `--json`.
+
 ## Local And Cloud Profiles
 
 | Profile            | Provider           | Default command                               | Auth / readiness                                             |

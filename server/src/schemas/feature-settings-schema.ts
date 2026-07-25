@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
-import { BOARD_COLUMN_ID_PATTERN } from '@veritas-kanban/shared';
+import { BOARD_COLUMN_ID_PATTERN, EXECUTABLE_AGENT_PROVIDERS } from '@veritas-kanban/shared';
 
 // Dangerous keys check
 const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
@@ -211,6 +211,54 @@ const BudgetSettingsSchema = z
   .strict()
   .optional();
 
+const AdmissionCapacityRequestSchema = z
+  .object({
+    runSlots: z.number().int().min(1).max(10_000).optional(),
+    processSlots: z.number().int().min(0).max(10_000).optional(),
+    estimatedMemoryMb: z.number().int().min(0).max(100_000_000).optional(),
+  })
+  .strict()
+  .optional();
+
+const AdmissionCapacityLimitSchema = z
+  .object({
+    concurrentRuns: z.number().int().min(0).max(10_000).optional(),
+    processSlots: z.number().int().min(0).max(10_000).optional(),
+    estimatedMemoryMb: z.number().int().min(0).max(100_000_000).optional(),
+  })
+  .strict();
+
+const AdmissionSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    leaseMs: z.number().int().min(5_000).max(300_000).optional(),
+    heartbeatMs: z.number().int().min(1_000).max(100_000).optional(),
+    retryAfterMs: z.number().int().min(250).max(60_000).optional(),
+    defaultRequest: AdmissionCapacityRequestSchema,
+    global: AdmissionCapacityLimitSchema.optional(),
+    workspaces: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
+    rootTasks: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
+    providers: z
+      .partialRecord(z.enum(EXECUTABLE_AGENT_PROVIDERS), AdmissionCapacityLimitSchema)
+      .optional(),
+    hosts: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.heartbeatMs !== undefined &&
+      value.leaseMs !== undefined &&
+      value.heartbeatMs >= value.leaseMs
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'admission.heartbeatMs must be less than admission.leaseMs',
+        path: ['heartbeatMs'],
+      });
+    }
+  })
+  .optional();
+
 const EnforcementSettingsSchema = z
   .object({
     squadChat: z.boolean().optional(),
@@ -351,6 +399,7 @@ const FeatureSettingsPatchObjectSchema = z
     notifications: NotificationSettingsSchema,
     archive: ArchiveSettingsSchema,
     budget: BudgetSettingsSchema,
+    admission: AdmissionSettingsSchema,
     enforcement: EnforcementSettingsSchema,
     hooks: HooksSettingsSchema,
     sharedResources: SharedResourcesSettingsSchema,

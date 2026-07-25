@@ -1284,6 +1284,38 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON phase_transitions(workspace_id, created_at DESC);
     `,
   },
+  {
+    version: 23,
+    name: '0023_durable_admission_reservations',
+    up: `
+      CREATE TABLE admission_reservations (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL DEFAULT 'local',
+        task_id TEXT NOT NULL,
+        root_task_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        host_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('active', 'released', 'expired')),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        idempotency_key TEXT NOT NULL UNIQUE,
+        lease_expires_at TEXT NOT NULL,
+        reservation_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_admission_reservations_scope_state
+        ON admission_reservations(
+          workspace_id, root_task_id, provider, host_id, state, updated_at DESC
+        );
+
+      CREATE INDEX idx_admission_reservations_task
+        ON admission_reservations(task_id, updated_at DESC);
+
+      CREATE INDEX idx_admission_reservations_lease
+        ON admission_reservations(state, lease_expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

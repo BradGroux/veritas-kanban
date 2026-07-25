@@ -405,6 +405,29 @@ describe('Feature Settings Schema', () => {
     expect(result.budget?.enabled).toBe(true);
   });
 
+  it('should validate admission ceilings and lease timing', () => {
+    const result = FeatureSettingsPatchSchema.parse({
+      admission: {
+        leaseMs: 30_000,
+        heartbeatMs: 10_000,
+        global: { concurrentRuns: 8, estimatedMemoryMb: 16_384 },
+        providers: { 'codex-cli': { processSlots: 4 } },
+      },
+    });
+    expect(result.admission?.global?.concurrentRuns).toBe(8);
+    expect(result.admission?.providers?.['codex-cli']?.processSlots).toBe(4);
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: { leaseMs: 10_000, heartbeatMs: 10_000 },
+      })
+    ).toThrow();
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: { defaultRequest: { runSlots: 0 } },
+      })
+    ).toThrow();
+  });
+
   it('should reject unknown keys (strict mode)', () => {
     expect(() => FeatureSettingsPatchSchema.parse({ unknownSection: {} })).toThrow();
   });

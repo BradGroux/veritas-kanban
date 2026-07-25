@@ -234,7 +234,30 @@ describe('agent local capability enforcement', () => {
       commitPolicy: undefined,
       phase: 'implement',
       parentAttemptId: undefined,
+      admissionIdempotencyKey: undefined,
     });
+  });
+
+  it('validates and forwards the idempotency header before agent dispatch', async () => {
+    const app = createApp(auth({ clientMode: 'desktop-local', capabilities: ['desktop:local'] }));
+    const response = await request(app)
+      .post('/api/agents/task_1/start')
+      .set('X-Idempotency-Key', 'launch-request-123')
+      .send({ agent: 'codex', idempotencyKey: 'body-request-456' });
+
+    expect(response.status).toBe(201);
+    expect(mockStartAgent).toHaveBeenCalledWith(
+      'task_1',
+      'codex',
+      expect.objectContaining({ admissionIdempotencyKey: 'launch-request-123' })
+    );
+
+    const invalid = await request(app)
+      .post('/api/agents/task_1/start')
+      .set('X-Idempotency-Key', 'short')
+      .send({ agent: 'codex' });
+    expect(invalid.status).toBe(400);
+    expect(mockStartAgent).toHaveBeenCalledTimes(1);
   });
 
   it('previews launch evidence without dispatching an agent', async () => {

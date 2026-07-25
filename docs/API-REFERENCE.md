@@ -62,6 +62,7 @@
 49. [Versioning & Deprecation](#versioning--deprecation)
 50. [Rate Limits](#rate-limits)
 51. [Additional Endpoint Groups](#additional-endpoint-groups)
+52. [Execution Admission](#execution-admission)
 
 ---
 
@@ -4135,6 +4136,40 @@ Settings live under `features.watcherContinuations` and are updated through
 `PATCH /api/settings/features`. Defaults preserve current behavior:
 continuations are disabled and the global kill switch is active until explicitly
 configured.
+
+---
+
+## Execution Admission
+
+Direct task starts atomically reserve configured run, process, and
+estimated-memory capacity before attempt persistence or provider dispatch.
+Inspection requires `agent:read`.
+
+| Method | Path                 | Description                                             |
+| ------ | -------------------- | ------------------------------------------------------- |
+| `GET`  | `/api/admission`     | List reservations with optional scope and state filters |
+| `GET`  | `/api/admission/:id` | Inspect one durable reservation                         |
+
+List filters are `workspaceId`, `taskId`, `rootTaskId`, `provider`, `hostId`,
+repeatable `state` (`active`, `released`, `expired`), and `limit` (1-1000).
+
+```http
+GET /api/v1/admission?state=active&provider=codex-cli&limit=25
+```
+
+The response contains `admission-reservation/v1` records with the versioned
+request, requested capacity, evaluated limit policies, attempt binding, lease,
+revision, and terminal release evidence. It never contains provider
+credentials. Overloaded task-start requests return a `409` conflict with
+`details.code` set to `ADMISSION_OVERLOAD`, the limiting scope, and bounded
+`retryAfterMs`. A request larger than a configured ceiling returns
+`ADMISSION_POLICY_DENIED`.
+
+Direct `POST /api/v1/agents/:taskId/start` callers may send an opaque
+`X-Idempotency-Key` header (8-240 characters). The header takes precedence
+over the equivalent JSON `idempotencyKey` field and lets a retry reuse the same
+reservation without launching a second attempt. Veritas persists only its
+SHA-256 identity, never the supplied value.
 
 ---
 

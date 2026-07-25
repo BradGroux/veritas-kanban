@@ -224,6 +224,15 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   high-risk environment passthrough are separate classes. Task integration
   credentials fail closed until an accepted tool or egress boundary proves
   brokered, non-bypassable delivery.
+- Atomically persist `admission-reservation/v1` before direct task attempt,
+  pending-run, or provider state. Capacity claims use the storage repository
+  transaction or file lock, not process-local counters. Keep the invariant
+  one-active-run-per-task policy and configured global, workspace, root-task,
+  provider, and host ceilings aligned across dispatch, REST, and `vk`.
+  Persist only a stable digest of caller-supplied idempotency values.
+  Completion, interruption, cancellation, and start failure release once;
+  restart recovery may reclaim only after the durable run supervisor verifies
+  the original live process or session.
 - Persist `run-supervisor/v1` before provider dispatch. Restart recovery must
   validate the exact runtime, task-envelope, launch-manifest, worktree, host,
   lease, and process/session identity; replay only after the durable event

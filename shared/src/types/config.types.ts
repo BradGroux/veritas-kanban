@@ -12,6 +12,7 @@ import type {
   WorkspaceCapabilityManifest,
   WorkspaceDelegationRecord,
 } from './workspace-capability.types.js';
+import type { AdmissionSettings } from './admission-control.types.js';
 
 export interface DevServerConfig {
   command: string; // e.g., "pnpm dev" or "npm run dev"
@@ -445,6 +446,7 @@ export interface FeatureSettings {
   notifications: NotificationSettings;
   archive: ArchiveSettings;
   budget: BudgetSettings;
+  admission: AdmissionSettings;
   enforcement: EnforcementSettings;
   hooks: HooksSettings;
   sharedResources: SharedResourcesSettings;
@@ -548,6 +550,22 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
       softThresholdPercent: 80,
       hardAction: 'require-approval',
     },
+  },
+  admission: {
+    enabled: true,
+    leaseMs: 30_000,
+    heartbeatMs: 10_000,
+    retryAfterMs: 5_000,
+    defaultRequest: {
+      runSlots: 1,
+      processSlots: 1,
+      estimatedMemoryMb: 512,
+    },
+    global: {},
+    workspaces: {},
+    rootTasks: {},
+    providers: {},
+    hosts: {},
   },
   enforcement: {
     squadChat: false,

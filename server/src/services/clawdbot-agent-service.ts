@@ -127,6 +127,7 @@ import type {
   RunApprovalRiskClass,
   WorkspaceExecutionTrustEvaluation,
   WorkspaceExecutionTrustScanResult,
+  AdmissionReservationRelease,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
@@ -209,6 +210,10 @@ import {
   type RunApprovalBrokerService,
 } from './run-approval-broker-service.js';
 import { getRunSupervisorService, type RunSupervisorService } from './run-supervisor-service.js';
+import {
+  getAdmissionControlService,
+  type AdmissionControlService,
+} from './admission-control-service.js';
 import {
   ConversationLifecycleService,
   type ConversationSource,
@@ -325,6 +330,7 @@ export interface AgentStatus {
   activePhaseEvidence?: PhaseCapabilityEvidence;
   conversation: ConversationLifecycleRecord;
   controls: ProviderRuntimeControlSet;
+  admissionReservationId?: string;
 }
 
 export interface AgentOutput {
@@ -345,6 +351,8 @@ export interface AgentStartOptions {
   conversation?: ConversationLaunchRequest;
   /** Internal durable recovery context. API callers cannot supply this field. */
   recovery?: RunRecoveryRecord;
+  admissionIdempotencyKey?: string;
+  rootTaskId?: string;
 }
 
 export interface AgentMessageOptions {
@@ -399,6 +407,7 @@ interface PendingAgent {
   activePhaseEvidence?: PhaseCapabilityEvidence;
   conversation: ConversationLifecycleRecord;
   supervisorId?: string;
+  admissionReservationId?: string;
   recoveredControl?: boolean;
   threadId?: string;
   abortController?: AbortController;
@@ -505,6 +514,7 @@ export class ClawdbotAgentService {
   private runEvents: RunEventJournalService;
   private approvalBroker: RunApprovalBrokerService;
   private runSupervisor: RunSupervisorService;
+  private admission: AdmissionControlService;
   private conversationLifecycle: ConversationLifecycleService;
   private toolControlPlane: ToolControlPlaneService;
   private runToolBridge: RunToolBridgeService;
@@ -550,7 +560,8 @@ export class ClawdbotAgentService {
     > = getWorkspaceExecutionTrustService(),
     phaseAuthority = new PhaseLaunchAuthorityService(),
     phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'> &
-      Partial<Pick<PhaseTransitionService, 'list'>>
+      Partial<Pick<PhaseTransitionService, 'list'>>,
+    admission: AdmissionControlService = getAdmissionControlService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -570,6 +581,7 @@ export class ClawdbotAgentService {
     this.runEvents = runEvents;
     this.approvalBroker = approvalBroker;
     this.runSupervisor = runSupervisor;
+    this.admission = admission;
     this.conversationLifecycle = conversationLifecycle;
     this.toolControlPlane = toolControlPlane;
     this.runToolBridge = runToolBridge;
@@ -619,6 +631,7 @@ export class ClawdbotAgentService {
    * and whose taskId is NOT in `pendingAgents` are touched.
    */
   async reconcileRunningAttempts(): Promise<void> {
+    await this.admission.expireAbandoned();
     let tasks: Task[];
     try {
       tasks = await this.taskService.listTasks();
@@ -1293,6 +1306,25 @@ export class ClawdbotAgentService {
           ? supervisor.control.sessionId
           : undefined;
     const recoveredConversation = this.conversationLifecycle.recover(attempt, sessionId);
+    const recoveredAdmission = await this.admission.recoverVerifiedRun({
+      workspaceId: attempt.taskEnvelope.workspace.workspaceId,
+      taskId: task.id,
+      attemptId: attempt.id,
+    });
+    if (
+      attempt.admissionReservationId &&
+      recoveredAdmission?.id !== attempt.admissionReservationId
+    ) {
+      throw new CompletionOwnershipError(
+        'Recovered attempt admission binding does not match the durable reservation.',
+        {
+          taskId: task.id,
+          attemptId: attempt.id,
+          expectedReservationId: attempt.admissionReservationId,
+          recoveredReservationId: recoveredAdmission?.id,
+        }
+      );
+    }
     const pending: PendingAgent = {
       taskId: task.id,
       attemptId: attempt.id,
@@ -1316,6 +1348,7 @@ export class ClawdbotAgentService {
       activePhaseEvidence: attempt.runLaunchManifest.phase?.evidence,
       conversation: recoveredConversation,
       supervisorId: supervisor.id,
+      admissionReservationId: recoveredAdmission?.id,
       recoveredControl: true,
       threadId: attempt.threadId ?? sessionId,
       openclawSessionKey: provider === 'openclaw' ? (attempt.sessionKey ?? sessionId) : undefined,
@@ -1712,6 +1745,14 @@ export class ClawdbotAgentService {
     if (!task.git?.worktreePath) {
       throw new Error('Task must have an active worktree to start an agent');
     }
+    if (task.attempt?.status === 'running') {
+      throw new ConflictError('Task already has a persisted running attempt.', {
+        taskId,
+        attemptId: task.attempt.id,
+        runSupervisorId: task.attempt.runSupervisorId,
+        admissionReservationId: task.attempt.admissionReservationId,
+      });
+    }
 
     const conversationRequest = this.normalizeConversationLaunch(options.conversation);
     const conversationSource =
@@ -2070,6 +2111,51 @@ export class ClawdbotAgentService {
       conversationRequest.forkTurnId,
       conversationRequest.intent
     );
+    const admissionDecision = await this.admission.admit({
+      taskId,
+      rootTaskId: options.rootTaskId,
+      workspaceId: taskEnvelope.workspace.workspaceId,
+      provider,
+      hostId: runLaunchManifest.routing.selectedHost,
+      source: options.recovery
+        ? options.recovery.action === 'fallback'
+          ? 'fallback'
+          : 'recovery'
+        : conversationRequest.mode === 'fresh'
+          ? 'direct'
+          : 'conversation',
+      idempotencyKey: options.admissionIdempotencyKey,
+    });
+    if (admissionDecision.outcome !== 'admitted' || !admissionDecision.reservation) {
+      throw new ConflictError(
+        admissionDecision.outcome === 'retryable-overload'
+          ? 'Agent launch is waiting for admission capacity.'
+          : 'Agent launch violates an admission policy.',
+        {
+          code:
+            admissionDecision.outcome === 'retryable-overload'
+              ? 'ADMISSION_OVERLOAD'
+              : 'ADMISSION_POLICY_DENIED',
+          decision: admissionDecision,
+        }
+      );
+    }
+    let admissionReservation;
+    try {
+      admissionReservation = await this.admission.bindAttempt(
+        admissionDecision.reservation.id,
+        attemptId
+      );
+    } catch (error) {
+      await this.admission
+        .releaseIfUnbound(
+          admissionDecision.reservation.id,
+          'start-failed',
+          `bind-failed:${attemptId}`
+        )
+        .catch(() => {});
+      throw error;
+    }
     // Create event emitter for status updates
     const emitter = new EventEmitter();
 
@@ -2093,6 +2179,7 @@ export class ClawdbotAgentService {
       runRetry,
       activePhaseEvidence: runLaunchManifest.phase?.evidence,
       conversation,
+      admissionReservationId: admissionReservation.id,
       filesystemSandboxPlan,
       budget: budgetPolicy
         ? {
@@ -2110,15 +2197,25 @@ export class ClawdbotAgentService {
 
     // Initialize log file (ensure it stays within logs dir)
     ensureWithinBase(this.logsDir, logPath);
-    await this.initLogFile(
-      logPath,
-      task,
-      agent,
-      providerTransport.content,
-      providerRuntimeManifest,
-      taskEnvelope,
-      runLaunchManifest
-    );
+    try {
+      await this.initLogFile(
+        logPath,
+        task,
+        agent,
+        providerTransport.content,
+        providerRuntimeManifest,
+        taskEnvelope,
+        runLaunchManifest
+      );
+    } catch (error) {
+      pendingAgents.delete(taskId);
+      await this.releaseAdmission(
+        admissionReservation.id,
+        'start-failed',
+        `log-init-failed:${attemptId}`
+      );
+      throw error;
+    }
 
     // Update task with attempt info
     const attempt: TaskAttempt = {
@@ -2139,6 +2236,7 @@ export class ClawdbotAgentService {
       runLaunchManifestDrift,
       runRetry,
       conversation,
+      admissionReservationId: admissionReservation.id,
     };
 
     const usesManagedWorktree = Boolean(task.git.worktreeManifestId && task.git.worktreeLeaseId);
@@ -2147,11 +2245,22 @@ export class ClawdbotAgentService {
         await this.worktrees.claimOwnership(taskId, attemptId);
       } catch (error) {
         pendingAgents.delete(taskId);
+        await this.releaseAdmission(
+          admissionReservation.id,
+          'start-failed',
+          `worktree-claim-failed:${attemptId}`
+        );
         throw error;
       }
       const claimedTask = await this.taskService.getTask(taskId);
       if (!claimedTask) {
         await this.worktrees.releaseOwnership(taskId, attemptId);
+        pendingAgents.delete(taskId);
+        await this.releaseAdmission(
+          admissionReservation.id,
+          'start-failed',
+          `task-missing:${attemptId}`
+        );
         throw new Error(`Task "${taskId}" disappeared while claiming its worktree`);
       }
       task = claimedTask;
@@ -2165,6 +2274,11 @@ export class ClawdbotAgentService {
         claimedRecovery.parentRunId !== options.recovery.parentRunId
       ) {
         pendingAgents.delete(taskId);
+        await this.releaseAdmission(
+          admissionReservation.id,
+          'start-failed',
+          `recovery-binding-failed:${attemptId}`
+        );
         throw new ConflictError('Recovery launch no longer matches the claimed parent attempt', {
           taskId,
           activeAttemptId: task.attempt?.id,
@@ -2202,6 +2316,11 @@ export class ClawdbotAgentService {
     } catch (error) {
       pendingAgents.delete(taskId);
       this.runToolBridge.revokeRun(taskId, attemptId);
+      await this.releaseAdmission(
+        admissionReservation.id,
+        'start-failed',
+        `attempt-persistence-failed:${attemptId}`
+      );
       if (usesManagedWorktree) {
         await this.worktrees.releaseOwnership(taskId, attemptId).catch((releaseError) => {
           log.error(
@@ -2358,6 +2477,11 @@ export class ClawdbotAgentService {
       });
     } catch (error: unknown) {
       const startError = error instanceof Error ? error : new Error(String(error));
+      await this.releaseAdmission(
+        admissionReservation.id,
+        'start-failed',
+        `provider-start-failed:${attemptId}`
+      );
       await this.appendRunEvent(
         taskId,
         attemptId,
@@ -2488,6 +2612,7 @@ export class ClawdbotAgentService {
       activePhaseEvidence: runLaunchManifest.phase?.evidence,
       conversation,
       controls: providerRuntimeControls(providerRuntimeManifest),
+      admissionReservationId: admissionReservation.id,
     };
   }
 
@@ -2585,6 +2710,17 @@ export class ClawdbotAgentService {
         if (persistedAttempt.completionResult) {
           const persistedCompletion = this.parsePersistedCompletion(persistedAttempt);
           if (persistedCompletion.idempotencyKey === idempotencyKey) {
+            await this.admission.releaseByAttempt(
+              persistedAttempt.taskEnvelope.workspace.workspaceId,
+              taskId,
+              persistedAttempt.id,
+              persistedCompletion.status === 'success'
+                ? 'completed'
+                : persistedCompletion.status === 'interrupted'
+                  ? 'interrupted'
+                  : 'failed',
+              `duplicate-completion:${persistedCompletion.idempotencyKey}`
+            );
             await this.revokeRunCredentialLeases(
               taskId,
               persistedAttempt.id,
@@ -2861,6 +2997,13 @@ export class ClawdbotAgentService {
       }
     }
     if (lastError) throw lastError;
+    await this.admission.releaseByAttempt(
+      attempt.taskEnvelope.workspace.workspaceId,
+      task.id,
+      attempt.id,
+      admissionReleaseReason(completionResult.status),
+      `recovered-completion:${completionResult.idempotencyKey}`
+    );
     await this.revokeRunCredentialLeases(
       task.id,
       attempt.id,
@@ -3041,6 +3184,13 @@ export class ClawdbotAgentService {
     }
     if (lastError) throw lastError;
 
+    await this.admission.releaseByAttempt(
+      attempt.taskEnvelope.workspace.workspaceId,
+      task.id,
+      attempt.id,
+      admissionReleaseReason(completionResult.status),
+      `restart-completion:${completionResult.idempotencyKey}`
+    );
     await this.revokeRunCredentialLeases(
       task.id,
       attempt.id,
@@ -3138,6 +3288,14 @@ export class ClawdbotAgentService {
     try {
       await finalization;
     } catch (error) {
+      const prepared = pending.preparedFinalizationResult;
+      if (prepared && pending.terminalClaimIdempotencyKey) {
+        await this.releaseAdmission(
+          pending.admissionReservationId,
+          admissionReleaseReason(prepared.status, prepared.success),
+          `finalization-failed:${pending.terminalClaimIdempotencyKey}`
+        );
+      }
       if (error instanceof CompletionOwnershipError && pendingAgents.get(taskId) === pending) {
         pendingAgents.delete(taskId);
       }
@@ -3235,6 +3393,7 @@ export class ClawdbotAgentService {
           taskEnvelope: pending.taskEnvelope,
           runLaunchManifest: pending.runLaunchManifest,
           runSupervisorId: pending.supervisorId,
+          admissionReservationId: pending.admissionReservationId,
           runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
           runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
           runLaunchManifestDrift: pending.runLaunchManifestDrift,
@@ -3311,6 +3470,11 @@ export class ClawdbotAgentService {
       pendingAgents.delete(taskId);
     }
     this.clearRecoveredProcessMonitor(taskId);
+    await this.releaseAdmission(
+      pending.admissionReservationId,
+      admissionReleaseReason(completionResult.status),
+      `completion:${completionResult.idempotencyKey}`
+    );
     if (!persistedHere) return;
 
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
@@ -3458,6 +3622,22 @@ export class ClawdbotAgentService {
       });
     } finally {
       this.runToolBridge.revokeRun(taskId, attemptId);
+    }
+  }
+
+  private async releaseAdmission(
+    reservationId: string | undefined,
+    reason: AdmissionReservationRelease['reason'],
+    idempotencyKey: string
+  ): Promise<void> {
+    if (!reservationId) return;
+    try {
+      await this.admission.release(reservationId, reason, idempotencyKey);
+    } catch (error) {
+      log.error(
+        { err: error, reservationId, reason },
+        '[ClawdbotAgent] Failed to release admission reservation'
+      );
     }
   }
 
@@ -9879,6 +10059,14 @@ function taskStatusForCompletion(status: TaskCompletionStatus): 'done' | 'blocke
   if (status === 'success') return 'done';
   if (status === 'blocked') return 'blocked';
   return 'in-progress';
+}
+
+function admissionReleaseReason(
+  status: TaskCompletionStatus | undefined,
+  success?: boolean
+): AdmissionReservationRelease['reason'] {
+  if (status === 'success' || success === true) return 'completed';
+  return status === 'interrupted' ? 'interrupted' : 'failed';
 }
 
 function upsertAttemptHistory(

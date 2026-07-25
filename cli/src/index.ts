@@ -25,6 +25,7 @@ import { registerQueueMonitorCommands } from './commands/queue-monitors.js';
 import { registerSqliteCommands } from './commands/sqlite.js';
 import { registerToolServerCommands } from './commands/tool-servers.js';
 import { registerAcpCommands } from './commands/acp.js';
+import { registerAdmissionCommands } from './commands/admission.js';
 
 const program = new Command();
 const packageJson = JSON.parse(
@@ -61,5 +62,6 @@ registerQueueMonitorCommands(program);
 registerSqliteCommands(program);
 registerToolServerCommands(program);
 registerAcpCommands(program);
+registerAdmissionCommands(program);
 
 program.parse();

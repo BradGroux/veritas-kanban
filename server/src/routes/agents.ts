@@ -60,6 +60,7 @@ const startAgentSchema = z.object({
   commitPolicy: TaskCommitPolicySchema.optional(),
   phase: phaseNameSchema.optional(),
   parentAttemptId: z.string().trim().min(1).max(120).optional(),
+  idempotencyKey: z.string().trim().min(8).max(240).optional(),
 });
 
 const completionProvenanceSchema = {
@@ -313,7 +314,9 @@ router.post(
     let commitPolicy: TaskCommitPolicy | undefined;
     let phase: PhaseName | undefined;
     let parentAttemptId: string | undefined;
+    let idempotencyKey: string | undefined;
     try {
+      const headerIdempotencyKey = req.get('x-idempotency-key')?.trim();
       ({
         agent,
         profileId,
@@ -324,7 +327,11 @@ router.post(
         commitPolicy,
         phase,
         parentAttemptId,
-      } = startAgentSchema.parse(req.body) as {
+        idempotencyKey,
+      } = startAgentSchema.parse({
+        ...req.body,
+        ...(headerIdempotencyKey ? { idempotencyKey: headerIdempotencyKey } : {}),
+      }) as {
         agent?: AgentType;
         profileId?: string;
         overrideReason?: string;
@@ -334,6 +341,7 @@ router.post(
         commitPolicy?: TaskCommitPolicy;
         phase?: PhaseName;
         parentAttemptId?: string;
+        idempotencyKey?: string;
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -352,6 +360,7 @@ router.post(
         commitPolicy,
         phase,
         parentAttemptId,
+        admissionIdempotencyKey: idempotencyKey,
       });
     } catch (error) {
       if (error instanceof AgentReadinessError) {
