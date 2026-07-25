@@ -92,11 +92,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   exact blocker before changing paths.
 - Source every published GitHub release body from `docs/releases/vX.Y.Z.md` and pass that file
   to `gh release create` or `gh release edit` with `--notes-file`.
-- Keep each prose paragraph, blockquote, and list item on one logical Markdown source line.
-  Separate blocks with blank lines. Do not hard-wrap release prose or add carriage returns,
-  trailing-space hard breaks, literal escaped newlines, or HTML `<br>` tags.
+- Keep each prose paragraph and list item on one logical Markdown source line. Separate blocks
+  with blank lines. Do not hard-wrap release prose or add carriage returns, trailing-space hard
+  breaks, literal escaped newlines, HTML `<br>` tags, or blockquotes.
 - Prefer compact, natural paragraphs over bullet-per-sentence formatting. Use lists only for
-  genuinely parallel items, and avoid repeated one-sentence blocks that render as a ragged page.
+  genuinely parallel items. Keep rendered prose blocks concise so they do not become walls of
+  text on GitHub's release index.
 - Run `pnpm validate:release -- --version X.Y.Z`; the post-publication `--github` form also
   requires the published GitHub body to match the reviewed file exactly.
 

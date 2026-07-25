@@ -53,9 +53,10 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
       scope, while explicit and milestone release gates remain full (#1000).
 - [x] Published release notes are sourced from
       `docs/releases/vX.Y.Z.md`, use one full-width Markdown line per paragraph
-      or list item, use lists rather than blockquotes for grouped changes, and
-      are compared with GitHub during post-publication validation. Run
-      `pnpm test:release-format` and `pnpm validate:release` before publication.
+      or list item, reject blockquotes and overlong prose blocks, and are
+      compared with GitHub during post-publication validation. Run
+      `pnpm test:release-format`, `pnpm validate:release`, and the
+      post-publication `pnpm validate:release -- --github` check.
 
 ## Provider Certification
 

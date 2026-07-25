@@ -301,6 +301,18 @@ function normalizeReleaseBody(value) {
   return value.replace(/\r\n?/g, '\n').trim();
 }
 
+const MAX_RENDERED_RELEASE_BLOCK_LENGTH = 240;
+
+function renderedReleaseBlockText(line) {
+  return line
+    .replace(/!\[[^\]]*]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')
+    .replace(/[*_~]/g, '')
+    .trim();
+}
+
 export function releaseBodyFormattingIssues(value) {
   const issues = [];
 
@@ -348,9 +360,21 @@ export function releaseBodyFormattingIssues(value) {
 
     const blockLine = {
       lineNumber,
+      heading: /^\s*#{1,6}\s+/.test(line),
       listItem: /^\s*(?:[-*+]|\d+\.)\s+/.test(line),
       tableRow: /^\s*\|.*\|\s*$/.test(line),
     };
+
+    const renderedBlockLength = renderedReleaseBlockText(line).length;
+    if (
+      !blockLine.heading &&
+      !blockLine.tableRow &&
+      renderedBlockLength > MAX_RENDERED_RELEASE_BLOCK_LENGTH
+    ) {
+      issues.push(
+        `line ${lineNumber} renders as ${renderedBlockLength} characters; split it into concise full-width blocks`
+      );
+    }
 
     if (
       previousBlockLine &&
