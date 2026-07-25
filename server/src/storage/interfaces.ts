@@ -446,7 +446,7 @@ export interface AdmissionReservationRepository {
   claimOrEnqueue(
     input: AdmissionReservationClaimOrQueueInput
   ): Promise<AdmissionReservationClaimOrQueueResult>;
-  /** Atomically claim the FIFO head and its admission capacity. */
+  /** Atomically claim one scheduler-selected eligible entry and its admission capacity. */
   claimQueued(input: AdmissionQueuedClaimInput): Promise<AdmissionQueuedClaimResult>;
   get(id: string): Promise<AdmissionReservation | null>;
   list(query: AdmissionReservationListQuery): Promise<AdmissionReservation[]>;

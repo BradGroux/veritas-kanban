@@ -449,6 +449,7 @@ export class WorkflowRunService {
     } as const;
     const decision = await this.admission.admitOrQueue(admissionInput, {
       attemptId,
+      priority: task?.priority,
       target: {
         kind: 'workflow-root',
         workflowId: run.workflowId,
@@ -608,6 +609,7 @@ export class WorkflowRunService {
     } as const;
     const decision = await this.admission.admitOrQueue(admissionInput, {
       attemptId,
+      priority: run.taskId ? (await getTaskService().getTask(run.taskId))?.priority : undefined,
       target: {
         kind: 'workflow-step',
         workflowId: run.workflowId,

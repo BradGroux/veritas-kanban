@@ -4229,6 +4229,14 @@ Veritas revalidates the persisted run, workflow version, step state, provider
 runtime, host, phase authority, budgets, and reservation evidence. Drift
 terminalizes the queue entry and run without calling the provider.
 
+A single versioned scheduler orders direct, workflow-root, and workflow-step
+entries using explicit task priority, bounded age promotion, workspace turns,
+and stable enqueue identity. Capacity-blocked entries remain queued while the
+next compatible entry is evaluated. The selected entry persists redacted
+priority, fairness, readiness, limiting-scope, and conditional-start evidence;
+provider or host metadata cannot override this ordering. Scheduler bounds live
+under `features.admission.queue.scheduler`.
+
 A pre-dispatch failure releases capacity and may requeue with bounded backoff.
 Once the queue entry is durably `dispatched`, workflow recovery owns the run.
 Startup reconciliation resumes a root or step that stopped at that ownership

@@ -326,7 +326,15 @@ describe('workflow admission', () => {
         )
       );
       const claim = await harness.admission.claimNextQueued();
-      expect(claim?.entry.id).toBe(queued?.id);
+      expect(claim?.entry).toMatchObject({
+        id: queued?.id,
+        target: { kind: 'workflow-root' },
+        selectionEvidence: {
+          policyVersion: 'admission-queue-scheduler/v1',
+          selectedQueueEntryId: queued?.id,
+          capacityReadiness: 'ready',
+        },
+      });
       await (
         harness.service as unknown as {
           dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
@@ -489,7 +497,15 @@ describe('workflow admission', () => {
         `release-step-blocker-${backend}`
       );
       const claim = await harness.admission.claimNextQueued();
-      expect(claim?.entry.id).toBe(queued?.id);
+      expect(claim?.entry).toMatchObject({
+        id: queued?.id,
+        target: { kind: 'workflow-step' },
+        selectionEvidence: {
+          policyVersion: 'admission-queue-scheduler/v1',
+          selectedQueueEntryId: queued?.id,
+          capacityReadiness: 'ready',
+        },
+      });
       await (
         harness.service as unknown as {
           dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;

@@ -477,6 +477,16 @@ describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (b
     const winners = competing.filter((claim) => claim !== null);
     expect(winners).toHaveLength(1);
     expect(winners[0]?.entry.id).toBe(first.queueEntry?.id);
+    expect(winners[0]?.entry.selectionEvidence).toMatchObject({
+      selectedQueueEntryId: first.queueEntry?.id,
+      skipped: [
+        {
+          queueEntryId: second.queueEntry?.id,
+          capacityReadiness: 'not-evaluated',
+          reason: 'lower-rank',
+        },
+      ],
+    });
     await left.markQueueDispatched(
       winners[0]?.entry.id as string,
       winners[0]?.entry.attemptId as string
@@ -506,6 +516,71 @@ describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (b
       reservation: { lease: { ownerId: 'owner-recovered' } },
     });
     await expect(recovered.claimNextQueued()).resolves.toBeNull();
+  });
+
+  it('skips a capacity-blocked priority leader and persists redacted selection evidence', async () => {
+    const repository = await repositoryFor(backend);
+    const settings = configuredSettings({
+      global: { concurrentRuns: 1 },
+      providers: { 'codex-cli': { concurrentRuns: 1 } },
+    });
+    const service = createService(repository, settings, { ownerId: `owner-scheduler-${backend}` });
+    await service.admit(request(`task-provider-blocker-${backend}`));
+    const blockedHigh = await service.admitOrQueue(request(`task-high-${backend}`), {
+      agent: 'codex',
+      attemptId: `attempt-high-${backend}`,
+      priority: 'critical',
+    });
+    const readyLow = await service.admitOrQueue(
+      {
+        ...request(`task-low-${backend}`),
+        provider: 'codex-sdk',
+      },
+      {
+        agent: 'codex-sdk',
+        attemptId: `attempt-low-${backend}`,
+        priority: 'low',
+      }
+    );
+    settings.global.concurrentRuns = 2;
+
+    const claim = await service.claimNextQueued();
+
+    expect(claim).toMatchObject({
+      entry: {
+        id: readyLow.queueEntry?.id,
+        selectionEvidence: {
+          schemaVersion: 'admission-queue-selection/v1',
+          policyVersion: 'admission-queue-scheduler/v1',
+          selectedQueueEntryId: readyLow.queueEntry?.id,
+          rawPriority: 0,
+          capacityReadiness: 'ready',
+          limitingScopes: [],
+          conditionalStartFactors: [
+            'queue-eligibility',
+            'capacity-available',
+            'active-reservation-release',
+          ],
+          skipped: [
+            {
+              queueEntryId: blockedHigh.queueEntry?.id,
+              rawPriority: 3,
+              capacityReadiness: 'blocked',
+              limitingScopes: [
+                {
+                  scope: 'provider',
+                  scopeKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+                },
+              ],
+              reason: 'capacity-blocked',
+            },
+          ],
+        },
+      },
+    });
+    const stillQueued = await service.getQueueEntry(blockedHigh.queueEntry?.id as string);
+    expect(stillQueued.state).toBe('queued');
+    expect(stillQueued.selectionEvidence).toBeUndefined();
   });
 
   it('reactivates a released pre-dispatch reservation when the queue retries', async () => {

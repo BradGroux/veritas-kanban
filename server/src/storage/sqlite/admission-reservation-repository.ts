@@ -151,18 +151,16 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
     try {
       this.expireInTransaction(input.now);
       this.expireQueueInTransaction(input.now);
-      const headRow = connection
+      const queueRow = connection
         .prepare(
           `SELECT queue_json FROM admission_queue
-           WHERE state IN ('queued', 'requeued') AND available_at <= ?
-           ORDER BY enqueue_sequence ASC, id ASC
-           LIMIT 1`
+           WHERE id = ? AND state IN ('queued', 'requeued') AND available_at <= ?`
         )
-        .get(input.now) as QueueRow | undefined;
-      const head = headRow
-        ? AdmissionQueueEntrySchema.parse(JSON.parse(headRow.queue_json))
+        .get(input.queueId, input.now) as QueueRow | undefined;
+      const current = queueRow
+        ? AdmissionQueueEntrySchema.parse(JSON.parse(queueRow.queue_json))
         : undefined;
-      if (!head || head.id !== input.queueId || head.revision !== input.expectedRevision) {
+      if (!current || current.revision !== input.expectedRevision) {
         connection.exec('COMMIT');
         return { stale: true, limitingPolicies: [] };
       }
@@ -182,15 +180,16 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         };
       }
       const entry = AdmissionQueueEntrySchema.parse({
-        ...head,
-        revision: head.revision + 1,
+        ...current,
+        revision: current.revision + 1,
         state: 'leased',
         policies: claimed.record.policies,
         lease: claimed.record.lease,
         reservationId: claimed.record.id,
+        selectionEvidence: input.selectionEvidence,
         updatedAt: input.now,
       });
-      this.updateQueueRow(entry, head.revision);
+      this.updateQueueRow(entry, current.revision);
       connection.exec('COMMIT');
       return {
         entry,
@@ -275,13 +274,20 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
       clauses.push('available_at <= ?');
       parameters.push(query.eligibleAt);
     }
+    if (query.withSelectionEvidence) {
+      clauses.push(`json_type(queue_json, '$.selectionEvidence') IS NOT NULL`);
+    }
     parameters.push(query.limit ?? 100);
     const rows = this.database
       .getConnection()
       .prepare(
         `SELECT queue_json FROM admission_queue
          ${clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''}
-         ORDER BY enqueue_sequence ASC, id ASC
+         ORDER BY ${
+           query.order === 'updated-desc'
+             ? 'updated_at DESC, enqueue_sequence DESC, id ASC'
+             : 'enqueue_sequence ASC, id ASC'
+         }
          LIMIT ?`
       )
       .all(...parameters) as unknown as QueueRow[];
