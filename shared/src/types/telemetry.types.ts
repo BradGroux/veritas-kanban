@@ -2,6 +2,7 @@
 
 import type { TaskStatus, AgentType } from './task.types.js';
 import type { HarnessSupportFailureClass, HarnessSupportTier } from './provider-runtime.types.js';
+import type { AdmissionLaunchSource } from './admission-control.types.js';
 
 export type TelemetryEventType =
   | 'task.created'
@@ -38,6 +39,8 @@ export interface RunStartedEvent extends TelemetryEvent {
   model?: string;
   sessionKey?: string;
   attemptId?: string;
+  admissionSource?: AdmissionLaunchSource;
+  admissionOutcome?: 'admitted' | 'queued-dispatch';
   harnessSupport?: HarnessSupportTelemetry;
 }
 
@@ -89,6 +92,8 @@ export interface RunTelemetryEvent extends TelemetryEvent {
   model?: string;
   sessionKey?: string;
   stackTrace?: string;
+  admissionSource?: AdmissionLaunchSource;
+  admissionOutcome?: 'admitted' | 'queued-dispatch';
   harnessSupport?: HarnessSupportTelemetry;
 }
 

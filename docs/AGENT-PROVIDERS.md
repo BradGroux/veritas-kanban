@@ -982,23 +982,26 @@ Configure ceilings through `PATCH /api/settings/features`:
 
 An individual request larger than a ceiling receives a terminal policy denial.
 Queueable temporary exhaustion persists one bounded
-`admission-queue-entry/v1` record. A fresh direct task start with no transient
-operator message or per-request policy override returns `status: "queued"`,
-`queueId`, the reserved `attemptId`, `retryAfterMs`, and redacted limiting
-scopes. Harnesses must treat that response as accepted work, not as a failed
-attempt, and must not submit a duplicate start. Workflow roots and
-provider-backed workflow steps instead persist `state: "waiting"` in their
-admission binding while the run and step remain `pending`.
+`admission-queue-entry/v1` record. Direct, profile, conversation,
+provider-handoff, child-agent, retry, and fallback starts return
+`status: "queued"`, `queueId`, the reserved `attemptId`, `retryAfterMs`, and
+redacted limiting scopes. Harnesses must treat that response as accepted work,
+not as a failed attempt, and must not submit a duplicate start. Workflow roots
+and provider-backed workflow steps instead persist `state: "waiting"` in their
+admission binding while the run and step remain `pending`. Scheduled workflows
+retain `source: "scheduled"`; queue-monitor continuations retain
+`source: "watcher"`.
 
-The queue uses the versioned `admission-queue-scheduler/v1` policy for direct
-tasks, workflow roots, and workflow steps. It ranks the bounded eligible queue
-snapshot by task priority, configured age promotion, workspace turns, enqueue
-sequence, and queue identity. After `workspaceBurstLimit` consecutive
-selections, compatible work from another workspace receives the next turn.
-Age promotion is capped at the highest configured priority, and
-`maxAgePromotion` must let the lowest priority eventually reach that level.
-Provider and host limits only determine capacity readiness; they cannot
-override durable ordering or create a hidden provider queue.
+The queue uses the versioned `admission-queue-scheduler/v1` policy for
+agent-launch, legacy direct, workflow-root, and workflow-step targets. It ranks
+the bounded eligible queue snapshot by task priority, configured age
+promotion, workspace turns, enqueue sequence, and queue identity. After
+`workspaceBurstLimit` consecutive selections, compatible work from another
+workspace receives the next turn. Age promotion is capped at the highest
+configured priority, and `maxAgePromotion` must let the lowest priority
+eventually reach that level. Provider and host limits only determine capacity
+readiness; they cannot override durable ordering or create a hidden provider
+queue.
 
 A worker tries ranked entries until it atomically claims both a queue lease and
 admission capacity. A capacity-blocked entry stays queued while another ready
@@ -1013,9 +1016,19 @@ may restart or finish the work. Abandoned pre-dispatch leases requeue with
 bounded backoff. Terminal drift, retry exhaustion, and queue overflow fail
 closed. Queue records retain task, workspace, agent, execution tree, workflow
 version and revision, retry or fallback sequence, provider, host, immutable
-runtime and phase digests, and limiting-scope evidence. They never retain
-prompts, workflow context, messages, tool arguments, credentials, or raw
-idempotency keys.
+runtime and phase digests, and limiting-scope evidence. Workflow targets never
+retain prompts, workflow context, tool arguments, or credentials. Agent-launch
+targets retain only bounded provider-neutral inputs required for exact replay,
+which may include an operator turn or override reason. Queue inspection,
+telemetry, Operations, and support bundles omit those private inputs. No target
+retains credentials, process handles, leases, or raw idempotency keys.
+
+Every built-in and custom provider adapter receives
+`provider-admission-evidence/v1` immediately before dispatch. The evidence binds
+the shared reservation, launch source, queue-dispatch outcome, and exact
+execution-tree identity to the durable attempt. Missing or inconsistent
+evidence fails before the adapter is called, so an adapter cannot widen
+capacity or substitute an external hidden queue.
 
 Active leases renew while the verified run is live; completion, interruption,
 cancellation, or launch failure releases the reservation idempotently.

@@ -645,7 +645,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 
-  it('launches the exact scheduled task recovery with its causal record', async () => {
+  it('durably queues the exact scheduled recovery before mutating its parent state', async () => {
     const recovery: RunRecoveryRecord = {
       schemaVersion: 'run-recovery/v1',
       rootRunId: 'attempt_root',
@@ -700,9 +700,13 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       .mockResolvedValue({} as never);
     const startAgent = vi.spyOn(service, 'startAgent').mockResolvedValue({
       taskId: currentTask.id,
-      attemptId: 'attempt_child',
+      attemptId: 'attempt_queued',
+      queueId: 'admission_queue_recovery',
       agent: 'openclaw',
-      runLaunchManifest: { digest: `sha256:${'b'.repeat(64)}` },
+      status: 'queued',
+      enqueuedAt: '2026-07-25T12:00:00.000Z',
+      retryAfterMs: 250,
+      limitingScopes: [{ scope: 'global', scopeId: 'global' }],
     } as never);
 
     await (
@@ -711,34 +715,44 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       }
     ).launchScheduledTaskRecovery(currentTask.id, parentAttempt.id);
 
-    expect(mockUpdateTask).toHaveBeenCalledWith(
-      currentTask.id,
-      expect.objectContaining({
-        expectedRevision: 1,
-        attempt: expect.objectContaining({
-          id: parentAttempt.id,
-          runRetry: expect.objectContaining({ state: 'launching', sequence: 1 }),
-        }),
-      })
-    );
+    expect(mockUpdateTask).not.toHaveBeenCalled();
     expect(startAgent).toHaveBeenCalledWith(
       currentTask.id,
       'openclaw',
       expect.objectContaining({
         parentAttemptId: parentAttempt.id,
+        admissionIdempotencyKey: `recovery:${recovery.rootRunId}:${recovery.parentRunId}:${recovery.sequence}`,
         recovery: expect.objectContaining({
           parentRunId: parentAttempt.id,
-          state: 'launching',
+          state: 'scheduled',
         }),
       })
     );
     expect(appendRunEvent).toHaveBeenCalledWith(
       currentTask.id,
-      'attempt_child',
-      'recovery.launched',
-      expect.objectContaining({ parentAttemptId: parentAttempt.id }),
+      parentAttempt.id,
+      'recovery.queued',
+      expect.objectContaining({ queueId: 'admission_queue_recovery', sequence: 1 }),
       expect.any(Object)
     );
+
+    const claimed = await (
+      service as unknown as {
+        claimTaskRecoveryAfterAdmission(
+          taskId: string,
+          task: Task,
+          options: { parentAttemptId: string; recovery: RunRecoveryRecord }
+        ): Promise<Task>;
+      }
+    ).claimTaskRecoveryAfterAdmission(currentTask.id, currentTask, {
+      parentAttemptId: parentAttempt.id,
+      recovery,
+    });
+    expect(claimed.attempt?.runRetry).toMatchObject({
+      state: 'launching',
+      sequence: recovery.sequence,
+    });
+    expect(mockUpdateTask).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a scheduled task recovery armed when cancellation persistence fails', async () => {

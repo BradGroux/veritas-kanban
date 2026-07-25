@@ -100,6 +100,18 @@ describe('WorkflowRunService', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
+  it('preserves interactive, scheduled, and watcher workflow admission sources', () => {
+    const source = (
+      service as unknown as {
+        workflowAdmissionSource(run: { context: Record<string, unknown> }): string;
+      }
+    ).workflowAdmissionSource.bind(service);
+
+    expect(source({ context: {} })).toBe('workflow');
+    expect(source({ context: { scheduler: { itemId: 'workflow:nightly' } } })).toBe('scheduled');
+    expect(source({ context: { queueMonitor: { monitorId: 'backlog' } } })).toBe('watcher');
+  });
+
   it('starts a run, snapshots workflow, merges context, and completes asynchronously', async () => {
     const run = await service.startRun('wf-1', 'task-1', { custom: 42 });
     expect(run.id).toMatch(/^run_\d+_/);

@@ -1,5 +1,11 @@
 import type { ExecutableAgentProvider } from './config.types.js';
+import type { AgentBudgetPolicy } from './agent-budget.types.js';
+import type { ConversationLaunchRequest } from './conversation-lifecycle.types.js';
 import type { AgentType, TaskPriority } from './task.types.js';
+import type { PhaseName } from './phase-capability.types.js';
+import type { ProviderRuntimeCapabilityId } from './provider-runtime.types.js';
+import type { RunRecoveryRecord } from './run-recovery.types.js';
+import type { TaskCommitPolicy } from './task-envelope.types.js';
 import type {
   ExecutionTreeBudgetPolicy,
   ExecutionTreeBudgetState,
@@ -185,10 +191,35 @@ export interface AdmissionQueueSelectionEvidence {
   skipped: AdmissionQueueSkippedCandidateEvidence[];
 }
 
+/**
+ * Durable, provider-neutral inputs required to reconstruct an agent launch.
+ *
+ * Transient authority such as credentials, process handles, leases, and raw
+ * admission idempotency keys must never be stored here.
+ */
+export interface AdmissionAgentLaunchOptions {
+  profileId?: string;
+  overrideReason?: string;
+  sandboxPresetId?: string;
+  budget?: AgentBudgetPolicy;
+  requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
+  commitPolicy?: TaskCommitPolicy;
+  phase?: PhaseName;
+  parentAttemptId?: string;
+  conversation?: ConversationLaunchRequest;
+  recovery?: RunRecoveryRecord;
+}
+
 export type AdmissionQueueTarget =
   | {
       kind: 'direct';
       agent: AgentType;
+    }
+  | {
+      kind: 'agent-launch';
+      agent: AgentType;
+      source: Exclude<AdmissionLaunchSource, 'workflow' | 'scheduled' | 'watcher'>;
+      options: AdmissionAgentLaunchOptions;
     }
   | {
       kind: 'workflow-root';

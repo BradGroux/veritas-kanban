@@ -102,13 +102,20 @@ export interface DirectAdmissionQueueInput {
   priority?: AdmissionQueuePriority;
 }
 
-export interface WorkflowAdmissionQueueInput {
-  target: Exclude<AdmissionQueueTarget, { kind: 'direct' }>;
+export interface AgentAdmissionQueueInput {
+  target: Extract<AdmissionQueueTarget, { kind: 'agent-launch' }>;
   attemptId: string;
   priority?: AdmissionQueuePriority;
 }
 
-export type AdmissionQueueInput = DirectAdmissionQueueInput | WorkflowAdmissionQueueInput;
+export interface WorkflowAdmissionQueueInput {
+  target: Extract<AdmissionQueueTarget, { kind: 'workflow-root' | 'workflow-step' }>;
+  attemptId: string;
+  priority?: AdmissionQueuePriority;
+}
+
+export type AdmissionQueueInput =
+  DirectAdmissionQueueInput | AgentAdmissionQueueInput | WorkflowAdmissionQueueInput;
 
 export interface RecoverAdmissionInput {
   workspaceId: string;
@@ -292,12 +299,16 @@ export class AdmissionControlService {
       queueTarget &&
       settings.queue.enabled &&
       ((queueTarget.kind === 'direct' && request.source === 'direct') ||
+        (queueTarget.kind === 'agent-launch' &&
+          request.source === queueTarget.source &&
+          !request.workflowRunId &&
+          !request.workflowStepId) ||
         (queueTarget.kind === 'workflow-root' &&
-          request.source === 'workflow' &&
+          ['workflow', 'scheduled', 'watcher'].includes(request.source) &&
           request.workflowRunId === queueTarget.workflowRunId &&
           !request.workflowStepId) ||
         (queueTarget.kind === 'workflow-step' &&
-          ['workflow', 'recovery', 'fallback'].includes(request.source) &&
+          ['workflow', 'scheduled', 'watcher', 'recovery', 'fallback'].includes(request.source) &&
           request.workflowRunId === queueTarget.workflowRunId &&
           request.workflowStepId === queueTarget.workflowStepId))
     );
@@ -328,7 +339,7 @@ export class AdmissionControlService {
         'terminal-policy-denial',
         request,
         claimed.limitingPolicies,
-        'The task already has a queued launch with a different agent selection.',
+        'The task already has a queued launch with a different durable target.',
         now
       );
     }

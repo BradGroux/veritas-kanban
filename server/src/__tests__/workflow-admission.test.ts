@@ -293,6 +293,11 @@ describe('workflow admission', () => {
 
       const rawContextSecret = `workflow-root-secret-${backend}`;
       const run = await harness.service.startRun(harness.definition.id, undefined, {
+        scheduler: {
+          itemId: 'workflow:scheduled-admission',
+          trigger: 'due-run',
+          runAt: '2026-07-25T12:00:00.000Z',
+        },
         operatorPrompt: `Use ${rawContextSecret}`,
         toolArguments: { credential: rawContextSecret },
       });
@@ -310,6 +315,7 @@ describe('workflow admission', () => {
       });
       expect(queued).toMatchObject({
         state: 'queued',
+        request: { source: 'scheduled' },
         target: {
           kind: 'workflow-root',
           workflowId: harness.definition.id,

@@ -129,6 +129,8 @@ import type {
   WorkspaceExecutionTrustEvaluation,
   WorkspaceExecutionTrustScanResult,
   AdmissionReservationRelease,
+  AdmissionAgentLaunchOptions,
+  AdmissionLaunchSource,
   AdmissionQueueClaim,
   ExecutionTreeBudgetPolicy,
   ExecutionTreeEdgeKind,
@@ -293,6 +295,16 @@ export interface AgentProviderStartContext {
   sandboxPolicy?: SandboxPolicyDryRunResult;
   runLaunchManifest: RunLaunchManifest;
   conversation: ConversationLifecycleRecord;
+  admission: AgentProviderAdmissionEvidence;
+}
+
+export interface AgentProviderAdmissionEvidence {
+  schemaVersion: 'provider-admission-evidence/v1';
+  source: AdmissionLaunchSource;
+  outcome: 'admitted' | 'queued-dispatch';
+  reservationId: string;
+  queueEntryId?: string;
+  executionTree: ExecutionTreeIdentity;
 }
 
 export interface AgentProviderStopContext {
@@ -677,7 +689,10 @@ export class ClawdbotAgentService {
         await getWorkflowRunService().dispatchQueuedAdmission(claim);
         continue;
       }
-      const queuedAgent = entry.target?.kind === 'direct' ? entry.target.agent : entry.agent;
+      const queuedAgent =
+        entry.target?.kind === 'direct' || entry.target?.kind === 'agent-launch'
+          ? entry.target.agent
+          : entry.agent;
       if (!queuedAgent) {
         await this.admission
           .release(reservation.id, 'start-failed', `queue-target-missing:${entry.id}`)
@@ -703,7 +718,10 @@ export class ClawdbotAgentService {
 
       startingAgents.add(entry.request.taskId);
       try {
+        const queuedOptions =
+          entry.target?.kind === 'agent-launch' ? entry.target.options : undefined;
         const result = await this.startReservedAgent(entry.request.taskId, queuedAgent, {
+          ...queuedOptions,
           rootTaskId: entry.request.rootTaskId,
           admissionQueueClaim: claim,
         });
@@ -745,6 +763,65 @@ export class ClawdbotAgentService {
     return true;
   }
 
+  private agentAdmissionSource(
+    executionTree: ExecutionTreeIdentity,
+    recovery?: RunRecoveryRecord
+  ): Extract<
+    AdmissionLaunchSource,
+    'direct' | 'conversation' | 'recovery' | 'fallback' | 'child-agent'
+  > {
+    if (recovery) return recovery.action === 'fallback' ? 'fallback' : 'recovery';
+    if (executionTree.edge === 'child-agent') return 'child-agent';
+    return executionTree.edge === 'root' ? 'direct' : 'conversation';
+  }
+
+  private admissionAgentLaunchOptions(
+    options: AgentStartOptions,
+    conversation: ConversationLaunchRequest,
+    overrideReason?: string
+  ): AdmissionAgentLaunchOptions {
+    const persistConversation =
+      options.conversation !== undefined ||
+      conversation.mode !== 'fresh' ||
+      conversation.message !== undefined;
+    return {
+      ...(options.profileId ? { profileId: options.profileId } : {}),
+      ...(overrideReason ? { overrideReason } : {}),
+      ...(options.sandboxPresetId ? { sandboxPresetId: options.sandboxPresetId } : {}),
+      ...(options.budget ? { budget: structuredClone(options.budget) } : {}),
+      ...(options.requiredRuntimeCapabilities?.length
+        ? { requiredRuntimeCapabilities: [...options.requiredRuntimeCapabilities] }
+        : {}),
+      ...(options.commitPolicy ? { commitPolicy: options.commitPolicy } : {}),
+      ...(options.phase ? { phase: options.phase } : {}),
+      ...(options.parentAttemptId ? { parentAttemptId: options.parentAttemptId } : {}),
+      ...(persistConversation ? { conversation: structuredClone(conversation) } : {}),
+      ...(options.recovery ? { recovery: structuredClone(options.recovery) } : {}),
+    };
+  }
+
+  private assertProviderAdmissionEvidence(
+    evidence: AgentProviderAdmissionEvidence,
+    attempt: TaskAttempt
+  ): void {
+    const missing = [
+      evidence.schemaVersion !== 'provider-admission-evidence/v1' ? 'schemaVersion' : undefined,
+      attempt.admissionReservationId !== evidence.reservationId ? 'reservationId' : undefined,
+      !attempt.executionTree ||
+      JSON.stringify(attempt.executionTree) !== JSON.stringify(evidence.executionTree)
+        ? 'executionTree'
+        : undefined,
+      evidence.outcome === 'queued-dispatch' && !evidence.queueEntryId ? 'queueEntryId' : undefined,
+      evidence.outcome === 'admitted' && evidence.queueEntryId ? 'queueOutcome' : undefined,
+    ].filter((field): field is string => Boolean(field));
+    if (missing.length > 0) {
+      throw new ConflictError('Provider launch is missing required admission evidence.', {
+        code: 'PROVIDER_ADMISSION_EVIDENCE_INVALID',
+        fields: missing,
+      });
+    }
+  }
+
   private queueDispatchFailure(error: unknown): {
     terminal: boolean;
     code: string;
@@ -780,14 +857,6 @@ export class ClawdbotAgentService {
       ).slice(0, 160),
       reason: redactedReason.trim().slice(0, 1_000) || 'Queued launch failed before dispatch.',
     };
-  }
-
-  private requireRunningLaunch(result: AgentLaunchStatus): AgentStatus {
-    if (result.status !== 'queued') return result;
-    throw new ConflictError('This launch source cannot enter the direct admission queue.', {
-      code: 'ADMISSION_QUEUE_SOURCE_DENIED',
-      queueId: result.queueId,
-    });
   }
 
   /**
@@ -1331,7 +1400,65 @@ export class ClawdbotAgentService {
         : {}),
       parentAttemptId: parentAttempt.id,
       recovery,
+      admissionIdempotencyKey: `recovery:${recovery.rootRunId}:${recovery.parentRunId}:${recovery.sequence}`,
     };
+  }
+
+  private async claimTaskRecoveryAfterAdmission(
+    taskId: string,
+    task: Task,
+    options: AgentStartOptions
+  ): Promise<Task> {
+    const requested = options.recovery;
+    if (!requested) return task;
+    const parentAttempt = task.attempt;
+    const current = parentAttempt?.runRetry;
+    if (
+      !parentAttempt ||
+      parentAttempt.id !== options.parentAttemptId ||
+      !current ||
+      !['scheduled', 'launching'].includes(current.state) ||
+      current.rootRunId !== requested.rootRunId ||
+      current.parentRunId !== requested.parentRunId ||
+      current.sequence !== requested.sequence ||
+      current.action !== requested.action ||
+      current.selectedAgent !== requested.selectedAgent
+    ) {
+      throw new ConflictError('Recovery launch no longer matches the pending parent attempt', {
+        taskId,
+        activeAttemptId: parentAttempt?.id,
+        parentAttemptId: options.parentAttemptId,
+        recoveryState: current?.state,
+        recoverySequence: current?.sequence,
+      });
+    }
+    if (current.state === 'launching') return task;
+
+    const launching: RunRecoveryRecord = { ...current, state: 'launching' };
+    const claimedAttempt = { ...parentAttempt, runRetry: launching };
+    const claimed = await this.taskService.updateTask(taskId, {
+      expectedRevision: normalizedTaskRevision(task),
+      attempt: claimedAttempt,
+      attempts: upsertAttemptHistory(task.attempts, claimedAttempt),
+    });
+    if (!claimed) throw new NotFoundError(`Task "${taskId}" disappeared during recovery launch`);
+    await this.appendRunEvent(
+      taskId,
+      parentAttempt.id,
+      'recovery.launching',
+      {
+        action: launching.action,
+        sequence: launching.sequence,
+        selectedAgent: launching.selectedAgent,
+      },
+      {
+        provider: 'system',
+        adapter: 'run-recovery',
+        agent: launching.selectedAgent,
+        dedupeKey: `recovery.launching:${launching.sequence}`,
+      }
+    );
+    return claimed;
   }
 
   private scheduleTaskRecovery(
@@ -1383,60 +1510,32 @@ export class ClawdbotAgentService {
       return;
     }
 
-    const launching: RunRecoveryRecord = { ...recovery, state: 'launching' };
-    const claimedAttempt = { ...parentAttempt, runRetry: launching };
-    const claimed = await this.taskService.updateTask(taskId, {
-      expectedRevision: normalizedTaskRevision(task),
-      attempt: claimedAttempt,
-      attempts: upsertAttemptHistory(task.attempts, claimedAttempt),
-    });
-    if (!claimed) return;
-    await this.appendRunEvent(
-      taskId,
-      attemptId,
-      'recovery.launching',
-      {
-        action: launching.action,
-        sequence: launching.sequence,
-        selectedAgent: launching.selectedAgent,
-      },
-      {
-        provider: 'system',
-        adapter: 'run-recovery',
-        agent: launching.selectedAgent,
-        dedupeKey: `recovery.launching:${launching.sequence}`,
-      }
-    );
-
     try {
-      const child = this.requireRunningLaunch(
-        await this.startAgent(
-          taskId,
-          launching.selectedAgent,
-          this.recoveryLaunchOptions(claimedAttempt, launching)
-        )
-      );
-      await this.appendRunEvent(
+      const child = await this.startAgent(
         taskId,
-        child.attemptId,
-        'recovery.launched',
-        {
-          action: launching.action,
-          sequence: launching.sequence,
-          parentAttemptId: attemptId,
-          launchedAttemptId: child.attemptId,
-          selectedAgent: child.agent,
-          sourceManifestDigest: launching.sourceManifestDigest,
-          launchedManifestDigest: child.runLaunchManifest.digest,
-          cumulativeBudget: launching.cumulativeBudget,
-        },
-        {
-          provider: 'system',
-          adapter: 'run-recovery',
-          agent: child.agent,
-          dedupeKey: `recovery.launched:${launching.sequence}`,
-        }
+        recovery.selectedAgent,
+        this.recoveryLaunchOptions(parentAttempt, recovery)
       );
+      if (child.status === 'queued') {
+        await this.appendRunEvent(
+          taskId,
+          attemptId,
+          'recovery.queued',
+          {
+            action: recovery.action,
+            sequence: recovery.sequence,
+            queueId: child.queueId,
+            selectedAgent: child.agent,
+            retryAfterMs: child.retryAfterMs,
+          },
+          {
+            provider: 'system',
+            adapter: 'run-recovery',
+            agent: child.agent,
+            dedupeKey: `recovery.queued:${recovery.sequence}`,
+          }
+        );
+      }
     } catch (error) {
       const latest = await this.taskService.getTask(taskId);
       if (latest?.attempt?.id === attemptId) {
@@ -2320,19 +2419,14 @@ export class ClawdbotAgentService {
         isRoot: !parentAttempt,
       }),
     ]);
+    const admissionSource = this.agentAdmissionSource(executionTree, options.recovery);
     const admissionInput = {
       taskId,
       rootTaskId: options.rootTaskId,
       workspaceId: taskEnvelope.workspace.workspaceId,
       provider,
       hostId: runLaunchManifest.routing.selectedHost,
-      source: options.recovery
-        ? options.recovery.action === 'fallback'
-          ? 'fallback'
-          : 'recovery'
-        : conversationRequest.mode === 'fresh'
-          ? 'direct'
-          : 'conversation',
+      source: admissionSource,
       idempotencyKey: options.admissionIdempotencyKey,
       executionTree,
       budgetPolicies: executionBudgetPolicies,
@@ -2341,28 +2435,18 @@ export class ClawdbotAgentService {
         retries: options.recovery ? 1 : 0,
       },
     } as const;
-    const queueableDirectLaunch =
-      !options.admissionQueueClaim &&
-      conversationRequest.mode === 'fresh' &&
-      !conversationRequest.message &&
-      !options.recovery &&
-      !options.parentAttemptId &&
-      !options.profileId &&
-      !options.overrideReason &&
-      !options.sandboxPresetId &&
-      !options.budget &&
-      !options.requiredRuntimeCapabilities?.length &&
-      !options.commitPolicy &&
-      !options.phase;
     const admissionDecision = options.admissionQueueClaim
       ? undefined
-      : queueableDirectLaunch
-        ? await this.admission.admitOrQueue(admissionInput, {
+      : await this.admission.admitOrQueue(admissionInput, {
+          target: {
+            kind: 'agent-launch',
             agent,
-            attemptId,
-            priority: task.priority,
-          })
-        : await this.admission.admit(admissionInput);
+            source: admissionSource,
+            options: this.admissionAgentLaunchOptions(options, conversationRequest, overrideReason),
+          },
+          attemptId,
+          priority: task.priority,
+        });
     if (admissionDecision?.outcome === 'queued' && admissionDecision.queueEntry) {
       try {
         await this.filesystemSandbox.cleanup(filesystemSandboxPlan);
@@ -2411,7 +2495,8 @@ export class ClawdbotAgentService {
       const driftFields = [
         queuedClaim.entry.state !== 'leased' ? 'queueState' : undefined,
         queuedClaim.entry.attemptId !== attemptId ? 'attemptId' : undefined,
-        (queuedClaim.entry.target?.kind === 'direct'
+        (queuedClaim.entry.target?.kind === 'direct' ||
+        queuedClaim.entry.target?.kind === 'agent-launch'
           ? queuedClaim.entry.target.agent
           : queuedClaim.entry.agent) !== agent
           ? 'agent'
@@ -2419,7 +2504,7 @@ export class ClawdbotAgentService {
         queuedClaim.entry.reservationId !== queuedClaim.reservation.id
           ? 'reservationId'
           : undefined,
-        queuedRequest.source !== 'direct' ? 'source' : undefined,
+        queuedRequest.source !== admissionSource ? 'source' : undefined,
         queuedRequest.taskId !== taskId ? 'taskId' : undefined,
         queuedRequest.rootTaskId !== (options.rootTaskId ?? taskId) ? 'rootTaskId' : undefined,
         queuedRequest.workspaceId !== taskEnvelope.workspace.workspaceId
@@ -2479,6 +2564,16 @@ export class ClawdbotAgentService {
           `bind-failed:${attemptId}`
         )
         .catch(() => {});
+      throw error;
+    }
+    try {
+      task = await this.claimTaskRecoveryAfterAdmission(taskId, task, options);
+    } catch (error) {
+      await this.releaseAdmission(
+        admissionReservation.id,
+        'start-failed',
+        `recovery-claim-failed:${attemptId}`
+      );
       throw error;
     }
     // Create event emitter for status updates
@@ -2571,7 +2666,7 @@ export class ClawdbotAgentService {
       executionTree,
     };
 
-    const usesManagedWorktree = Boolean(task.git.worktreeManifestId && task.git.worktreeLeaseId);
+    const usesManagedWorktree = Boolean(task.git?.worktreeManifestId && task.git.worktreeLeaseId);
     if (usesManagedWorktree) {
       try {
         await this.worktrees.claimOwnership(taskId, attemptId);
@@ -2713,6 +2808,29 @@ export class ClawdbotAgentService {
       if (queuedClaim) {
         await this.admission.markQueueDispatched(queuedClaim.entry.id, attemptId);
       }
+      if (options.recovery && runRetry) {
+        await this.appendRunEvent(
+          taskId,
+          attemptId,
+          'recovery.launched',
+          {
+            action: runRetry.action,
+            sequence: runRetry.sequence,
+            parentAttemptId: options.parentAttemptId,
+            launchedAttemptId: attemptId,
+            selectedAgent: agent,
+            sourceManifestDigest: runRetry.sourceManifestDigest,
+            launchedManifestDigest: runRetry.launchedManifestDigest,
+            cumulativeBudget: runRetry.cumulativeBudget,
+          },
+          {
+            provider: 'system',
+            adapter: 'run-recovery',
+            agent,
+            dedupeKey: `recovery.launched:${runRetry.sequence}`,
+          }
+        );
+      }
       const startedEvent = await this.appendRunEvent(
         taskId,
         attemptId,
@@ -2789,6 +2907,8 @@ export class ClawdbotAgentService {
         agent,
         model: launchAgentConfig?.model,
         project: task.project,
+        admissionSource,
+        admissionOutcome: queuedClaim ? 'queued-dispatch' : 'admitted',
         harnessSupport: this.harnessTelemetry(harnessSupport),
       });
 
@@ -2797,6 +2917,15 @@ export class ClawdbotAgentService {
         runLaunchManifest.workspaceTrust
       );
       await this.filesystemSandbox.activate(filesystemSandboxPlan);
+      const providerAdmission: AgentProviderAdmissionEvidence = {
+        schemaVersion: 'provider-admission-evidence/v1',
+        source: admissionSource,
+        outcome: queuedClaim ? 'queued-dispatch' : 'admitted',
+        reservationId: admissionReservation.id,
+        ...(queuedClaim ? { queueEntryId: queuedClaim.entry.id } : {}),
+        executionTree,
+      };
+      this.assertProviderAdmissionEvidence(providerAdmission, attempt);
       await adapter.start({
         task,
         agentConfig: launchAgentConfig,
@@ -2809,6 +2938,7 @@ export class ClawdbotAgentService {
         sandboxPolicy: sandboxPolicy.result,
         runLaunchManifest,
         conversation,
+        admission: providerAdmission,
       });
     } catch (error: unknown) {
       const startError = error instanceof Error ? error : new Error(String(error));
@@ -4220,18 +4350,16 @@ export class ClawdbotAgentService {
     sourceAttemptId: string,
     message: string,
     options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {}
-  ): Promise<AgentStatus> {
+  ): Promise<AgentLaunchStatus> {
     const source = this.conversationLifecycle.source(
       await this.findAttempt(sourceAttemptId),
       'resume'
     );
-    return this.requireRunningLaunch(
-      await this.startAgent(taskId, source.attempt.agent, {
-        ...options,
-        parentAttemptId: source.attempt.id,
-        conversation: { mode: 'resume', intent: 'resume', sourceAttemptId, message },
-      })
-    );
+    return this.startAgent(taskId, source.attempt.agent, {
+      ...options,
+      parentAttemptId: source.attempt.id,
+      conversation: { mode: 'resume', intent: 'resume', sourceAttemptId, message },
+    });
   }
 
   async followUpConversation(
@@ -4239,23 +4367,21 @@ export class ClawdbotAgentService {
     sourceAttemptId: string,
     message: string,
     options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {}
-  ): Promise<AgentStatus> {
+  ): Promise<AgentLaunchStatus> {
     const source = this.conversationLifecycle.source(
       await this.findAttempt(sourceAttemptId),
       'resume'
     );
-    return this.requireRunningLaunch(
-      await this.startAgent(taskId, source.attempt.agent, {
-        ...options,
-        parentAttemptId: source.attempt.id,
-        conversation: {
-          mode: 'resume',
-          intent: 'follow-up',
-          sourceAttemptId,
-          message,
-        },
-      })
-    );
+    return this.startAgent(taskId, source.attempt.agent, {
+      ...options,
+      parentAttemptId: source.attempt.id,
+      conversation: {
+        mode: 'resume',
+        intent: 'follow-up',
+        sourceAttemptId,
+        message,
+      },
+    });
   }
 
   async forkConversation(
@@ -4264,24 +4390,22 @@ export class ClawdbotAgentService {
     message: string,
     forkTurnId?: string,
     options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {}
-  ): Promise<AgentStatus> {
+  ): Promise<AgentLaunchStatus> {
     const source = this.conversationLifecycle.source(
       await this.findAttempt(sourceAttemptId),
       'fork'
     );
-    return this.requireRunningLaunch(
-      await this.startAgent(taskId, source.attempt.agent, {
-        ...options,
-        parentAttemptId: source.attempt.id,
-        conversation: {
-          mode: 'fork',
-          intent: 'fork',
-          sourceAttemptId,
-          message,
-          ...(forkTurnId ? { forkTurnId } : {}),
-        },
-      })
-    );
+    return this.startAgent(taskId, source.attempt.agent, {
+      ...options,
+      parentAttemptId: source.attempt.id,
+      conversation: {
+        mode: 'fork',
+        intent: 'fork',
+        sourceAttemptId,
+        message,
+        ...(forkTurnId ? { forkTurnId } : {}),
+      },
+    });
   }
 
   async compactConversation(

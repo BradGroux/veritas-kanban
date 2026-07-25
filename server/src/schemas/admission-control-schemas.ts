@@ -11,12 +11,25 @@ import {
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   ADMISSION_RESERVATION_STATES,
   ADMISSION_SCOPES,
+  CONVERSATION_LAUNCH_INTENTS,
+  CONVERSATION_LAUNCH_MODES,
   EXECUTION_TREE_BUDGET_EVENT_SCHEMA_VERSION,
   EXECUTION_TREE_EDGE_KINDS,
   EXECUTION_TREE_IDENTITY_SCHEMA_VERSION,
   EXECUTABLE_AGENT_PROVIDERS,
+  PHASE_NAMES,
+  RUN_FAILURE_CLASSES,
+  RUN_RECOVERY_ACTIONS,
+  RUN_RECOVERY_SCHEMA_VERSION,
+  RUN_RECOVERY_STATES,
+  TASK_COMMIT_POLICIES,
 } from '@veritas-kanban/shared';
-import { AgentBudgetLimitsSchema, AgentBudgetUsageSchema } from './agent-budget-schemas.js';
+import {
+  AgentBudgetLimitsSchema,
+  AgentBudgetPolicySchema,
+  AgentBudgetUsageSchema,
+} from './agent-budget-schemas.js';
+import { ProviderRuntimeCapabilityIdSchema } from './provider-runtime-manifest-schemas.js';
 
 const identifier = z.string().trim().min(1).max(240);
 const policyIdentifier = z.string().trim().min(1).max(256);
@@ -216,11 +229,87 @@ export const AdmissionReservationSchema = z
     }
   });
 
+const ConversationLaunchRequestSchema = z
+  .object({
+    mode: z.enum(CONVERSATION_LAUNCH_MODES),
+    intent: z.enum(CONVERSATION_LAUNCH_INTENTS).optional(),
+    sourceAttemptId: identifier.optional(),
+    forkTurnId: z.string().trim().min(1).max(240).optional(),
+    message: z.string().trim().min(1).max(20_000).optional(),
+  })
+  .strict();
+
+const RunRecoveryRecordSchema = z
+  .object({
+    schemaVersion: z.literal(RUN_RECOVERY_SCHEMA_VERSION),
+    rootRunId: identifier,
+    parentRunId: identifier,
+    sequence: z.number().int().nonnegative().max(100),
+    fallbackUsed: z.boolean(),
+    state: z.enum(RUN_RECOVERY_STATES),
+    action: z.enum(RUN_RECOVERY_ACTIONS),
+    failure: z
+      .object({
+        classification: z.enum(RUN_FAILURE_CLASSES),
+        summary: z.string().trim().min(1).max(1_000),
+        retryable: z.boolean(),
+        approvalRequired: z.boolean(),
+        destructiveSideEffects: z.boolean(),
+      })
+      .strict(),
+    reason: z.string().trim().min(1).max(4_000),
+    backoffMs: z.number().int().nonnegative().max(2_147_483_647),
+    scheduledAt: z.string().datetime().optional(),
+    notBefore: z.string().datetime().optional(),
+    launchedAt: z.string().datetime().optional(),
+    launchedRunId: identifier.optional(),
+    cancelledAt: z.string().datetime().optional(),
+    cancelledBy: z.string().trim().min(1).max(240).optional(),
+    selectedAgent: identifier,
+    fallbackAgent: identifier.optional(),
+    routingDecision: z.string().trim().min(1).max(4_000),
+    sourceManifestDigest: digest.optional(),
+    launchedManifestDigest: digest.optional(),
+    requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(128),
+    cumulativeBudget: AgentBudgetUsageSchema,
+    handoff: z
+      .object({
+        summary: z.string().trim().min(1).max(4_000),
+        nextActions: z.array(z.string().trim().min(1).max(4_000)).max(32),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const AdmissionAgentLaunchOptionsSchema = z
+  .object({
+    profileId: identifier.optional(),
+    overrideReason: z.string().trim().min(1).max(2_000).optional(),
+    sandboxPresetId: identifier.optional(),
+    budget: AgentBudgetPolicySchema.optional(),
+    requiredRuntimeCapabilities: z.array(ProviderRuntimeCapabilityIdSchema).max(128).optional(),
+    commitPolicy: z.enum(TASK_COMMIT_POLICIES).optional(),
+    phase: z.enum(PHASE_NAMES).optional(),
+    parentAttemptId: identifier.optional(),
+    conversation: ConversationLaunchRequestSchema.optional(),
+    recovery: RunRecoveryRecordSchema.optional(),
+  })
+  .strict();
+
 export const AdmissionQueueTargetSchema = z.discriminatedUnion('kind', [
   z
     .object({
       kind: z.literal('direct'),
       agent: identifier,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('agent-launch'),
+      agent: identifier,
+      source: z.enum(['direct', 'conversation', 'recovery', 'fallback', 'child-agent']),
+      options: AdmissionAgentLaunchOptionsSchema,
     })
     .strict(),
   z
@@ -365,11 +454,24 @@ export const AdmissionQueueEntrySchema = z
         path: ['agent'],
       });
     }
-    if (entry.target && entry.target.kind !== 'direct' && entry.agent) {
+    if (entry.target && !['direct'].includes(entry.target.kind) && entry.agent) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Workflow queue targets cannot contain a direct agent identity.',
+        message: 'Versioned queue targets cannot contain a legacy direct agent identity.',
         path: ['agent'],
+      });
+    }
+    if (
+      entry.target?.kind === 'agent-launch' &&
+      (entry.request.source !== entry.target.source ||
+        entry.request.provider === ADMISSION_CONTROL_PROVIDER ||
+        entry.request.workflowRunId !== undefined ||
+        entry.request.workflowStepId !== undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Agent launch queue target must match its admission request.',
+        path: ['target'],
       });
     }
     if (

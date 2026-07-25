@@ -162,6 +162,46 @@ describe('AdmissionControlService', () => {
     });
   });
 
+  it('queues every provider-neutral agent launch source through one target contract', async () => {
+    const repository = await repositoryFor('file');
+    const service = createService(
+      repository,
+      configuredSettings({ global: { concurrentRuns: 1 } })
+    );
+    const active = await service.admit(request('task-source-blocker'));
+    expect(active.outcome).toBe('admitted');
+
+    const sources = ['direct', 'conversation', 'recovery', 'fallback', 'child-agent'] as const;
+    for (const source of sources) {
+      const decision = await service.admitOrQueue(
+        {
+          ...request(`task-source-${source}`),
+          source,
+        },
+        {
+          attemptId: `attempt-source-${source}`,
+          target: {
+            kind: 'agent-launch',
+            agent: 'codex',
+            source,
+            options: {},
+          },
+        }
+      );
+      expect(decision).toMatchObject({
+        outcome: 'queued',
+        request: { source },
+        queueEntry: {
+          target: {
+            kind: 'agent-launch',
+            agent: 'codex',
+            source,
+          },
+        },
+      });
+    }
+  });
+
   it('admits maximum-length scope identifiers without overflowing generated policy IDs', async () => {
     const repository = await repositoryFor('file');
     const service = createService(repository, configuredSettings());

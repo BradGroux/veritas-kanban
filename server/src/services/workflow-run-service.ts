@@ -18,6 +18,7 @@ import {
   type AgentBudgetUsage,
   type AgentType,
   type AdmissionDecision,
+  type AdmissionLaunchSource,
   type AdmissionQueueClaim,
   type AdmissionQueueEntry,
   type AdmissionReservation,
@@ -80,6 +81,10 @@ const RESERVED_CONTEXT_KEYS = new Set([
   '_gateBlock',
   '_gateApproval',
 ]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 class WorkflowStepAdmissionError extends Error {
   readonly decision: AdmissionDecision;
@@ -367,6 +372,14 @@ export class WorkflowRunService {
     return normalizeWorkspaceId(task.project?.trim() || task.git?.repo || task.id);
   }
 
+  private workflowAdmissionSource(
+    run: WorkflowRun
+  ): Extract<AdmissionLaunchSource, 'workflow' | 'scheduled' | 'watcher'> {
+    if (isRecord(run.context.scheduler)) return 'scheduled';
+    if (isRecord(run.context.queueMonitor)) return 'watcher';
+    return 'workflow';
+  }
+
   private admissionConflict(decision: AdmissionDecision, subject: string): ConflictError {
     return new ConflictError(
       decision.outcome === 'retryable-overload'
@@ -435,7 +448,7 @@ export class WorkflowRunService {
       workspaceId,
       provider: ADMISSION_CONTROL_PROVIDER,
       hostId: this.admission.getExecutionHostId(),
-      source: 'workflow',
+      source: this.workflowAdmissionSource(run),
       workflowRunId: run.id,
       idempotencyKey: `workflow-root:${run.id}`,
       requested: {
@@ -584,6 +597,10 @@ export class WorkflowRunService {
     const hostId =
       preparation.hostRouting.selectedHostId ??
       (preparation.runtimeProvider === 'openclaw' ? 'openclaw-gateway' : 'local-process');
+    const rootReservation = await this.admission.get(rootReservationId);
+    const rootSource = ['scheduled', 'watcher'].includes(rootReservation.request.source)
+      ? rootReservation.request.source
+      : 'workflow';
     const admissionInput = {
       taskId: admissionTaskId,
       rootTaskId: run.admission.rootTaskId,
@@ -595,13 +612,13 @@ export class WorkflowRunService {
           ? 'fallback'
           : stepRun.runRetry
             ? 'recovery'
-            : 'workflow',
+            : rootSource,
       workflowRunId: run.id,
       workflowStepId: step.id,
       rootReservationId,
       idempotencyKey: `workflow-step:${run.id}:${step.id}:${sequence}`,
       executionTree,
-      budgetPolicies: (await this.admission.get(rootReservationId)).request.budgetPolicies,
+      budgetPolicies: rootReservation.request.budgetPolicies,
       budgetRequest: {
         fanOut: Math.max(1, step.parallel?.steps.length ?? 1),
         retries: stepRun.runRetry ? 1 : 0,
@@ -761,7 +778,7 @@ export class WorkflowRunService {
     terminalEntry: AdmissionQueueEntry
   ): Promise<void> {
     const target = claim.entry.target;
-    if (!target || target.kind === 'direct') return;
+    if (!target || target.kind === 'direct' || target.kind === 'agent-launch') return;
     const run = await this.getRun(target.workflowRunId);
     if (!run) return;
     const reason = terminalEntry.terminal?.reason ?? 'Workflow queue authority changed.';
@@ -1052,7 +1069,7 @@ export class WorkflowRunService {
 
   private async rollbackWorkflowQueueClaim(claim: AdmissionQueueClaim): Promise<void> {
     const target = claim.entry.target;
-    if (!target || target.kind === 'direct') return;
+    if (!target || target.kind === 'direct' || target.kind === 'agent-launch') return;
     const run = await this.getRun(target.workflowRunId);
     if (!run) return;
     if (
@@ -1594,7 +1611,7 @@ export class WorkflowRunService {
           stepRun.status = 'running';
           stepRun.error = undefined;
           stepRun.startedAt = new Date().toISOString();
-          if (stepRun.runRetry?.state === 'launching') {
+          if (stepRun.runRetry && ['scheduled', 'launching'].includes(stepRun.runRetry.state)) {
             stepRun.runRetry = {
               ...stepRun.runRetry,
               state: 'launched',
@@ -2271,7 +2288,6 @@ export class WorkflowRunService {
     }
     stepRun.runRetry = {
       ...recovery,
-      state: 'launching',
       selectedAgent: stepRun.agent ?? recovery.selectedAgent,
     };
     stepRun.status = 'pending';
