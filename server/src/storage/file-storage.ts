@@ -43,6 +43,7 @@ import type {
   RunApprovalRepository,
   PhaseTransitionRepository,
   RunSupervisorRepository,
+  AdmissionReservationRepository,
   ToolControlPlaneRepository,
 } from './interfaces.js';
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
@@ -71,6 +72,7 @@ import { FileRunEventRepository } from './run-event-repository.js';
 import { FileRunApprovalRepository } from './run-approval-repository.js';
 import { FilePhaseTransitionRepository } from './phase-transition-repository.js';
 import { FileRunSupervisorRepository } from './run-supervisor-repository.js';
+import { FileAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
 
 // ---------------------------------------------------------------------------
@@ -492,6 +494,7 @@ export interface FileStorageOptions {
   runApprovalsPath?: string;
   phaseTransitionsPath?: string;
   runSupervisorsPath?: string;
+  admissionReservationsPath?: string;
   toolControlPlanePath?: string;
 }
 
@@ -508,6 +511,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly runApprovals: RunApprovalRepository;
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
+  readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
 
   private taskService: TaskService;
@@ -562,6 +566,9 @@ export class FileStorageProvider implements StorageProvider {
     this.runApprovals = new FileRunApprovalRepository(options.runApprovalsPath);
     this.phaseTransitions = new FilePhaseTransitionRepository(options.phaseTransitionsPath);
     this.runSupervisors = new FileRunSupervisorRepository(options.runSupervisorsPath);
+    this.admissionReservations = new FileAdmissionReservationRepository(
+      options.admissionReservationsPath
+    );
     this.toolControlPlane = new FileToolControlPlaneRepository(options.toolControlPlanePath);
   }
 

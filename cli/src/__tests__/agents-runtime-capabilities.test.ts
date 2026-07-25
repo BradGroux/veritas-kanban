@@ -16,6 +16,15 @@ import { registerAgentCommands } from '../commands/agents.js';
 
 const temporaryRoots: string[] = [];
 
+function expectLaunchBody(expected: Record<string, unknown>): void {
+  const [url, request] = mockApi.mock.calls.at(-1) as [string, { method: string; body: string }];
+  const { idempotencyKey, ...body } = JSON.parse(request.body) as Record<string, unknown>;
+  expect(url).toBe('/api/agents/task_1/start');
+  expect(request.method).toBe('POST');
+  expect(idempotencyKey).toMatch(/^vk-cli:task_1:[0-9a-f-]{36}$/);
+  expect(body).toEqual(expected);
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))
@@ -61,15 +70,11 @@ describe('vk agent runtime capability controls', () => {
       { from: 'user' }
     );
 
-    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
-      method: 'POST',
-      body: JSON.stringify({
-        agent: 'codex',
-        profileId: undefined,
-        phase: 'implement',
-        requiredRuntimeCapabilities: ['tool.mcp', 'output.structured'],
-        parentAttemptId: 'attempt_parent',
-      }),
+    expectLaunchBody({
+      agent: 'codex',
+      phase: 'implement',
+      requiredRuntimeCapabilities: ['tool.mcp', 'output.structured'],
+      parentAttemptId: 'attempt_parent',
     });
   });
 
@@ -116,14 +121,9 @@ describe('vk agent runtime capability controls', () => {
       { from: 'user' }
     );
 
-    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
-      method: 'POST',
-      body: JSON.stringify({
-        agent: 'codex',
-        profileId: undefined,
-        requiredRuntimeCapabilities: undefined,
-        commitPolicy: 'forbidden',
-      }),
+    expectLaunchBody({
+      agent: 'codex',
+      commitPolicy: 'forbidden',
     });
   });
 

@@ -27,6 +27,7 @@ export type {
   RunEventRepositoryAppendInput,
   RunApprovalRepository,
   PhaseTransitionRepository,
+  AdmissionReservationRepository,
   ToolControlPlaneRepository,
   SetupContextRepository,
   WorkspaceFileRepository,
@@ -62,6 +63,10 @@ export {
   InMemoryPhaseTransitionRepository,
   getPhaseTransitionsPath,
 } from './phase-transition-repository.js';
+export {
+  FileAdmissionReservationRepository,
+  getAdmissionReservationsPath,
+} from './admission-reservation-repository.js';
 export type { FileStorageOptions } from './file-storage.js';
 export {
   DEFAULT_SQLITE_FILENAME,
@@ -90,6 +95,7 @@ export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
 export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
 export { SqliteRunApprovalRepository } from './sqlite/run-approval-repository.js';
 export { SqlitePhaseTransitionRepository } from './sqlite/phase-transition-repository.js';
+export { SqliteAdmissionReservationRepository } from './sqlite/admission-reservation-repository.js';
 export {
   FileToolControlPlaneRepository,
   InMemoryToolControlPlaneRepository,

@@ -19,6 +19,7 @@ Comprehensive guide to the `vk` command-line tool for Veritas Kanban.
   - [Agent Status](#agent-status)
   - [Project Management](#project-management)
   - [Agent Commands](#agent-commands)
+  - [Admission Commands](#admission-commands)
   - [Automation Commands](#automation-commands)
   - [Scheduler Commands](#scheduler-commands)
   - [Queue Monitor Commands](#queue-monitor-commands)
@@ -587,6 +588,24 @@ applies immediately. Expansion returns an exact approval; decide it with
 transition with the same `--operation` and `--approval-id`. Emergency expansion
 requires `--override-until` and `--override-reason`; the authenticated caller
 must be an administrator and the expiry cannot exceed 24 hours.
+
+---
+
+### Admission Commands
+
+Inspect the capacity reservation that must exist before a provider can start:
+
+```bash
+vk admission list
+vk admission list --state active --provider codex-cli --json
+vk admission get admission_0123456789abcdef --json
+```
+
+`admission list` filters by workspace, task, root task, provider, host, state,
+and result limit. Active records show the lease expiry and requested run,
+process, and estimated-memory capacity. Released records retain the terminal
+reason and idempotency identity for operator diagnosis. These are read-only
+commands and require `agent:read`.
 
 ---
 

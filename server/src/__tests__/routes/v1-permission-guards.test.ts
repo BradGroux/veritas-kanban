@@ -3,6 +3,7 @@ import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest, AuthPermission } from '../../middleware/auth.js';
 import {
   activityAccess,
+  admissionAccess,
   agentPermissionAccess,
   agentRegistryAccess,
   agentRoutingAccess,
@@ -51,6 +52,21 @@ function runGuard(handler: AccessGuard, req: AuthenticatedRequest) {
 }
 
 describe('v1 REST permission guard presets', () => {
+  it('allows admission inspection but reserves future mutations for administrators', () => {
+    expect(
+      runGuard(admissionAccess, mockRequest('GET', '/', 'agent', ['agent:read'])).next
+    ).toHaveBeenCalled();
+
+    const mutation = runGuard(admissionAccess, mockRequest('POST', '/', 'agent', ['agent:read']));
+    expect(mutation.next).not.toHaveBeenCalled();
+    expect(mutation.res.status).toHaveBeenCalledWith(403);
+    expect(mutation.res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ required: ['admin:manage'] }),
+      })
+    );
+  });
+
   it('blocks read-only callers from task, settings, workflow, comment, and approval mutations', () => {
     const blockedMutations: Array<{
       guard: AccessGuard;

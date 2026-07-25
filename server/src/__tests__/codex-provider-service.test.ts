@@ -203,6 +203,7 @@ import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-diges
 import type { FilesystemSandboxService } from '../services/filesystem-sandbox-service.js';
 import type { SandboxPolicyService } from '../services/sandbox-policy-service.js';
 import type { WorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
+import type { AdmissionControlService } from '../services/admission-control-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -250,7 +251,8 @@ function testableService(
   workspaceExecutionTrust: Pick<
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
-  > = testWorkspaceExecutionTrust()
+  > = testWorkspaceExecutionTrust(),
+  admission?: AdmissionControlService
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -273,7 +275,8 @@ function testableService(
     sandboxPolicies,
     workspaceExecutionTrust,
     undefined,
-    { getCurrent: vi.fn().mockResolvedValue(null) }
+    { getCurrent: vi.fn().mockResolvedValue(null) },
+    admission
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -3426,6 +3429,55 @@ describe('ClawdbotAgentService Codex providers', () => {
       }),
     });
     expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('blocks provider dispatch before attempt persistence when admission is overloaded', async () => {
+    const admit = vi.fn().mockResolvedValue({
+      schemaVersion: 'admission-decision/v1',
+      outcome: 'retryable-overload',
+      request: {
+        schemaVersion: 'admission-request/v1',
+        idempotencyKey: 'launch:overloaded-task',
+        source: 'direct',
+        taskId: task.id,
+        rootTaskId: task.id,
+        workspaceId: task.project,
+        provider: 'codex-cli',
+        hostId: 'local-process',
+        requested: { runSlots: 1, processSlots: 1, estimatedMemoryMb: 512 },
+        requestedAt: '2026-07-25T10:00:00.000Z',
+      },
+      limitingPolicies: [
+        {
+          id: 'global:global',
+          scope: 'global',
+          scopeId: 'global',
+          limits: { concurrentRuns: 1 },
+        },
+      ],
+      retryAfterMs: 5_000,
+      reason: 'Active reservations currently consume the configured capacity.',
+      decidedAt: '2026-07-25T10:00:00.000Z',
+    });
+    const admission = { admit } as unknown as AdmissionControlService;
+    const service = testableService(
+      tmpDir,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      testWorkspaceExecutionTrust(),
+      admission
+    );
+
+    await expect(service.startAgent(task.id, 'codex')).rejects.toMatchObject({
+      statusCode: 409,
+      details: expect.objectContaining({ code: 'ADMISSION_OVERLOAD' }),
+    });
+    expect(admit).toHaveBeenCalledOnce();
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
   });
 
   it('records user stop requests as abort trace steps before completing the attempt', async () => {

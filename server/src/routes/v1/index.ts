@@ -18,6 +18,7 @@ import { Router, type IRouter, type Request } from 'express';
 import { readRateLimit, writeRateLimit, uploadRateLimit } from '../../middleware/rate-limit.js';
 import {
   activityAccess,
+  admissionAccess,
   adminAccess,
   agentPermissionAccess,
   agentRegistryAccess,
@@ -146,6 +147,7 @@ import { workspaceCapabilityRoutes } from '../workspace-capabilities.js';
 import { schedulerRoutes } from '../scheduler.js';
 import { queueMonitorRoutes } from '../queue-monitors.js';
 import { toolControlPlaneRoutes } from '../tool-control-plane.js';
+import { admissionRoutes } from '../admission.js';
 
 const v1Router: IRouter = Router();
 
@@ -200,6 +202,7 @@ v1Router.use('/agents/register', agentRegistryAccess, agentRegistryRoutes); // B
 v1Router.use('/agents/permissions', agentPermissionAccess, agentPermissionRoutes);
 v1Router.use('/agents', agentRoutingAccess, agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
 v1Router.use('/agents', agentTaskAccess, agentRoutes);
+v1Router.use('/admission', admissionAccess, admissionRoutes);
 v1Router.use('/diff', diffAccess, diffRoutes);
 v1Router.use('/automation', taskAccess, automationRoutes);
 v1Router.use('/summary', reportAccess, summaryRoutes);

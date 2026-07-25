@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { getApiPermissionRequirement } from '../../../shared/src/utils/api-permissions.js';
 
 describe('shared API permission metadata', () => {
+  it('keeps admission inspection agent-scoped and mutations admin-scoped', () => {
+    expect(getApiPermissionRequirement('/api/v1/admission').permissions).toEqual(['agent:read']);
+    expect(getApiPermissionRequirement('/api/admission', { method: 'POST' }).permissions).toEqual([
+      'admin:manage',
+    ]);
+  });
+
   it('requires agent write permission for local agent start and stop routes', () => {
     expect(
       getApiPermissionRequirement('/api/agents/task_1/start', { method: 'POST' }).permissions

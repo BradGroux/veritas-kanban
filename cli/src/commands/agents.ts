@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { randomUUID } from 'node:crypto';
 import chalk from 'chalk';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -234,6 +235,7 @@ export function registerAgentCommands(program: Command): void {
             requiredRuntimeCapabilities: options.requireCapability,
             commitPolicy: options.commitPolicy,
             parentAttemptId: options.parentAttempt,
+            idempotencyKey: `vk-cli:${task.id}:${randomUUID()}`,
           }),
         });
 
