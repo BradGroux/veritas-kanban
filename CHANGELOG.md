@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controls. Workflow recovery exposes the same exact-parent cancellation
   through REST (#861).
 
+### Changed
+
+- Reworked GitHub release notes to use natural page-width prose instead of
+  fragmented micro-sections, and expanded the release-format gate to reject
+  nested headings and consecutive sentence-sized prose blocks in v6.0.2 and
+  later release bodies (#1025).
+
 ## [6.0.2] - 2026-07-24
 
 Veritas Kanban 6.0.2 is a desktop recovery and supportability hotfix. It keeps

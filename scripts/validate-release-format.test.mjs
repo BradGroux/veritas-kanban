@@ -33,6 +33,14 @@ test('rejects release formatting that forces narrow or manual line breaks', () =
     ['HTML break', 'First paragraph.<br>\n'],
     ['blockquote', '> Narrow callout.\n'],
     ['hard-wrapped prose', 'First half of a paragraph\nsecond half of the paragraph.\n'],
+    [
+      'nested heading fragment',
+      '## What changed\n\n### One small change\n\nA complete explanation follows.\n',
+    ],
+    [
+      'consecutive short prose blocks',
+      'First short thought.\n\nSecond short thought.\n\nThird short thought.\n',
+    ],
     ['unclosed code fence', '```bash\nbrew update\n'],
   ];
 
@@ -51,6 +59,12 @@ test('accepts every checked-in GitHub release body', async () => {
 
   for (const file of releaseBodyFiles) {
     const body = await readFile(path.join(releaseBodyDir, file), 'utf8');
-    assert.deepEqual(releaseBodyFormattingIssues(body), [], file);
+    const [major, minor, patch] = file
+      .slice(1, -3)
+      .split('.')
+      .map((part) => Number.parseInt(part, 10));
+    const compactLayout = major > 6 || (major === 6 && (minor > 0 || (minor === 0 && patch >= 2)));
+
+    assert.deepEqual(releaseBodyFormattingIssues(body, { compactLayout }), [], file);
   }
 });

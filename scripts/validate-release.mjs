@@ -301,8 +301,10 @@ function normalizeReleaseBody(value) {
   return value.replace(/\r\n?/g, '\n').trim();
 }
 
-export function releaseBodyFormattingIssues(value) {
+export function releaseBodyFormattingIssues(value, options = {}) {
+  const { compactLayout = true } = options;
   const issues = [];
+  const shortProseBlocks = [];
 
   if (value.includes('\r')) {
     issues.push('contains carriage-return characters');
@@ -320,6 +322,7 @@ export function releaseBodyFormattingIssues(value) {
     if (/^```/.test(trimmedStart)) {
       inFence = !inFence;
       previousBlockLine = undefined;
+      shortProseBlocks.length = 0;
       continue;
     }
 
@@ -349,9 +352,32 @@ export function releaseBodyFormattingIssues(value) {
     const blockLine = {
       lineNumber,
       heading: /^\s*#{1,6}\s+/.test(line),
+      nestedHeading: /^\s*#{3,6}\s+/.test(line),
       listItem: /^\s*(?:[-*+]|\d+\.)\s+/.test(line),
       tableRow: /^\s*\|.*\|\s*$/.test(line),
     };
+
+    if (compactLayout && blockLine.nestedHeading) {
+      issues.push(
+        `line ${lineNumber} uses a nested heading that fragments the GitHub release layout`
+      );
+    }
+
+    const proseBlock =
+      !blockLine.heading && !blockLine.listItem && !blockLine.tableRow && trimmed.length < 160;
+
+    if (compactLayout && proseBlock) {
+      shortProseBlocks.push(lineNumber);
+      if (shortProseBlocks.length === 3) {
+        issues.push(
+          `lines ${shortProseBlocks.join(
+            ', '
+          )} form consecutive short prose blocks; combine them into full-width paragraphs`
+        );
+      }
+    } else {
+      shortProseBlocks.length = 0;
+    }
 
     if (
       previousBlockLine &&
@@ -401,7 +427,18 @@ async function main() {
   const releaseBodyFile = `docs/releases/v${expectedVersion}.md`;
   const releaseBodyExists = await exists(releaseBodyFile);
   const releaseBody = releaseBodyExists ? await readText(releaseBodyFile) : '';
-  const releaseBodyIssues = releaseBodyExists ? releaseBodyFormattingIssues(releaseBody) : [];
+  const releaseVersionParts = expectedVersion
+    .split(/[+-]/, 1)[0]
+    .split('.')
+    .map((part) => Number.parseInt(part, 10));
+  const compactReleaseLayout =
+    releaseVersionParts[0] > 6 ||
+    (releaseVersionParts[0] === 6 &&
+      (releaseVersionParts[1] > 0 ||
+        (releaseVersionParts[1] === 0 && releaseVersionParts[2] >= 2)));
+  const releaseBodyIssues = releaseBodyExists
+    ? releaseBodyFormattingIssues(releaseBody, { compactLayout: compactReleaseLayout })
+    : [];
 
   check(
     'Release version is valid semver',
