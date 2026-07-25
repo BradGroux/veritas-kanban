@@ -34,6 +34,22 @@ test('reports a missing canonical cadence rule with its file', () => {
   ]);
 });
 
+test('requires the 45-minute delivery checkpoint in canonical guidance', () => {
+  const files = validContractFiles();
+  files['AGENTS.md'] = files['AGENTS.md'].replace(
+    '45-minute delivery checkpoint',
+    'unbounded delivery loop'
+  );
+
+  assert.deepEqual(findMissingCadenceContracts(files), [
+    {
+      file: 'AGENTS.md',
+      message:
+        'required cadence contract is missing: 45-minute split or escalate delivery checkpoint',
+    },
+  ]);
+});
+
 test('rejects unconditional workspace-wide pnpm test commands', () => {
   assert.deepEqual(
     findUnsafePromptStatements({
