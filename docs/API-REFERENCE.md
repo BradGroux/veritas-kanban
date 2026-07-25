@@ -4194,6 +4194,31 @@ over the equivalent JSON `idempotencyKey` field and lets a retry reuse the same
 reservation without launching a second attempt. Veritas persists only its
 SHA-256 identity, never the supplied value.
 
+When capacity is temporarily exhausted, a reconstructable fresh direct start
+returns `201` with `status: "queued"` instead of `ADMISSION_OVERLOAD`:
+
+```json
+{
+  "taskId": "task_0123456789abcdef",
+  "attemptId": "attempt_01234567",
+  "queueId": "admission_queue_0123456789abcdef",
+  "agent": "codex",
+  "status": "queued",
+  "enqueuedAt": "2026-07-25T12:00:00.000Z",
+  "retryAfterMs": 5000,
+  "limitingScopes": [{ "scope": "global", "scopeId": "global" }]
+}
+```
+
+The response means Veritas durably accepted ownership. Clients and harnesses
+must not create a second launch. Starts containing a conversation message,
+profile, readiness override, sandbox or budget override, explicit runtime
+capability, commit policy, phase, recovery, or parent attempt are not
+reconstructable from durable task configuration and continue to fail closed
+with `ADMISSION_OVERLOAD`. Queue bounds and retry behavior are configured under
+`features.admission.queue`. Queue inspection endpoints are added separately;
+reservation inspection remains unchanged.
+
 ---
 
 ## Traces

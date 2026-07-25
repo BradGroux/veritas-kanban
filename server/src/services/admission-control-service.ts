@@ -6,7 +6,11 @@ import type {
   AdmissionLaunchSource,
   AdmissionLimitPolicy,
   AdmissionProvider,
+  AdmissionQueueClaim,
+  AdmissionQueueEntry,
+  AdmissionQueueListQuery,
   AdmissionReservation,
+  AdmissionReservationClaimOrQueueResult,
   AdmissionReservationListQuery,
   AdmissionReservationRelease,
   AdmissionSettings,
@@ -15,6 +19,7 @@ import type {
   ExecutionTreeBudgetSummary,
   ExecutionTreeBudgetUsageEvent,
   ExecutionTreeIdentity,
+  AgentType,
 } from '@veritas-kanban/shared';
 import {
   ADMISSION_DECISION_SCHEMA_VERSION,
@@ -59,6 +64,11 @@ export interface AdmissionRequestInput {
   requested?: Partial<AdmissionCapacityRequest>;
 }
 
+export interface DirectAdmissionQueueInput {
+  agent: AgentType;
+  attemptId: string;
+}
+
 export interface RecoverAdmissionInput {
   workspaceId: string;
   taskId: string;
@@ -91,6 +101,10 @@ function reservationId(idempotencyKey: string): string {
   return `admission_${createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32)}`;
 }
 
+function queueEntryId(idempotencyKey: string): string {
+  return `admission_queue_${createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32)}`;
+}
+
 function idempotencyIdentity(idempotencyKey: string): string {
   return `sha256:${createHash('sha256').update(idempotencyKey).digest('hex')}`;
 }
@@ -105,6 +119,8 @@ export class AdmissionControlService {
   private readonly processId: number;
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
   private readonly heartbeatEligible = new Set<string>();
+  private readonly queueHeartbeatTimers = new Map<string, NodeJS.Timeout>();
+  private readonly capacityListeners = new Set<() => void>();
 
   constructor(options: AdmissionControlServiceOptions = {}) {
     this.repositoryOverride = options.repository;
@@ -131,10 +147,30 @@ export class AdmissionControlService {
         leaseMs: settings.leaseMs,
       });
     }
+    if (settings.heartbeatMs >= settings.queue.leaseMs) {
+      throw new ConflictError('Admission heartbeat must be shorter than the queue lease.', {
+        heartbeatMs: settings.heartbeatMs,
+        queueLeaseMs: settings.queue.leaseMs,
+      });
+    }
     return settings;
   }
 
   async admit(input: AdmissionRequestInput): Promise<AdmissionDecision> {
+    return this.admitInternal(input);
+  }
+
+  async admitOrQueue(
+    input: AdmissionRequestInput,
+    queue: DirectAdmissionQueueInput
+  ): Promise<AdmissionDecision> {
+    return this.admitInternal(input, queue);
+  }
+
+  private async admitInternal(
+    input: AdmissionRequestInput,
+    queue?: DirectAdmissionQueueInput
+  ): Promise<AdmissionDecision> {
     const settings = await this.settings();
     const now = this.now();
     const idempotencyKey = idempotencyIdentity(
@@ -201,7 +237,59 @@ export class AdmissionControlService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
-    const claimed = await this.repository.claim({ record, now: now.toISOString() });
+    const queueable = Boolean(queue && settings.queue.enabled && request.source === 'direct');
+    const claimed: AdmissionReservationClaimOrQueueResult = queueable
+      ? await this.repository.claimOrEnqueue({
+          record,
+          queue: {
+            id: queueEntryId(idempotencyKey),
+            agent: queue?.agent as AgentType,
+            attemptId: queue?.attemptId as string,
+            request,
+            policies,
+            limitingPolicies: [],
+            retryAfterMs: settings.queue.retryBackoffMs,
+            maxRetries: settings.queue.maxRetries,
+            availableAt: now.toISOString(),
+            createdAt: now.toISOString(),
+          },
+          now: now.toISOString(),
+          globalQueueLimit: settings.queue.globalLimit,
+          workspaceQueueLimit: settings.queue.workspaceLimit,
+        })
+      : await this.repository.claim({ record, now: now.toISOString() });
+    if (claimed.queueConflict) {
+      return this.decision(
+        'terminal-policy-denial',
+        request,
+        claimed.limitingPolicies,
+        'The task already has a queued launch with a different agent selection.',
+        now
+      );
+    }
+    if (claimed.queueOverflow) {
+      return this.decision(
+        'queue-overflow',
+        request,
+        claimed.limitingPolicies,
+        `The ${claimed.queueOverflow} admission queue reached its configured bound.`,
+        now,
+        settings.retryAfterMs
+      );
+    }
+    if (claimed.queueEntry) {
+      return this.decision(
+        'queued',
+        request,
+        claimed.queueEntry.limitingPolicies,
+        'The launch is durably queued until admission capacity becomes available.',
+        now,
+        claimed.queueEntry.retryAfterMs,
+        undefined,
+        claimed.queueEntry.limitingBudgetPolicies,
+        claimed.queueEntry
+      );
+    }
     if (claimed.limitingBudgetPolicies?.length) {
       return this.decision(
         claimed.budgetRetryable ? 'retryable-overload' : 'terminal-policy-denial',
@@ -258,6 +346,174 @@ export class AdmissionControlService {
     );
   }
 
+  async claimNextQueued(): Promise<AdmissionQueueClaim | null> {
+    const settings = await this.settings();
+    for (let attempt = 1; attempt <= MAX_CAS_ATTEMPTS; attempt++) {
+      const now = this.now();
+      await this.repository.expireLeases(now.toISOString());
+      await this.repository.expireQueueLeases(now.toISOString());
+      const [entry] = await this.repository.listQueue({
+        states: ['queued', 'requeued'],
+        eligibleAt: now.toISOString(),
+        limit: 1,
+      });
+      if (!entry) return null;
+      const policies = this.policiesFor(entry.request, settings);
+      const impossible = requestExceedsPolicies(entry.request.requested, policies);
+      if (impossible.length > 0) {
+        await this.terminateQueueEntry(
+          entry.id,
+          'ADMISSION_POLICY_DRIFT',
+          'The queued launch exceeds the current admission policy.'
+        );
+        continue;
+      }
+      const record = AdmissionReservationSchema.parse({
+        schemaVersion: ADMISSION_RESERVATION_SCHEMA_VERSION,
+        id: reservationId(entry.request.idempotencyKey),
+        revision: 1,
+        state: 'active',
+        request: entry.request,
+        policies,
+        ...(entry.request.executionTree
+          ? {
+              executionBudget: initializeExecutionTreeBudget(
+                entry.request.budgetRequest ?? { ...ZERO_AGENT_BUDGET_USAGE }
+              ),
+            }
+          : {}),
+        lease: this.newLease(now, Math.min(settings.leaseMs, settings.queue.leaseMs)),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
+      const claimed = await this.repository.claimQueued({
+        queueId: entry.id,
+        expectedRevision: entry.revision,
+        record,
+        now: now.toISOString(),
+      });
+      if (claimed.stale) continue;
+      if (claimed.limitingBudgetPolicies?.length && claimed.budgetRetryable === false) {
+        await this.terminateQueueEntry(
+          entry.id,
+          'ADMISSION_BUDGET_EXHAUSTED',
+          'Committed execution-tree usage exhausts the current budget.'
+        );
+        continue;
+      }
+      if (
+        claimed.limitingPolicies.length > 0 ||
+        claimed.limitingBudgetPolicies?.length ||
+        !claimed.entry ||
+        !claimed.reservation
+      ) {
+        return null;
+      }
+      const queueClaim = { entry: claimed.entry, reservation: claimed.reservation };
+      this.startQueueHeartbeat(queueClaim, settings.heartbeatMs);
+      return queueClaim;
+    }
+    return null;
+  }
+
+  async getQueueEntry(id: string): Promise<AdmissionQueueEntry> {
+    const entry = await this.repository.getQueueEntry(id);
+    if (!entry) throw new NotFoundError('Admission queue entry not found.');
+    return entry;
+  }
+
+  async listQueue(query: AdmissionQueueListQuery = {}): Promise<AdmissionQueueEntry[]> {
+    await this.repository.expireQueueLeases(this.now().toISOString());
+    return this.repository.listQueue(query);
+  }
+
+  async markQueueDispatched(id: string, attemptId: string): Promise<AdmissionQueueEntry> {
+    this.stopQueueHeartbeat(id);
+    return this.mutateQueue(id, (current, now) => {
+      if (current.state === 'dispatched' && current.dispatchedAttemptId === attemptId) {
+        return current;
+      }
+      if (current.state !== 'leased' || current.attemptId !== attemptId) {
+        throw new ConflictError('Queue dispatch no longer matches its leased launch.', {
+          queueId: id,
+          queueState: current.state,
+          queuedAttemptId: current.attemptId,
+          attemptId,
+        });
+      }
+      return {
+        ...current,
+        state: 'dispatched',
+        dispatchedAttemptId: attemptId,
+        updatedAt: now.toISOString(),
+      };
+    });
+  }
+
+  async requeueQueueEntry(id: string, code: string, reason: string): Promise<AdmissionQueueEntry> {
+    this.stopQueueHeartbeat(id);
+    const settings = await this.settings();
+    return this.mutateQueue(id, (current, now) => {
+      if (current.state !== 'leased') return current;
+      const retryCount = current.retryCount + 1;
+      if (retryCount > current.maxRetries) {
+        return {
+          ...current,
+          state: 'terminal',
+          retryCount,
+          lease: undefined,
+          reservationId: undefined,
+          terminal: {
+            code: code.trim().slice(0, 160) || 'QUEUE_RETRY_EXHAUSTED',
+            reason:
+              `Queue retry limit exhausted. ${reason}`.trim().slice(0, 1_000) ||
+              'Queue retry limit exhausted.',
+            recordedAt: now.toISOString(),
+          },
+          updatedAt: now.toISOString(),
+        };
+      }
+      return {
+        ...current,
+        state: 'requeued',
+        retryCount,
+        availableAt: new Date(now.getTime() + settings.queue.retryBackoffMs).toISOString(),
+        lease: undefined,
+        reservationId: undefined,
+        updatedAt: now.toISOString(),
+      };
+    });
+  }
+
+  async terminateQueueEntry(
+    id: string,
+    code: string,
+    reason: string
+  ): Promise<AdmissionQueueEntry> {
+    this.stopQueueHeartbeat(id);
+    return this.mutateQueue(id, (current, now) => {
+      if (current.state === 'terminal') return current;
+      if (current.state === 'dispatched') {
+        throw new ConflictError('Dispatched queue entries are owned by run recovery.', {
+          queueId: id,
+          dispatchedAttemptId: current.dispatchedAttemptId,
+        });
+      }
+      return {
+        ...current,
+        state: 'terminal',
+        lease: undefined,
+        reservationId: undefined,
+        terminal: {
+          code: code.trim().slice(0, 160) || 'QUEUE_TERMINAL',
+          reason: reason.trim().slice(0, 1_000) || 'Queued launch terminated.',
+          recordedAt: now.toISOString(),
+        },
+        updatedAt: now.toISOString(),
+      };
+    });
+  }
+
   async bindAttempt(id: string, attemptId: string): Promise<AdmissionReservation> {
     const settings = await this.settings();
     const bound = await this.mutate(id, (current, now) => {
@@ -285,6 +541,14 @@ export class AdmissionControlService {
     return bound;
   }
 
+  async bindQueuedAttempt(
+    _queueId: string,
+    reservationId: string,
+    attemptId: string
+  ): Promise<AdmissionReservation> {
+    return this.bindAttempt(reservationId, attemptId);
+  }
+
   async renew(id: string): Promise<AdmissionReservation> {
     return this.mutate(id, (current, now) => {
       if (current.state !== 'active') return current;
@@ -302,7 +566,7 @@ export class AdmissionControlService {
     idempotencyKey: string
   ): Promise<AdmissionReservation> {
     this.stopHeartbeat(id);
-    return this.mutate(id, (current, now) => {
+    const released = await this.mutate(id, (current, now) => {
       if (current.state === 'released') return current;
       return {
         ...current,
@@ -316,6 +580,8 @@ export class AdmissionControlService {
         updatedAt: now.toISOString(),
       };
     });
+    this.notifyCapacityAvailable();
+    return released;
   }
 
   async releaseIfUnbound(
@@ -398,7 +664,16 @@ export class AdmissionControlService {
   }
 
   async expireAbandoned(): Promise<AdmissionReservation[]> {
-    return this.repository.expireLeases(this.now().toISOString());
+    const now = this.now().toISOString();
+    const expired = await this.repository.expireLeases(now);
+    await this.repository.expireQueueLeases(now);
+    if (expired.length > 0) this.notifyCapacityAvailable();
+    return expired;
+  }
+
+  onCapacityAvailable(listener: () => void): () => void {
+    this.capacityListeners.add(listener);
+    return () => this.capacityListeners.delete(listener);
   }
 
   getExecutionHostId(): string {
@@ -494,8 +769,22 @@ export class AdmissionControlService {
 
   dispose(): void {
     for (const id of this.heartbeatTimers.keys()) this.stopHeartbeat(id);
+    for (const id of this.queueHeartbeatTimers.keys()) this.stopQueueHeartbeat(id);
     this.heartbeatEligible.clear();
+    this.capacityListeners.clear();
     this.configService.dispose();
+  }
+
+  private notifyCapacityAvailable(): void {
+    for (const listener of this.capacityListeners) {
+      queueMicrotask(() => {
+        try {
+          listener();
+        } catch {
+          // Capacity notifications are best-effort wakeups; durable queue state remains authoritative.
+        }
+      });
+    }
   }
 
   private policiesFor(
@@ -539,13 +828,15 @@ export class AdmissionControlService {
     now: Date,
     retryAfterMs?: number,
     reservation?: AdmissionReservation,
-    limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[]
+    limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[],
+    queueEntry?: AdmissionQueueEntry
   ): AdmissionDecision {
     return AdmissionDecisionSchema.parse({
       schemaVersion: ADMISSION_DECISION_SCHEMA_VERSION,
       outcome,
       request,
       reservation,
+      queueEntry,
       limitingPolicies,
       limitingBudgetPolicies,
       retryAfterMs,
@@ -608,6 +899,93 @@ export class AdmissionControlService {
     throw new ConflictError('Admission reservation changed too many times.', {
       reservationId: id,
     });
+  }
+
+  private async mutateQueue(
+    id: string,
+    update: (current: AdmissionQueueEntry, now: Date) => AdmissionQueueEntry
+  ): Promise<AdmissionQueueEntry> {
+    for (let attempt = 1; attempt <= MAX_CAS_ATTEMPTS; attempt++) {
+      const current = await this.repository.getQueueEntry(id);
+      if (!current) throw new NotFoundError('Admission queue entry not found.');
+      const candidate = update(current, this.now());
+      if (candidate === current) return current;
+      const next = {
+        ...candidate,
+        revision: current.revision + 1,
+      };
+      const result = await this.repository.compareAndSetQueue({
+        id,
+        expectedRevision: current.revision,
+        next,
+      });
+      if (result.updated && result.record) return result.record;
+      if (result.reason !== 'stale-revision') {
+        throw new ConflictError('Admission queue update failed.', {
+          queueId: id,
+          reason: result.reason,
+        });
+      }
+    }
+    throw new ConflictError('Admission queue entry changed too many times.', { queueId: id });
+  }
+
+  private startQueueHeartbeat(claim: AdmissionQueueClaim, configuredHeartbeatMs: number): void {
+    const queueId = claim.entry.id;
+    if (this.queueHeartbeatTimers.has(queueId)) return;
+    const leaseDurationMs =
+      Date.parse(claim.entry.lease?.expiresAt ?? '') -
+      Date.parse(claim.entry.lease?.heartbeatAt ?? '');
+    const heartbeatMs = Math.min(
+      configuredHeartbeatMs,
+      Math.max(250, Math.floor(leaseDurationMs / 3))
+    );
+    const timer = setInterval(() => {
+      void this.renewQueueClaim(queueId, claim.reservation.id).catch(() => {
+        this.stopQueueHeartbeat(queueId);
+      });
+    }, heartbeatMs);
+    timer.unref();
+    this.queueHeartbeatTimers.set(queueId, timer);
+  }
+
+  private async renewQueueClaim(
+    queueId: string,
+    reservationId: string
+  ): Promise<AdmissionQueueEntry> {
+    const entry = await this.mutateQueue(queueId, (current, now) => {
+      if (
+        current.state !== 'leased' ||
+        current.reservationId !== reservationId ||
+        current.lease?.ownerId !== this.ownerId
+      ) {
+        throw new ConflictError('Admission queue lease ownership changed.', {
+          queueId,
+          reservationId,
+          queueState: current.state,
+          queueReservationId: current.reservationId,
+        });
+      }
+      const leaseDurationMs =
+        Date.parse(current.lease.expiresAt) - Date.parse(current.lease.heartbeatAt);
+      return {
+        ...current,
+        lease: {
+          ...current.lease,
+          heartbeatAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + Math.max(1, leaseDurationMs)).toISOString(),
+        },
+        updatedAt: now.toISOString(),
+      };
+    });
+    await this.renew(reservationId);
+    return entry;
+  }
+
+  private stopQueueHeartbeat(queueId: string): void {
+    const timer = this.queueHeartbeatTimers.get(queueId);
+    if (timer) clearInterval(timer);
+    this.queueHeartbeatTimers.delete(queueId);
   }
 
   private startHeartbeat(record: AdmissionReservation, configuredHeartbeatMs: number): void {

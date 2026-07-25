@@ -533,7 +533,9 @@ app.use(errorHandler);
 let configService: ConfigService | null = null;
 let storageInitialized = false;
 let credentialReconciliationInterval: ReturnType<typeof setInterval> | undefined;
+let admissionQueueInterval: ReturnType<typeof setInterval> | undefined;
 const CREDENTIAL_RECONCILIATION_INTERVAL_MS = 60_000;
+const ADMISSION_QUEUE_INTERVAL_MS = 5_000;
 
 async function reconcileCredentialLeases(context: 'startup' | 'periodic'): Promise<void> {
   try {
@@ -596,6 +598,7 @@ async function initializeServices(): Promise<void> {
     await agentService.reconcileRunningAttempts();
     await agentService.reconcilePendingRecoveries();
     await getWorkflowRunService().reconcilePendingRecoveries();
+    await agentService.reconcileQueuedLaunches();
   } catch (reconcileErr) {
     // Non-fatal: log and continue — the server can still serve requests.
     log.warn({ err: reconcileErr }, 'Startup: agent run reconciliation failed');
@@ -606,6 +609,14 @@ async function initializeServices(): Promise<void> {
     CREDENTIAL_RECONCILIATION_INTERVAL_MS
   );
   credentialReconciliationInterval.unref();
+  admissionQueueInterval ??= setInterval(
+    () =>
+      void agentService
+        .reconcileQueuedLaunches()
+        .catch((error) => log.warn({ err: error }, 'Admission queue reconciliation failed')),
+    ADMISSION_QUEUE_INTERVAL_MS
+  );
+  admissionQueueInterval.unref();
 }
 
 // Create HTTP server
@@ -1184,6 +1195,10 @@ async function gracefulShutdown(signal: string) {
   if (credentialReconciliationInterval) {
     clearInterval(credentialReconciliationInterval);
     credentialReconciliationInterval = undefined;
+  }
+  if (admissionQueueInterval) {
+    clearInterval(admissionQueueInterval);
+    admissionQueueInterval = undefined;
   }
   log.info({ clients: wss.clients.size }, 'Closing WebSocket connections');
   wss.clients.forEach((client) => {

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdmissionReservationRepository } from '../storage/interfaces.js';
 import {
   DEFAULT_FEATURE_SETTINGS,
@@ -29,12 +29,17 @@ function configuredSettings(
   overrides: {
     global?: AdmissionCapacityLimit;
     providers?: AdmissionSettings['providers'];
+    queue?: Partial<AdmissionSettings['queue']>;
   } = {}
 ): AdmissionSettings {
   return {
     ...structuredClone(DEFAULT_FEATURE_SETTINGS.admission),
     global: overrides.global ?? {},
     providers: overrides.providers ?? {},
+    queue: {
+      ...DEFAULT_FEATURE_SETTINGS.admission.queue,
+      ...overrides.queue,
+    },
     heartbeatMs: 20_000,
   };
 }
@@ -255,9 +260,229 @@ describe('AdmissionControlService', () => {
     });
     expect(compacted.revision).toBe(renewed.revision + 1);
   });
+
+  it('renews a leased queue claim until dispatch ownership takes over', async () => {
+    const repository = await repositoryFor('file');
+    const settings = {
+      ...configuredSettings({ global: { concurrentRuns: 1 } }),
+      heartbeatMs: 10,
+    };
+    const service = createService(repository, settings, { ownerId: 'owner-heartbeat' });
+    const active = await service.admit(request('task-heartbeat-active'));
+    const queued = await service.admitOrQueue(request('task-heartbeat-queued'), {
+      agent: 'codex',
+      attemptId: 'attempt-heartbeat-queued',
+    });
+    await service.release(
+      active.reservation?.id as string,
+      'completed',
+      'release-heartbeat-active'
+    );
+    const claim = await service.claimNextQueued();
+    await service.bindQueuedAttempt(
+      claim?.entry.id as string,
+      claim?.reservation.id as string,
+      claim?.entry.attemptId as string
+    );
+    const initialQueueRevision = claim?.entry.revision as number;
+    const initialReservationRevision = (await repository.get(claim?.reservation.id as string))
+      ?.revision as number;
+
+    await vi.waitFor(
+      async () => {
+        const queueEntry = await service.getQueueEntry(queued.queueEntry?.id as string);
+        const reservation = await repository.get(claim?.reservation.id as string);
+        expect(queueEntry.state).toBe('leased');
+        expect(queueEntry.revision).toBeGreaterThan(initialQueueRevision);
+        expect(reservation).toMatchObject({ state: 'active' });
+        expect(reservation?.revision).toBeGreaterThan(initialReservationRevision);
+      },
+      { timeout: 500, interval: 10 }
+    );
+
+    const dispatched = await service.markQueueDispatched(
+      claim?.entry.id as string,
+      claim?.entry.attemptId as string
+    );
+    await new Promise((resolve) => setTimeout(resolve, settings.heartbeatMs * 3));
+    await expect(service.getQueueEntry(dispatched.id)).resolves.toEqual(dispatched);
+    service.dispose();
+  });
 });
 
 describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (backend) => {
+  it('durably queues and atomically claims a saturated direct launch', async () => {
+    const repository = await repositoryFor(backend);
+    const settings = configuredSettings({ global: { concurrentRuns: 1 } });
+    const original = createService(repository, settings, { ownerId: 'owner-original' });
+    const active = await original.admit(request(`task-active-${backend}`));
+
+    const queued = await original.admitOrQueue(request(`task-queued-${backend}`), {
+      agent: 'codex',
+      attemptId: `attempt-queued-${backend}`,
+    });
+    expect(queued).toMatchObject({
+      outcome: 'queued',
+      queueEntry: {
+        state: 'queued',
+        revision: 1,
+        agent: 'codex',
+        attemptId: `attempt-queued-${backend}`,
+      },
+    });
+
+    await original.release(
+      active.reservation?.id as string,
+      'completed',
+      `release-active-${backend}`
+    );
+    original.dispose();
+
+    const restarted = createService(repository, settings, { ownerId: 'owner-restarted' });
+    const claimed = await restarted.claimNextQueued();
+    expect(claimed).toMatchObject({
+      entry: {
+        id: queued.queueEntry?.id,
+        state: 'leased',
+        revision: 2,
+        lease: { ownerId: 'owner-restarted' },
+      },
+      reservation: {
+        state: 'active',
+        request: { taskId: `task-queued-${backend}` },
+        lease: { ownerId: 'owner-restarted' },
+      },
+    });
+    await expect(restarted.claimNextQueued()).resolves.toBeNull();
+  });
+
+  it('fails closed on terminal policy, queue bounds, and sensitive idempotency input', async () => {
+    const repository = await repositoryFor(backend);
+    const terminal = createService(
+      repository,
+      configuredSettings({ global: { concurrentRuns: 0 } })
+    );
+    await expect(
+      terminal.admitOrQueue(request(`task-terminal-${backend}`), {
+        agent: 'codex',
+        attemptId: `attempt-terminal-${backend}`,
+      })
+    ).resolves.toMatchObject({ outcome: 'terminal-policy-denial', queueEntry: undefined });
+    await expect(terminal.listQueue()).resolves.toEqual([]);
+
+    const settings = configuredSettings({
+      global: { concurrentRuns: 1 },
+      queue: { globalLimit: 1, workspaceLimit: 1 },
+    });
+    const service = createService(repository, settings);
+    await service.admit(request(`task-active-bound-${backend}`));
+    const rawIdempotencyKey = `operator-secret-${backend}`;
+    const queued = await service.admitOrQueue(
+      request(`task-bounded-${backend}`, rawIdempotencyKey),
+      {
+        agent: 'codex',
+        attemptId: `attempt-bounded-${backend}`,
+      }
+    );
+    expect(queued.outcome).toBe('queued');
+    expect(JSON.stringify(queued.queueEntry)).not.toContain(rawIdempotencyKey);
+
+    const duplicate = await service.admitOrQueue(
+      request(`task-bounded-${backend}`, `different-${rawIdempotencyKey}`),
+      {
+        agent: 'codex',
+        attemptId: `attempt-bounded-duplicate-${backend}`,
+      }
+    );
+    expect(duplicate.queueEntry?.id).toBe(queued.queueEntry?.id);
+    await expect(
+      service.admitOrQueue(
+        request(`task-bounded-${backend}`, `different-agent-${rawIdempotencyKey}`),
+        {
+          agent: 'copilot',
+          attemptId: `attempt-bounded-agent-change-${backend}`,
+        }
+      )
+    ).resolves.toMatchObject({
+      outcome: 'terminal-policy-denial',
+      queueEntry: undefined,
+    });
+    await expect(
+      service.admitOrQueue(request(`task-overflow-${backend}`), {
+        agent: 'codex',
+        attemptId: `attempt-overflow-${backend}`,
+      })
+    ).resolves.toMatchObject({
+      outcome: 'queue-overflow',
+      retryAfterMs: settings.retryAfterMs,
+      queueEntry: undefined,
+    });
+    await expect(service.listQueue()).resolves.toHaveLength(1);
+  });
+
+  it('preserves FIFO under competing claims and recovers an abandoned lease once', async () => {
+    const repository = await repositoryFor(backend);
+    let now = new Date('2026-07-25T12:00:00.000Z');
+    const settings = configuredSettings({
+      global: { concurrentRuns: 1 },
+      queue: { retryBackoffMs: 250 },
+    });
+    const original = createService(repository, settings, {
+      now: () => now,
+      ownerId: 'owner-original',
+    });
+    const active = await original.admit(request(`task-fifo-active-${backend}`));
+    const first = await original.admitOrQueue(request(`task-fifo-first-${backend}`), {
+      agent: 'codex',
+      attemptId: `attempt-fifo-first-${backend}`,
+    });
+    const second = await original.admitOrQueue(request(`task-fifo-second-${backend}`), {
+      agent: 'codex',
+      attemptId: `attempt-fifo-second-${backend}`,
+    });
+    await original.release(
+      active.reservation?.id as string,
+      'completed',
+      `release-fifo-active-${backend}`
+    );
+
+    const left = createService(repository, settings, { now: () => now, ownerId: 'owner-left' });
+    const right = createService(repository, settings, { now: () => now, ownerId: 'owner-right' });
+    const competing = await Promise.all([left.claimNextQueued(), right.claimNextQueued()]);
+    const winners = competing.filter((claim) => claim !== null);
+    expect(winners).toHaveLength(1);
+    expect(winners[0]?.entry.id).toBe(first.queueEntry?.id);
+    await left.markQueueDispatched(
+      winners[0]?.entry.id as string,
+      winners[0]?.entry.attemptId as string
+    );
+    await left.release(
+      winners[0]?.reservation.id as string,
+      'completed',
+      `release-fifo-first-${backend}`
+    );
+
+    const leasedSecond = await right.claimNextQueued();
+    expect(leasedSecond?.entry.id).toBe(second.queueEntry?.id);
+    now = new Date('2026-07-25T12:00:31.000Z');
+    await expect(right.claimNextQueued()).resolves.toBeNull();
+    now = new Date('2026-07-25T12:00:31.300Z');
+    const recovered = createService(repository, settings, {
+      now: () => now,
+      ownerId: 'owner-recovered',
+    });
+    await expect(recovered.claimNextQueued()).resolves.toMatchObject({
+      entry: {
+        id: second.queueEntry?.id,
+        state: 'leased',
+        retryCount: 1,
+        lease: { ownerId: 'owner-recovered' },
+      },
+      reservation: { lease: { ownerId: 'owner-recovered' } },
+    });
+    await expect(recovered.claimNextQueued()).resolves.toBeNull();
+  });
+
   it('atomically reserves, converts, summarizes, and releases execution-tree budgets', async () => {
     const repository = await repositoryFor(backend);
     const service = createService(repository, configuredSettings());
