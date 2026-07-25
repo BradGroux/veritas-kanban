@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 
 export type AppView =
   | 'board'
@@ -33,7 +34,8 @@ export type ViewIcon =
 
 export interface ViewComponentProps {
   onBack: () => void;
-  onTaskClick?: (taskId: string) => void;
+  onTaskClick?: (taskId: string, target?: TaskDetailNavigationTarget) => void;
+  onWorkflowClick?: (workflowId: string) => void;
 }
 
 export interface ViewDefinition {

@@ -34,6 +34,7 @@ import { schedulerApi } from './scheduler';
 import { queueMonitorsApi } from './queue-monitors';
 import { ceremoniesApi } from './ceremonies';
 import { reflectionsApi } from './reflections';
+import { admissionApi } from './admission';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -79,6 +80,7 @@ export const api = {
   queueMonitors: queueMonitorsApi,
   ceremonies: ceremoniesApi,
   reflections: reflectionsApi,
+  admission: admissionApi,
 };
 
 export type {
@@ -94,6 +96,12 @@ export type {
 export type { WorkProductExportFormat, WorkProductExportOptions } from './work-products';
 export type { CeremonyListFilters } from './ceremonies';
 export type { ReflectionListFilters } from './reflections';
+export type {
+  AdmissionQueueGetResponse,
+  AdmissionQueueInspectionEntry,
+  AdmissionQueueInspectionQuery,
+  AdmissionQueueListResponse,
+} from '@veritas-kanban/shared';
 export type { TraceStatus } from './traces';
 export type { SqlitePortabilityReport } from './maintenance';
 export type {

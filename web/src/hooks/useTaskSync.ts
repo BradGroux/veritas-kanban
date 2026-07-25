@@ -91,6 +91,7 @@ export function useTaskSync(): {
         // Invalidate metrics and trends (derived from task data)
         queryClient.invalidateQueries({ queryKey: ['metrics'] });
         queryClient.invalidateQueries({ queryKey: ['trends'] });
+        queryClient.invalidateQueries({ queryKey: ['admission-queue'] });
       }
 
       // Handle telemetry events (run.started, run.completed, run.tokens)
@@ -98,6 +99,11 @@ export function useTaskSync(): {
         // Telemetry events update metrics and trends data
         queryClient.invalidateQueries({ queryKey: ['metrics'] });
         queryClient.invalidateQueries({ queryKey: ['trends'] });
+        queryClient.invalidateQueries({ queryKey: ['admission-queue'] });
+      }
+
+      if (message.type === 'workflow:status') {
+        queryClient.invalidateQueries({ queryKey: ['admission-queue'] });
       }
     },
     [queryClient]

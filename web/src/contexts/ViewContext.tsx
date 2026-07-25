@@ -81,6 +81,8 @@ interface ViewContextValue {
   setView: (view: AppView) => void;
   /** Navigate to a specific task by opening the board and setting selectedTaskId. */
   navigateToTask: (taskId: string, target?: TaskDetailNavigationTarget) => void;
+  /** Navigate to a specific workflow while preserving the originating full-page view. */
+  navigateToWorkflow: (workflowId: string) => void;
   /** The task ID requested by view navigation (consumed once by the board). */
   pendingTaskId: string | null;
   /** Optional tab/run target for the pending task navigation. */
@@ -96,6 +98,7 @@ const ViewContext = createContext<ViewContextValue>({
   view: 'board',
   setView: () => {},
   navigateToTask: () => {},
+  navigateToWorkflow: () => {},
   pendingTaskId: null,
   pendingTaskTarget: null,
   clearPendingTask: () => {},
@@ -189,6 +192,24 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     [setView, view]
   );
 
+  const navigateToWorkflow = useCallback(
+    (workflowId: string) => {
+      const originPath = typeof window === 'undefined' ? '' : window.location.pathname;
+      setView('workflows');
+      if (typeof window === 'undefined') return;
+
+      const workflowPath =
+        `${basePath}${VIEW_PATHS.workflows}/${encodeURIComponent(workflowId)}`.replace(/\/+/g, '/');
+      const currentState =
+        window.history.state && typeof window.history.state === 'object'
+          ? { ...(window.history.state as Record<string, unknown>) }
+          : {};
+      currentState.veritasWorkflowNavigation = { from: originPath };
+      window.history.replaceState(currentState, '', workflowPath);
+    },
+    [setView]
+  );
+
   const clearPendingTask = useCallback(() => {
     setPendingTaskId(null);
     setPendingTaskTarget(null);
@@ -205,6 +226,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       view,
       setView,
       navigateToTask,
+      navigateToWorkflow,
       pendingTaskId,
       pendingTaskTarget,
       clearPendingTask,
@@ -215,6 +237,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       view,
       setView,
       navigateToTask,
+      navigateToWorkflow,
       pendingTaskId,
       pendingTaskTarget,
       clearPendingTask,
