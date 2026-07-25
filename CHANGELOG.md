@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added run-scoped filesystem sandbox enforcement for local ACP, Claude Code,
+  Codex app-server, Codex CLI, and Hermes processes. Required presets compile
+  explicit read, write, deny, dotfile, protected-metadata, temporary, and cache
+  rules into a version-bound `codex sandbox` wrapper before provider creation.
+  Workspace and home aliases fail closed on traversal or symlink escape, and
+  nested mount boundaries and pre-existing external hard-link aliases are
+  denied and rechecked before spawn. Failed or byte-changed backends block
+  launch. CLI package/virtual-environment roots, linked-worktree Git metadata,
+  and `.git`, `.agents`, `.codex`, and `.veritas-kanban` directly beneath
+  writable roots are bound read-only, while protected paths cannot themselves
+  be writable roots or symlinks. Ambient Git config is replaced with a
+  run-scoped identity-only environment. Immutable manifests retain only
+  canonical path hashes, the exact provider-runtime digest, backend
+  executable-content and conformance evidence, and durable cleanup state.
+  Local native and wrapped runs receive supervisor-owned temporary and cache
+  directories, while remote native enforcement must prove every active
+  filesystem and lifecycle capability. Cleanup rejects symlinked ancestors
+  (#862).
 - Added one durable `run-recovery/v1` state machine for production task
   attempts and workflow steps. Only classified transient transport, provider
   availability, rate-limit, timeout, and verification failures retry; policy,

@@ -24,8 +24,12 @@ const COMMON_SUPPORTED: ProviderRuntimeCapabilityOverrides = {
 };
 
 const CLI_SANDBOX: ProviderRuntimeCapabilityOverrides = {
-  'filesystem.read': supported('The launch sandbox grants bounded filesystem reads.'),
-  'filesystem.write': supported('The launch sandbox grants bounded workspace writes.'),
+  'filesystem.read': advisory(
+    'The provider sandbox mode does not prove exact configured read roots. Required policies need a conformant host wrapper or version-bound native conformance evidence.'
+  ),
+  'filesystem.write': advisory(
+    'The provider sandbox mode does not prove exact configured write roots. Required policies need a conformant host wrapper or version-bound native conformance evidence.'
+  ),
   'environment.allowlist': supported('The adapter receives an allowlisted environment.'),
 };
 

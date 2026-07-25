@@ -362,6 +362,47 @@ describe('RunSupervisorService', () => {
     });
   });
 
+  it('persists supervisor-owned sandbox cleanup and retries a failed terminal cleanup', async () => {
+    const repository = new InMemoryRunSupervisorRepository();
+    const cleanup = vi
+      .fn<(rootPath: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('temporary cleanup failure'))
+      .mockResolvedValueOnce();
+    const original = service(repository, { sandboxCleanup: cleanup });
+    const record = await original.register(
+      registerInput({
+        sandbox: {
+          rootPath: '/tmp/veritas-sandboxes/task-853/attempt-853',
+          policyHash: SHA_A,
+        },
+      })
+    );
+    expect(record.sandboxCleanup).toEqual({ state: 'pending' });
+
+    const terminal = await original.markTerminal(record.id, 'failed', 'Provider launch failed.');
+    expect(terminal.sandboxCleanup).toMatchObject({
+      state: 'failed',
+      detail: 'temporary cleanup failure',
+    });
+    original.dispose();
+
+    const recovering = service(repository, {
+      ownerId: 'owner-b',
+      processId: 303,
+      sandboxCleanup: cleanup,
+    });
+    const recovered = await recovering.recover(record.id, recoveryBindings());
+    expect(recovered).toMatchObject({
+      outcome: 'terminal',
+      record: {
+        sandboxCleanup: {
+          state: 'complete',
+        },
+      },
+    });
+    expect(cleanup).toHaveBeenCalledTimes(2);
+  });
+
   it('reconciles the run journal strictly after the durable cursor', async () => {
     const repository = new InMemoryRunSupervisorRepository();
     const durable = service(repository);

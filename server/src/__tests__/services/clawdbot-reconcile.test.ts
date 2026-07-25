@@ -45,13 +45,17 @@ vi.mock('../../services/task-service.js', () => ({
   },
 }));
 
-vi.mock('../../services/config-service.js', () => ({
-  ConfigService: class MockConfigService {
+vi.mock('../../services/config-service.js', () => {
+  class MockConfigService {
     getConfig = vi.fn().mockResolvedValue({ agents: [], features: {} });
     getFeatureSettings = vi.fn().mockResolvedValue({});
     dispose = vi.fn();
-  },
-}));
+  }
+  return {
+    ConfigService: MockConfigService,
+    getConfigService: () => new MockConfigService(),
+  };
+});
 
 vi.mock('../../services/agent-health-service.js', () => ({
   AgentHealthService: class MockAgentHealthService {

@@ -18,6 +18,7 @@ import { RunSupervisorRecordSchema } from '../schemas/run-supervisor-schemas.js'
 import type { RunSupervisorRepository } from '../storage/interfaces.js';
 import { FileRunSupervisorRepository } from '../storage/run-supervisor-repository.js';
 import { getStorage, getStorageTypeFromEnv } from '../storage/index.js';
+import { removeRunSandboxDirectory } from '../utils/filesystem-sandbox-runtime.js';
 
 const DEFAULT_LEASE_MS = 15_000;
 const DEFAULT_HEARTBEAT_MS = 5_000;
@@ -43,6 +44,10 @@ export interface RegisterRunSupervisorInput {
   controlKind?: 'in-process' | 'remote-session';
   sessionId?: string;
   threadId?: string;
+  sandbox?: {
+    rootPath: string;
+    policyHash: string;
+  };
 }
 
 export interface RunSupervisorCheckpoint {
@@ -85,6 +90,7 @@ export interface RunSupervisorServiceOptions {
   processProbe?: (pid: number) => ProcessProbeResult;
   signalProcess?: (pid: number, processGroupId: number | undefined, signal: NodeJS.Signals) => void;
   sessionProbe?: (record: RunSupervisorRecord) => Promise<boolean>;
+  sandboxCleanup?: (rootPath: string) => Promise<void>;
 }
 
 let fileRepository: FileRunSupervisorRepository | undefined;
@@ -110,6 +116,7 @@ export class RunSupervisorService {
     signal: NodeJS.Signals
   ) => void;
   private readonly sessionProbe?: (record: RunSupervisorRecord) => Promise<boolean>;
+  private readonly sandboxCleanup: (rootPath: string) => Promise<void>;
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(options: RunSupervisorServiceOptions = {}) {
@@ -124,6 +131,7 @@ export class RunSupervisorService {
     this.processProbe = options.processProbe ?? defaultProcessProbe;
     this.signalProcess = options.signalProcess ?? signalProcessGroup;
     this.sessionProbe = options.sessionProbe;
+    this.sandboxCleanup = options.sandboxCleanup ?? removeRunSandboxDirectory;
   }
 
   private get repository(): RunSupervisorRepository {
@@ -150,6 +158,7 @@ export class RunSupervisorService {
         worktreeLeaseId: input.worktreeLeaseId,
         taskEnvelopeDigest: input.taskEnvelopeDigest,
       }),
+      ...(input.sandbox ? { sandbox: { ...input.sandbox } } : {}),
     };
     const existing = await this.repository.get(id);
     if (existing) {
@@ -185,6 +194,7 @@ export class RunSupervisorService {
       bindings,
       control,
       recoveryOperations: [...new Set(input.recoveryOperations)].sort(),
+      ...(input.sandbox ? { sandboxCleanup: { state: 'pending' } } : {}),
       budget: input.budget,
       lastEventSequence: 0,
       lease: this.newLease(now),
@@ -326,7 +336,7 @@ export class RunSupervisorService {
           },
         };
       }
-      return { outcome: 'terminal', record: current };
+      return { outcome: 'terminal', record: await this.cleanupTerminalSandbox(current) };
     }
     const claimed = await this.claimRecoveryLease(current);
     if (!claimed) return { outcome: 'lease-held', record: await this.get(id) };
@@ -450,7 +460,7 @@ export class RunSupervisorService {
     completionResult?: CompletionResult
   ): Promise<RunSupervisorRecord> {
     this.stopHeartbeat(id);
-    return this.mutate(id, (current, now) => {
+    const terminal = await this.mutate(id, (current, now) => {
       if (isTerminal(current.state)) {
         if (
           current.state === state &&
@@ -477,6 +487,7 @@ export class RunSupervisorService {
         updatedAt: now.toISOString(),
       };
     });
+    return this.cleanupTerminalSandbox(terminal);
   }
 
   async stopLocalProcess(id: string): Promise<void> {
@@ -539,6 +550,35 @@ export class RunSupervisorService {
       outcome: 'recovery-required',
       record: await this.requireRecovery(id, code, detail, nextAction),
     };
+  }
+
+  private async cleanupTerminalSandbox(record: RunSupervisorRecord): Promise<RunSupervisorRecord> {
+    const sandbox = record.bindings.sandbox;
+    if (!sandbox || record.sandboxCleanup?.state === 'complete') return record;
+    try {
+      await this.sandboxCleanup(sandbox.rootPath);
+      return this.mutate(record.id, (current, now) => ({
+        ...current,
+        sandboxCleanup: {
+          state: 'complete',
+          recordedAt: now.toISOString(),
+        },
+        updatedAt: now.toISOString(),
+      }));
+    } catch (error) {
+      const detail = (
+        error instanceof Error ? error.message : 'Filesystem sandbox cleanup failed.'
+      ).slice(0, 1_000);
+      return this.mutate(record.id, (current, now) => ({
+        ...current,
+        sandboxCleanup: {
+          state: 'failed',
+          detail,
+          recordedAt: now.toISOString(),
+        },
+        updatedAt: now.toISOString(),
+      }));
+    }
   }
 
   private async claimRecoveryLease(record: RunSupervisorRecord): Promise<boolean> {

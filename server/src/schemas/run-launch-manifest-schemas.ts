@@ -250,6 +250,52 @@ export const RunLaunchManifestSchema = z
           )
           .max(128),
         warnings: z.array(safeTextSchema).max(128),
+        filesystem: z
+          .object({
+            schemaVersion: z.literal('filesystem-sandbox-evidence/v1'),
+            providerRuntimeManifestDigest: digestSchema,
+            backend: z.enum(['codex-sandbox', 'provider-native', 'none']),
+            state: z.enum(['enforced', 'native', 'advisory', 'unavailable']),
+            platformBackend: z.enum([
+              'seatbelt',
+              'landlock-bubblewrap',
+              'restricted-token',
+              'provider-native',
+              'none',
+            ]),
+            capabilityVersion: identifierSchema,
+            backendVersion: safeTextSchema.optional(),
+            backendExecutableDigest: digestSchema.optional(),
+            policyHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+            roots: z
+              .array(
+                z
+                  .object({
+                    id: identifierSchema,
+                    access: z.enum(['read', 'write', 'deny', 'protected']),
+                    scope: z.enum([
+                      'platform-runtime',
+                      'protected-metadata',
+                      'workspace',
+                      'home',
+                      'absolute',
+                      'run-temp',
+                      'run-cache',
+                    ]),
+                    pathDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+                  })
+                  .strict()
+              )
+              .max(512),
+            protectedPaths: z
+              .array(z.enum(['.agents', '.codex', '.git', '.veritas-kanban']))
+              .max(4),
+            dotfileMasking: z.boolean(),
+            descendantsEnforced: z.boolean(),
+            cleanupOwner: z.enum(['run-supervisor', 'provider-native', 'none']),
+          })
+          .strict()
+          .optional(),
       })
       .strict(),
     budget: AgentBudgetPolicySchema,
@@ -320,6 +366,75 @@ export const RunLaunchManifestSchema = z
           message: 'Credential plan provider evidence does not match the launch manifest',
         });
       }
+    }
+    const filesystem = manifest.sandbox.filesystem;
+    if (
+      filesystem &&
+      filesystem.providerRuntimeManifestDigest !== manifest.providerRuntime.digest
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandbox', 'filesystem', 'providerRuntimeManifestDigest'],
+        message: 'Filesystem sandbox evidence does not match the provider runtime manifest',
+      });
+    }
+    if (
+      filesystem?.backend === 'codex-sandbox' &&
+      (filesystem.state !== 'enforced' ||
+        filesystem.platformBackend === 'provider-native' ||
+        filesystem.platformBackend === 'none' ||
+        filesystem.cleanupOwner !== 'run-supervisor' ||
+        !filesystem.backendExecutableDigest ||
+        !filesystem.descendantsEnforced)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandbox', 'filesystem'],
+        message: 'Host-wrapper filesystem evidence has an inconsistent enforcement posture',
+      });
+    }
+    if (
+      filesystem?.backend === 'provider-native' &&
+      (filesystem.state !== 'native' ||
+        filesystem.platformBackend !== 'provider-native' ||
+        !['provider-native', 'run-supervisor'].includes(filesystem.cleanupOwner) ||
+        filesystem.backendExecutableDigest ||
+        !filesystem.descendantsEnforced)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandbox', 'filesystem'],
+        message: 'Provider-native filesystem evidence has an inconsistent enforcement posture',
+      });
+    }
+    if (
+      filesystem?.backend === 'provider-native' &&
+      filesystem.cleanupOwner === 'run-supervisor' &&
+      (!filesystem.roots.some((root) => root.scope === 'run-temp' && root.access === 'write') ||
+        !filesystem.roots.some((root) => root.scope === 'run-cache' && root.access === 'write'))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandbox', 'filesystem', 'roots'],
+        message:
+          'Supervisor-owned provider-native cleanup requires run temp and cache root evidence',
+      });
+    }
+    if (
+      filesystem?.backend === 'none' &&
+      (filesystem.state === 'enforced' ||
+        filesystem.state === 'native' ||
+        filesystem.platformBackend !== 'none' ||
+        filesystem.cleanupOwner !== 'none' ||
+        filesystem.backendExecutableDigest ||
+        filesystem.descendantsEnforced ||
+        filesystem.protectedPaths.length > 0)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandbox', 'filesystem'],
+        message: 'Unavailable filesystem evidence cannot claim an enforced boundary',
+      });
     }
     if (manifest.enforcement.enforceable !== (manifest.enforcement.blockers.length === 0)) {
       context.addIssue({

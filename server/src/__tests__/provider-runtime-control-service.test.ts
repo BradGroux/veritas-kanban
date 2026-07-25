@@ -90,7 +90,7 @@ describe('provider runtime control enforcement', () => {
     expect(sandboxCapabilitiesFromManifest(manifest)).toEqual({
       provider: manifest.provider,
       supported: expect.arrayContaining(['filesystem.read']),
-      advisory: ['network.allowlist'],
+      advisory: ['filesystem.write', 'network.allowlist'],
     });
   });
 });

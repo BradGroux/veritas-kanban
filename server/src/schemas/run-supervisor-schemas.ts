@@ -142,6 +142,13 @@ const BindingsSchema = z
     worktreeManifestId: IdentifierSchema.optional(),
     worktreeLeaseId: IdentifierSchema.optional(),
     worktreeFingerprint: Sha256Schema,
+    sandbox: z
+      .object({
+        rootPath: z.string().trim().min(1).max(4_096),
+        policyHash: DigestSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -179,6 +186,14 @@ export const RunSupervisorRecordSchema: z.ZodType<RunSupervisorRecord> = z
       })
       .strict()
       .optional(),
+    sandboxCleanup: z
+      .object({
+        state: z.enum(['pending', 'complete', 'failed']),
+        recordedAt: IsoTimestampSchema.optional(),
+        detail: z.string().trim().min(1).max(1_000).optional(),
+      })
+      .strict()
+      .optional(),
     createdAt: IsoTimestampSchema,
     updatedAt: IsoTimestampSchema,
   })
@@ -210,6 +225,24 @@ export const RunSupervisorRecordSchema: z.ZodType<RunSupervisorRecord> = z
         code: 'custom',
         path: ['recovery'],
         message: 'Recovery-required state must include an actionable recovery record.',
+      });
+    }
+    if (Boolean(record.bindings.sandbox) !== Boolean(record.sandboxCleanup)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandboxCleanup'],
+        message: 'Sandbox cleanup evidence must match the durable sandbox binding.',
+      });
+    }
+    if (
+      record.sandboxCleanup?.state !== 'pending' &&
+      record.sandboxCleanup &&
+      !record.sandboxCleanup.recordedAt
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sandboxCleanup', 'recordedAt'],
+        message: 'Completed or failed sandbox cleanup must include a timestamp.',
       });
     }
     if (Date.parse(record.lease.expiresAt) <= Date.parse(record.lease.heartbeatAt)) {

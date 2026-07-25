@@ -137,7 +137,7 @@ describe('AgentHealthService hermes-cli auth probe', () => {
 });
 
 describe('Hermes provider runtime sandbox capabilities', () => {
-  it('reports the same evidence-backed local capability set as codex-cli', () => {
+  it('keeps coarse local CLI sandbox claims advisory until the host wrapper is probed', () => {
     const supported = (provider: 'hermes-cli' | 'codex-cli') =>
       getProviderRuntimeAdapterDefinition(provider)
         .capabilities.filter((capability) => capability.state === 'supported')
@@ -150,8 +150,12 @@ describe('Hermes provider runtime sandbox capabilities', () => {
         expect.objectContaining({ id: 'filesystem.write', state: 'advisory' }),
       ])
     );
-    expect(supported('codex-cli')).toEqual(
-      expect.arrayContaining(['filesystem.read', 'filesystem.write', 'environment.allowlist'])
+    expect(supported('codex-cli')).toContain('environment.allowlist');
+    expect(getProviderRuntimeAdapterDefinition('codex-cli').capabilities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'filesystem.read', state: 'advisory' }),
+        expect.objectContaining({ id: 'filesystem.write', state: 'advisory' }),
+      ])
     );
   });
 });

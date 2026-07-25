@@ -276,6 +276,48 @@ Every dry-run and launch-time decision writes a governance trace with raw
 detail redacted; credential references and environment-style `name=value`
 strings are shown as `[redacted]`.
 
+For local ACP, Claude Code, Codex app-server, Codex CLI, and Hermes runs,
+Veritas can compile those filesystem rules into a version-bound `codex
+sandbox` process wrapper. The credential-free backend probe covers read,
+write, deny, symlink and hard-link escape, dotfile, protected metadata,
+descendant, PATH-tool, and backend re-execution behavior. A failed or missing
+backend blocks a required policy before provider process creation. Codex SDK
+and remote OpenClaw runs require exact provider-native conformance evidence,
+including descendant inheritance, run-scoped temporary storage, and cleanup;
+coarse provider sandbox modes remain advisory.
+
+Workspace and home aliases are canonical-base constrained. Nested mounts below
+allowed roots are denied unless explicitly granted or denied, and the relevant
+mount topology is rechecked before provider spawn. A changed or uninspectable
+topology fails closed. The bounded workspace tree is scanned before
+compilation and immediately before activation for pre-existing hard links that
+alias inaccessible external inodes.
+
+CLI package and virtual-environment roots are read-only. Linked-worktree Git
+metadata is resolved to exact protected read-only roots so status and diff can
+work without exposing the primary checkout for writes. Ambient system/global
+Git configuration is disabled; only effective author identity values may be
+carried in memory for the run, and they are excluded from manifests and logs.
+The `.git`, `.agents`, `.codex`, and `.veritas-kanban` names receive explicit
+read-only entries directly beneath writable roots and cannot themselves be
+selected as writable policy roots. A protected path that is or becomes a
+symlink blocks launch.
+
+Launch evidence stores only canonical path hashes and binds the filesystem
+decision to the exact provider runtime manifest digest and conformed backend
+executable-content digest. The executable is rehashed after policy evaluation
+and immediately before activation, so same-size replacement with restored
+timestamps still blocks launch. Local run-specific temporary and cache
+directories are registered with the durable run supervisor and cleaned on
+terminal completion or recovery; cleanup rejects symlinked ancestors. Remote
+provider-native backends must prove their equivalent lifecycle. See
+[Run-scoped filesystem sandbox backends](architecture/FILESYSTEM-SANDBOX-BACKENDS.md).
+
+Required filesystem boundaries have no per-run bypass. Task-readiness
+`overrideReason` values do not affect sandbox enforcement. Relaxation requires
+an authorized advisory policy preset, and the evaluated policy plus launch
+decision are retained as governance evidence.
+
 ### Credential broker core
 
 Credential definitions are stored separately from secret values. An admin can

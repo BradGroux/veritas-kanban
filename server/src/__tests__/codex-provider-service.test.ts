@@ -22,6 +22,7 @@ const {
   mockStartStep,
   mockEndStep,
   mockCompleteTrace,
+  mockSdkConstructor,
   mockSdkStartThread,
   mockSdkRunStreamed,
 } = vi.hoisted(() => ({
@@ -40,16 +41,74 @@ const {
   mockStartStep: vi.fn(),
   mockEndStep: vi.fn(),
   mockCompleteTrace: vi.fn(),
+  mockSdkConstructor: vi.fn(),
   mockSdkStartThread: vi.fn(),
   mockSdkRunStreamed: vi.fn(),
 }));
 
-vi.mock('child_process', () => ({
-  spawn: mockSpawn,
-}));
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: mockSpawn,
+  };
+});
+
+vi.mock('../services/filesystem-sandbox-service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/filesystem-sandbox-service.js')>();
+  const filesystemSandbox = {
+    probe: vi.fn(async () => ({
+      backend: 'none' as const,
+      state: 'unavailable' as const,
+      capabilityVersion: 'filesystem-sandbox-probe/v2',
+      platformBackend: 'none' as const,
+      supported: [],
+      reason: 'Native filesystem sandbox probing is disabled in provider unit tests.',
+    })),
+    compile: vi.fn(
+      async (
+        input: Parameters<
+          import('../services/filesystem-sandbox-service.js').FilesystemSandboxService['compile']
+        >[0]
+      ) => ({
+        evidence: {
+          schemaVersion: 'filesystem-sandbox-evidence/v1' as const,
+          providerRuntimeManifestDigest: input.providerRuntimeManifestDigest,
+          backend: 'none' as const,
+          state: 'advisory' as const,
+          platformBackend: 'none' as const,
+          capabilityVersion: 'filesystem-sandbox-probe/v2',
+          policyHash: `sha256:${'b'.repeat(64)}`,
+          roots: [],
+          protectedPaths: [],
+          dotfileMasking: false,
+          descendantsEnforced: false,
+          cleanupOwner: 'none' as const,
+        },
+        environment: {},
+      })
+    ),
+    activate: vi.fn(),
+    cleanup: vi.fn(),
+    wrap: vi.fn((_plan: unknown, command: string, args: string[], cwd: string) => ({
+      command,
+      args: [...args],
+      cwd,
+      environment: {},
+    })),
+  };
+  return {
+    ...actual,
+    getFilesystemSandboxService: () => filesystemSandbox,
+  };
+});
 
 vi.mock('@openai/codex-sdk', () => ({
   Codex: class {
+    constructor(options: unknown) {
+      mockSdkConstructor(options);
+    }
+
     startThread = mockSdkStartThread;
   },
 }));
@@ -139,6 +198,8 @@ import type {
   ToolControlPlaneService,
 } from '../services/tool-control-plane-service.js';
 import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
+import type { FilesystemSandboxService } from '../services/filesystem-sandbox-service.js';
+import type { SandboxPolicyService } from '../services/sandbox-policy-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -180,7 +241,9 @@ function testableService(
   tmpDir: string,
   credentialLeases?: CredentialLeaseLifecycle,
   approvalBroker?: RunApprovalBrokerService,
-  toolControlPlane?: ToolControlPlaneService
+  toolControlPlane?: ToolControlPlaneService,
+  filesystemSandbox?: Pick<FilesystemSandboxService, 'compile' | 'activate' | 'cleanup' | 'wrap'>,
+  sandboxPolicies?: Pick<SandboxPolicyService, 'dryRunWithTrace'>
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -196,7 +259,11 @@ function testableService(
     approvalBroker,
     testRunSupervisor(),
     undefined,
-    toolControlPlane
+    toolControlPlane,
+    undefined,
+    undefined,
+    filesystemSandbox,
+    sandboxPolicies
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -766,6 +833,89 @@ describe('ClawdbotAgentService Codex providers', () => {
       );
     }
   );
+
+  it('fails a required filesystem boundary before creating a provider process', async () => {
+    const compile = vi
+      .fn()
+      .mockRejectedValue(new Error('Required filesystem sandbox rules cannot be enforced.'));
+    const filesystemSandbox = {
+      compile,
+      activate: vi.fn(),
+      cleanup: vi.fn(),
+      wrap: vi.fn(),
+    } as Pick<FilesystemSandboxService, 'compile' | 'activate' | 'cleanup' | 'wrap'>;
+    const requiredPolicy: SandboxPolicyDryRunResult = {
+      decision: 'allow',
+      preset: {
+        id: 'required-contained',
+        name: 'Required contained',
+        enabled: true,
+        enforcement: 'required',
+        requiredCapabilities: [],
+        filesystem: {
+          readPaths: ['<workspace>'],
+          writePaths: ['<workspace>'],
+          deniedPaths: [],
+          dotfileMasking: false,
+          localOnlyHandles: true,
+        },
+        network: {
+          defaultEgress: 'deny',
+          allowedHosts: [],
+          allowedMethods: [],
+          allowedPathPrefixes: [],
+          blockPrivateNetwork: true,
+          blockMetadataEndpoints: true,
+          blockLoopback: true,
+        },
+        environment: { passthrough: ['PATH'], redactDisplay: true },
+        credentials: { mode: 'none', brokerRefs: [] },
+        createdAt: '2026-07-25T00:00:00.000Z',
+        updatedAt: '2026-07-25T00:00:00.000Z',
+      },
+      provider: 'codex-cli',
+      effective: {
+        sandboxMode: 'workspace-write',
+        networkAccessEnabled: false,
+        envPassthrough: ['PATH'],
+        credentialRefs: [],
+        filesystemBackend: {
+          backend: 'none',
+          state: 'unavailable',
+          capabilityVersion: 'filesystem-sandbox-probe/v2',
+          platformBackend: 'none',
+          supported: [],
+          reason: 'No conformant backend is available.',
+        },
+      },
+      evaluations: [],
+      unsupportedRules: [],
+      warnings: [],
+    };
+    const sandboxPolicies = {
+      dryRunWithTrace: vi.fn().mockResolvedValue({
+        result: requiredPolicy,
+        trace: {} as never,
+      }),
+    };
+    const service = testableService(
+      tmpDir,
+      undefined,
+      undefined,
+      undefined,
+      filesystemSandbox,
+      sandboxPolicies
+    );
+
+    await expect(
+      service.startAgent(task.id, 'codex', {
+        overrideReason: 'Operator acknowledged unrelated readiness checks.',
+      })
+    ).rejects.toThrow('Required filesystem sandbox rules cannot be enforced');
+    expect(compile).toHaveBeenCalledOnce();
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+  });
 
   it(
     'runs the Codex app-server adapter through a pinned JSON-RPC lifecycle',
@@ -1872,6 +2022,113 @@ describe('ClawdbotAgentService Codex providers', () => {
       attempt: { ...activeAttempt, providerRuntimeManifest: originalManifest },
     } as Task;
     await service.stopAgent(task.id, attemptId);
+  });
+
+  it('passes provider-native run temp and cache roots into the Codex SDK environment', async () => {
+    let releaseEvents: (() => void) | undefined;
+    const eventGate = new Promise<void>((resolve) => {
+      releaseEvents = resolve;
+    });
+    mockSdkRunStreamed.mockResolvedValue({
+      events: {
+        async *[Symbol.asyncIterator]() {
+          await eventGate;
+          yield {
+            type: 'item.completed',
+            item: { type: 'agent_message', text: 'SDK environment verified.' },
+          };
+        },
+      },
+    });
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-sdk',
+          name: 'OpenAI Codex SDK',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-sdk',
+          model: 'gpt-5.5',
+        },
+      ],
+    });
+    const rootPath = path.join(tmpDir, '.sandbox');
+    const tempPath = path.join(rootPath, 'tmp');
+    const cachePath = path.join(rootPath, 'cache');
+    const activateSandbox = vi.fn();
+    const filesystemSandbox = {
+      compile: vi.fn(
+        async (
+          input: Parameters<
+            import('../services/filesystem-sandbox-service.js').FilesystemSandboxService['compile']
+          >[0]
+        ) => ({
+          evidence: {
+            schemaVersion: 'filesystem-sandbox-evidence/v1' as const,
+            providerRuntimeManifestDigest: input.providerRuntimeManifestDigest,
+            backend: 'provider-native' as const,
+            state: 'native' as const,
+            platformBackend: 'provider-native' as const,
+            capabilityVersion: 'provider-runtime-manifest/v1@15',
+            policyHash: digestRunLaunchValue({ taskId: input.taskId }),
+            roots: [
+              {
+                id: 'run-temp',
+                access: 'write' as const,
+                scope: 'run-temp' as const,
+                pathDigest: digestRunLaunchValue({ path: tempPath }),
+              },
+              {
+                id: 'run-cache',
+                access: 'write' as const,
+                scope: 'run-cache' as const,
+                pathDigest: digestRunLaunchValue({ path: cachePath }),
+              },
+            ],
+            protectedPaths: ['.agents', '.codex', '.git', '.veritas-kanban'],
+            dotfileMasking: false,
+            descendantsEnforced: true,
+            cleanupOwner: 'run-supervisor' as const,
+          },
+          directories: { rootPath, tempPath, cachePath },
+          environment: {
+            TMPDIR: tempPath,
+            TMP: tempPath,
+            TEMP: tempPath,
+            XDG_CACHE_HOME: cachePath,
+          },
+        })
+      ),
+      activate: activateSandbox,
+      cleanup: vi.fn(),
+      wrap: vi.fn((_plan: unknown, command: string, args: string[], cwd: string) => ({
+        command,
+        args,
+        cwd,
+        environment: {},
+      })),
+    } as Pick<FilesystemSandboxService, 'compile' | 'activate' | 'cleanup' | 'wrap'>;
+    const service = testableService(tmpDir, undefined, undefined, undefined, filesystemSandbox);
+
+    await service.startAgent(task.id, 'codex-sdk');
+    await waitFor(() => expect(mockSdkConstructor).toHaveBeenCalled());
+    expect(mockSdkConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: expect.objectContaining({
+          TMPDIR: tempPath,
+          TMP: tempPath,
+          TEMP: tempPath,
+          XDG_CACHE_HOME: cachePath,
+        }),
+      })
+    );
+    expect(activateSandbox.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSdkConstructor.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    );
+
+    releaseEvents?.();
+    await waitFor(async () => expect(await service.getAgentStatus(task.id)).toBeNull());
   });
 
   it('aborts and removes a Codex SDK run when stale evidence also blocks finalization', async () => {

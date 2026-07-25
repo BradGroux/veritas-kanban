@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { SandboxPolicyPreset } from '@veritas-kanban/shared';
+import type { FilesystemSandboxBackendStatus, SandboxPolicyPreset } from '@veritas-kanban/shared';
 import { ConfigService } from '../services/config-service.js';
 import {
   DEFAULT_SANDBOX_PRESET_ID,
@@ -62,7 +62,9 @@ describe('SandboxPolicyService', () => {
       configFile: path.join(configDir, 'config.json'),
       storageType: 'file',
     });
-    service = new SandboxPolicyService(configService);
+    service = new SandboxPolicyService(configService, {
+      probe: async (provider) => unavailableFilesystemBackend(provider),
+    });
   });
 
   afterEach(async () => {
@@ -91,6 +93,8 @@ describe('SandboxPolicyService', () => {
       capabilityStates: {
         'filesystem.read': 'supported',
         'filesystem.write': 'supported',
+        'filesystem.protected-metadata': 'supported',
+        'filesystem.descendants': 'supported',
         'network.disable': 'supported',
         'environment.allowlist': 'supported',
       },
@@ -115,6 +119,8 @@ describe('SandboxPolicyService', () => {
         capabilityStates: {
           'filesystem.read': 'supported',
           'filesystem.write': 'supported',
+          'filesystem.protected-metadata': 'supported',
+          'filesystem.descendants': 'supported',
           'environment.allowlist': 'supported',
         },
       }),
@@ -122,6 +128,172 @@ describe('SandboxPolicyService', () => {
 
     expect(cliResult.decision).toBe('block');
     expect(cliResult.unsupportedRules.map((rule) => rule.capability)).toContain('network.disable');
+  });
+
+  it('uses a conformant host backend to satisfy filesystem rules without provider-name inference', async () => {
+    service = new SandboxPolicyService(configService, {
+      probe: async () => ({
+        backend: 'codex-sandbox',
+        state: 'available',
+        capabilityVersion: 'codex-sandbox-state/v0.145',
+        backendVersion: '0.145.0',
+        platformBackend: 'seatbelt',
+        supported: [
+          'filesystem.read',
+          'filesystem.write',
+          'filesystem.deny-paths',
+          'filesystem.dotfile-masking',
+          'filesystem.protected-metadata',
+          'filesystem.descendants',
+          'filesystem.run-scoped-temp',
+          'filesystem.cleanup',
+        ],
+        reason: 'Credential-free conformance passed.',
+      }),
+    });
+    const result = await service.dryRun({
+      presetId: 'codex-repo-contained',
+      provider: 'codex-cli',
+      providerRuntimeManifest: providerRuntimeManifestFixture({
+        provider: 'codex-cli',
+        capabilityStates: {
+          'network.disable': 'supported',
+          'environment.allowlist': 'supported',
+        },
+      }),
+    });
+
+    expect(result.decision).toBe('allow');
+    expect(result.effective.filesystemBackend).toMatchObject({
+      backend: 'codex-sandbox',
+      state: 'available',
+    });
+  });
+
+  it('does not let coarse advisory provider modes satisfy a required filesystem policy', async () => {
+    const result = await service.dryRun({
+      presetId: 'codex-repo-contained',
+      provider: 'codex-cli',
+      providerRuntimeManifest: providerRuntimeManifestFixture({
+        provider: 'codex-cli',
+        capabilityStates: {
+          'network.disable': 'supported',
+          'environment.allowlist': 'supported',
+        },
+      }),
+    });
+
+    expect(result.decision).toBe('block');
+    expect(result.unsupportedRules.map((rule) => rule.capability)).toEqual(
+      expect.arrayContaining(['filesystem.read', 'filesystem.write'])
+    );
+  });
+
+  it('does not represent partial provider-native evidence as a filesystem backend', async () => {
+    const result = await service.dryRun({
+      preset: preset({
+        filesystem: {
+          readPaths: ['<workspace>'],
+          writePaths: ['<workspace>'],
+          deniedPaths: ['~/.ssh'],
+          dotfileMasking: true,
+          localOnlyHandles: true,
+        },
+      }),
+      provider: 'codex-sdk',
+      providerRuntimeManifest: providerRuntimeManifestFixture({
+        provider: 'codex-sdk',
+        capabilityStates: {
+          'filesystem.read': 'supported',
+          'filesystem.write': 'supported',
+          'filesystem.deny-paths': 'unsupported',
+          'filesystem.dotfile-masking': 'unsupported',
+          'filesystem.protected-metadata': 'supported',
+          'filesystem.descendants': 'supported',
+          'network.disable': 'supported',
+          'environment.allowlist': 'supported',
+        },
+      }),
+    });
+
+    expect(result.decision).toBe('block');
+    expect(result.effective.filesystemBackend).toMatchObject({
+      backend: 'none',
+      state: 'unavailable',
+    });
+    expect(result.unsupportedRules.map((rule) => rule.capability)).toEqual(
+      expect.arrayContaining(['filesystem.deny-paths', 'filesystem.dotfile-masking'])
+    );
+  });
+
+  it('does not accept exact provider-native claims from a degraded runtime probe', async () => {
+    const result = await service.dryRun({
+      preset: preset({
+        filesystem: {
+          readPaths: ['<workspace>'],
+          writePaths: ['<workspace>'],
+          deniedPaths: [],
+          dotfileMasking: false,
+          localOnlyHandles: false,
+        },
+      }),
+      provider: 'codex-sdk',
+      providerRuntimeManifest: providerRuntimeManifestFixture({
+        provider: 'codex-sdk',
+        probeState: 'degraded',
+        capabilityStates: {
+          'filesystem.read': 'supported',
+          'filesystem.write': 'supported',
+          'filesystem.protected-metadata': 'supported',
+          'filesystem.descendants': 'supported',
+          'network.disable': 'supported',
+          'environment.allowlist': 'supported',
+        },
+      }),
+    });
+
+    expect(result.decision).toBe('block');
+    expect(result.effective.filesystemBackend).toMatchObject({
+      backend: 'none',
+      state: 'unavailable',
+      reason: expect.stringContaining('requires a ready runtime probe'),
+    });
+    expect(result.unsupportedRules.map((rule) => rule.capability)).toEqual(
+      expect.arrayContaining([
+        'filesystem.read',
+        'filesystem.write',
+        'filesystem.protected-metadata',
+        'filesystem.descendants',
+      ])
+    );
+  });
+
+  it('blocks remote providers that cannot prove local-only filesystem handles', async () => {
+    const result = await service.dryRun({
+      preset: preset(),
+      provider: 'openclaw',
+      providerRuntimeManifest: providerRuntimeManifestFixture({
+        provider: 'openclaw',
+        capabilityStates: {
+          'filesystem.read': 'supported',
+          'filesystem.write': 'supported',
+          'filesystem.protected-metadata': 'supported',
+          'filesystem.descendants': 'supported',
+          'network.disable': 'supported',
+          'environment.allowlist': 'supported',
+        },
+      }),
+    });
+
+    expect(result.decision).toBe('block');
+    expect(result.unsupportedRules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'filesystem-local-handles',
+          status: 'unsupported',
+        }),
+      ])
+    );
   });
 
   it('fails closed when only a provider name is supplied', async () => {
@@ -222,6 +394,8 @@ describe('SandboxPolicyService', () => {
         capabilityStates: {
           'filesystem.read': 'supported',
           'filesystem.write': 'supported',
+          'filesystem.protected-metadata': 'supported',
+          'filesystem.descendants': 'supported',
           'network.disable': 'supported',
           'network.block-private': 'supported',
           'network.block-metadata': 'supported',
@@ -242,3 +416,14 @@ describe('SandboxPolicyService', () => {
     );
   });
 });
+
+function unavailableFilesystemBackend(provider?: string): FilesystemSandboxBackendStatus {
+  return {
+    backend: 'none',
+    state: 'unavailable',
+    capabilityVersion: 'filesystem-sandbox-probe/v1',
+    platformBackend: 'none',
+    supported: provider === 'codex-sdk' ? ['filesystem.run-scoped-temp', 'filesystem.cleanup'] : [],
+    reason: 'No host wrapper is available in this unit fixture.',
+  };
+}
