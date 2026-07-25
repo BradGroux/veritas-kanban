@@ -35,12 +35,18 @@ Investigate and fix bug: <BUG-TITLE>
 - [ ] Fix implemented
 - [ ] Regression test added (if applicable)
 - [ ] Related areas checked for similar issues
+- [ ] Touched packages type-check and the focused regression test passes
+
+Follow the verification cadence in `AGENTS.md`. Do not run the complete
+workspace suite unless deterministic CI selects it or this is an explicit
+integration, critical-security, or release milestone.
 
 ## Workflow
 ```bash
 vk begin <TASK-ID>
 # ... investigate and fix ...
-pnpm test
+pnpm --filter <TOUCHED-PACKAGE> typecheck
+pnpm --filter <TOUCHED-PACKAGE> test -- <FOCUSED-TEST>
 vk done <TASK-ID> "Fixed: <ROOT-CAUSE>. Solution: <SUMMARY>"
 ````
 

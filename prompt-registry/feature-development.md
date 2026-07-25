@@ -38,13 +38,17 @@ Implement feature: <FEATURE-TITLE>
 - Follow existing code patterns in the codebase
 - All new endpoints need auth middleware
 - Changes affecting shared types go in `shared/src/`
-- Run `pnpm typecheck` before considering complete
+- Follow the verification cadence in `AGENTS.md`: type-check touched packages
+  and run focused regression tests during ordinary implementation
+- Run the complete workspace suite only when deterministic CI selects it or at
+  an explicit integration, critical-security, or release milestone
 
 ## Workflow
 ```bash
 vk begin <TASK-ID>
 # ... implement ...
-pnpm typecheck && pnpm test
+pnpm --filter <TOUCHED-PACKAGE> typecheck
+pnpm --filter <TOUCHED-PACKAGE> test -- <FOCUSED-TEST>
 vk done <TASK-ID> "Implemented <FEATURE>: <SUMMARY>"
 ````
 

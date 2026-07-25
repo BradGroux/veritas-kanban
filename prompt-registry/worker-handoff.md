@@ -24,7 +24,10 @@ You are assigned task <TASK-ID>: <TASK-TITLE>
 ## Constraints
 - Do not modify scope without PM approval
 - Escalate blockers immediately via `vk block <TASK-ID> "<REASON>"`
-- All code changes require cross-model review before merge
+- Follow the proportional verification cadence in `AGENTS.md`; use focused
+  checks for ordinary work and record the selected pull-request tier
+- Independent or cross-model review is optional unless the task, governance
+  policy, issue owner, or release owner explicitly requires it
 
 ## Resources
 - API: http://localhost:3001/api
