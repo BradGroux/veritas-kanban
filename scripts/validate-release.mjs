@@ -38,6 +38,7 @@ const requiredScripts = [
   'test:e2e',
   'test:load',
   'test:load:smoke',
+  'test:release-format',
   'test:unit',
   'typecheck',
 ];
@@ -300,7 +301,7 @@ function normalizeReleaseBody(value) {
   return value.replace(/\r\n?/g, '\n').trim();
 }
 
-function releaseBodyFormattingIssues(value) {
+export function releaseBodyFormattingIssues(value) {
   const issues = [];
 
   if (value.includes('\r')) {
@@ -339,6 +340,10 @@ function releaseBodyFormattingIssues(value) {
 
     if (/\\[rn](?:\\[rn])?/.test(line)) {
       issues.push(`line ${lineNumber} contains a literal escaped line break`);
+    }
+
+    if (/^\s*>/.test(line)) {
+      issues.push(`line ${lineNumber} uses a blockquote instead of a full-width block`);
     }
 
     const blockLine = {
@@ -585,7 +590,9 @@ async function main() {
   console.log('\nRelease validation passed.');
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}
