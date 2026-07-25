@@ -39,28 +39,29 @@
 26. [Task Archive](#task-archive)
 27. [Attachments](#attachments)
 28. [Agent Permissions](#agent-permissions)
-29. [Agent Routing](#agent-routing)
-30. [Sandbox Policies](#sandbox-policies)
-31. [Shared Resources](#shared-resources)
-32. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-33. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-34. [Doc Freshness](#doc-freshness)
-35. [Cost Prediction](#cost-prediction)
-36. [Error Learning](#error-learning)
-37. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
-38. [External Tracker Introspection](#external-tracker-introspection)
-39. [Run-scoped Tool Control Plane](#run-scoped-tool-control-plane)
-40. [Tool Policies](#tool-policies)
-41. [Watcher Continuation Policies](#watcher-continuation-policies)
-42. [Traces](#traces)
-43. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
-44. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-45. [Audit](#audit)
-46. [Maintenance Center](#maintenance-center-apiv1maintenance)
-47. [Common Workflows](#common-workflows)
-48. [Versioning & Deprecation](#versioning--deprecation)
-49. [Rate Limits](#rate-limits)
-50. [Additional Endpoint Groups](#additional-endpoint-groups)
+29. [Workspace Execution Trust](#workspace-execution-trust)
+30. [Agent Routing](#agent-routing)
+31. [Sandbox Policies](#sandbox-policies)
+32. [Shared Resources](#shared-resources)
+33. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+34. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+35. [Doc Freshness](#doc-freshness)
+36. [Cost Prediction](#cost-prediction)
+37. [Error Learning](#error-learning)
+38. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
+39. [External Tracker Introspection](#external-tracker-introspection)
+40. [Run-scoped Tool Control Plane](#run-scoped-tool-control-plane)
+41. [Tool Policies](#tool-policies)
+42. [Watcher Continuation Policies](#watcher-continuation-policies)
+43. [Traces](#traces)
+44. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+45. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+46. [Audit](#audit)
+47. [Maintenance Center](#maintenance-center-apiv1maintenance)
+48. [Common Workflows](#common-workflows)
+49. [Versioning & Deprecation](#versioning--deprecation)
+50. [Rate Limits](#rate-limits)
+51. [Additional Endpoint Groups](#additional-endpoint-groups)
 
 ---
 
@@ -2155,6 +2156,72 @@ POST /api/agents/permissions/approvals/:id
 ```
 
 Approve or reject a pending approval request.
+
+---
+
+## Workspace Execution Trust
+
+Scans repository-controlled execution inputs for a task's exact registered
+worktree and manages append-only operator decisions.
+
+Mounted at `/api/agents/:taskId/workspace-trust`.
+
+| Method | Path                                            | Description                              | Permission     |
+| ------ | ----------------------------------------------- | ---------------------------------------- | -------------- |
+| `GET`  | `/api/agents/:taskId/workspace-trust`           | Scan inventory and show current decision | `agent:read`   |
+| `POST` | `/api/agents/:taskId/workspace-trust/decisions` | Record an exact-inventory decision       | `admin:manage` |
+| `POST` | `/api/agents/:taskId/workspace-trust/revoke`    | Revoke the current decision              | `admin:manage` |
+
+All routes resolve the worktree from the task record. Callers cannot submit an
+arbitrary filesystem path.
+
+### Scan
+
+```
+GET /api/agents/TASK-001/workspace-trust
+```
+
+The response contains `workspace-execution-trust-inventory/v1`, stable
+credential-redacted identity evidence, classified entries and requested
+capabilities, the project maximum, and the latest decision when one exists.
+Source contents are never returned.
+
+### Record a Decision
+
+```
+POST /api/agents/TASK-001/workspace-trust/decisions
+```
+
+```json
+{
+  "inventoryDigest": "sha256:...",
+  "mode": "restricted",
+  "reason": "Reviewed instructions; retain read-only execution",
+  "expiresAt": "2026-08-01T00:00:00.000Z"
+}
+```
+
+`mode` accepts `trusted`, `restricted`, or `denied`. `expiresAt` is optional.
+If the inventory changed after review, the server returns `409` and does not
+record the decision.
+
+### Revoke
+
+```
+POST /api/agents/TASK-001/workspace-trust/revoke
+```
+
+```json
+{
+  "inventoryDigest": "sha256:...",
+  "reason": "Repository ownership changed"
+}
+```
+
+The revocation identifies the superseded decision and remains in the audit
+history. See
+[Workspace Execution Trust](architecture/WORKSPACE-EXECUTION-TRUST.md) for
+identity, inventory, restricted-mode, and launch-binding rules.
 
 ---
 

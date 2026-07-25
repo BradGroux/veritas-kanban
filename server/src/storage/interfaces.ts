@@ -43,6 +43,8 @@ import type {
   RunToolCatalog,
   ToolServerDefinition,
   ToolServerDiscovery,
+  WorkspaceExecutionTrustDecision,
+  WorkspaceExecutionTrustInventory,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -316,6 +318,18 @@ export interface WorkspaceFileRepository {
    * file returns null; other I/O failures remain visible to the caller.
    */
   readOptionalText(workspaceRoot: string, relativePath: string): Promise<string | null>;
+}
+
+// ---------------------------------------------------------------------------
+// Workspace Execution Trust Repository
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceExecutionTrustRepository {
+  inspect(workspacePath: string): Promise<WorkspaceExecutionTrustInventory>;
+  listDecisions(identityDigest?: string): Promise<WorkspaceExecutionTrustDecision[]>;
+  appendDecision(
+    decision: WorkspaceExecutionTrustDecision
+  ): Promise<WorkspaceExecutionTrustDecision>;
 }
 
 // ---------------------------------------------------------------------------

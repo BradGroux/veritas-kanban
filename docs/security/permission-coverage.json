@@ -644,6 +644,38 @@
       "denialReason": "Previewing effective launch evidence requires task and agent read access."
     },
     {
+      "id": "cli:agents:workspace-trust",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Workspace trust command discovery requires task and agent read access."
+    },
+    {
+      "id": "cli:agents:scan",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Scanning workspace execution configuration requires task and agent read access."
+    },
+    {
+      "id": "cli:agents:decide",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["task:read", "admin:manage"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Recording a workspace execution trust decision requires administrator authority."
+    },
+    {
+      "id": "cli:agents:revoke",
+      "kind": "cli",
+      "classification": "owner-admin",
+      "permissions": ["task:read", "admin:manage"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Revoking workspace execution trust requires administrator authority."
+    },
+    {
       "id": "cli:agents:stop",
       "kind": "cli",
       "classification": "agent-scoped",

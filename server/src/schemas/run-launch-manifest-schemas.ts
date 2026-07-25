@@ -299,12 +299,57 @@ export const RunLaunchManifestSchema = z
       })
       .strict(),
     budget: AgentBudgetPolicySchema,
-    workspaceTrust: z
-      .object({
-        status: z.enum(['trusted', 'untrusted', 'not-required']),
-        source: safeTextSchema,
-      })
-      .strict(),
+    workspaceTrust: z.union([
+      z
+        .object({
+          schemaVersion: z.literal('workspace-execution-trust/v1'),
+          status: z.enum(['trusted', 'restricted', 'untrusted', 'not-required']),
+          source: safeTextSchema,
+          policyVersion: z.number().int().positive().max(10_000),
+          identityDigest: digestSchema,
+          inventoryDigest: digestSchema,
+          inventoryEntryCount: z.number().int().nonnegative().max(2_000),
+          containsExecutableConfiguration: z.boolean(),
+          requestedCapabilities: z.array(identifierSchema).max(256),
+          decisionId: identifierSchema.optional(),
+          decisionMode: z.enum(['trusted', 'restricted', 'denied', 'revoked']).optional(),
+          decisionExpiresAt: z.string().datetime({ offset: true }).optional(),
+          inventory: z
+            .array(
+              z
+                .object({
+                  id: identifierSchema,
+                  pathDigest: digestSchema,
+                  kind: z.enum([
+                    'agent-instruction',
+                    'provider-instruction',
+                    'provider-configuration',
+                    'tool-server-configuration',
+                    'runtime-hook',
+                    'language-server-configuration',
+                    'workflow-configuration',
+                    'extension-configuration',
+                    'agent-definition',
+                    'skill-definition',
+                    'project-trust-policy',
+                    'unknown-executable',
+                  ]),
+                  posture: z.enum(['declarative-only', 'model-influencing', 'executable']),
+                  sourceFingerprint: digestSchema,
+                  requestedCapabilities: z.array(identifierSchema).max(64),
+                })
+                .strict()
+            )
+            .max(2_000),
+        })
+        .strict(),
+      z
+        .object({
+          status: z.enum(['trusted', 'untrusted', 'not-required']),
+          source: safeTextSchema,
+        })
+        .strict(),
+    ]),
     origins: z
       .array(
         z

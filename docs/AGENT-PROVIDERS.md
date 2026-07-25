@@ -736,6 +736,22 @@ cannot enforce is returned as a concrete blocker, and `start` rejects it before
 pending or task attempt state changes. Declaring `tool.calls` support is not
 treated as proof that an adapter can enforce a named allowlist.
 
+Repository-controlled instructions and executable configuration pass through
+the provider-neutral workspace execution trust gate before Veritas reads
+repository instructions or creates an attempt. The gate fingerprints the exact
+task worktree, inventories recognized instructions, hooks, MCP servers,
+provider overrides, language-server settings, workflows, extensions, skills,
+and agent definitions, and evaluates them against an actor-attributed operator
+decision. Executable configuration requires explicit authorization. Model-only
+instructions may run provisionally only in enforced restricted mode.
+
+The immutable launch manifest records redacted identity and inventory evidence,
+the effective decision, project maximum, requested capabilities, and
+restriction checks. Veritas rescans immediately before provider creation; an
+identity, inventory, or decision change aborts the launch. Repository policy
+can only narrow operator trust. See
+[Workspace Execution Trust](architecture/WORKSPACE-EXECUTION-TRUST.md).
+
 Codex app-server and Claude Code inject a positive MCP catalog through their
 native run-scoped configuration. Other task adapters reject non-empty MCP
 selections. All adapters continue to reject named-tool restrictions they

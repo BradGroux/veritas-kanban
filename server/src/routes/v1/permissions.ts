@@ -44,6 +44,11 @@ export const agentRoutingAccess = routeAccess('agent:read', 'admin:manage', [
 ]);
 export const agentTaskAccess = routeAccess('agent:read', 'task:write', [
   { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
+  {
+    methods: ['POST'],
+    path: /^\/[^/]+\/workspace-trust\/(?:decisions|revoke)\/?$/,
+    permissions: 'admin:manage',
+  },
 ]);
 export const agentStatusAccess = routeAccess('agent:read', 'telemetry:write');
 export const reportAccess = routeAccess('report:read', 'report:read');

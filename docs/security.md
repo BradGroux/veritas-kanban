@@ -109,6 +109,18 @@ credential-redacted remote identity before any push. Integration uses a
 detached temporary worktree and a non-force push, so the configured primary
 checkout is not mutated.
 
+Repository-controlled execution is a separate trust boundary from worktree
+ownership. Before an executable provider launch, Veritas inventories recognized
+agent instructions, provider configuration, MCP servers, hooks, language-server
+settings, workflows, extensions, skills, and agent definitions. Executable
+configuration requires an explicit, actor-attributed decision for the exact
+workspace identity and inventory digest. Model-only instructions can run
+provisionally only under the enforced restricted profile. The inventory and
+decision are bound into the immutable launch manifest and rescanned before
+provider creation; drift fails closed. A repository-owned policy can only
+narrow trust. See
+[Workspace Execution Trust](architecture/WORKSPACE-EXECUTION-TRUST.md).
+
 ### v5 Auth Context
 
 Authenticated REST requests and WebSocket connections now carry a shared auth

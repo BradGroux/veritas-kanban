@@ -28,8 +28,14 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
 import { TaskCommitPolicySchema } from '../schemas/task-envelope-schemas.js';
 import { RunEventQuerySchema } from '../schemas/run-event-schemas.js';
+import {
+  workspaceExecutionTrustDecisionInputSchema,
+  workspaceExecutionTrustRevokeInputSchema,
+} from '../schemas/workspace-execution-trust-schemas.js';
+import { getWorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
 
 const router: RouterType = Router();
+const workspaceExecutionTrust = getWorkspaceExecutionTrustService();
 
 // Validation schemas
 const AgentTypeSchema = z.string().min(1).max(50);
@@ -179,6 +185,57 @@ const reportTokensSchema = z.object({
   model: z.string().optional(),
   agent: AgentTypeSchema.optional(),
 });
+
+async function taskWorkspacePath(taskId: string): Promise<string> {
+  const task = await getTaskService().getTask(taskId);
+  if (!task) throw new NotFoundError(`Task ${taskId} not found`);
+  if (!task.git?.worktreePath) {
+    throw new ValidationError('Task must have an active worktree for workspace trust.');
+  }
+  return task.git.worktreePath;
+}
+
+// GET /api/agents/:taskId/workspace-trust - Scan the exact task worktree and show its decision.
+router.get(
+  '/:taskId/workspace-trust',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    res.json(
+      await workspaceExecutionTrust.scan(await taskWorkspacePath(req.params.taskId as string))
+    );
+  })
+);
+
+// POST /api/agents/:taskId/workspace-trust/decisions - Record an exact-inventory decision.
+router.post(
+  '/:taskId/workspace-trust/decisions',
+  requireLocalAgentCapability,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = workspaceExecutionTrustDecisionInputSchema.parse(req.body);
+    const decision = await workspaceExecutionTrust.recordDecision(
+      await taskWorkspacePath(req.params.taskId as string),
+      input,
+      requestActor(req)
+    );
+    res.status(201).json(decision);
+  })
+);
+
+// POST /api/agents/:taskId/workspace-trust/revoke - Revoke the current decision.
+router.post(
+  '/:taskId/workspace-trust/revoke',
+  requireLocalAgentCapability,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = workspaceExecutionTrustRevokeInputSchema.parse(req.body);
+    res.json(
+      await workspaceExecutionTrust.revoke(
+        await taskWorkspacePath(req.params.taskId as string),
+        input,
+        requestActor(req)
+      )
+    );
+  })
+);
 
 // POST /api/agents/:taskId/launch-preview - Compile effective launch evidence without dispatch.
 router.post(

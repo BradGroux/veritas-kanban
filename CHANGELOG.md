@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a provider-neutral workspace execution trust gate that scans the exact
+  task worktree for repository-controlled agent instructions, provider
+  configuration, MCP servers, hooks, language-server settings, workflows,
+  extensions, skills, and agent definitions before launch. Stable identity
+  combines canonical worktree, repository, Git common-directory, and
+  credential-redacted remote evidence so sibling, nested, moved, and linked
+  worktrees cannot borrow authorization. Append-only trusted, restricted,
+  denied, revoked, and expiring decisions bind to an exact inventory digest;
+  project policy can only narrow them. Executable configuration requires
+  explicit authorization, while model-only instructions can run provisionally
+  only under enforced read-only, no-network, credential-free restricted
+  controls. The immutable launch manifest records redacted inventory and
+  decision evidence, and a final pre-spawn rescan blocks any drift. Added
+  administrator REST and CLI scan, decide, and revoke controls (#878).
 - Added run-scoped filesystem sandbox enforcement for local ACP, Claude Code,
   Codex app-server, Codex CLI, and Hermes processes. Required presets compile
   explicit read, write, deny, dotfile, protected-metadata, temporary, and cache

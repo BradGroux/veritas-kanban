@@ -13,6 +13,9 @@ import type {
   ConversationLifecycleResult,
   RunRecoveryRecord,
   RunLaunchManifestPreview,
+  WorkspaceExecutionTrustDecision,
+  WorkspaceExecutionTrustDecisionMode,
+  WorkspaceExecutionTrustScanResult,
 } from '@veritas-kanban/shared';
 
 type ConversationTurnAction = 'resume' | 'follow-up' | 'fork';
@@ -248,6 +251,8 @@ export function registerAgentCommands(program: Command): void {
         console.log(`  Digest: ${preview.manifest.digest}`);
         console.log(`  Provider: ${preview.manifest.providerRuntime.provider}`);
         console.log(`  Model: ${preview.manifest.runtime.model ?? 'provider default'}`);
+        console.log(`  Workspace trust: ${preview.manifest.workspaceTrust.status}`);
+        console.log(chalk.dim(`  ${preview.manifest.workspaceTrust.source}`));
         console.log(
           `  Enforceable: ${preview.manifest.enforcement.enforceable ? chalk.green('yes') : chalk.red('no')}`
         );
@@ -259,6 +264,119 @@ export function registerAgentCommands(program: Command): void {
             `  Parent drift: ${preview.drift.material ? chalk.yellow('material') : chalk.green('none')}`
           );
         }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  const workspaceTrust = program
+    .command('workspace-trust')
+    .description('Inspect and manage repository execution trust');
+
+  workspaceTrust
+    .command('scan <id>')
+    .description('Scan repository-controlled instructions and executable configuration')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const result = await api<WorkspaceExecutionTrustScanResult>(
+          `/api/agents/${taskId}/workspace-trust`
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        console.log(chalk.bold('Workspace execution trust'));
+        console.log(`  Identity: ${result.inventory.identity.digest}`);
+        console.log(`  Inventory: ${result.inventory.digest}`);
+        console.log(`  Project maximum: ${result.inventory.projectPolicy.maximumTrust}`);
+        console.log(`  Current decision: ${result.currentDecision?.mode ?? chalk.yellow('none')}`);
+        if (result.inventory.entries.length === 0) {
+          console.log(chalk.dim('  No recognized repository-controlled components found.'));
+          return;
+        }
+        for (const entry of result.inventory.entries) {
+          console.log(
+            `  ${entry.posture === 'executable' ? chalk.red('!') : chalk.yellow('•')} ${entry.relativePath}`
+          );
+          console.log(
+            chalk.dim(
+              `    ${entry.kind}; ${entry.posture}; ${entry.requestedCapabilities.join(', ')}`
+            )
+          );
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  workspaceTrust
+    .command('decide <id>')
+    .description('Record trust, restricted, or denied for an exact scanned inventory')
+    .requiredOption('--mode <mode>', 'Decision mode: trusted, restricted, or denied')
+    .requiredOption('--inventory <digest>', 'Exact inventory digest from workspace-trust scan')
+    .requiredOption('--reason <text>', 'Reason for the decision')
+    .option('--expires-at <timestamp>', 'Optional ISO-8601 expiry')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const mode = options.mode as WorkspaceExecutionTrustDecisionMode;
+        if (!['trusted', 'restricted', 'denied'].includes(mode)) {
+          throw new Error('Mode must be trusted, restricted, or denied.');
+        }
+        const taskId = await resolveTaskId(id);
+        const decision = await api<WorkspaceExecutionTrustDecision>(
+          `/api/agents/${taskId}/workspace-trust/decisions`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              mode,
+              inventoryDigest: options.inventory,
+              reason: options.reason,
+              expiresAt: options.expiresAt,
+            }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(decision, null, 2));
+          return;
+        }
+        console.log(chalk.green(`✓ Workspace decision recorded: ${decision.mode}`));
+        console.log(chalk.dim(`Decision ID: ${decision.id}`));
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  workspaceTrust
+    .command('revoke <id>')
+    .description('Revoke the current workspace execution trust decision')
+    .requiredOption('--inventory <digest>', 'Exact current inventory digest')
+    .requiredOption('--reason <text>', 'Reason for revocation')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const decision = await api<WorkspaceExecutionTrustDecision>(
+          `/api/agents/${taskId}/workspace-trust/revoke`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              inventoryDigest: options.inventory,
+              reason: options.reason,
+            }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(decision, null, 2));
+          return;
+        }
+        console.log(chalk.green('✓ Workspace execution trust decision revoked'));
+        console.log(chalk.dim(`Decision ID: ${decision.id}`));
       } catch (err) {
         console.error(chalk.red(`Error: ${(err as Error).message}`));
         process.exit(1);

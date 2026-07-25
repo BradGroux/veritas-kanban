@@ -1794,23 +1794,26 @@ Added in v3.3.2.
 
 ### Agent Commands
 
-| Command                                                                       | Description                                         |
-| ----------------------------------------------------------------------------- | --------------------------------------------------- |
-| `vk start <id>`                                                               | Start an agent on a code task (`--agent` to choose) |
-| `vk launch-preview <id>`                                                      | Preview immutable launch evidence without dispatch  |
-| `vk stop <id>`                                                                | Stop a running agent                                |
-| `vk agent:resume <id> --source-attempt <id> -m <text>`                        | Resume an exact provider conversation               |
-| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                     | Start a native follow-up turn                       |
-| `vk agent:fork <id> --source-attempt <id> -m <text>`                          | Fork native provider history                        |
-| `vk agent:steer <id> --attempt <id> -m <text>`                                | Steer the exact active provider turn                |
-| `vk agent:interrupt <id> --attempt <id>`                                      | Interrupt the exact active attempt                  |
-| `vk agent:compact <id> --attempt <id>`                                        | Compact a supported provider conversation           |
-| `vk agent:archive <id> --attempt <id>`                                        | Archive a supported provider conversation           |
-| `vk agent:close <id> --attempt <id>`                                          | Close a supported provider conversation             |
-| `vk agents:pending`                                                           | List pending agent requests                         |
-| `vk agents:status <id>`                                                       | Check agent running status                          |
-| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)  |
-| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (failure)  |
+| Command                                                                             | Description                                         |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `vk start <id>`                                                                     | Start an agent on a code task (`--agent` to choose) |
+| `vk launch-preview <id>`                                                            | Preview immutable launch evidence without dispatch  |
+| `vk workspace-trust scan <id>`                                                      | Inventory repository-controlled launch inputs       |
+| `vk workspace-trust decide <id> --mode <mode> --inventory <digest> --reason <text>` | Record an exact-inventory trust decision            |
+| `vk workspace-trust revoke <id> --inventory <digest> --reason <text>`               | Revoke the current workspace authorization          |
+| `vk stop <id>`                                                                      | Stop a running agent                                |
+| `vk agent:resume <id> --source-attempt <id> -m <text>`                              | Resume an exact provider conversation               |
+| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                           | Start a native follow-up turn                       |
+| `vk agent:fork <id> --source-attempt <id> -m <text>`                                | Fork native provider history                        |
+| `vk agent:steer <id> --attempt <id> -m <text>`                                      | Steer the exact active provider turn                |
+| `vk agent:interrupt <id> --attempt <id>`                                            | Interrupt the exact active attempt                  |
+| `vk agent:compact <id> --attempt <id>`                                              | Compact a supported provider conversation           |
+| `vk agent:archive <id> --attempt <id>`                                              | Archive a supported provider conversation           |
+| `vk agent:close <id> --attempt <id>`                                                | Close a supported provider conversation             |
+| `vk agents:pending`                                                                 | List pending agent requests                         |
+| `vk agents:status <id>`                                                             | Check agent running status                          |
+| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (success)  |
+| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (failure)  |
 
 ### Automation Commands
 
@@ -1970,6 +1973,28 @@ Defense-in-depth security model with multiple authentication methods and hardene
 - **Weak key detection** — Startup warnings for known weak defaults or keys under 32 characters
 - **Password strength indicator** — Visual strength meter in the Security settings tab (weak/fair/good/strong/very strong)
 - **Password change** — Change password from the Security settings tab with current password verification
+
+### Workspace Execution Trust
+
+- **Pre-launch inventory** - Scans repository-controlled harness instructions,
+  provider configuration, MCP servers, hooks, language-server settings,
+  workflows, extensions, skills, and agent definitions before an executable
+  provider launch.
+- **Stable identity** - Binds decisions to the canonical worktree, repository,
+  Git common directory, and credential-redacted remote identity instead of a
+  reusable path string.
+- **Exact authorization** - Trusted, restricted, denied, and revoked records
+  are actor-attributed and inventory-bound. Content drift, expiry, or revocation
+  fails closed.
+- **Restricted mode** - Requires enforced read-only filesystem access, disabled
+  network, no task credentials, no project tool servers, and no external
+  mutation.
+- **Immutable launch evidence** - Records only redacted identity, inventory,
+  capability, project-policy, and decision evidence, then rescans immediately
+  before provider creation.
+
+See
+[Workspace Execution Trust](architecture/WORKSPACE-EXECUTION-TRUST.md).
 
 ### Network & Headers
 

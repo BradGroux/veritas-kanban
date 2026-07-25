@@ -200,6 +200,7 @@ import type {
 import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 import type { FilesystemSandboxService } from '../services/filesystem-sandbox-service.js';
 import type { SandboxPolicyService } from '../services/sandbox-policy-service.js';
+import type { WorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -243,7 +244,11 @@ function testableService(
   approvalBroker?: RunApprovalBrokerService,
   toolControlPlane?: ToolControlPlaneService,
   filesystemSandbox?: Pick<FilesystemSandboxService, 'compile' | 'activate' | 'cleanup' | 'wrap'>,
-  sandboxPolicies?: Pick<SandboxPolicyService, 'dryRunWithTrace'>
+  sandboxPolicies?: Pick<SandboxPolicyService, 'dryRunWithTrace'>,
+  workspaceExecutionTrust: Pick<
+    WorkspaceExecutionTrustService,
+    'scan' | 'evaluateForLaunch' | 'assertFresh'
+  > = testWorkspaceExecutionTrust()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -263,10 +268,51 @@ function testableService(
     undefined,
     undefined,
     filesystemSandbox,
-    sandboxPolicies
+    sandboxPolicies,
+    workspaceExecutionTrust
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testWorkspaceExecutionTrust(): Pick<
+  WorkspaceExecutionTrustService,
+  'scan' | 'evaluateForLaunch' | 'assertFresh'
+> {
+  const identity = {
+    schemaVersion: 'workspace-execution-trust/v1' as const,
+    digest: `sha256:${'1'.repeat(64)}`,
+    canonicalWorkspacePathDigest: `sha256:${'2'.repeat(64)}`,
+    canonicalRepositoryRootDigest: `sha256:${'3'.repeat(64)}`,
+    gitCommonDirectoryDigest: `sha256:${'4'.repeat(64)}`,
+    remoteIdentityDigest: `sha256:${'5'.repeat(64)}`,
+  };
+  const inventory = {
+    schemaVersion: 'workspace-execution-trust-inventory/v1' as const,
+    digest: `sha256:${'6'.repeat(64)}`,
+    scannerRevision: 1,
+    scannedAt: '2026-07-23T20:00:00.000Z',
+    identity,
+    entries: [],
+    projectPolicy: {
+      maximumTrust: 'trusted' as const,
+      valid: true,
+    },
+  };
+  const evaluation = {
+    schemaVersion: 'workspace-execution-trust/v1' as const,
+    status: 'not-required' as const,
+    source: 'No repository-controlled execution components were discovered.',
+    requiresExplicitDecision: false,
+    identity,
+    inventory,
+    restrictionChecks: [],
+  };
+  return {
+    scan: vi.fn(async () => ({ inventory })),
+    evaluateForLaunch: vi.fn(async () => evaluation),
+    assertFresh: vi.fn(async () => undefined),
+  };
 }
 
 function testRunSupervisor(): RunSupervisorService {

@@ -16,7 +16,10 @@ import {
   type RunLaunchManifestCompileInput,
 } from '../services/run-launch-manifest-service.js';
 import { calculateProviderRuntimeManifestDigest } from '../utils/provider-runtime-manifest-digest.js';
-import { verifyRunLaunchManifestDigest } from '../utils/run-launch-manifest-digest.js';
+import {
+  calculateRunLaunchManifestDigest,
+  verifyRunLaunchManifestDigest,
+} from '../utils/run-launch-manifest-digest.js';
 import { calculateRunToolCatalogDigest } from '../utils/tool-control-plane-digest.js';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 
@@ -155,6 +158,36 @@ const sandboxPolicy: SandboxPolicyDryRunResult = {
   warnings: [],
 };
 
+const workspaceTrustIdentity = {
+  schemaVersion: 'workspace-execution-trust/v1',
+  digest: `sha256:${'1'.repeat(64)}`,
+  canonicalWorkspacePathDigest: `sha256:${'2'.repeat(64)}`,
+  canonicalRepositoryRootDigest: `sha256:${'3'.repeat(64)}`,
+  gitCommonDirectoryDigest: `sha256:${'4'.repeat(64)}`,
+  remoteIdentityDigest: `sha256:${'5'.repeat(64)}`,
+} as const;
+
+const workspaceTrust: RunLaunchManifestCompileInput['workspaceTrust'] = {
+  schemaVersion: 'workspace-execution-trust/v1',
+  status: 'not-required',
+  source: 'No repository-controlled execution components were discovered.',
+  requiresExplicitDecision: false,
+  identity: workspaceTrustIdentity,
+  inventory: {
+    schemaVersion: 'workspace-execution-trust-inventory/v1',
+    digest: `sha256:${'6'.repeat(64)}`,
+    scannerRevision: 1,
+    scannedAt: '2026-07-23T20:00:00.000Z',
+    identity: workspaceTrustIdentity,
+    entries: [],
+    projectPolicy: {
+      maximumTrust: 'trusted',
+      valid: true,
+    },
+  },
+  restrictionChecks: [],
+};
+
 function input(
   overrides: Partial<RunLaunchManifestCompileInput> = {}
 ): RunLaunchManifestCompileInput {
@@ -262,10 +295,7 @@ function input(
       limits: { totalTokens: 50_000 },
       hardAction: 'require-approval',
     },
-    workspaceTrust: {
-      status: 'not-required',
-      source: 'No repository-controlled executable components were selected.',
-    },
+    workspaceTrust,
     origins: [
       {
         field: 'runtime.model',
@@ -405,6 +435,24 @@ describe('RunLaunchManifestService', () => {
     expect(Object.isFrozen(manifest)).toBe(true);
     expect(Object.isFrozen(manifest.runtime.args)).toBe(true);
     expect(() => manifest.runtime.args.push('--tamper')).toThrow(TypeError);
+  });
+
+  it('keeps legacy v1 launch manifests readable without treating them as fresh trust evidence', () => {
+    const current = new RunLaunchManifestService().compile(input());
+    const { digest: _digest, ...currentPayload } = current;
+    const legacyPayload = {
+      ...currentPayload,
+      workspaceTrust: {
+        status: 'trusted' as const,
+        source: 'Legacy workspace trust evidence.',
+      },
+    };
+    const legacy = {
+      ...legacyPayload,
+      digest: calculateRunLaunchManifestDigest(legacyPayload),
+    };
+
+    expect(parseRunLaunchManifest(legacy).workspaceTrust).toEqual(legacyPayload.workspaceTrust);
   });
 
   it('rejects filesystem evidence linked to a different provider manifest', () => {

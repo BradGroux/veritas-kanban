@@ -19,6 +19,21 @@ describe('shared API permission metadata', () => {
     ).toEqual(['agent:read']);
   });
 
+  it('keeps workspace trust scans read-scoped and decisions admin-scoped', () => {
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/workspace-trust', {
+        method: 'GET',
+      }).permissions
+    ).toEqual(['agent:read']);
+    for (const action of ['decisions', 'revoke']) {
+      expect(
+        getApiPermissionRequirement(`/api/agents/task_1/workspace-trust/${action}`, {
+          method: 'POST',
+        }).permissions
+      ).toEqual(['admin:manage']);
+    }
+  });
+
   it('separates conversation steering from lifecycle mutation authority', () => {
     expect(
       getApiPermissionRequirement('/api/agents/task_1/conversation/steer', {
