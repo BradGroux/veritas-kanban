@@ -47,7 +47,7 @@ Write a brief summary covering:
 ```bash
 # Run the narrowest useful verification from AGENTS.md
 pnpm --filter <TOUCHED-PACKAGE> typecheck
-pnpm --filter <TOUCHED-PACKAGE> test -- <FOCUSED-TEST>
+pnpm --filter <TOUCHED-PACKAGE> exec vitest run <FOCUSED-TEST>
 
 # Complete the task
 vk done <TASK-ID> "<SUMMARY>"

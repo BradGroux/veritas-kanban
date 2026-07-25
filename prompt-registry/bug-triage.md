@@ -46,7 +46,7 @@ integration, critical-security, or release milestone.
 vk begin <TASK-ID>
 # ... investigate and fix ...
 pnpm --filter <TOUCHED-PACKAGE> typecheck
-pnpm --filter <TOUCHED-PACKAGE> test -- <FOCUSED-TEST>
+pnpm --filter <TOUCHED-PACKAGE> exec vitest run <FOCUSED-TEST>
 vk done <TASK-ID> "Fixed: <ROOT-CAUSE>. Solution: <SUMMARY>"
 ````
 
