@@ -133,13 +133,50 @@ export interface AdmissionQueueTerminalEvidence {
   recordedAt: string;
 }
 
+export type AdmissionQueueTarget =
+  | {
+      kind: 'direct';
+      agent: AgentType;
+    }
+  | {
+      kind: 'workflow-root';
+      workflowId: string;
+      workflowVersion: number;
+      workflowRunId: string;
+      workflowRunRevision: number;
+      associatedTaskId?: string;
+      initialContextDigest: string;
+      budgetPolicyDigest: string;
+      executionTreeDigest: string;
+    }
+  | {
+      kind: 'workflow-step';
+      workflowId: string;
+      workflowVersion: number;
+      workflowRunId: string;
+      workflowRunRevision: number;
+      workflowStepId: string;
+      workflowStepSequence: number;
+      recoverySequence: number;
+      parentNodeId: string;
+      edge: ExecutionTreeIdentity['edge'];
+      provider: ExecutableAgentProvider;
+      hostId: string;
+      providerRuntimeManifestDigest: string;
+      requiredRuntimeCapabilitiesDigest: string;
+      phaseEvidenceDigest: string;
+      phaseLaunchDigest: string;
+    };
+
 export interface AdmissionQueueEntry {
   schemaVersion: typeof ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION;
   id: string;
   revision: number;
   state: AdmissionQueueState;
   enqueueSequence: number;
-  agent: AgentType;
+  /** Legacy direct-launch discriminator. New entries also persist target. */
+  agent?: AgentType;
+  target?: AdmissionQueueTarget;
   attemptId: string;
   request: AdmissionRequest;
   policies: AdmissionLimitPolicy[];
@@ -180,7 +217,8 @@ export interface AdmissionQueueListQuery {
 
 export interface AdmissionQueueDraft {
   id: string;
-  agent: AgentType;
+  agent?: AgentType;
+  target?: AdmissionQueueTarget;
   attemptId: string;
   request: AdmissionRequest;
   policies: AdmissionLimitPolicy[];
@@ -224,6 +262,7 @@ export interface AdmissionReservationClaimInput {
   record: AdmissionReservation;
   now: string;
   reclaimExpired?: boolean;
+  reclaimReleased?: boolean;
 }
 
 export interface AdmissionReservationClaimResult {

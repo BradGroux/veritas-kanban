@@ -18,6 +18,7 @@ import { AgentBudgetLimitsSchema, AgentBudgetUsageSchema } from './agent-budget-
 
 const identifier = z.string().trim().min(1).max(240);
 const policyIdentifier = z.string().trim().min(1).max(256);
+const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const admissionProvider = z.enum([...EXECUTABLE_AGENT_PROVIDERS, ADMISSION_CONTROL_PROVIDER]);
 const executionTreeBudgetPolicyScope = z.enum([
   'workspace',
@@ -213,6 +214,48 @@ export const AdmissionReservationSchema = z
     }
   });
 
+export const AdmissionQueueTargetSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('direct'),
+      agent: identifier,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('workflow-root'),
+      workflowId: identifier,
+      workflowVersion: z.number().int().positive(),
+      workflowRunId: identifier,
+      workflowRunRevision: z.number().int().positive(),
+      associatedTaskId: identifier.optional(),
+      initialContextDigest: digest,
+      budgetPolicyDigest: digest,
+      executionTreeDigest: digest,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('workflow-step'),
+      workflowId: identifier,
+      workflowVersion: z.number().int().positive(),
+      workflowRunId: identifier,
+      workflowRunRevision: z.number().int().positive(),
+      workflowStepId: identifier,
+      workflowStepSequence: z.number().int().positive(),
+      recoverySequence: z.number().int().nonnegative(),
+      parentNodeId: identifier,
+      edge: z.enum(EXECUTION_TREE_EDGE_KINDS),
+      provider: z.enum(EXECUTABLE_AGENT_PROVIDERS),
+      hostId: identifier,
+      providerRuntimeManifestDigest: digest,
+      requiredRuntimeCapabilitiesDigest: digest,
+      phaseEvidenceDigest: digest,
+      phaseLaunchDigest: digest,
+    })
+    .strict(),
+]);
+
 export const AdmissionQueueEntrySchema = z
   .object({
     schemaVersion: z.literal(ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION),
@@ -220,7 +263,8 @@ export const AdmissionQueueEntrySchema = z
     revision: z.number().int().positive(),
     state: z.enum(ADMISSION_QUEUE_STATES),
     enqueueSequence: z.number().int().positive(),
-    agent: identifier,
+    agent: identifier.optional(),
+    target: AdmissionQueueTargetSchema.optional(),
     attemptId: identifier,
     request: AdmissionRequestSchema,
     policies: z.array(AdmissionLimitPolicySchema).max(6),
@@ -246,6 +290,52 @@ export const AdmissionQueueEntrySchema = z
   })
   .strict()
   .superRefine((entry, ctx) => {
+    const directAgent = entry.target?.kind === 'direct' ? entry.target.agent : entry.agent;
+    if (!entry.target && !entry.agent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Admission queue entries require a launch target.',
+        path: ['target'],
+      });
+    }
+    if (entry.target?.kind === 'direct' && entry.agent && entry.agent !== directAgent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Direct queue target and legacy agent identity must match.',
+        path: ['agent'],
+      });
+    }
+    if (entry.target && entry.target.kind !== 'direct' && entry.agent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Workflow queue targets cannot contain a direct agent identity.',
+        path: ['agent'],
+      });
+    }
+    if (
+      entry.target?.kind === 'workflow-root' &&
+      (entry.request.workflowRunId !== entry.target.workflowRunId ||
+        entry.request.workflowStepId !== undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Workflow root queue target must match its admission request.',
+        path: ['target'],
+      });
+    }
+    if (
+      entry.target?.kind === 'workflow-step' &&
+      (entry.request.workflowRunId !== entry.target.workflowRunId ||
+        entry.request.workflowStepId !== entry.target.workflowStepId ||
+        entry.request.provider !== entry.target.provider ||
+        entry.request.hostId !== entry.target.hostId)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Workflow step queue target must match its admission request.',
+        path: ['target'],
+      });
+    }
     if (entry.state === 'leased' && (!entry.lease || !entry.reservationId)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

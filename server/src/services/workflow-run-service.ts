@@ -5,7 +5,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import {
   ADMISSION_CONTROL_PROVIDER,
@@ -18,6 +18,8 @@ import {
   type AgentBudgetUsage,
   type AgentType,
   type AdmissionDecision,
+  type AdmissionQueueClaim,
+  type AdmissionQueueEntry,
   type AdmissionReservation,
   type AdmissionReservationRelease,
   type ExecutionTreeBudgetPolicy,
@@ -55,6 +57,7 @@ import {
   getAdmissionControlService,
 } from './admission-control-service.js';
 import { normalizeWorkspaceId } from './task-envelope-service.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const log = createLogger('workflow-run');
 
@@ -113,6 +116,7 @@ export class WorkflowRunService {
   private readonly ownsSqliteDatabase: boolean = false;
   private readonly runRecoveryPolicy: RunRecoveryPolicyService;
   private readonly admission: AdmissionControlService;
+  private readonly requestAdmissionQueueDrain?: () => void;
 
   constructor(options: string | WorkflowRunServiceOptions = {}) {
     const resolvedOptions = typeof options === 'string' ? { runsDir: options } : options;
@@ -120,6 +124,7 @@ export class WorkflowRunService {
     this.workflowService = resolvedOptions.workflowService ?? getWorkflowService();
     this.runRecoveryPolicy = resolvedOptions.runRecoveryPolicy ?? new RunRecoveryPolicyService();
     this.admission = resolvedOptions.admission ?? getAdmissionControlService();
+    this.requestAdmissionQueueDrain = resolvedOptions.requestAdmissionQueueDrain;
     this.stepExecutor =
       resolvedOptions.stepExecutor ??
       new WorkflowStepExecutor(resolvedOptions.runsDir, {
@@ -424,7 +429,7 @@ export class WorkflowRunService {
         'Root objective budget'
       ),
     ]);
-    const decision = await this.admission.admit({
+    const admissionInput = {
       taskId: admissionTaskId,
       rootTaskId,
       workspaceId,
@@ -432,7 +437,7 @@ export class WorkflowRunService {
       hostId: this.admission.getExecutionHostId(),
       source: 'workflow',
       workflowRunId: run.id,
-      idempotencyKey: `workflow-root:${run.id}:${randomUUID()}`,
+      idempotencyKey: `workflow-root:${run.id}`,
       requested: {
         runSlots: 1,
         processSlots: 0,
@@ -441,7 +446,34 @@ export class WorkflowRunService {
       executionTree,
       budgetPolicies,
       budgetRequest: { fanOut: 1 },
+    } as const;
+    const decision = await this.admission.admitOrQueue(admissionInput, {
+      attemptId,
+      target: {
+        kind: 'workflow-root',
+        workflowId: run.workflowId,
+        workflowVersion: run.workflowVersion,
+        workflowRunId: run.id,
+        workflowRunRevision: (run.revision ?? 0) + 1,
+        ...(run.taskId ? { associatedTaskId: run.taskId } : {}),
+        initialContextDigest: digestRunLaunchValue(run.context),
+        budgetPolicyDigest: digestRunLaunchValue(budgetPolicies),
+        executionTreeDigest: digestRunLaunchValue(executionTree),
+      },
     });
+    if (decision.outcome === 'queued' && decision.queueEntry) {
+      return {
+        schemaVersion: WORKFLOW_ADMISSION_SCHEMA_VERSION,
+        state: 'waiting',
+        workspaceId,
+        rootTaskId,
+        admissionTaskId,
+        attemptId,
+        queueEntryId: decision.queueEntry.id,
+        decision,
+        executionTree,
+      };
+    }
     if (decision.outcome !== 'admitted' || !decision.reservation) {
       throw this.admissionConflict(decision, 'Workflow root');
     }
@@ -468,11 +500,13 @@ export class WorkflowRunService {
     }
     return {
       schemaVersion: WORKFLOW_ADMISSION_SCHEMA_VERSION,
+      state: 'active',
       workspaceId,
       rootTaskId,
       admissionTaskId,
       attemptId,
       reservationId: reservation.id,
+      decision,
       executionTree,
     };
   }
@@ -519,12 +553,13 @@ export class WorkflowRunService {
     step: WorkflowStep,
     preparation: WorkflowAgentStepPreparation
   ): Promise<NonNullable<StepRun['admission']>> {
-    if (!run.admission) {
+    if (!run.admission?.reservationId || run.admission.state === 'waiting') {
       throw new ConflictError('Workflow root admission is missing before step launch.', {
         runId: run.id,
         stepId: step.id,
       });
     }
+    const rootReservationId = run.admission.reservationId;
     const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
     if (!stepRun) throw new Error(`Workflow run is missing step state for ${step.id}`);
     const sequence = (stepRun.admission?.sequence ?? 0) + 1;
@@ -548,7 +583,7 @@ export class WorkflowRunService {
     const hostId =
       preparation.hostRouting.selectedHostId ??
       (preparation.runtimeProvider === 'openclaw' ? 'openclaw-gateway' : 'local-process');
-    const decision = await this.admission.admit({
+    const admissionInput = {
       taskId: admissionTaskId,
       rootTaskId: run.admission.rootTaskId,
       workspaceId: run.admission.workspaceId,
@@ -562,24 +597,53 @@ export class WorkflowRunService {
             : 'workflow',
       workflowRunId: run.id,
       workflowStepId: step.id,
-      rootReservationId: run.admission.reservationId,
-      idempotencyKey: `workflow-step:${run.id}:${step.id}:${sequence}:${randomUUID()}`,
+      rootReservationId,
+      idempotencyKey: `workflow-step:${run.id}:${step.id}:${sequence}`,
       executionTree,
-      budgetPolicies: (await this.admission.get(run.admission.reservationId)).request
-        .budgetPolicies,
+      budgetPolicies: (await this.admission.get(rootReservationId)).request.budgetPolicies,
       budgetRequest: {
         fanOut: Math.max(1, step.parallel?.steps.length ?? 1),
         retries: stepRun.runRetry ? 1 : 0,
       },
+    } as const;
+    const decision = await this.admission.admitOrQueue(admissionInput, {
+      attemptId,
+      target: {
+        kind: 'workflow-step',
+        workflowId: run.workflowId,
+        workflowVersion: run.workflowVersion,
+        workflowRunId: run.id,
+        workflowRunRevision: (run.revision ?? 0) + 1,
+        workflowStepId: step.id,
+        workflowStepSequence: sequence,
+        recoverySequence: stepRun.runRetry?.sequence ?? 0,
+        parentNodeId: parentExecutionTree.nodeId,
+        edge: executionTree.edge,
+        provider: preparation.runtimeProvider,
+        hostId,
+        providerRuntimeManifestDigest: preparation.runtimeManifest.digest,
+        requiredRuntimeCapabilitiesDigest: digestRunLaunchValue(
+          preparation.requiredRuntimeCapabilities
+        ),
+        phaseEvidenceDigest: preparation.phaseAuthority.evidence.digest,
+        phaseLaunchDigest: preparation.phaseLaunchDigest,
+      },
     });
     const binding: NonNullable<StepRun['admission']> = {
       schemaVersion: WORKFLOW_ADMISSION_SCHEMA_VERSION,
+      state: decision.outcome === 'queued' ? 'waiting' : undefined,
       sequence,
       admissionTaskId,
       attemptId,
       decision,
       executionTree,
     };
+    if (decision.outcome === 'queued' && decision.queueEntry) {
+      return {
+        ...binding,
+        queueEntryId: decision.queueEntry.id,
+      };
+    }
     if (decision.outcome !== 'admitted' || !decision.reservation) {
       throw new WorkflowStepAdmissionError(binding);
     }
@@ -599,6 +663,7 @@ export class WorkflowRunService {
       });
       return {
         ...binding,
+        state: 'active',
         reservationId: reservation.id,
       };
     } catch (error) {
@@ -629,6 +694,657 @@ export class WorkflowRunService {
   ): Promise<void> {
     if (!run.admission?.reservationId) return;
     await this.admission.release(run.admission.reservationId, reason, idempotencyKey);
+  }
+
+  async dispatchQueuedAdmission(claim: AdmissionQueueClaim): Promise<void> {
+    const target = claim.entry.target;
+    if (!target || target.kind === 'direct') {
+      throw new ConflictError('Queue claim is not a workflow launch.', {
+        code: 'ADMISSION_QUEUE_TARGET_MISMATCH',
+        queueId: claim.entry.id,
+      });
+    }
+
+    try {
+      if (target.kind === 'workflow-root') {
+        await this.dispatchQueuedWorkflowRoot(claim);
+        return;
+      }
+      await this.dispatchQueuedWorkflowStep(claim);
+    } catch (error) {
+      const current = await this.admission.getQueueEntry(claim.entry.id);
+      if (current.state === 'dispatched') {
+        log.warn(
+          { err: error, queueId: current.id },
+          'Workflow queue dispatch failed after durable ownership transfer'
+        );
+        return;
+      }
+      await this.rollbackWorkflowQueueClaim(claim).catch((rollbackError) => {
+        log.error(
+          { err: rollbackError, queueId: claim.entry.id },
+          'Workflow queue claim rollback failed'
+        );
+      });
+      await this.admission
+        .release(
+          claim.reservation.id,
+          'start-failed',
+          `workflow-queue-dispatch-failed:${claim.entry.id}`
+        )
+        .catch(() => {});
+      if (
+        error instanceof ConflictError ||
+        error instanceof NotFoundError ||
+        error instanceof ValidationError
+      ) {
+        const terminalEntry = await this.admission.terminateQueueEntry(
+          claim.entry.id,
+          'WORKFLOW_QUEUE_AUTHORITY_DRIFT',
+          'Workflow queue authority changed before dispatch.'
+        );
+        await this.terminalizeWorkflowQueueTarget(claim, terminalEntry);
+        return;
+      }
+      await this.admission.requeueQueueEntry(
+        claim.entry.id,
+        'WORKFLOW_QUEUE_TRANSIENT_FAILURE',
+        'Workflow queue dispatch failed before ownership became durable.'
+      );
+    }
+  }
+
+  private async terminalizeWorkflowQueueTarget(
+    claim: AdmissionQueueClaim,
+    terminalEntry: AdmissionQueueEntry
+  ): Promise<void> {
+    const target = claim.entry.target;
+    if (!target || target.kind === 'direct') return;
+    const run = await this.getRun(target.workflowRunId);
+    if (!run) return;
+    const reason = terminalEntry.terminal?.reason ?? 'Workflow queue authority changed.';
+    if (
+      target.kind === 'workflow-root' &&
+      run.admission?.queueEntryId === claim.entry.id &&
+      ['waiting', 'dispatching'].includes(run.admission.state ?? '')
+    ) {
+      run.admission = {
+        ...run.admission,
+        state: 'terminal',
+        reservationId: undefined,
+        ...(run.admission.decision
+          ? {
+              decision: {
+                ...run.admission.decision,
+                queueEntry: terminalEntry,
+              },
+            }
+          : {}),
+      };
+      run.status = 'failed';
+      run.error = reason;
+      run.completedAt = new Date().toISOString();
+      await this.saveRun(run);
+      broadcastWorkflowStatus(run);
+      return;
+    }
+    if (target.kind !== 'workflow-step') return;
+    const stepRun = run.steps.find(
+      (candidate) => candidate.admission?.queueEntryId === claim.entry.id
+    );
+    const stepAdmission = stepRun?.admission;
+    if (
+      !stepRun ||
+      !stepAdmission ||
+      !['waiting', 'dispatching'].includes(stepAdmission.state ?? '')
+    ) {
+      return;
+    }
+    stepRun.admission = {
+      ...stepAdmission,
+      state: 'terminal',
+      reservationId: undefined,
+      decision: {
+        ...stepAdmission.decision,
+        queueEntry: terminalEntry,
+      },
+    };
+    stepRun.status = 'failed';
+    stepRun.error = reason;
+    stepRun.completedAt = new Date().toISOString();
+    run.status = 'failed';
+    run.error = reason;
+    run.completedAt = stepRun.completedAt;
+    await this.saveRun(run);
+    await this.releaseRootAdmission(
+      run,
+      'failed',
+      `workflow-step-queue-terminal:${run.id}:${stepRun.stepId}:${stepAdmission.sequence}`
+    ).catch((releaseError) => {
+      log.error(
+        { err: releaseError, runId: run.id, stepId: stepRun.stepId },
+        'Failed to release workflow root after terminal queue drift'
+      );
+    });
+    broadcastWorkflowStatus(run);
+  }
+
+  private async dispatchQueuedWorkflowRoot(claim: AdmissionQueueClaim): Promise<void> {
+    const target = claim.entry.target;
+    if (target?.kind !== 'workflow-root') {
+      throw new ConflictError('Queue claim is not a workflow root.', {
+        code: 'ADMISSION_QUEUE_TARGET_MISMATCH',
+        queueId: claim.entry.id,
+      });
+    }
+    const run = await this.getRun(target.workflowRunId);
+    if (!run) throw new NotFoundError(`Run ${target.workflowRunId} not found`);
+    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) throw new NotFoundError(`Workflow ${run.workflowId} not found`);
+    const driftFields = [
+      run.workflowId !== target.workflowId ? 'workflowId' : undefined,
+      run.workflowVersion !== target.workflowVersion ? 'workflowVersion' : undefined,
+      workflow.version !== target.workflowVersion ? 'currentWorkflowVersion' : undefined,
+      run.revision !== target.workflowRunRevision ? 'workflowRunRevision' : undefined,
+      run.taskId !== target.associatedTaskId ? 'associatedTaskId' : undefined,
+      run.status !== 'pending' ? 'runStatus' : undefined,
+      run.admission?.state !== 'waiting' ? 'admissionState' : undefined,
+      run.admission?.queueEntryId !== claim.entry.id ? 'queueEntryId' : undefined,
+      run.admission?.attemptId !== claim.entry.attemptId ? 'attemptId' : undefined,
+      digestRunLaunchValue(run.context) !== target.initialContextDigest
+        ? 'initialContextDigest'
+        : undefined,
+      digestRunLaunchValue(claim.entry.request.budgetPolicies ?? []) !== target.budgetPolicyDigest
+        ? 'budgetPolicyDigest'
+        : undefined,
+      digestRunLaunchValue(run.executionTree) !== target.executionTreeDigest
+        ? 'executionTreeDigest'
+        : undefined,
+    ].filter((field): field is string => Boolean(field));
+    if (driftFields.length > 0) {
+      throw new ConflictError('Queued workflow root changed before dispatch.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        queueId: claim.entry.id,
+        driftFields,
+      });
+    }
+
+    const reservation = await this.admission.bindQueuedAttempt(
+      claim.entry.id,
+      claim.reservation.id,
+      claim.entry.attemptId
+    );
+    await this.admission.recordBudgetUsage(reservation.id, {
+      schemaVersion: 'execution-tree-budget-event/v1',
+      id: `launch_${claim.entry.attemptId}`,
+      mode: 'delta',
+      usage: { ...ZERO_AGENT_BUDGET_USAGE, fanOut: 1 },
+      source: 'workflow-root-launch',
+      occurredAt: run.startedAt,
+    });
+    const currentAdmission = run.admission;
+    if (!currentAdmission) {
+      throw new ConflictError('Queued workflow root admission binding is missing.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        queueId: claim.entry.id,
+      });
+    }
+    const dispatchingAdmission: NonNullable<WorkflowRun['admission']> = {
+      ...currentAdmission,
+      state: 'dispatching',
+      reservationId: reservation.id,
+    };
+    run.admission = dispatchingAdmission;
+    await this.saveRun(run);
+    await this.admission.markQueueDispatched(claim.entry.id, claim.entry.attemptId);
+    run.admission = { ...dispatchingAdmission, state: 'active' };
+    run.status = 'running';
+    run.error = undefined;
+    await this.saveRun(run);
+
+    void this.executeRun(run, workflow).catch((error) => {
+      log.error({ err: error, runId: run.id }, 'Queued workflow root execution failed');
+    });
+  }
+
+  private async dispatchQueuedWorkflowStep(claim: AdmissionQueueClaim): Promise<void> {
+    const target = claim.entry.target;
+    if (target?.kind !== 'workflow-step') {
+      throw new ConflictError('Queue claim is not a workflow step.', {
+        code: 'ADMISSION_QUEUE_TARGET_MISMATCH',
+        queueId: claim.entry.id,
+      });
+    }
+    const run = await this.getRun(target.workflowRunId);
+    if (!run) throw new NotFoundError(`Run ${target.workflowRunId} not found`);
+    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) throw new NotFoundError(`Workflow ${run.workflowId} not found`);
+    const step = workflow.steps.find((candidate) => candidate.id === target.workflowStepId);
+    if (!step) throw new NotFoundError(`Workflow step ${target.workflowStepId} not found`);
+    const stepRun = run.steps.find((candidate) => candidate.stepId === target.workflowStepId);
+    if (!stepRun) throw new NotFoundError(`Run step ${target.workflowStepId} not found`);
+    const driftFields = [
+      run.workflowId !== target.workflowId ? 'workflowId' : undefined,
+      run.workflowVersion !== target.workflowVersion ? 'workflowVersion' : undefined,
+      workflow.version !== target.workflowVersion ? 'currentWorkflowVersion' : undefined,
+      run.revision !== target.workflowRunRevision ? 'workflowRunRevision' : undefined,
+      run.status !== 'pending' ? 'runStatus' : undefined,
+      run.currentStep !== target.workflowStepId ? 'currentStep' : undefined,
+      !run.admission?.reservationId || run.admission.state === 'waiting'
+        ? 'rootAdmission'
+        : undefined,
+      claim.entry.request.rootReservationId !== run.admission?.reservationId
+        ? 'rootReservationId'
+        : undefined,
+      stepRun.status !== 'pending' ? 'stepStatus' : undefined,
+      stepRun.admission?.state !== 'waiting' ? 'stepAdmissionState' : undefined,
+      stepRun.admission?.queueEntryId !== claim.entry.id ? 'queueEntryId' : undefined,
+      stepRun.admission?.sequence !== target.workflowStepSequence
+        ? 'workflowStepSequence'
+        : undefined,
+      (stepRun.runRetry?.sequence ?? 0) !== target.recoverySequence
+        ? 'recoverySequence'
+        : undefined,
+      stepRun.executionTree?.parentNodeId !== target.parentNodeId ? 'parentNodeId' : undefined,
+      stepRun.executionTree?.edge !== target.edge ? 'executionTreeEdge' : undefined,
+    ].filter((field): field is string => Boolean(field));
+    if (driftFields.length > 0) {
+      throw new ConflictError('Queued workflow step changed before dispatch.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        queueId: claim.entry.id,
+        driftFields,
+      });
+    }
+
+    const preparation = await this.stepExecutor.prepareStep(step, run);
+    if (preparation.kind !== 'agent') {
+      throw new ConflictError('Queued workflow step is no longer provider-backed.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        queueId: claim.entry.id,
+      });
+    }
+    this.assertQueuedWorkflowStepPreparation(run, stepRun, preparation);
+    const reservation = await this.admission.bindQueuedAttempt(
+      claim.entry.id,
+      claim.reservation.id,
+      claim.entry.attemptId
+    );
+    await this.admission.recordBudgetUsage(reservation.id, {
+      schemaVersion: 'execution-tree-budget-event/v1',
+      id: `launch_${claim.entry.attemptId}`,
+      mode: 'delta',
+      usage: {
+        ...ZERO_AGENT_BUDGET_USAGE,
+        fanOut: Math.max(1, step.parallel?.steps.length ?? 1),
+        retries: stepRun.runRetry ? 1 : 0,
+      },
+      source: 'workflow-step-launch',
+      occurredAt: run.startedAt,
+    });
+    this.stepExecutor.applyPreparation(run, preparation);
+    const currentStepAdmission = stepRun.admission;
+    if (!currentStepAdmission) {
+      throw new ConflictError('Queued workflow step admission binding is missing.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        queueId: claim.entry.id,
+      });
+    }
+    stepRun.admission = {
+      ...currentStepAdmission,
+      state: 'dispatching',
+      reservationId: reservation.id,
+    };
+    stepRun.error = undefined;
+    run.status = 'pending';
+    run.error = undefined;
+    await this.saveRun(run);
+    await this.admission.markQueueDispatched(claim.entry.id, claim.entry.attemptId);
+
+    void this.executeRun(run, workflow).catch((error) => {
+      log.error(
+        { err: error, runId: run.id, stepId: step.id },
+        'Queued workflow step execution failed'
+      );
+    });
+  }
+
+  private assertQueuedWorkflowStepPreparation(
+    run: WorkflowRun,
+    stepRun: StepRun,
+    preparation: WorkflowAgentStepPreparation
+  ): void {
+    const target = stepRun.admission?.decision.queueEntry?.target;
+    if (target?.kind !== 'workflow-step') {
+      throw new ConflictError('Workflow step queue target is missing.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        runId: run.id,
+        stepId: stepRun.stepId,
+      });
+    }
+    const hostId =
+      preparation.hostRouting.selectedHostId ??
+      (preparation.runtimeProvider === 'openclaw' ? 'openclaw-gateway' : 'local-process');
+    const driftFields = [
+      preparation.runtimeProvider !== target.provider ? 'provider' : undefined,
+      hostId !== target.hostId ? 'hostId' : undefined,
+      preparation.runtimeManifest.digest !== target.providerRuntimeManifestDigest
+        ? 'providerRuntimeManifestDigest'
+        : undefined,
+      digestRunLaunchValue(preparation.requiredRuntimeCapabilities) !==
+      target.requiredRuntimeCapabilitiesDigest
+        ? 'requiredRuntimeCapabilitiesDigest'
+        : undefined,
+      preparation.phaseAuthority.evidence.digest !== target.phaseEvidenceDigest
+        ? 'phaseEvidenceDigest'
+        : undefined,
+      preparation.phaseLaunchDigest !== target.phaseLaunchDigest ? 'phaseLaunchDigest' : undefined,
+    ].filter((field): field is string => Boolean(field));
+    if (driftFields.length > 0) {
+      throw new ConflictError('Queued workflow step launch authority changed.', {
+        code: 'ADMISSION_QUEUE_DRIFT',
+        queueId: stepRun.admission?.queueEntryId,
+        driftFields,
+      });
+    }
+  }
+
+  private async rollbackWorkflowQueueClaim(claim: AdmissionQueueClaim): Promise<void> {
+    const target = claim.entry.target;
+    if (!target || target.kind === 'direct') return;
+    const run = await this.getRun(target.workflowRunId);
+    if (!run) return;
+    if (
+      run.admission?.queueEntryId === claim.entry.id &&
+      run.admission.state === 'dispatching' &&
+      run.admission.reservationId === claim.reservation.id
+    ) {
+      run.admission = {
+        ...run.admission,
+        state: 'waiting',
+        reservationId: undefined,
+      };
+      run.status = 'pending';
+      run.error = 'Workflow launch is waiting for admission capacity.';
+      await this.saveRun(run);
+      return;
+    }
+    const stepRun = run.steps.find(
+      (candidate) => candidate.admission?.queueEntryId === claim.entry.id
+    );
+    if (
+      stepRun?.admission?.state === 'dispatching' &&
+      stepRun.admission.reservationId === claim.reservation.id
+    ) {
+      stepRun.admission = {
+        ...stepRun.admission,
+        state: 'waiting',
+        reservationId: undefined,
+      };
+      stepRun.status = 'pending';
+      stepRun.error = 'Workflow step is waiting for admission capacity.';
+      run.status = 'pending';
+      run.error = stepRun.error;
+      await this.saveRun(run);
+    }
+  }
+
+  private async reconcileWorkflowRootQueue(run: WorkflowRun): Promise<boolean> {
+    const binding = run.admission;
+    if (!binding || !['waiting', 'dispatching'].includes(binding.state ?? '')) {
+      return false;
+    }
+    if (!binding.queueEntryId) {
+      throw new ConflictError('Workflow queue binding is missing its queue entry.', {
+        runId: run.id,
+        admissionState: binding.state,
+      });
+    }
+    const entry = await this.admission.getQueueEntry(binding.queueEntryId);
+    if (binding.state === 'waiting') {
+      if (entry.state === 'terminal') {
+        run.admission = {
+          ...binding,
+          state: 'terminal',
+          decision: binding.decision
+            ? { ...binding.decision, queueEntry: entry }
+            : binding.decision,
+        };
+        run.status = 'failed';
+        run.error = entry.terminal?.reason ?? 'Workflow admission queue terminated.';
+        run.completedAt = new Date().toISOString();
+        await this.saveRun(run);
+        broadcastWorkflowStatus(run);
+      } else {
+        this.scheduleAdmissionQueueDrain();
+      }
+      return true;
+    }
+    if (
+      entry.state === 'dispatched' &&
+      entry.dispatchedAttemptId === binding.attemptId &&
+      entry.reservationId === binding.reservationId
+    ) {
+      const recovered = await this.admission.recoverVerifiedRun({
+        workspaceId: binding.workspaceId,
+        taskId: binding.admissionTaskId,
+        attemptId: binding.attemptId,
+      });
+      if (!recovered || recovered.id !== binding.reservationId) {
+        throw new ConflictError('Dispatched workflow root admission could not be recovered.', {
+          runId: run.id,
+          queueId: entry.id,
+          expectedReservationId: binding.reservationId,
+          recoveredReservationId: recovered?.id,
+        });
+      }
+      const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+      if (!workflow || workflow.version !== run.workflowVersion) {
+        throw new ConflictError('Dispatched workflow definition is unavailable for recovery.', {
+          runId: run.id,
+          workflowId: run.workflowId,
+          workflowVersion: run.workflowVersion,
+          currentWorkflowVersion: workflow?.version,
+        });
+      }
+      run.admission = { ...binding, state: 'active' };
+      run.status = 'running';
+      run.error = undefined;
+      await this.saveRun(run);
+      void this.executeRun(run, workflow).catch((error) => {
+        log.error({ err: error, runId: run.id }, 'Recovered workflow root execution failed');
+      });
+      return true;
+    }
+    if (entry.state === 'terminal') {
+      run.admission = {
+        ...binding,
+        state: 'terminal',
+        reservationId: undefined,
+        decision: binding.decision ? { ...binding.decision, queueEntry: entry } : binding.decision,
+      };
+      run.status = 'failed';
+      run.error = entry.terminal?.reason ?? 'Workflow admission queue terminated.';
+      run.completedAt = new Date().toISOString();
+      await this.saveRun(run);
+      if (binding.reservationId) {
+        await this.admission
+          .release(
+            binding.reservationId,
+            'start-failed',
+            `workflow-root-queue-terminal-restart:${run.id}`
+          )
+          .catch(() => {});
+      }
+      broadcastWorkflowStatus(run);
+      return true;
+    }
+    run.admission = {
+      ...binding,
+      state: 'waiting',
+      reservationId: undefined,
+    };
+    run.status = 'pending';
+    run.error = 'Workflow root is waiting for admission capacity.';
+    await this.saveRun(run);
+    if (binding.reservationId) {
+      await this.admission.release(
+        binding.reservationId,
+        'start-failed',
+        `workflow-root-queue-restart:${run.id}`
+      );
+    }
+    if (entry.state === 'leased') {
+      await this.admission.requeueQueueEntry(
+        entry.id,
+        'WORKFLOW_QUEUE_RESTART',
+        'Server restarted before workflow ownership became durable.'
+      );
+    }
+    this.scheduleAdmissionQueueDrain();
+    broadcastWorkflowStatus(run);
+    return true;
+  }
+
+  private async reconcileWorkflowStepQueue(run: WorkflowRun, stepRun: StepRun): Promise<boolean> {
+    const binding = stepRun.admission;
+    if (!binding || !['waiting', 'dispatching'].includes(binding.state ?? '')) {
+      return false;
+    }
+    if (!binding.queueEntryId) {
+      throw new ConflictError('Workflow step queue binding is missing its queue entry.', {
+        runId: run.id,
+        stepId: stepRun.stepId,
+        admissionState: binding.state,
+      });
+    }
+    const entry = await this.admission.getQueueEntry(binding.queueEntryId);
+    if (binding.state === 'waiting') {
+      if (entry.state === 'terminal') {
+        stepRun.admission = {
+          ...binding,
+          state: 'terminal',
+          decision: { ...binding.decision, queueEntry: entry },
+        };
+        stepRun.status = 'failed';
+        stepRun.error = entry.terminal?.reason ?? 'Workflow step admission queue terminated.';
+        stepRun.completedAt = new Date().toISOString();
+        run.status = 'failed';
+        run.error = stepRun.error;
+        run.completedAt = stepRun.completedAt;
+        await this.saveRun(run);
+        await this.releaseRootAdmission(
+          run,
+          'failed',
+          `workflow-step-queue-terminal-restart:${run.id}:${stepRun.stepId}:${binding.sequence}`
+        ).catch(() => {});
+        broadcastWorkflowStatus(run);
+      } else {
+        this.scheduleAdmissionQueueDrain();
+      }
+      return true;
+    }
+    if (
+      entry.state === 'dispatched' &&
+      entry.dispatchedAttemptId === binding.attemptId &&
+      entry.reservationId === binding.reservationId
+    ) {
+      if (!binding.reservationId) {
+        throw new ConflictError('Dispatched workflow step is missing its reservation.', {
+          runId: run.id,
+          stepId: stepRun.stepId,
+          queueId: entry.id,
+        });
+      }
+      const persisted = await this.admission.get(binding.reservationId);
+      const recovered = await this.admission.recoverVerifiedRun({
+        workspaceId: persisted.request.workspaceId,
+        taskId: binding.admissionTaskId,
+        attemptId: binding.attemptId,
+      });
+      if (!recovered || recovered.id !== binding.reservationId) {
+        throw new ConflictError('Dispatched workflow step admission could not be recovered.', {
+          runId: run.id,
+          stepId: stepRun.stepId,
+          queueId: entry.id,
+          expectedReservationId: binding.reservationId,
+          recoveredReservationId: recovered?.id,
+        });
+      }
+      const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+      if (!workflow || workflow.version !== run.workflowVersion) {
+        throw new ConflictError('Dispatched workflow definition is unavailable for recovery.', {
+          runId: run.id,
+          workflowId: run.workflowId,
+          workflowVersion: run.workflowVersion,
+          currentWorkflowVersion: workflow?.version,
+        });
+      }
+      void this.executeRun(run, workflow).catch((error) => {
+        log.error(
+          { err: error, runId: run.id, stepId: stepRun.stepId },
+          'Recovered workflow step execution failed'
+        );
+      });
+      return true;
+    }
+    if (entry.state === 'terminal') {
+      stepRun.admission = {
+        ...binding,
+        state: 'terminal',
+        reservationId: undefined,
+        decision: { ...binding.decision, queueEntry: entry },
+      };
+      stepRun.status = 'failed';
+      stepRun.error = entry.terminal?.reason ?? 'Workflow step admission queue terminated.';
+      stepRun.completedAt = new Date().toISOString();
+      run.status = 'failed';
+      run.error = stepRun.error;
+      run.completedAt = stepRun.completedAt;
+      await this.saveRun(run);
+      if (binding.reservationId) {
+        await this.admission
+          .release(
+            binding.reservationId,
+            'start-failed',
+            `workflow-step-queue-terminal-restart:${run.id}:${stepRun.stepId}:${binding.sequence}`
+          )
+          .catch(() => {});
+      }
+      await this.releaseRootAdmission(
+        run,
+        'failed',
+        `workflow-step-queue-terminal-root:${run.id}:${stepRun.stepId}:${binding.sequence}`
+      ).catch(() => {});
+      broadcastWorkflowStatus(run);
+      return true;
+    }
+    stepRun.admission = {
+      ...binding,
+      state: 'waiting',
+      reservationId: undefined,
+    };
+    stepRun.status = 'pending';
+    stepRun.error = 'Workflow step is waiting for admission capacity.';
+    run.status = 'pending';
+    run.error = stepRun.error;
+    await this.saveRun(run);
+    if (binding.reservationId) {
+      await this.admission.release(
+        binding.reservationId,
+        'start-failed',
+        `workflow-step-queue-restart:${run.id}:${stepRun.stepId}:${binding.sequence}`
+      );
+    }
+    if (entry.state === 'leased') {
+      await this.admission.requeueQueueEntry(
+        entry.id,
+        'WORKFLOW_QUEUE_RESTART',
+        'Server restarted before workflow step ownership became durable.'
+      );
+    }
+    this.scheduleAdmissionQueueDrain();
+    broadcastWorkflowStatus(run);
+    return true;
   }
 
   /**
@@ -749,9 +1465,18 @@ export class WorkflowRunService {
 
     try {
       run.admission = await this.admitWorkflowRoot(run, task, budgetSources);
-      run.status = 'running';
+      const waitingForAdmission = run.admission.state === 'waiting';
+      run.status = waitingForAdmission ? 'pending' : 'running';
+      run.error = waitingForAdmission
+        ? 'Workflow root is waiting for admission capacity.'
+        : undefined;
       await this.saveRun(run);
       await this.snapshotWorkflow(run.id, workflow);
+      if (waitingForAdmission) {
+        this.scheduleAdmissionQueueDrain();
+        broadcastWorkflowStatus(run);
+        return run;
+      }
     } catch (error) {
       if (run.admission) {
         if (run.revision) {
@@ -779,6 +1504,20 @@ export class WorkflowRunService {
     });
 
     return run;
+  }
+
+  private scheduleAdmissionQueueDrain(): void {
+    if (this.requestAdmissionQueueDrain) {
+      this.requestAdmissionQueueDrain();
+      return;
+    }
+    queueMicrotask(() => {
+      void import('./clawdbot-agent-service.js')
+        .then(({ clawdbotAgentService }) => clawdbotAgentService.reconcileQueuedLaunches())
+        .catch((error) => {
+          log.error({ err: error }, 'Workflow admission queue drain failed');
+        });
+    });
   }
 
   /**
@@ -826,7 +1565,25 @@ export class WorkflowRunService {
           // or mutating the executable step attempt.
           const preparation = await this.stepExecutor.prepareStep(step, run);
           if (preparation.kind === 'agent') {
-            stepRun.admission = await this.admitWorkflowStep(run, step, preparation);
+            if (stepRun.admission?.state === 'dispatching') {
+              this.assertQueuedWorkflowStepPreparation(run, stepRun, preparation);
+              stepRun.admission = { ...stepRun.admission, state: 'active' };
+            } else {
+              stepRun.admission = await this.admitWorkflowStep(run, step, preparation);
+            }
+            if (stepRun.admission.state === 'waiting') {
+              run.status = 'pending';
+              run.currentStep = step.id;
+              run.error = 'Workflow step is waiting for admission capacity.';
+              stepRun.status = 'pending';
+              stepRun.error = run.error;
+              stepRun.completedAt = undefined;
+              this.syncPipelineSummary(run, workflow);
+              await this.saveRun(run);
+              broadcastWorkflowStatus(run);
+              this.scheduleAdmissionQueueDrain();
+              return;
+            }
           }
           run.status = 'running';
           run.currentStep = step.id;
@@ -1296,6 +2053,9 @@ export class WorkflowRunService {
     let scheduledCount = 0;
     for (const run of runs) {
       try {
+        if (await this.reconcileWorkflowRootQueue(run)) {
+          continue;
+        }
         await this.ensureWorkflowRootAdmission(run);
       } catch (error) {
         run.status = 'blocked';
@@ -1308,6 +2068,22 @@ export class WorkflowRunService {
         continue;
       }
       const stepRun = run.steps.find((step) => step.stepId === run.currentStep);
+      if (stepRun) {
+        try {
+          if (await this.reconcileWorkflowStepQueue(run, stepRun)) {
+            continue;
+          }
+        } catch (error) {
+          run.status = 'blocked';
+          run.error =
+            error instanceof Error
+              ? `Workflow step admission recovery failed: ${error.message}`
+              : 'Workflow step admission recovery failed.';
+          await this.saveRun(run);
+          broadcastWorkflowStatus(run);
+          continue;
+        }
+      }
       const recovery = stepRun?.runRetry;
       if (stepRun?.status === 'running') {
         await this.releaseStepAdmission(
@@ -2066,6 +2842,7 @@ export interface WorkflowRunServiceOptions {
   runRecoveryPolicy?: RunRecoveryPolicyService;
   stepExecutor?: WorkflowStepExecutor;
   admission?: AdmissionControlService;
+  requestAdmissionQueueDrain?: () => void;
 }
 
 function workflowExecutionTreePolicy(

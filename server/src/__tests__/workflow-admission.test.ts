@@ -74,9 +74,19 @@ function preparation(step: WorkflowDefinition['steps'][number]): WorkflowAgentSt
     kind: 'agent',
     step,
     runtimeProvider: 'codex-sdk',
+    runtimeManifest: {
+      digest: `sha256:${'a'.repeat(64)}`,
+    },
+    requiredRuntimeCapabilities: [],
     hostRouting: {
       selectedHostId: 'local-process',
     },
+    phaseAuthority: {
+      evidence: {
+        digest: `sha256:${'b'.repeat(64)}`,
+      },
+    },
+    phaseLaunchDigest: `sha256:${'c'.repeat(64)}`,
   } as WorkflowAgentStepPreparation;
 }
 
@@ -130,9 +140,42 @@ async function createHarness(
     } as never,
     stepExecutor,
     admission,
+    requestAdmissionQueueDrain: () => undefined,
   });
   runs.push(service);
   return { root, database, repository, admission, definition, service };
+}
+
+function restartHarness(
+  harness: Awaited<ReturnType<typeof createHarness>>,
+  admissionSettings: AdmissionSettings,
+  stepExecutor: WorkflowStepExecutor,
+  ownerId: string
+) {
+  harness.service.dispose();
+  harness.admission.dispose();
+  const admission = new AdmissionControlService({
+    repository: harness.repository,
+    settings: async () => structuredClone(admissionSettings),
+    hostId: 'workflow-host',
+    ownerId,
+    processId: 303,
+  });
+  admissions.push(admission);
+  const service = new WorkflowRunService({
+    runsDir: path.join(harness.root, 'runs'),
+    storageType: harness.database ? 'sqlite' : 'file',
+    sqliteDatabase: harness.database,
+    workflowService: {
+      loadWorkflow: async (id: string) =>
+        id === harness.definition.id ? harness.definition : null,
+    } as never,
+    stepExecutor,
+    admission,
+    requestAdmissionQueueDrain: () => undefined,
+  });
+  runs.push(service);
+  return { admission, service };
 }
 
 describe('workflow admission', () => {
@@ -217,6 +260,484 @@ describe('workflow admission', () => {
       ).toEqual(['released', 'released']);
     }
   );
+
+  it.each(['file', 'sqlite'] as const)(
+    'queues a saturated workflow root and resumes it exactly once with %s storage',
+    async (backend) => {
+      const executeStep = vi.fn(async (step: WorkflowDefinition['steps'][number]) => ({
+        output: { completed: true },
+        outputPath: `/tmp/${step.id}.json`,
+      }));
+      const harness = await createHarness(
+        backend,
+        settings({ global: { concurrentRuns: 2 } }),
+        executor(executeStep)
+      );
+      const blockers = await Promise.all(
+        ['one', 'two'].map((suffix) =>
+          harness.admission.admit({
+            taskId: `root-blocker-${suffix}`,
+            workspaceId: 'other-workspace',
+            provider: 'workflow-control',
+            hostId: 'workflow-host',
+            idempotencyKey: `root-blocker-${backend}-${suffix}`,
+            requested: { runSlots: 1, processSlots: 0, estimatedMemoryMb: 0 },
+          })
+        )
+      );
+      expect(blockers.every((decision) => decision.outcome === 'admitted')).toBe(true);
+
+      const rawContextSecret = `workflow-root-secret-${backend}`;
+      const run = await harness.service.startRun(harness.definition.id, undefined, {
+        operatorPrompt: `Use ${rawContextSecret}`,
+        toolArguments: { credential: rawContextSecret },
+      });
+      expect(run).toMatchObject({
+        status: 'pending',
+        admission: {
+          state: 'waiting',
+          decision: { outcome: 'queued' },
+        },
+      });
+      expect(executeStep).not.toHaveBeenCalled();
+
+      const [queued] = await harness.admission.listQueue({
+        taskId: `workflow-root:${run.id}`,
+      });
+      expect(queued).toMatchObject({
+        state: 'queued',
+        target: {
+          kind: 'workflow-root',
+          workflowId: harness.definition.id,
+          workflowVersion: harness.definition.version,
+          workflowRunId: run.id,
+          workflowRunRevision: run.revision,
+        },
+      });
+      expect(JSON.stringify(queued)).not.toContain(rawContextSecret);
+
+      await Promise.all(
+        blockers.map((decision, index) =>
+          harness.admission.release(
+            decision.reservation?.id as string,
+            'completed',
+            `release-root-blocker-${backend}-${index}`
+          )
+        )
+      );
+      const claim = await harness.admission.claimNextQueued();
+      expect(claim?.entry.id).toBe(queued?.id);
+      await (
+        harness.service as unknown as {
+          dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
+        }
+      ).dispatchQueuedAdmission(claim as NonNullable<typeof claim>);
+
+      await vi.waitFor(async () => {
+        expect((await harness.service.getRun(run.id))?.status).toBe('completed');
+      });
+      expect(executeStep).toHaveBeenCalledTimes(1);
+      await expect(harness.admission.getQueueEntry(queued?.id as string)).resolves.toMatchObject({
+        state: 'dispatched',
+        dispatchedAttemptId: `workflow-root:${run.id}`,
+      });
+    }
+  );
+
+  it.each(['file', 'sqlite'] as const)(
+    'recovers a durably dispatched workflow root exactly once after restart with %s storage',
+    async (backend) => {
+      const executeStep = vi.fn(async (step: WorkflowDefinition['steps'][number]) => ({
+        output: { completed: true },
+        outputPath: `/tmp/${step.id}.json`,
+      }));
+      const admissionSettings = settings({ global: { concurrentRuns: 2 } });
+      const stepExecutor = executor(executeStep);
+      const harness = await createHarness(backend, admissionSettings, stepExecutor);
+      const blockers = await Promise.all(
+        ['one', 'two'].map((suffix) =>
+          harness.admission.admit({
+            taskId: `restart-root-blocker-${suffix}`,
+            workspaceId: 'other-workspace',
+            provider: 'workflow-control',
+            hostId: 'workflow-host',
+            idempotencyKey: `restart-root-blocker-${backend}-${suffix}`,
+            requested: { runSlots: 1, processSlots: 0, estimatedMemoryMb: 0 },
+          })
+        )
+      );
+      const run = await harness.service.startRun(harness.definition.id);
+      await Promise.all(
+        blockers.map((decision, index) =>
+          harness.admission.release(
+            decision.reservation?.id as string,
+            'completed',
+            `release-restart-root-blocker-${backend}-${index}`
+          )
+        )
+      );
+      const claim = await harness.admission.claimNextQueued();
+      const markQueueDispatched = harness.admission.markQueueDispatched.bind(harness.admission);
+      vi.spyOn(harness.admission, 'markQueueDispatched').mockImplementationOnce(
+        async (queueId, attemptId) => {
+          await markQueueDispatched(queueId, attemptId);
+          throw new Error('simulated process exit after durable queue dispatch');
+        }
+      );
+      await (
+        harness.service as unknown as {
+          dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
+        }
+      ).dispatchQueuedAdmission(claim as NonNullable<typeof claim>);
+      await expect(harness.service.getRun(run.id)).resolves.toMatchObject({
+        status: 'pending',
+        admission: { state: 'dispatching' },
+      });
+      expect(executeStep).not.toHaveBeenCalled();
+
+      const restarted = restartHarness(
+        harness,
+        admissionSettings,
+        stepExecutor,
+        `owner-restarted-root-${backend}`
+      );
+      await restarted.service.reconcilePendingRecoveries();
+
+      await vi.waitFor(async () => {
+        expect((await restarted.service.getRun(run.id))?.status).toBe('completed');
+      });
+      expect(executeStep).toHaveBeenCalledTimes(1);
+      await vi.waitFor(async () => {
+        expect(
+          (await restarted.admission.list({ workflowRunId: run.id })).every(
+            (reservation) => reservation.state === 'released'
+          )
+        ).toBe(true);
+      });
+    }
+  );
+
+  it.each(['file', 'sqlite'] as const)(
+    'queues a saturated workflow step and dispatches it exactly once with %s storage',
+    async (backend) => {
+      const executeStep = vi.fn(async (step: WorkflowDefinition['steps'][number]) => ({
+        output: { completed: true },
+        outputPath: `/tmp/${step.id}.json`,
+      }));
+      const harness = await createHarness(
+        backend,
+        settings({ global: { concurrentRuns: 3 } }),
+        executor(executeStep)
+      );
+      const blocker = await harness.admission.admit({
+        taskId: 'step-provider-blocker',
+        workspaceId: 'other-workspace',
+        provider: 'codex-sdk',
+        hostId: 'local-process',
+        idempotencyKey: `step-provider-blocker-${backend}`,
+        requested: { runSlots: 1, processSlots: 1, estimatedMemoryMb: 0 },
+      });
+      expect(blocker.outcome).toBe('admitted');
+
+      const started = await harness.service.startRun(harness.definition.id);
+      const waiting = await vi.waitFor(async () => {
+        const run = await harness.service.getRun(started.id);
+        expect(run).toMatchObject({
+          status: 'pending',
+          steps: [
+            {
+              stepId: 'execute',
+              status: 'pending',
+              admission: {
+                state: 'waiting',
+                decision: { outcome: 'queued' },
+              },
+            },
+          ],
+        });
+        if (!run) throw new Error('Expected a persisted workflow run');
+        return run;
+      });
+      expect(executeStep).not.toHaveBeenCalled();
+
+      const [queued] = (await harness.admission.listQueue({})).filter(
+        (entry) => entry.target?.kind === 'workflow-step'
+      );
+      expect(queued).toMatchObject({
+        state: 'queued',
+        target: {
+          kind: 'workflow-step',
+          workflowId: harness.definition.id,
+          workflowVersion: harness.definition.version,
+          workflowRunId: waiting.id,
+          workflowRunRevision: waiting.revision,
+          workflowStepId: 'execute',
+          workflowStepSequence: 1,
+          recoverySequence: 0,
+          provider: 'codex-sdk',
+          hostId: 'local-process',
+          providerRuntimeManifestDigest: `sha256:${'a'.repeat(64)}`,
+          phaseEvidenceDigest: `sha256:${'b'.repeat(64)}`,
+          phaseLaunchDigest: `sha256:${'c'.repeat(64)}`,
+        },
+      });
+      expect(JSON.stringify(queued)).not.toContain('Run the test.');
+
+      await harness.admission.release(
+        blocker.reservation?.id as string,
+        'completed',
+        `release-step-blocker-${backend}`
+      );
+      const claim = await harness.admission.claimNextQueued();
+      expect(claim?.entry.id).toBe(queued?.id);
+      await (
+        harness.service as unknown as {
+          dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
+        }
+      ).dispatchQueuedAdmission(claim as NonNullable<typeof claim>);
+
+      await vi.waitFor(async () => {
+        expect((await harness.service.getRun(waiting.id))?.status).toBe('completed');
+      });
+      expect(executeStep).toHaveBeenCalledTimes(1);
+      await expect(harness.admission.getQueueEntry(queued?.id as string)).resolves.toMatchObject({
+        state: 'dispatched',
+      });
+    }
+  );
+
+  it.each(['file', 'sqlite'] as const)(
+    'recovers a durably dispatched workflow step exactly once after restart with %s storage',
+    async (backend) => {
+      const executeStep = vi.fn(async (step: WorkflowDefinition['steps'][number]) => ({
+        output: { completed: true },
+        outputPath: `/tmp/${step.id}.json`,
+      }));
+      const admissionSettings = settings({ global: { concurrentRuns: 3 } });
+      const stepExecutor = executor(executeStep);
+      const harness = await createHarness(backend, admissionSettings, stepExecutor);
+      const blocker = await harness.admission.admit({
+        taskId: 'restart-step-provider-blocker',
+        workspaceId: 'other-workspace',
+        provider: 'codex-sdk',
+        hostId: 'local-process',
+        idempotencyKey: `restart-step-provider-blocker-${backend}`,
+        requested: { runSlots: 1, processSlots: 1, estimatedMemoryMb: 0 },
+      });
+      const run = await harness.service.startRun(harness.definition.id);
+      await vi.waitFor(async () => {
+        expect((await harness.service.getRun(run.id))?.steps[0]?.admission?.state).toBe('waiting');
+      });
+      await harness.admission.release(
+        blocker.reservation?.id as string,
+        'completed',
+        `release-restart-step-blocker-${backend}`
+      );
+      const claim = await harness.admission.claimNextQueued();
+      const markQueueDispatched = harness.admission.markQueueDispatched.bind(harness.admission);
+      vi.spyOn(harness.admission, 'markQueueDispatched').mockImplementationOnce(
+        async (queueId, attemptId) => {
+          await markQueueDispatched(queueId, attemptId);
+          throw new Error('simulated process exit after durable step dispatch');
+        }
+      );
+      await (
+        harness.service as unknown as {
+          dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
+        }
+      ).dispatchQueuedAdmission(claim as NonNullable<typeof claim>);
+      await expect(harness.service.getRun(run.id)).resolves.toMatchObject({
+        status: 'pending',
+        steps: [
+          expect.objectContaining({
+            stepId: 'execute',
+            admission: expect.objectContaining({ state: 'dispatching' }),
+          }),
+        ],
+      });
+      expect(executeStep).not.toHaveBeenCalled();
+
+      const restarted = restartHarness(
+        harness,
+        admissionSettings,
+        stepExecutor,
+        `owner-restarted-step-${backend}`
+      );
+      await restarted.service.reconcilePendingRecoveries();
+
+      await vi.waitFor(async () => {
+        expect((await restarted.service.getRun(run.id))?.status).toBe('completed');
+      });
+      expect(executeStep).toHaveBeenCalledTimes(1);
+      await vi.waitFor(async () => {
+        expect(
+          (await restarted.admission.list({ workflowRunId: run.id })).every(
+            (reservation) => reservation.state === 'released'
+          )
+        ).toBe(true);
+      });
+    }
+  );
+
+  it.each(['retry', 'fallback'] as const)(
+    'queues a saturated %s replacement only after releasing its predecessor',
+    async (replacement) => {
+      let invocationCount = 0;
+      const executeStep = vi.fn(async (step: WorkflowDefinition['steps'][number]) => {
+        invocationCount += 1;
+        if (invocationCount === 1) throw new Error('ECONNRESET before replacement');
+        return { output: { completed: true }, outputPath: `/tmp/${step.id}.json` };
+      });
+      const harness = await createHarness('file', settings(), executor(executeStep));
+      harness.definition.steps[0].on_fail =
+        replacement === 'retry'
+          ? { retry: 1, retry_delay_ms: 250 }
+          : { retry: 0, retry_delay_ms: 250, escalate_to: 'agent:agent' };
+
+      const run = await harness.service.startRun(harness.definition.id);
+      await vi.waitFor(async () => {
+        expect((await harness.service.getRun(run.id))?.steps[0]?.runRetry?.state).toBe('scheduled');
+      });
+      const blocker = await harness.admission.admit({
+        taskId: `${replacement}-replacement-blocker`,
+        workspaceId: 'other-workspace',
+        provider: 'codex-sdk',
+        hostId: 'local-process',
+        idempotencyKey: `${replacement}-replacement-blocker`,
+        requested: { runSlots: 1, processSlots: 1, estimatedMemoryMb: 0 },
+      });
+      expect(blocker.outcome).toBe('admitted');
+
+      const waiting = await vi.waitFor(
+        async () => {
+          const persisted = await harness.service.getRun(run.id);
+          expect(persisted?.steps[0]?.admission?.state).toBe('waiting');
+          if (!persisted) throw new Error('Expected replacement workflow run');
+          return persisted;
+        },
+        { timeout: 2_000 }
+      );
+      const reservations = await harness.admission.list({ workflowRunId: run.id });
+      const predecessor = reservations.find(
+        (reservation) =>
+          reservation.request.workflowStepId === 'execute' &&
+          reservation.attemptId !== waiting.steps[0]?.admission?.attemptId
+      );
+      expect(predecessor).toMatchObject({
+        state: 'released',
+        release: { reason: 'failed' },
+      });
+      const [queued] = (await harness.admission.listQueue({})).filter(
+        (entry) => entry.target?.kind === 'workflow-step'
+      );
+      expect(queued).toMatchObject({
+        state: 'queued',
+        request: {
+          source: replacement === 'retry' ? 'recovery' : 'fallback',
+          budgetRequest: { retries: 1 },
+        },
+        target: {
+          kind: 'workflow-step',
+          workflowStepSequence: 2,
+          recoverySequence: 1,
+          edge: replacement,
+        },
+      });
+
+      await harness.admission.release(
+        blocker.reservation?.id as string,
+        'completed',
+        `release-${replacement}-replacement-blocker`
+      );
+      const claim = await harness.admission.claimNextQueued();
+      await (
+        harness.service as unknown as {
+          dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
+        }
+      ).dispatchQueuedAdmission(claim as NonNullable<typeof claim>);
+
+      await vi.waitFor(async () => {
+        expect((await harness.service.getRun(run.id))?.status).toBe('completed');
+      });
+      expect(executeStep).toHaveBeenCalledTimes(2);
+      await vi.waitFor(async () => {
+        expect(
+          (await harness.admission.list({ workflowRunId: run.id })).every(
+            (reservation) => reservation.state === 'released'
+          )
+        ).toBe(true);
+      });
+    }
+  );
+
+  it('terminalizes a queued step without provider dispatch when launch authority drifts', async () => {
+    let runtimeManifestDigest = `sha256:${'a'.repeat(64)}`;
+    const executeStep = vi.fn(async () => ({
+      output: { completed: true },
+      outputPath: '/tmp/execute.json',
+    }));
+    const stepExecutor = executor(executeStep);
+    stepExecutor.prepareStep = async (step) => ({
+      ...preparation(step),
+      runtimeManifest: { digest: runtimeManifestDigest },
+    });
+    const harness = await createHarness(
+      'file',
+      settings({ global: { concurrentRuns: 3 } }),
+      stepExecutor
+    );
+    const blocker = await harness.admission.admit({
+      taskId: 'drift-provider-blocker',
+      workspaceId: 'other-workspace',
+      provider: 'codex-sdk',
+      hostId: 'local-process',
+      idempotencyKey: 'drift-provider-blocker',
+      requested: { runSlots: 1, processSlots: 1, estimatedMemoryMb: 0 },
+    });
+    const started = await harness.service.startRun(harness.definition.id);
+    await vi.waitFor(async () => {
+      expect((await harness.service.getRun(started.id))?.steps[0]?.admission?.state).toBe(
+        'waiting'
+      );
+    });
+    const [queued] = (await harness.admission.listQueue({})).filter(
+      (entry) => entry.target?.kind === 'workflow-step'
+    );
+    await harness.admission.release(
+      blocker.reservation?.id as string,
+      'completed',
+      'release-drift-blocker'
+    );
+    const claim = await harness.admission.claimNextQueued();
+    runtimeManifestDigest = `sha256:${'d'.repeat(64)}`;
+
+    await (
+      harness.service as unknown as {
+        dispatchQueuedAdmission: (input: NonNullable<typeof claim>) => Promise<void>;
+      }
+    ).dispatchQueuedAdmission(claim as NonNullable<typeof claim>);
+
+    await expect(harness.admission.getQueueEntry(queued?.id as string)).resolves.toMatchObject({
+      state: 'terminal',
+      terminal: { code: 'WORKFLOW_QUEUE_AUTHORITY_DRIFT' },
+    });
+    await expect(harness.service.getRun(started.id)).resolves.toMatchObject({
+      status: 'failed',
+      steps: [
+        expect.objectContaining({
+          stepId: 'execute',
+          status: 'failed',
+          admission: expect.objectContaining({ state: 'terminal' }),
+        }),
+      ],
+    });
+    expect(executeStep).not.toHaveBeenCalled();
+    expect(
+      (await harness.admission.list({ workflowRunId: started.id })).map(
+        (reservation) => reservation.state
+      )
+    ).toEqual(['released', 'released']);
+  });
 
   it('fails closed before provider dispatch when a step exceeds its provider ceiling', async () => {
     const executeStep = vi.fn(async () => ({

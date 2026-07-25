@@ -7,23 +7,25 @@ export function workflowAdmissionStub(): AdmissionControlService {
     { budgetPolicies?: import('@veritas-kanban/shared').ExecutionTreeBudgetPolicy[] }
   >();
   let pendingReservationId = 'admission_workflow_test';
+  const admit = async (input: {
+    workflowRunId?: string;
+    workflowStepId?: string;
+    budgetPolicies?: import('@veritas-kanban/shared').ExecutionTreeBudgetPolicy[];
+  }) => {
+    pendingReservationId = `admission_${input.workflowRunId ?? 'run'}_${input.workflowStepId ?? 'root'}`;
+    requestsByReservation.set(pendingReservationId, {
+      budgetPolicies: input.budgetPolicies,
+    });
+    return {
+      outcome: 'admitted' as const,
+      reservation: { id: pendingReservationId },
+    };
+  };
 
   return {
     getExecutionHostId: () => 'test-execution-host',
-    admit: async (input: {
-      workflowRunId?: string;
-      workflowStepId?: string;
-      budgetPolicies?: import('@veritas-kanban/shared').ExecutionTreeBudgetPolicy[];
-    }) => {
-      pendingReservationId = `admission_${input.workflowRunId ?? 'run'}_${input.workflowStepId ?? 'root'}`;
-      requestsByReservation.set(pendingReservationId, {
-        budgetPolicies: input.budgetPolicies,
-      });
-      return {
-        outcome: 'admitted',
-        reservation: { id: pendingReservationId },
-      };
-    },
+    admit,
+    admitOrQueue: admit,
     get: async (id: string) => ({ id, request: requestsByReservation.get(id) ?? {} }),
     recordBudgetUsage: async (id: string) => ({ id }),
     bindAttempt: async (id: string, attemptId: string) => {

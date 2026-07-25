@@ -205,6 +205,31 @@ describe('AdmissionControlService', () => {
     await expect(repository.list({ taskId: 'task-recover' })).resolves.toHaveLength(1);
   });
 
+  it('does not resurrect an intentionally released run during restart recovery', async () => {
+    const repository = await repositoryFor('file');
+    const service = createService(repository, configuredSettings());
+    const decision = await service.admit(request('task-released-recovery'));
+    const bound = await service.bindAttempt(
+      decision.reservation?.id as string,
+      'attempt-released-recovery'
+    );
+    await service.release(bound.id, 'completed', 'release-before-recovery');
+
+    await expect(
+      service.recoverVerifiedRun({
+        workspaceId: 'workspace-a',
+        taskId: 'task-released-recovery',
+        attemptId: 'attempt-released-recovery',
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: {
+        reservationId: bound.id,
+        reservationState: 'released',
+      },
+    });
+  });
+
   it('does not release another attempt when an idempotent retry loses the bind race', async () => {
     const repository = await repositoryFor('file');
     const settings = configuredSettings();
@@ -481,6 +506,57 @@ describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (b
       reservation: { lease: { ownerId: 'owner-recovered' } },
     });
     await expect(recovered.claimNextQueued()).resolves.toBeNull();
+  });
+
+  it('reactivates a released pre-dispatch reservation when the queue retries', async () => {
+    const repository = await repositoryFor(backend);
+    let now = new Date('2026-07-25T12:00:00.000Z');
+    const settings = configuredSettings({
+      global: { concurrentRuns: 1 },
+      queue: { retryBackoffMs: 250 },
+    });
+    const service = createService(repository, settings, {
+      ownerId: `owner-retry-${backend}`,
+      now: () => now,
+    });
+    const active = await service.admit(request(`task-retry-active-${backend}`));
+    const queued = await service.admitOrQueue(request(`task-retry-queued-${backend}`), {
+      agent: 'codex',
+      attemptId: `attempt-retry-${backend}`,
+    });
+    await service.release(
+      active.reservation?.id as string,
+      'completed',
+      `release-retry-active-${backend}`
+    );
+    const firstClaim = await service.claimNextQueued();
+    await service.release(
+      firstClaim?.reservation.id as string,
+      'start-failed',
+      `release-retry-claim-${backend}`
+    );
+    await service.requeueQueueEntry(
+      queued.queueEntry?.id as string,
+      'TRANSIENT_PRE_DISPATCH',
+      'Transient pre-dispatch failure.'
+    );
+    now = new Date('2026-07-25T12:00:00.300Z');
+
+    const secondClaim = await service.claimNextQueued();
+    expect(secondClaim).toMatchObject({
+      entry: {
+        id: queued.queueEntry?.id,
+        state: 'leased',
+        retryCount: 1,
+      },
+      reservation: {
+        id: firstClaim?.reservation.id,
+        state: 'active',
+      },
+    });
+    expect(secondClaim?.reservation.revision).toBeGreaterThan(
+      firstClaim?.reservation.revision as number
+    );
   });
 
   it('atomically reserves, converts, summarizes, and releases execution-tree budgets', async () => {

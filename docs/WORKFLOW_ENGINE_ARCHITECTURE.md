@@ -2472,10 +2472,13 @@ transaction. Each step commits only its own provider-reported usage; cumulative
 workflow totals are not copied into child records. This keeps deep, wide, and
 replayed workflows attributable without descendant double counting.
 
-Temporary step overload blocks the workflow with the limiting policy retained
-in the run; an impossible request fails the run. Durable fair queues and
-priority aging are scheduler concerns layered on this controller, not hidden
-inside the workflow service.
+Temporary root or step overload persists one bounded FIFO admission entry and
+leaves the run or step visibly waiting without provider dispatch. Claims
+revalidate workflow, run, provider, host, phase, budget, and execution-tree
+evidence before transferring ownership to workflow recovery. Retry and
+fallback replacements cannot queue until predecessor capacity is released. An
+impossible request or stale queue authority fails closed. Priority aging and
+cross-workspace fairness remain later scheduler concerns.
 
 **OpenClaw Session Cleanup**:
 

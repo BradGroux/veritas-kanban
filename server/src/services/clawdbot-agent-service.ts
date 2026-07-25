@@ -672,6 +672,23 @@ export class ClawdbotAgentService {
       const claim = await this.admission.claimNextQueued();
       if (!claim) return false;
       const { entry, reservation } = claim;
+      if (entry.target?.kind === 'workflow-root' || entry.target?.kind === 'workflow-step') {
+        const { getWorkflowRunService } = await import('./workflow-run-service.js');
+        await getWorkflowRunService().dispatchQueuedAdmission(claim);
+        continue;
+      }
+      const queuedAgent = entry.target?.kind === 'direct' ? entry.target.agent : entry.agent;
+      if (!queuedAgent) {
+        await this.admission
+          .release(reservation.id, 'start-failed', `queue-target-missing:${entry.id}`)
+          .catch(() => {});
+        await this.admission.terminateQueueEntry(
+          entry.id,
+          'ADMISSION_QUEUE_TARGET_MISSING',
+          'The queued direct launch has no agent target.'
+        );
+        continue;
+      }
       if (startingAgents.has(entry.request.taskId) || pendingAgents.has(entry.request.taskId)) {
         await this.admission
           .release(reservation.id, 'start-failed', `queue-task-busy:${entry.id}`)
@@ -686,7 +703,7 @@ export class ClawdbotAgentService {
 
       startingAgents.add(entry.request.taskId);
       try {
-        const result = await this.startReservedAgent(entry.request.taskId, entry.agent, {
+        const result = await this.startReservedAgent(entry.request.taskId, queuedAgent, {
           rootTaskId: entry.request.rootTaskId,
           admissionQueueClaim: claim,
         });
@@ -2390,7 +2407,11 @@ export class ClawdbotAgentService {
       const driftFields = [
         queuedClaim.entry.state !== 'leased' ? 'queueState' : undefined,
         queuedClaim.entry.attemptId !== attemptId ? 'attemptId' : undefined,
-        queuedClaim.entry.agent !== agent ? 'agent' : undefined,
+        (queuedClaim.entry.target?.kind === 'direct'
+          ? queuedClaim.entry.target.agent
+          : queuedClaim.entry.agent) !== agent
+          ? 'agent'
+          : undefined,
         queuedClaim.entry.reservationId !== queuedClaim.reservation.id
           ? 'reservationId'
           : undefined,

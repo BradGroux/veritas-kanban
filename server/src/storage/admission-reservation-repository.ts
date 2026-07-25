@@ -27,8 +27,10 @@ import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import { findLimitingAdmissionPolicies } from './admission-capacity.js';
+import { sameAdmissionQueueTarget } from './admission-queue-identity.js';
 import {
   findLimitingExecutionTreeBudgetPolicies,
+  reactivateExecutionTreeBudget,
   releaseExecutionTreeBudget,
 } from './execution-tree-budget.js';
 import type { AdmissionReservationRepository } from './interfaces.js';
@@ -97,7 +99,7 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       );
       if (existing) {
         if (expired.length > 0) await this.replaceQueueEntries([...queue.values()]);
-        if (existing.agent !== input.queue.agent) {
+        if (!sameAdmissionQueueTarget(existing, input.queue)) {
           return { ...claimed, queueConflict: true };
         }
         return { ...claimed, queueEntry: existing };
@@ -163,7 +165,12 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       }
       const claimed = await this.claimMaterialized(
         requested,
-        { record: requested, now: input.now, reclaimExpired: true },
+        {
+          record: requested,
+          now: input.now,
+          reclaimExpired: true,
+          reclaimReleased: true,
+        },
         reservations,
         snapshots
       );
@@ -207,13 +214,20 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       if (existing.request.idempotencyKey !== requested.request.idempotencyKey) {
         throw new Error(`Admission reservation ${requested.id} has conflicting identity.`);
       }
-      if (existing.state !== 'expired' || !input.reclaimExpired) {
+      const reclaimable =
+        (existing.state === 'expired' && input.reclaimExpired) ||
+        (existing.state === 'released' && input.reclaimReleased);
+      if (!reclaimable) {
         return { record: existing, created: false, limitingPolicies: [] };
       }
       const reclaimed = AdmissionReservationSchema.parse({
         ...requested,
         revision: existing.revision + 1,
         createdAt: existing.createdAt,
+        executionBudget: reactivateExecutionTreeBudget(
+          existing.executionBudget,
+          requested.executionBudget
+        ),
       });
       const limitingPolicies = findLimitingAdmissionPolicies(
         [...materialized.values()].filter((record) => record.id !== existing.id),

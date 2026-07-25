@@ -973,13 +973,14 @@ Configure ceilings through `PATCH /api/settings/features`:
 ```
 
 An individual request larger than a ceiling receives a terminal policy denial.
-Temporary exhaustion returns a retryable overload decision with the limiting
-scope and bounded retry guidance. A fresh direct task start with no transient
-operator message or per-request policy override is instead persisted as one
-bounded `admission-queue-entry/v1` record. The start response has
-`status: "queued"`, `queueId`, the reserved `attemptId`, `retryAfterMs`, and
-redacted limiting scopes. Harnesses must treat that response as accepted work,
-not as a failed attempt, and must not submit a duplicate start.
+Queueable temporary exhaustion persists one bounded
+`admission-queue-entry/v1` record. A fresh direct task start with no transient
+operator message or per-request policy override returns `status: "queued"`,
+`queueId`, the reserved `attemptId`, `retryAfterMs`, and redacted limiting
+scopes. Harnesses must treat that response as accepted work, not as a failed
+attempt, and must not submit a duplicate start. Workflow roots and
+provider-backed workflow steps instead persist `state: "waiting"` in their
+admission binding while the run and step remain `pending`.
 
 The queue uses deterministic FIFO order. A worker claims the queue lease and
 admission capacity atomically, then reruns provider, sandbox, budget, workspace
@@ -988,17 +989,21 @@ supervisor ownership changes the entry to `dispatched`; after that point only
 run recovery may restart or finish the work. Abandoned pre-dispatch leases
 requeue with bounded backoff. Terminal drift, retry exhaustion, and queue
 overflow fail closed. Queue records retain task, workspace, agent, execution
-tree, and limiting-scope evidence, but never prompts, messages, tool arguments,
-credentials, or raw idempotency keys.
+tree, workflow version and revision, retry or fallback sequence, provider,
+host, immutable runtime and phase digests, and limiting-scope evidence. They
+never retain prompts, workflow context, messages, tool arguments, credentials,
+or raw idempotency keys.
 
 Active leases renew while the verified run is live; completion, interruption,
 cancellation, or launch failure releases the reservation idempotently.
 Workflow retry and fallback attempts release the prior step reservation before
-acquiring another. After restart, task runs use their durable supervisor and
-workflow runs use the exact persisted root binding before reclaiming a
-reservation. Unverified in-flight workflow steps are released and blocked for
-operator reconciliation. Caller-supplied idempotency values are represented by
-a stable SHA-256 identity in durable records; the original value is not stored.
+queueing or acquiring the replacement. After restart, task runs use their
+durable supervisor and workflow runs use the exact persisted root and step
+bindings before reclaiming a reservation. Roots and steps interrupted after
+durable queue dispatch but before provider execution resume exactly once.
+Unverified provider work that was already running remains blocked for operator
+reconciliation. Caller-supplied idempotency values are represented by a stable
+SHA-256 identity in durable records; the original value is not stored.
 
 Every reservation also carries a versioned execution-tree identity. Resume,
 follow-up, fork, retry, fallback, provider handoff, workflow-step, and
