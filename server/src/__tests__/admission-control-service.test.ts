@@ -20,9 +20,13 @@ const services: AdmissionControlService[] = [];
 const databases: SqliteDatabase[] = [];
 
 afterEach(async () => {
-  for (const service of services.splice(0)) service.dispose();
+  await Promise.all(services.splice(0).map((service) => service.dispose()));
   for (const database of databases.splice(0)) database.close();
-  await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }))
+  );
 });
 
 function configuredSettings(
@@ -177,7 +181,7 @@ describe('AdmissionControlService', () => {
     const original = createService(repository, settings, { now: () => now });
     const decision = await original.admit(request('task-recover'));
     const bound = await original.bindAttempt(decision.reservation?.id as string, 'attempt-recover');
-    original.dispose();
+    await original.dispose();
 
     now = new Date('2026-07-25T10:00:31.000Z');
     await original.expireAbandoned();
@@ -331,7 +335,7 @@ describe('AdmissionControlService', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, settings.heartbeatMs * 3));
     await expect(service.getQueueEntry(dispatched.id)).resolves.toEqual(dispatched);
-    service.dispose();
+    await service.dispose();
   });
 });
 
@@ -361,7 +365,7 @@ describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (b
       'completed',
       `release-active-${backend}`
     );
-    original.dispose();
+    await original.dispose();
 
     const restarted = createService(repository, settings, { ownerId: 'owner-restarted' });
     const claimed = await restarted.claimNextQueued();

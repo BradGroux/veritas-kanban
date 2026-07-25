@@ -140,7 +140,9 @@ export class AdmissionControlService {
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
   private readonly heartbeatEligible = new Set<string>();
   private readonly queueHeartbeatTimers = new Map<string, NodeJS.Timeout>();
+  private readonly heartbeatTasks = new Set<Promise<void>>();
   private readonly capacityListeners = new Set<() => void>();
+  private disposed = false;
 
   constructor(options: AdmissionControlServiceOptions = {}) {
     this.repositoryOverride = options.repository;
@@ -884,11 +886,17 @@ export class AdmissionControlService {
     return records.find((record) => record.attemptId === attemptId) ?? null;
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
+    if (this.disposed) {
+      await Promise.allSettled([...this.heartbeatTasks]);
+      return;
+    }
+    this.disposed = true;
     for (const id of this.heartbeatTimers.keys()) this.stopHeartbeat(id);
     for (const id of this.queueHeartbeatTimers.keys()) this.stopQueueHeartbeat(id);
     this.heartbeatEligible.clear();
     this.capacityListeners.clear();
+    await Promise.allSettled([...this.heartbeatTasks]);
     this.configService.dispose();
   }
 
@@ -1048,6 +1056,7 @@ export class AdmissionControlService {
   }
 
   private startQueueHeartbeat(claim: AdmissionQueueClaim, configuredHeartbeatMs: number): void {
+    if (this.disposed) return;
     const queueId = claim.entry.id;
     if (this.queueHeartbeatTimers.has(queueId)) return;
     const leaseDurationMs =
@@ -1058,9 +1067,14 @@ export class AdmissionControlService {
       Math.max(250, Math.floor(leaseDurationMs / 3))
     );
     const timer = setInterval(() => {
-      void this.renewQueueClaim(queueId, claim.reservation.id).catch(() => {
-        this.stopQueueHeartbeat(queueId);
-      });
+      if (this.disposed) return;
+      this.trackHeartbeatTask(
+        this.renewQueueClaim(queueId, claim.reservation.id)
+          .then(() => undefined)
+          .catch(() => {
+            this.stopQueueHeartbeat(queueId);
+          })
+      );
     }, heartbeatMs);
     timer.unref();
     this.queueHeartbeatTimers.set(queueId, timer);
@@ -1106,6 +1120,7 @@ export class AdmissionControlService {
   }
 
   private startHeartbeat(record: AdmissionReservation, configuredHeartbeatMs: number): void {
+    if (this.disposed) return;
     const id = record.id;
     this.heartbeatEligible.add(id);
     if (this.heartbeatTimers.has(id)) return;
@@ -1116,11 +1131,14 @@ export class AdmissionControlService {
       Math.max(1_000, Math.floor(leaseDurationMs / 2))
     );
     const timer = setInterval(() => {
-      void this.renew(id)
-        .then((renewed) => {
-          if (renewed.state !== 'active') this.stopHeartbeat(id);
-        })
-        .catch(() => this.stopHeartbeat(id));
+      if (this.disposed) return;
+      this.trackHeartbeatTask(
+        this.renew(id)
+          .then((renewed) => {
+            if (renewed.state !== 'active') this.stopHeartbeat(id);
+          })
+          .catch(() => this.stopHeartbeat(id))
+      );
     }, heartbeatMs);
     timer.unref();
     this.heartbeatTimers.set(id, timer);
@@ -1131,6 +1149,11 @@ export class AdmissionControlService {
     const timer = this.heartbeatTimers.get(id);
     if (timer) clearInterval(timer);
     this.heartbeatTimers.delete(id);
+  }
+
+  private trackHeartbeatTask(task: Promise<void>): void {
+    this.heartbeatTasks.add(task);
+    void task.finally(() => this.heartbeatTasks.delete(task));
   }
 }
 
