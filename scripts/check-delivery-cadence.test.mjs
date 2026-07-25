@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   CADENCE_CONTRACTS,
+  findAmbiguousFocusedTestCommands,
   findMissingCadenceContracts,
   findUnsafePromptStatements,
 } from './check-delivery-cadence.mjs';
@@ -99,6 +100,42 @@ test('allows optional cross-model review language', () => {
     findUnsafePromptStatements({
       'prompt-registry/example.md':
         'Cross-model review is optional unless the issue owner explicitly requires it.',
+    }),
+    []
+  );
+});
+
+test('rejects package test wrappers that can expand an intended file slice', () => {
+  assert.deepEqual(
+    findAmbiguousFocusedTestCommands({
+      'prompt-registry/example.md':
+        'Run `pnpm --filter @veritas-kanban/server test -- --run src/example.test.ts`.',
+    }),
+    [
+      {
+        file: 'prompt-registry/example.md',
+        message:
+          'focused Vitest files must use direct `pnpm --filter <package> exec vitest run <exact-test-files>` invocation',
+      },
+    ]
+  );
+});
+
+test('allows direct Vitest exact-file invocation', () => {
+  assert.deepEqual(
+    findAmbiguousFocusedTestCommands({
+      'prompt-registry/example.md':
+        'Run `pnpm --filter @veritas-kanban/server exec vitest run src/example.test.ts`.',
+    }),
+    []
+  );
+});
+
+test('allows an explicit warning against the ambiguous package test wrapper', () => {
+  assert.deepEqual(
+    findAmbiguousFocusedTestCommands({
+      'AGENTS.md':
+        'Do not use `pnpm --filter <package> test -- --run <test-files>` for focused verification.',
     }),
     []
   );

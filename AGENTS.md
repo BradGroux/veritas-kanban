@@ -117,6 +117,10 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   subsystem becomes necessary, or verification work is larger than the behavior being changed.
 - During implementation, run the narrowest useful loop: type-check touched packages, lint changed
   files, and run focused tests for changed behavior and high-risk edges.
+- Run focused Vitest slices with
+  `pnpm --filter <package> exec vitest run <exact-test-files>`. Do not use the ambiguous
+  `pnpm --filter <package> test -- --run <test-files>` form; package wrappers can ignore that
+  file boundary and expand into the entire package suite.
 - Do not rerun an unchanged passing gate after documentation, comments, or formatting-only edits.
   Rerun only the checks affected by the later change.
 - Use the complete workspace suite once at an explicit integration, critical-security, or release
