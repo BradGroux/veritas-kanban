@@ -24,6 +24,25 @@ export interface WorkflowDefinition {
   updatedAt?: string;
 }
 
+export type WorkflowProvenanceKind = 'built-in' | 'user-owned' | 'shared';
+
+export interface WorkflowAccess {
+  workflowId: string;
+  canView: boolean;
+  canEdit: boolean;
+  canExecute: boolean;
+  canDuplicate: boolean;
+  readOnlyReason?: string;
+  provenance: {
+    kind: WorkflowProvenanceKind;
+    owner: string | null;
+    createdBy?: string;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+}
+
 export interface WorkflowConfig {
   timeout?: number; // seconds
   fresh_session_default?: boolean;

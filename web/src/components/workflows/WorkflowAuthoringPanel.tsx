@@ -57,7 +57,9 @@ import { useSandboxPolicies } from '@/hooks/useSandboxPolicies';
 
 interface WorkflowAuthoringPanelProps {
   canSaveWorkflow: boolean;
-  onWorkflowCreated: () => void;
+  onWorkflowCreated: (workflowId: string) => void;
+  initialWorkflow?: WorkflowDefinition;
+  saveMode?: 'create' | 'edit';
 }
 
 type BuilderContext = {
@@ -178,6 +180,8 @@ function upsertTarget(
 export function WorkflowAuthoringPanel({
   canSaveWorkflow,
   onWorkflowCreated,
+  initialWorkflow,
+  saveMode = 'create',
 }: WorkflowAuthoringPanelProps) {
   const { toast } = useToast();
   const [recipes, setRecipes] = useState<WorkflowRecipe[]>([]);
@@ -187,8 +191,8 @@ export function WorkflowAuthoringPanel({
   const [materialized, setMaterialized] = useState<WorkflowRecipeMaterialization | null>(null);
   const [recipeBusy, setRecipeBusy] = useState(false);
 
-  const [builderWorkflow, setBuilderWorkflow] = useState<WorkflowDefinition>(() =>
-    defaultWorkflow()
+  const [builderWorkflow, setBuilderWorkflow] = useState<WorkflowDefinition>(
+    () => initialWorkflow ?? defaultWorkflow()
   );
   const [builderContext, setBuilderContext] = useState<BuilderContext>({
     taskId: '',
@@ -199,6 +203,7 @@ export function WorkflowAuthoringPanel({
   const [yamlDryRun, setYamlDryRun] = useState<WorkflowDryRunResult | null>(null);
   const [builderBusy, setBuilderBusy] = useState(false);
   const [yamlBusy, setYamlBusy] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const selectedRecipe = useMemo(
     () => recipes.find((recipe) => recipe.id === selectedRecipeId) ?? null,
@@ -206,6 +211,10 @@ export function WorkflowAuthoringPanel({
   );
 
   useEffect(() => {
+    if (saveMode === 'edit') {
+      setRecipesLoading(false);
+      return;
+    }
     let cancelled = false;
     workflowsApi
       .recipes()
@@ -226,7 +235,7 @@ export function WorkflowAuthoringPanel({
     return () => {
       cancelled = true;
     };
-  }, [toast]);
+  }, [saveMode, toast]);
 
   useEffect(() => {
     if (!selectedRecipe) return;
@@ -237,6 +246,29 @@ export function WorkflowAuthoringPanel({
     setRecipeInputs(nextInputs);
     setMaterialized(null);
   }, [selectedRecipe]);
+
+  useEffect(() => {
+    if (!initialWorkflow) return;
+    let cancelled = false;
+    setBuilderWorkflow(initialWorkflow);
+    setBuilderDryRun(null);
+    setYamlDryRun(null);
+    workflowsApi
+      .renderYaml(initialWorkflow)
+      .then((result) => {
+        if (!cancelled) setYamlDraft(result.yaml);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        toast({
+          title: 'Workflow YAML unavailable',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialWorkflow, toast]);
 
   const materializeRecipe = async () => {
     if (!selectedRecipe) return;
@@ -267,12 +299,37 @@ export function WorkflowAuthoringPanel({
       });
       return;
     }
-    await workflowsApi.create(workflow);
-    toast({
-      title: 'Workflow saved',
-      description: `${workflow.name} is available for runs.`,
-    });
-    onWorkflowCreated();
+    setSaveBusy(true);
+    try {
+      if (saveMode === 'edit') {
+        await workflowsApi.update(
+          workflow.id,
+          workflow,
+          initialWorkflow?.version ?? workflow.version
+        );
+        toast({
+          title: 'Workflow updated',
+          description: `${workflow.name} now uses the saved definition.`,
+        });
+      } else {
+        await workflowsApi.create(workflow);
+        toast({
+          title: 'Workflow saved',
+          description: `${workflow.name} is available for runs.`,
+        });
+      }
+      onWorkflowCreated(workflow.id);
+    } catch (error) {
+      toast({
+        title: saveMode === 'edit' ? 'Workflow update failed' : 'Workflow save failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'The workflow draft is still available. Correct the error and try again.',
+      });
+    } finally {
+      setSaveBusy(false);
+    }
   };
 
   const runBuilderDryRun = async () => {
@@ -329,11 +386,13 @@ export function WorkflowAuthoringPanel({
   };
 
   return (
-    <Tabs defaultValue="recipes" className="w-full">
+    <Tabs defaultValue={initialWorkflow ? 'builder' : 'recipes'} className="w-full">
       <Tabs.List className="w-fit">
-        <Tabs.Tab value="recipes" leftSection={<BookOpen className="h-4 w-4" />}>
-          Recipes
-        </Tabs.Tab>
+        {saveMode === 'create' && (
+          <Tabs.Tab value="recipes" leftSection={<BookOpen className="h-4 w-4" />}>
+            Recipes
+          </Tabs.Tab>
+        )}
         <Tabs.Tab value="builder" leftSection={<GitBranch className="h-4 w-4" />}>
           Builder
         </Tabs.Tab>
@@ -342,118 +401,125 @@ export function WorkflowAuthoringPanel({
         </Tabs.Tab>
       </Tabs.List>
 
-      <Tabs.Panel value="recipes" pt="md">
-        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-          <Stack gap="md">
-            <Group justify="space-between" align="center">
-              <Title order={2} className="text-lg">
-                Recipe Gallery
-              </Title>
-              <Badge variant="light">{recipes.length} recipes</Badge>
-            </Group>
+      {saveMode === 'create' && (
+        <Tabs.Panel value="recipes" pt="md">
+          <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
+            <Stack gap="md">
+              <Group justify="space-between" align="center">
+                <Title order={2} className="text-lg">
+                  Recipe Gallery
+                </Title>
+                <Badge variant="light">{recipes.length} recipes</Badge>
+              </Group>
 
-            {recipesLoading ? (
-              <Text c="dimmed">Loading recipes...</Text>
-            ) : (
-              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-                {recipes.map((recipe) => (
-                  <Paper
-                    key={recipe.id}
-                    className="p-4 transition-colors hover:bg-accent/50"
-                    radius="md"
-                    withBorder
-                  >
-                    <Stack gap="sm">
-                      <Group justify="space-between" align="flex-start">
-                        <Title order={3} className="text-base">
-                          {recipe.name}
-                        </Title>
-                        <Button
-                          size="xs"
-                          variant={selectedRecipeId === recipe.id ? 'filled' : 'light'}
-                          onClick={() => setSelectedRecipeId(recipe.id)}
-                        >
-                          Select
-                        </Button>
-                      </Group>
-                      <Text size="sm" c="dimmed">
-                        {recipe.description}
-                      </Text>
-                      <Group gap={6}>
-                        {recipe.tags.map((tag) => (
-                          <Badge key={tag} size="xs" variant="outline">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </Group>
-                    </Stack>
-                  </Paper>
-                ))}
-              </SimpleGrid>
-            )}
-          </Stack>
-
-          <Stack gap="md">
-            <Title order={2} className="text-lg">
-              Recipe Inputs
-            </Title>
-            {selectedRecipe ? (
-              <Paper className="p-4" radius="md" withBorder>
-                <Stack gap="sm">
-                  <Group justify="space-between" align="center">
-                    <Text fw={600}>{selectedRecipe.name}</Text>
-                    <Badge variant="outline">{selectedRecipe.id}</Badge>
-                  </Group>
-                  {selectedRecipe.inputs.map((input) => (
-                    <RecipeInputControl
-                      key={input.id}
-                      input={input}
-                      value={recipeInputs[input.id] ?? recipeInputDefault(input)}
-                      onChange={(value) =>
-                        setRecipeInputs((current) => ({ ...current, [input.id]: value }))
-                      }
-                    />
-                  ))}
-                  <Group justify="flex-end">
-                    <Button
-                      leftSection={<Wand2 className="h-4 w-4" />}
-                      loading={recipeBusy}
-                      onClick={materializeRecipe}
+              {recipesLoading ? (
+                <Text c="dimmed">Loading recipes...</Text>
+              ) : (
+                <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                  {recipes.map((recipe) => (
+                    <Paper
+                      key={recipe.id}
+                      className="p-4 transition-colors hover:bg-accent/50"
+                      radius="md"
+                      withBorder
                     >
-                      Build Recipe
-                    </Button>
-                  </Group>
-                </Stack>
-              </Paper>
-            ) : (
-              <Text c="dimmed">No recipe selected</Text>
-            )}
+                      <Stack gap="sm">
+                        <Group justify="space-between" align="flex-start">
+                          <Title order={3} className="text-base">
+                            {recipe.name}
+                          </Title>
+                          <Button
+                            size="xs"
+                            variant={selectedRecipeId === recipe.id ? 'filled' : 'light'}
+                            onClick={() => setSelectedRecipeId(recipe.id)}
+                          >
+                            Select
+                          </Button>
+                        </Group>
+                        <Text size="sm" c="dimmed">
+                          {recipe.description}
+                        </Text>
+                        <Group gap={6}>
+                          {recipe.tags.map((tag) => (
+                            <Badge key={tag} size="xs" variant="outline">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </Group>
+                      </Stack>
+                    </Paper>
+                  ))}
+                </SimpleGrid>
+              )}
+            </Stack>
 
-            {materialized && (
-              <WorkflowMaterializationPreview
-                materialized={materialized}
-                canSaveWorkflow={canSaveWorkflow}
-                onSave={() => saveWorkflow(materialized.workflow)}
-              />
-            )}
-          </Stack>
-        </SimpleGrid>
-      </Tabs.Panel>
+            <Stack gap="md">
+              <Title order={2} className="text-lg">
+                Recipe Inputs
+              </Title>
+              {selectedRecipe ? (
+                <Paper className="p-4" radius="md" withBorder>
+                  <Stack gap="sm">
+                    <Group justify="space-between" align="center">
+                      <Text fw={600}>{selectedRecipe.name}</Text>
+                      <Badge variant="outline">{selectedRecipe.id}</Badge>
+                    </Group>
+                    {selectedRecipe.inputs.map((input) => (
+                      <RecipeInputControl
+                        key={input.id}
+                        input={input}
+                        value={recipeInputs[input.id] ?? recipeInputDefault(input)}
+                        onChange={(value) =>
+                          setRecipeInputs((current) => ({ ...current, [input.id]: value }))
+                        }
+                      />
+                    ))}
+                    <Group justify="flex-end">
+                      <Button
+                        leftSection={<Wand2 className="h-4 w-4" />}
+                        loading={recipeBusy}
+                        onClick={materializeRecipe}
+                      >
+                        Build Recipe
+                      </Button>
+                    </Group>
+                  </Stack>
+                </Paper>
+              ) : (
+                <Text c="dimmed">No recipe selected</Text>
+              )}
+
+              {materialized && (
+                <WorkflowMaterializationPreview
+                  materialized={materialized}
+                  canSaveWorkflow={canSaveWorkflow}
+                  onSave={() => saveWorkflow(materialized.workflow)}
+                />
+              )}
+            </Stack>
+          </SimpleGrid>
+        </Tabs.Panel>
+      )}
 
       <Tabs.Panel value="builder" pt="md">
         <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md">
           <Stack gap="md">
-            <WorkflowDefinitionEditor workflow={builderWorkflow} onChange={setBuilderWorkflow} />
+            <WorkflowDefinitionEditor
+              workflow={builderWorkflow}
+              onChange={setBuilderWorkflow}
+              lockWorkflowId={saveMode === 'edit'}
+            />
           </Stack>
 
           <Stack gap="md">
             <ContextEditor context={builderContext} onChange={setBuilderContext} />
             <BuilderActions
               canSaveWorkflow={canSaveWorkflow}
-              isBusy={builderBusy}
+              isBusy={builderBusy || saveBusy}
               onDryRun={runBuilderDryRun}
               onRenderYaml={renderBuilderYaml}
               onSave={() => saveWorkflow(builderWorkflow)}
+              saveLabel={saveMode === 'edit' ? 'Save changes' : 'Save workflow'}
             />
             {builderDryRun && <DryRunResultPanel result={builderDryRun} />}
           </Stack>
@@ -495,10 +561,13 @@ export function WorkflowAuthoringPanel({
               </Button>
               <Button
                 leftSection={<Save className="h-4 w-4" />}
-                disabled={!canSaveWorkflow || !yamlDryRun?.workflow || !yamlDryRun.canRun}
+                disabled={
+                  saveBusy || !canSaveWorkflow || !yamlDryRun?.workflow || !yamlDryRun.canRun
+                }
+                loading={saveBusy}
                 onClick={() => yamlDryRun?.workflow && saveWorkflow(yamlDryRun.workflow)}
               >
-                Save YAML Workflow
+                {saveMode === 'edit' ? 'Save YAML changes' : 'Save YAML workflow'}
               </Button>
             </Group>
           </Stack>
@@ -693,9 +762,11 @@ function PipelineSummaryPanel({ pipeline }: { pipeline: WorkflowPipelineSummary 
 function WorkflowDefinitionEditor({
   workflow,
   onChange,
+  lockWorkflowId = false,
 }: {
   workflow: WorkflowDefinition;
   onChange: (workflow: WorkflowDefinition) => void;
+  lockWorkflowId?: boolean;
 }) {
   const { data: sandboxPresets = [] } = useSandboxPolicies();
   const agentOptions = workflow.agents.map((agent) => ({
@@ -799,6 +870,10 @@ function WorkflowDefinitionEditor({
             <TextInput
               label="ID"
               value={workflow.id}
+              disabled={lockWorkflowId}
+              description={
+                lockWorkflowId ? 'Workflow IDs cannot change after creation.' : undefined
+              }
               onChange={(event) => update({ id: event.currentTarget.value })}
             />
             <TextInput
@@ -1283,12 +1358,14 @@ function BuilderActions({
   onDryRun,
   onRenderYaml,
   onSave,
+  saveLabel,
 }: {
   canSaveWorkflow: boolean;
   isBusy: boolean;
   onDryRun: () => void;
   onRenderYaml: () => void;
   onSave: () => void;
+  saveLabel: string;
 }) {
   return (
     <Paper className="p-4" radius="md" withBorder>
@@ -1312,9 +1389,10 @@ function BuilderActions({
         <Button
           leftSection={<Save className="h-4 w-4" />}
           disabled={!canSaveWorkflow}
+          loading={isBusy}
           onClick={onSave}
         >
-          Save Workflow
+          {saveLabel}
         </Button>
       </Group>
     </Paper>

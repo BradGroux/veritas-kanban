@@ -64,21 +64,13 @@ curl http://localhost:3001/api/workflows
     "id": "feature-dev",
     "name": "Feature Development Workflow",
     "version": 2,
-    "description": "End-to-end feature development pipeline",
-    "agentCount": 4,
-    "stepCount": 7,
-    "createdAt": "2026-02-09T12:00:00Z",
-    "updatedAt": "2026-02-09T14:30:00Z"
+    "description": "End-to-end feature development pipeline"
   },
   {
     "id": "security-audit",
     "name": "Security Audit & Remediation",
     "version": 1,
-    "description": "Scan, prioritize, and fix security issues",
-    "agentCount": 3,
-    "stepCount": 5,
-    "createdAt": "2026-02-09T10:00:00Z",
-    "updatedAt": "2026-02-09T10:00:00Z"
+    "description": "Scan, prioritize, and fix security issues"
   }
 ]
 ```
@@ -170,6 +162,49 @@ X-Resource-Revision: 2
 ```
 
 **Permissions**: Requires `view` permission.
+
+---
+
+### GET /api/workflows/:id/access
+
+Resolve workflow-specific actions and provenance for the current identity. Clients use this server-owned result to distinguish editable user workflows from built-in or shared read-only definitions.
+
+**Request**:
+
+```bash
+curl http://localhost:3001/api/workflows/feature-dev/access
+```
+
+**Response**:
+
+```json
+{
+  "workflowId": "feature-dev",
+  "canView": true,
+  "canEdit": false,
+  "canExecute": true,
+  "canDuplicate": true,
+  "readOnlyReason": "Built-in workflows are read-only. Duplicate this workflow to customize it.",
+  "provenance": {
+    "kind": "built-in",
+    "owner": "system",
+    "createdBy": "system",
+    "updatedBy": "system",
+    "createdAt": "2026-02-09T12:00:00Z",
+    "updatedAt": "2026-02-09T14:30:00Z"
+  }
+}
+```
+
+`provenance.kind` is `built-in`, `user-owned`, or `shared`. `canEdit` and `canExecute` combine the authenticated request permissions with the workflow ACL decision. `canDuplicate` reflects whether the authenticated request may create workflows. A read-only response includes an actionable reason suitable for the workflow browser.
+
+**Status Codes**:
+
+- `200 OK` — Access and provenance resolved
+- `403 Forbidden` — No view permission
+- `404 Not Found` — Workflow not found
+
+**Permissions**: Requires `workflow:read` and workflow-level `view` permission.
 
 ---
 

@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import type { WorkflowDefinition, WorkflowACL } from '../types/workflow.js';
+import type { WorkflowDefinition, WorkflowACL, WorkflowAccess } from '@veritas-kanban/shared';
 import { getWorkflowService } from '../services/workflow-service.js';
 import { getWorkflowRunService } from '../services/workflow-run-service.js';
 import { getWorkflowAuthoringService } from '../services/workflow-authoring-service.js';
@@ -37,6 +37,11 @@ function getUserId(req: AuthenticatedRequest): string {
 
 function getRequestPermissions(req: AuthenticatedRequest): string[] | undefined {
   return req.auth?.permissions;
+}
+
+function requestHasPermission(req: AuthenticatedRequest, permission: string): boolean {
+  const permissions = getRequestPermissions(req);
+  return permissions?.includes('*') === true || permissions?.includes(permission) === true;
 }
 
 // Validation schemas
@@ -241,6 +246,59 @@ router.get(
         .filter(Boolean),
     });
     res.json(result);
+  })
+);
+
+/**
+ * GET /api/workflows/:id/access — Resolve workflow-specific actions and provenance
+ */
+router.get(
+  '/:id/access',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const workflowId = getStringParam(req.params.id);
+    const userId = getUserId(req);
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new NotFoundError(`Workflow ${workflowId} not found`);
+    }
+
+    await assertWorkflowPermission(workflowId, userId, 'view');
+
+    const acl = await workflowService.loadACL(workflowId);
+    const [aclCanEdit, aclCanExecute] = await Promise.all([
+      checkWorkflowPermission(workflowId, userId, 'edit'),
+      checkWorkflowPermission(workflowId, userId, 'execute'),
+    ]);
+    const canWriteWorkflows = requestHasPermission(req, 'workflow:write');
+    const canExecuteWorkflows = requestHasPermission(req, 'workflow:execute');
+    const canEdit = canWriteWorkflows && aclCanEdit;
+    const canExecute = canExecuteWorkflows && aclCanExecute;
+    const builtIn = !acl || acl.owner === 'system';
+    const owned = acl?.owner === userId;
+    const access: WorkflowAccess = {
+      workflowId,
+      canView: true,
+      canEdit,
+      canExecute,
+      canDuplicate: canWriteWorkflows,
+      readOnlyReason: canEdit
+        ? undefined
+        : !canWriteWorkflows
+          ? 'Workflow write permission is required to edit or duplicate this workflow.'
+          : builtIn
+            ? 'Built-in workflows are read-only. Duplicate this workflow to customize it.'
+            : 'You can view this workflow, but its owner has not granted edit access.',
+      provenance: {
+        kind: builtIn ? 'built-in' : owned ? 'user-owned' : 'shared',
+        owner: acl?.owner ?? 'system',
+        createdBy: workflow.createdBy,
+        updatedBy: workflow.updatedBy,
+        createdAt: workflow.createdAt,
+        updatedAt: workflow.updatedAt,
+      },
+    };
+
+    res.json(access);
   })
 );
 

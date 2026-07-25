@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { WorkflowsPage } from '@/components/workflows/WorkflowsPage';
@@ -179,6 +179,24 @@ describe('workflow surfaces Mantine migration', () => {
       if (url.endsWith('/workflows/recipes') && !init?.method) {
         return jsonResponse([]);
       }
+      if (url.endsWith('/workflows/wf-release') && !init?.method) {
+        return jsonResponse({
+          id: 'wf-release',
+          name: 'Release workflow',
+          version: 3,
+          description: 'Build and smoke the release',
+          variables: { releaseChannel: 'stable' },
+          agents: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              role: 'builder',
+              description: 'Builds the release.',
+            },
+          ],
+          steps: [{ id: 'build', name: 'Build', type: 'agent', agent: 'codex' }],
+        });
+      }
       if (url.endsWith('/workflows/wf-release/runs') && init?.method === 'POST') {
         return jsonResponse({ id: 'run-1' });
       }
@@ -199,9 +217,20 @@ describe('workflow surfaces Mantine migration', () => {
 
     await user.click(screen.getByRole('button', { name: 'Start Run' }));
 
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Task ID')).toBeDefined();
+    expect((within(dialog).getByLabelText('Run context') as HTMLTextAreaElement).value).toContain(
+      'releaseChannel'
+    );
+    await user.type(within(dialog).getByLabelText('Task ID'), 'task_release');
+    await user.click(within(dialog).getByRole('button', { name: 'Start Run' }));
+
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/workflows/wf-release/runs',
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"taskId":"task_release"'),
+      })
     );
     expect(await screen.findByText('Workflow Runs')).toBeDefined();
   });

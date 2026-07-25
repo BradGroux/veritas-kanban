@@ -48,6 +48,7 @@ function workflow(overrides: Partial<WorkflowDefinition> = {}): WorkflowDefiniti
 describe('workflow authoring routes', () => {
   let app: express.Express;
   let testRoot: string;
+  let requestPermissions: string[];
   let disposeWorkflowService: (() => void) | undefined;
 
   beforeEach(async () => {
@@ -56,6 +57,7 @@ describe('workflow authoring routes', () => {
     process.env.VERITAS_DATA_DIR = testRoot;
     process.env.DATA_DIR = testRoot;
     process.env.VERITAS_DISABLE_WATCHERS = '1';
+    requestPermissions = ['*'];
 
     const [{ workflowRoutes }, workflowService, { errorHandler }] = await Promise.all([
       import('../../routes/workflows.js'),
@@ -75,7 +77,7 @@ describe('workflow authoring routes', () => {
         workspaceId: 'local',
         actorType: 'user',
         authMethod: 'session',
-        permissions: ['*'],
+        permissions: requestPermissions,
       };
       next();
     });
@@ -120,6 +122,68 @@ describe('workflow authoring routes', () => {
     ).toEqual(['task-update', 'work-product', 'completion-packet']);
     expect(materialized.body.yaml).toContain('outputTargets:');
     expect(materialized.body.lint.ok).toBe(true);
+  });
+
+  it('reports server-owned editability and provenance for owned and built-in workflows', async () => {
+    const owned = workflow({
+      id: 'owned-workflow',
+      name: 'Owned workflow',
+      createdBy: 'user:workflow-authoring-user',
+    });
+    const created = await request(app).post('/api/workflows').send(owned);
+    expect(created.status).toBe(201);
+
+    const ownedAccess = await request(app).get('/api/workflows/owned-workflow/access');
+    expect(ownedAccess.status).toBe(200);
+    expect(ownedAccess.body).toMatchObject({
+      workflowId: 'owned-workflow',
+      canView: true,
+      canEdit: true,
+      canExecute: true,
+      canDuplicate: true,
+      provenance: {
+        kind: 'user-owned',
+        owner: 'workflow-authoring-user',
+      },
+    });
+    expect(ownedAccess.body.readOnlyReason).toBeUndefined();
+
+    const { getWorkflowService } = await import('../../services/workflow-service.js');
+    await getWorkflowService().saveWorkflow(
+      workflow({
+        id: 'built-in-workflow',
+        name: 'Built-in workflow',
+        createdBy: 'system',
+      })
+    );
+
+    const builtInAccess = await request(app).get('/api/workflows/built-in-workflow/access');
+    expect(builtInAccess.status).toBe(200);
+    expect(builtInAccess.body).toMatchObject({
+      workflowId: 'built-in-workflow',
+      canView: true,
+      canEdit: false,
+      canExecute: true,
+      canDuplicate: true,
+      readOnlyReason: 'Built-in workflows are read-only. Duplicate this workflow to customize it.',
+      provenance: {
+        kind: 'built-in',
+        owner: 'system',
+        createdBy: 'system',
+      },
+    });
+
+    requestPermissions = ['workflow:read'];
+    const readOnlyAccess = await request(app).get('/api/workflows/owned-workflow/access');
+    expect(readOnlyAccess.status).toBe(200);
+    expect(readOnlyAccess.body).toMatchObject({
+      workflowId: 'owned-workflow',
+      canView: true,
+      canEdit: false,
+      canExecute: false,
+      canDuplicate: false,
+      readOnlyReason: 'Workflow write permission is required to edit or duplicate this workflow.',
+    });
   });
 
   it('materializes the OpenClaw audit recipe with an orchestrated subagent pipeline', async () => {

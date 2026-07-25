@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a first-class workflow definition browser with deep-linked view, edit, and duplicate routes. Definition detail now exposes agents, ordered steps, phases, inputs, acceptance criteria, gates, loops, parallel branches, outputs, and provenance before execution. Server-owned access evidence distinguishes user-owned, shared, and built-in workflows; read-only definitions explain the restriction and offer duplication when permitted. User-owned edits save through Author with version-bound conflict protection that preserves the draft on failure. Starting a run is now a separate configuration step for optional task association and JSON context (#940).
 - Enforced active phase authority across run tool discovery, mediated
   invocation, approvals, completion evidence, REST, CLI, and the task run
   timeline. MCP `readOnlyHint` annotations now classify external reads while
