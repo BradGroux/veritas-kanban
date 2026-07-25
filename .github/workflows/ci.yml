@@ -74,8 +74,12 @@ jobs:
       - name: Verify CI scope controls
         run: >-
           node --test
+          scripts/check-delivery-cadence.test.mjs
           scripts/select-ci-test-scope.test.mjs
           scripts/verify-full-suite-job-evidence.test.mjs
+
+      - name: Guard delivery cadence
+        run: node scripts/check-delivery-cadence.mjs
 
       - name: Find reviewed full-suite evidence
         id: reviewed_full
