@@ -344,6 +344,10 @@ src/scripts/run-harness-conformance.ts -- --suite <suite.json>
   `server/src/services/acp-stdio-adapter.ts`.
 - **Launch arguments.** Never put credential values in provider commands or arguments; use an
   allowlisted environment key or run-scoped brokered credential reference.
+- **Workspace execution trust.** Scan repository-controlled instructions,
+  hooks, MCP servers, workflows, extensions, and provider configuration before
+  launch. Bind the exact inventory and decision to the run launch manifest,
+  then rescan before provider creation. Project policy may narrow trust only.
 - **Log redaction.** Trace logs and telemetry run through `TRACE_SECRET_PATTERNS` before storage.
 - **No credentials in PR descriptions, test fixtures, or log snippets.**
 

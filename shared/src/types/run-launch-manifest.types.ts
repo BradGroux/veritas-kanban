@@ -228,10 +228,36 @@ export interface RunLaunchSandbox {
   filesystem?: RunLaunchFilesystemSandboxEvidence;
 }
 
-export interface RunLaunchWorkspaceTrust {
+export interface RunLaunchWorkspaceTrustEvidence {
+  schemaVersion: import('./workspace-execution-trust.types.js').WorkspaceExecutionTrustEvaluation['schemaVersion'];
+  status: import('./workspace-execution-trust.types.js').WorkspaceExecutionTrustStatus;
+  source: string;
+  policyVersion: number;
+  identityDigest: string;
+  inventoryDigest: string;
+  inventoryEntryCount: number;
+  containsExecutableConfiguration: boolean;
+  requestedCapabilities: string[];
+  decisionId?: string;
+  decisionMode?: import('./workspace-execution-trust.types.js').WorkspaceExecutionTrustDecisionMode;
+  decisionExpiresAt?: string;
+  inventory: Array<{
+    id: string;
+    pathDigest: string;
+    kind: import('./workspace-execution-trust.types.js').WorkspaceExecutionTrustComponentKind;
+    posture: import('./workspace-execution-trust.types.js').WorkspaceExecutionTrustPosture;
+    sourceFingerprint: string;
+    requestedCapabilities: string[];
+  }>;
+}
+
+export interface LegacyRunLaunchWorkspaceTrust {
   status: 'trusted' | 'untrusted' | 'not-required';
   source: string;
 }
+
+export type RunLaunchWorkspaceTrust =
+  RunLaunchWorkspaceTrustEvidence | LegacyRunLaunchWorkspaceTrust;
 
 export interface RunLaunchManifestOrigin {
   field: string;

@@ -214,4 +214,83 @@ describe('vk agent runtime capability controls', () => {
       }),
     });
   });
+
+  it('scans the exact task workspace execution inventory', async () => {
+    mockApi.mockResolvedValueOnce({
+      inventory: {
+        identity: { digest: `sha256:${'1'.repeat(64)}` },
+        digest: `sha256:${'2'.repeat(64)}`,
+        projectPolicy: { maximumTrust: 'restricted' },
+        entries: [],
+      },
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(['workspace-trust', 'scan', 'task_1', '--json'], {
+      from: 'user',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/workspace-trust');
+  });
+
+  it('records and revokes exact-inventory workspace decisions', async () => {
+    mockApi.mockResolvedValue({
+      id: 'workspace-decision-1',
+      mode: 'trusted',
+    });
+    const digest = `sha256:${'3'.repeat(64)}`;
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'workspace-trust',
+        'decide',
+        'task_1',
+        '--mode',
+        'trusted',
+        '--inventory',
+        digest,
+        '--reason',
+        'Reviewed exact inventory',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/workspace-trust/decisions', {
+      method: 'POST',
+      body: JSON.stringify({
+        mode: 'trusted',
+        inventoryDigest: digest,
+        reason: 'Reviewed exact inventory',
+        expiresAt: undefined,
+      }),
+    });
+
+    await program.parseAsync(
+      [
+        'workspace-trust',
+        'revoke',
+        'task_1',
+        '--inventory',
+        digest,
+        '--reason',
+        'Authorization withdrawn',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/workspace-trust/revoke', {
+      method: 'POST',
+      body: JSON.stringify({
+        inventoryDigest: digest,
+        reason: 'Authorization withdrawn',
+      }),
+    });
+  });
 });

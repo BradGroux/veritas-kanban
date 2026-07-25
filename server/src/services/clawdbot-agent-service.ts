@@ -120,6 +120,8 @@ import type {
   ProviderRuntimeCapabilityEvidence,
   RunApprovalActionClass,
   RunApprovalRiskClass,
+  WorkspaceExecutionTrustEvaluation,
+  WorkspaceExecutionTrustScanResult,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
@@ -234,6 +236,10 @@ import {
   getFilesystemSandboxService,
   type FilesystemSandboxLaunchPlan,
 } from './filesystem-sandbox-service.js';
+import {
+  getWorkspaceExecutionTrustService,
+  type WorkspaceExecutionTrustService,
+} from './workspace-execution-trust-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -489,6 +495,10 @@ export class ClawdbotAgentService {
     'compile' | 'activate' | 'cleanup' | 'wrap'
   >;
   private sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'>;
+  private workspaceExecutionTrust: Pick<
+    WorkspaceExecutionTrustService,
+    'scan' | 'evaluateForLaunch' | 'assertFresh'
+  >;
   private logsDir: string;
 
   constructor(
@@ -510,7 +520,11 @@ export class ClawdbotAgentService {
       FilesystemSandboxService,
       'compile' | 'activate' | 'cleanup' | 'wrap'
     > = getFilesystemSandboxService(),
-    sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'> = getSandboxPolicyService()
+    sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'> = getSandboxPolicyService(),
+    workspaceExecutionTrust: Pick<
+      WorkspaceExecutionTrustService,
+      'scan' | 'evaluateForLaunch' | 'assertFresh'
+    > = getWorkspaceExecutionTrustService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -536,6 +550,7 @@ export class ClawdbotAgentService {
     this.runRecoveryPolicy = runRecoveryPolicy;
     this.filesystemSandbox = filesystemSandbox;
     this.sandboxPolicies = sandboxPolicies;
+    this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.logsDir = getLogsDir();
     this.ensureLogsDir();
   }
@@ -1485,14 +1500,25 @@ export class ClawdbotAgentService {
     const startedAt = new Date().toISOString();
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
     const worktreePath = this.expandPath(task.git.worktreePath);
+    const workspaceTrustScan = await this.workspaceExecutionTrust.scan(worktreePath);
+    const trustSandbox = this.workspaceTrustSandboxPolicy(sandboxPolicy.result, workspaceTrustScan);
     const filesystemSandboxPlan = await this.filesystemSandbox.compile({
       taskId,
       attemptId,
       provider,
       workspacePath: worktreePath,
-      sandboxPolicy: sandboxPolicy.result,
+      sandboxPolicy: trustSandbox.policy,
       providerRuntimeManifestDigest: providerRuntimeManifest.digest,
       providerCommand: launchAgentConfig?.command,
+    });
+    const workspaceTrustEvaluation = await this.workspaceExecutionTrust.evaluateForLaunch({
+      workspacePath: worktreePath,
+      constraints: this.workspaceTrustConstraints(
+        trustSandbox.policy,
+        filesystemSandboxPlan,
+        profileLaunch,
+        trustSandbox.projectExecutableConfigurationBlocked
+      ),
     });
     const taskEnvelope = await this.taskEnvelopes.build({
       task,
@@ -1506,7 +1532,7 @@ export class ClawdbotAgentService {
         legacyAutoCommitOnComplete: config.features?.agents.autoCommitOnComplete,
       }),
       profileInstructions: profileLaunch?.instructions,
-      networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
+      networkAccessEnabled: trustSandbox.policy.effective.networkAccessEnabled,
       executionPolicy: task.executionPolicy,
     });
     const toolPolicy = await this.resolveLaunchToolPolicy(profileLaunch);
@@ -1551,13 +1577,14 @@ export class ClawdbotAgentService {
       profileLaunch,
       readiness,
       overrideReason,
-      sandboxPolicy: sandboxPolicy.result,
+      sandboxPolicy: trustSandbox.policy,
       budgetPolicy,
       budgetModelOverride: budgetEvaluation.modelOverride,
       budgetSources,
       options,
       runToolCatalog,
       filesystemSandboxPlan,
+      workspaceTrustEvaluation,
     });
     const parentAttempt = await this.resolveParentAttempt(task, options.parentAttemptId);
     return {
@@ -1769,14 +1796,25 @@ export class ClawdbotAgentService {
     }
     const logPath = path.join(this.logsDir, `${taskId}_${attemptId}.md`);
     const worktreePath = this.expandPath(task.git.worktreePath);
+    const workspaceTrustScan = await this.workspaceExecutionTrust.scan(worktreePath);
+    const trustSandbox = this.workspaceTrustSandboxPolicy(sandboxPolicy.result, workspaceTrustScan);
     const filesystemSandboxPlan = await this.filesystemSandbox.compile({
       taskId,
       attemptId,
       provider,
       workspacePath: worktreePath,
-      sandboxPolicy: sandboxPolicy.result,
+      sandboxPolicy: trustSandbox.policy,
       providerRuntimeManifestDigest: providerRuntimeManifest.digest,
       providerCommand: launchAgentConfig?.command,
+    });
+    const workspaceTrustEvaluation = await this.workspaceExecutionTrust.evaluateForLaunch({
+      workspacePath: worktreePath,
+      constraints: this.workspaceTrustConstraints(
+        trustSandbox.policy,
+        filesystemSandboxPlan,
+        profileLaunch,
+        trustSandbox.projectExecutableConfigurationBlocked
+      ),
     });
     const commitPolicy = resolveTaskCommitPolicy({
       runPolicy: options.commitPolicy,
@@ -1791,7 +1829,7 @@ export class ClawdbotAgentService {
       providerRuntimeManifest,
       commitPolicy,
       profileInstructions: profileLaunch?.instructions,
-      networkAccessEnabled: sandboxPolicy.result.effective.networkAccessEnabled,
+      networkAccessEnabled: trustSandbox.policy.effective.networkAccessEnabled,
       executionPolicy: task.executionPolicy,
     });
     const toolPolicy = await this.resolveLaunchToolPolicy(profileLaunch);
@@ -1857,13 +1895,14 @@ export class ClawdbotAgentService {
       profileLaunch,
       readiness,
       overrideReason,
-      sandboxPolicy: sandboxPolicy.result,
+      sandboxPolicy: trustSandbox.policy,
       budgetPolicy,
       budgetModelOverride: budgetEvaluation.modelOverride,
       budgetSources,
       options,
       runToolCatalog,
       filesystemSandboxPlan,
+      workspaceTrustEvaluation,
     });
     const parentAttempt = await this.resolveParentAttempt(
       task,
@@ -2190,6 +2229,10 @@ export class ClawdbotAgentService {
         harnessSupport: this.harnessTelemetry(harnessSupport),
       });
 
+      await this.workspaceExecutionTrust.assertFresh(
+        worktreePath,
+        runLaunchManifest.workspaceTrust
+      );
       await this.filesystemSandbox.activate(filesystemSandboxPlan);
       await adapter.start({
         task,
@@ -7989,6 +8032,73 @@ export class ClawdbotAgentService {
       .map((f) => f.replace(`${taskId}_`, '').replace('.md', ''));
   }
 
+  private workspaceTrustConstraints(
+    sandboxPolicy: SandboxPolicyDryRunResult,
+    filesystemSandboxPlan: FilesystemSandboxLaunchPlan,
+    profileLaunch: AgentProfileResolvedLaunch | undefined,
+    projectExecutableConfigurationBlocked: boolean
+  ) {
+    const allowedTools = profileLaunch?.profile.tools?.allowed ?? [];
+    const requiredPermissions = profileLaunch?.profile.permissions?.required ?? [];
+    const externalMutationAllowed = [...allowedTools, ...requiredPermissions].some((value) =>
+      /(?:deploy|publish|release|github|webhook|external|mutation|write-api)/i.test(value)
+    );
+    return {
+      sandboxMode: sandboxPolicy.effective.sandboxMode,
+      networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
+      taskCredentialReferences: [...sandboxPolicy.effective.credentialRefs],
+      filesystemEnforcement: filesystemSandboxPlan.evidence.state,
+      selectedToolServerCount: profileLaunch?.profile.tools?.mcpServers?.length ?? 0,
+      externalMutationAllowed,
+      projectExecutableConfigurationBlocked,
+    };
+  }
+
+  private workspaceTrustSandboxPolicy(
+    policy: SandboxPolicyDryRunResult,
+    scan: WorkspaceExecutionTrustScanResult
+  ): {
+    policy: SandboxPolicyDryRunResult;
+    projectExecutableConfigurationBlocked: boolean;
+  } {
+    const executableEntries = scan.inventory.entries.filter(
+      (entry) => entry.posture === 'executable'
+    );
+    if (executableEntries.length === 0) {
+      return { policy, projectExecutableConfigurationBlocked: true };
+    }
+    const decision = scan.currentDecision;
+    const decisionIsCurrent =
+      decision && decision.mode !== 'revoked' && decision.inventoryDigest === scan.inventory.digest;
+    const restricted =
+      decisionIsCurrent &&
+      (decision.mode === 'restricted' ||
+        (decision.mode === 'trusted' &&
+          scan.inventory.projectPolicy.maximumTrust === 'restricted'));
+    if (!restricted || executableEntries.some((entry) => entry.relativePath.startsWith('git:'))) {
+      return { policy, projectExecutableConfigurationBlocked: false };
+    }
+    const deniedPaths = [
+      ...new Set([
+        ...policy.preset.filesystem.deniedPaths,
+        ...executableEntries.map((entry) => entry.relativePath),
+      ]),
+    ].sort();
+    return {
+      policy: {
+        ...policy,
+        preset: {
+          ...policy.preset,
+          filesystem: {
+            ...policy.preset.filesystem,
+            deniedPaths,
+          },
+        },
+      },
+      projectExecutableConfigurationBlocked: true,
+    };
+  }
+
   private async compileRunLaunchManifest(input: {
     task: Task;
     taskEnvelope: TaskEnvelope;
@@ -8022,6 +8132,7 @@ export class ClawdbotAgentService {
     options: AgentStartOptions;
     runToolCatalog?: RunToolCatalog;
     filesystemSandboxPlan: FilesystemSandboxLaunchPlan;
+    workspaceTrustEvaluation: WorkspaceExecutionTrustEvaluation;
   }): Promise<RunLaunchManifest> {
     const profile = input.profileLaunch?.profile;
     const toolCatalogDelivery = input.launchAgentConfig
@@ -8094,9 +8205,10 @@ export class ClawdbotAgentService {
     const worktreePath = input.task.git?.worktreePath
       ? this.expandPath(input.task.git.worktreePath)
       : undefined;
-    const repositoryInstructions = worktreePath
-      ? ((await this.workspaceFiles.readOptionalText(worktreePath, 'AGENTS.md')) ?? '')
-      : '';
+    const repositoryInstructions =
+      worktreePath && input.workspaceTrustEvaluation.status !== 'untrusted'
+        ? ((await this.workspaceFiles.readOptionalText(worktreePath, 'AGENTS.md')) ?? '')
+        : '';
     const hasRepositoryInstructions = Boolean(repositoryInstructions.trim());
     const instructions = [
       {
@@ -8612,12 +8724,11 @@ export class ClawdbotAgentService {
       },
       {
         field: 'workspaceTrust',
-        scope: 'system-default',
-        source:
-          selectedSharedResources.length > 0
-            ? 'workspace-trust:resources-blocked'
-            : 'workspace-trust:not-required',
-        precedence: 0,
+        scope: input.workspaceTrustEvaluation.decision ? 'workspace' : 'system-default',
+        source: input.workspaceTrustEvaluation.decision
+          ? `workspace-trust-decision:${input.workspaceTrustEvaluation.decision.id}`
+          : `workspace-trust-scan:${input.workspaceTrustEvaluation.inventory.digest}`,
+        precedence: input.workspaceTrustEvaluation.decision ? 200 : 0,
       },
       {
         field: 'enforcement',
@@ -8704,13 +8815,7 @@ export class ClawdbotAgentService {
         enabled: false,
         scope: 'run',
       },
-      workspaceTrust: {
-        status: 'not-required',
-        source:
-          selectedSharedResources.length > 0
-            ? 'Referenced profile files and workflow entrypoints are not loaded by the current adapter and are blocked as unavailable resources.'
-            : 'No repository-controlled executable profile components were selected.',
-      },
+      workspaceTrust: input.workspaceTrustEvaluation,
       origins,
     });
   }

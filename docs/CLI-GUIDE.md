@@ -445,27 +445,30 @@ vk project create "rubicon" --color "#7c3aed" --description "Main product"
 
 Manage AI agents on code tasks.
 
-| Command                                                                       | Description                                               |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `vk start <id>`                                                               | Start an agent; optionally require runtime capabilities   |
-| `vk launch-preview <id>`                                                      | Preview effective launch inputs, blockers, and drift      |
-| `vk stop <id>`                                                                | Stop a run only when its persisted manifest supports stop |
-| `vk agent:recovery <id>`                                                      | Inspect the latest retry or fallback decision             |
-| `vk agent:cancel-recovery <id> --attempt <id>`                                | Cancel the exact pending recovery parent                  |
-| `vk agent:resume <id> --source-attempt <id> -m <text>`                        | Resume the exact persisted provider conversation          |
-| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                     | Start a provider-native follow-up turn                    |
-| `vk agent:fork <id> --source-attempt <id> -m <text>`                          | Fork provider history without mutating its source         |
-| `vk agent:steer <id> --attempt <id> -m <text>`                                | Steer the exact active provider turn                      |
-| `vk agent:interrupt <id> --attempt <id>`                                      | Interrupt the exact active provider turn                  |
-| `vk agent:compact <id> --attempt <id>`                                        | Compact a supported provider conversation                 |
-| `vk agent:archive <id> --attempt <id>`                                        | Archive a supported provider conversation                 |
-| `vk agent:close <id> --attempt <id>`                                          | Close a supported provider conversation                   |
-| `vk acp status --json`                                                        | Check ACP server-view API and permission readiness        |
-| `vk acp serve --stdio [--task <id>]`                                          | Expose a Veritas-managed task to an ACP v1 client         |
-| `vk agents:pending`                                                           | List pending agent requests                               |
-| `vk agents:status <id>`                                                       | Check agent running status                                |
-| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (success)        |
-| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>` | Mark the matching agent attempt complete (failure)        |
+| Command                                                                             | Description                                               |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `vk start <id>`                                                                     | Start an agent; optionally require runtime capabilities   |
+| `vk launch-preview <id>`                                                            | Preview effective launch inputs, blockers, and drift      |
+| `vk workspace-trust scan <id>`                                                      | Inventory repository-controlled execution configuration   |
+| `vk workspace-trust decide <id> --mode <mode> --inventory <digest> --reason <text>` | Authorize or deny one exact inventory                     |
+| `vk workspace-trust revoke <id> --inventory <digest> --reason <text>`               | Revoke the current exact-inventory decision               |
+| `vk stop <id>`                                                                      | Stop a run only when its persisted manifest supports stop |
+| `vk agent:recovery <id>`                                                            | Inspect the latest retry or fallback decision             |
+| `vk agent:cancel-recovery <id> --attempt <id>`                                      | Cancel the exact pending recovery parent                  |
+| `vk agent:resume <id> --source-attempt <id> -m <text>`                              | Resume the exact persisted provider conversation          |
+| `vk agent:follow-up <id> --source-attempt <id> -m <text>`                           | Start a provider-native follow-up turn                    |
+| `vk agent:fork <id> --source-attempt <id> -m <text>`                                | Fork provider history without mutating its source         |
+| `vk agent:steer <id> --attempt <id> -m <text>`                                      | Steer the exact active provider turn                      |
+| `vk agent:interrupt <id> --attempt <id>`                                            | Interrupt the exact active provider turn                  |
+| `vk agent:compact <id> --attempt <id>`                                              | Compact a supported provider conversation                 |
+| `vk agent:archive <id> --attempt <id>`                                              | Archive a supported provider conversation                 |
+| `vk agent:close <id> --attempt <id>`                                                | Close a supported provider conversation                   |
+| `vk acp status --json`                                                              | Check ACP server-view API and permission readiness        |
+| `vk acp serve --stdio [--task <id>]`                                                | Expose a Veritas-managed task to an ACP v1 client         |
+| `vk agents:pending`                                                                 | List pending agent requests                               |
+| `vk agents:status <id>`                                                             | Check agent running status                                |
+| `vk agents:complete <id> -s --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (success)        |
+| `vk agents:complete <id> -f --attempt-id <id> --manifest-digest <sha256:...>`       | Mark the matching agent attempt complete (failure)        |
 
 Require one or more capabilities before launch:
 
@@ -487,6 +490,22 @@ Preview output includes the immutable run-launch digest, redacted command and
 argument plan, per-field origins, enforcement blockers, and material drift.
 It applies the same readiness gate and override rules as start. Attempt IDs and
 probe timestamps do not count as material drift.
+
+Inspect workspace execution trust before launching a newly cloned or changed
+repository:
+
+```bash
+vk workspace-trust scan TASK-001
+vk workspace-trust decide TASK-001 \
+  --mode restricted \
+  --inventory sha256:... \
+  --reason "Reviewed instructions; keep the run read-only"
+```
+
+Decision modes are `trusted`, `restricted`, and `denied`. The exact inventory
+digest from `scan` is required, and stale content is rejected. Decision and
+revocation commands require an administrator. `launch-preview` reports the
+effective trust status and any resulting enforcement blocker.
 
 `--require-capability <capabilities...>` is additive to the baseline launch,
 profile, sandbox, and budget requirements. The server returns a structured

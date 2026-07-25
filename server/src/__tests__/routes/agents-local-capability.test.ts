@@ -23,6 +23,9 @@ const {
   mockGetRunEvents,
   mockGetTask,
   mockTelemetryEmit,
+  mockScanWorkspaceTrust,
+  mockRecordWorkspaceTrustDecision,
+  mockRevokeWorkspaceTrustDecision,
 } = vi.hoisted(() => ({
   mockStartAgent: vi.fn(),
   mockPreviewAgentLaunch: vi.fn(),
@@ -42,6 +45,9 @@ const {
   mockGetRunEvents: vi.fn(),
   mockGetTask: vi.fn(),
   mockTelemetryEmit: vi.fn(),
+  mockScanWorkspaceTrust: vi.fn(),
+  mockRecordWorkspaceTrustDecision: vi.fn(),
+  mockRevokeWorkspaceTrustDecision: vi.fn(),
 }));
 
 vi.mock('../../services/clawdbot-agent-service.js', () => ({
@@ -83,6 +89,14 @@ vi.mock('../../services/task-service.js', () => ({
 
 vi.mock('../../services/telemetry-service.js', () => ({
   getTelemetryService: () => ({ emit: mockTelemetryEmit }),
+}));
+
+vi.mock('../../services/workspace-execution-trust-service.js', () => ({
+  getWorkspaceExecutionTrustService: () => ({
+    scan: mockScanWorkspaceTrust,
+    recordDecision: mockRecordWorkspaceTrustDecision,
+    revoke: mockRevokeWorkspaceTrustDecision,
+  }),
 }));
 
 import { agentRoutes } from '../../routes/agents.js';
@@ -174,8 +188,20 @@ describe('agent local capability enforcement', () => {
       id: 'task_1',
       project: 'veritas',
       attempt: { id: 'attempt_1', agent: 'codex' },
+      git: { worktreePath: '/tmp/task_1' },
     });
     mockTelemetryEmit.mockImplementation(async (event) => ({ id: 'event_1', ...event }));
+    mockScanWorkspaceTrust.mockResolvedValue({
+      inventory: { digest: `sha256:${'1'.repeat(64)}` },
+    });
+    mockRecordWorkspaceTrustDecision.mockResolvedValue({
+      id: 'workspace-decision-1',
+      mode: 'trusted',
+    });
+    mockRevokeWorkspaceTrustDecision.mockResolvedValue({
+      id: 'workspace-decision-2',
+      mode: 'revoked',
+    });
   });
 
   it('rejects remote sessions without a local-agent capability before starting agents', async () => {
@@ -237,6 +263,51 @@ describe('agent local capability enforcement', () => {
 
     expect(response.status).toBe(403);
     expect(mockPreviewAgentLaunch).not.toHaveBeenCalled();
+  });
+
+  it('scans and mutates trust only for the task registered worktree', async () => {
+    const app = createApp(
+      auth({
+        userId: 'operator_1',
+        clientMode: 'desktop-local',
+        capabilities: ['desktop:local'],
+      })
+    );
+    const inventoryDigest = `sha256:${'1'.repeat(64)}`;
+
+    const scan = await request(app).get('/api/agents/task_1/workspace-trust');
+    expect(scan.status).toBe(200);
+    expect(mockScanWorkspaceTrust).toHaveBeenCalledWith('/tmp/task_1');
+
+    const decision = await request(app).post('/api/agents/task_1/workspace-trust/decisions').send({
+      mode: 'trusted',
+      inventoryDigest,
+      reason: 'Reviewed exact inventory',
+    });
+    expect(decision.status).toBe(201);
+    expect(mockRecordWorkspaceTrustDecision).toHaveBeenCalledWith(
+      '/tmp/task_1',
+      {
+        mode: 'trusted',
+        inventoryDigest,
+        reason: 'Reviewed exact inventory',
+      },
+      'operator_1'
+    );
+
+    const revoke = await request(app).post('/api/agents/task_1/workspace-trust/revoke').send({
+      inventoryDigest,
+      reason: 'Authorization withdrawn',
+    });
+    expect(revoke.status).toBe(200);
+    expect(mockRevokeWorkspaceTrustDecision).toHaveBeenCalledWith(
+      '/tmp/task_1',
+      {
+        inventoryDigest,
+        reason: 'Authorization withdrawn',
+      },
+      'operator_1'
+    );
   });
 
   it('returns the same readiness validation evidence for preview as start', async () => {

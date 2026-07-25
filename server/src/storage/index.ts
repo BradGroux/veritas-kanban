@@ -29,9 +29,14 @@ export type {
   ToolControlPlaneRepository,
   SetupContextRepository,
   WorkspaceFileRepository,
+  WorkspaceExecutionTrustRepository,
   StorageProvider,
 } from './interfaces.js';
 export { LocalWorkspaceFileRepository } from './workspace-file-repository.js';
+export {
+  FileWorkspaceExecutionTrustRepository,
+  InMemoryWorkspaceExecutionTrustRepository,
+} from './workspace-execution-trust-repository.js';
 export {
   FileWorktreeManifestRepository,
   InMemoryWorktreeManifestRepository,

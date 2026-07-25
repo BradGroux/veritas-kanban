@@ -18,13 +18,16 @@ import type {
   RunLaunchRouting,
   RunLaunchRuntime,
   RunLaunchTools,
-  RunLaunchWorkspaceTrust,
   RunLaunchFilesystemSandboxEvidence,
   SandboxPolicyDryRunResult,
   TaskEnvelope,
   TaskReadinessSummary,
+  WorkspaceExecutionTrustEvaluation,
 } from '@veritas-kanban/shared';
-import { RUN_LAUNCH_MANIFEST_SCHEMA_VERSION } from '@veritas-kanban/shared';
+import {
+  RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
+  WORKSPACE_EXECUTION_TRUST_POLICY_VERSION,
+} from '@veritas-kanban/shared';
 import { ConflictError, ValidationError } from '../middleware/error-handler.js';
 import { parseProviderRuntimeManifest } from '../schemas/provider-runtime-manifest-schemas.js';
 import { parseRunLaunchManifest } from '../schemas/run-launch-manifest-schemas.js';
@@ -72,7 +75,7 @@ export interface RunLaunchManifestCompileInput {
   filesystemSandbox?: RunLaunchFilesystemSandboxEvidence;
   runToolCatalog?: RunToolCatalog;
   budgetPolicy: AgentBudgetPolicy;
-  workspaceTrust: RunLaunchWorkspaceTrust;
+  workspaceTrust: WorkspaceExecutionTrustEvaluation;
   origins: RunLaunchManifestOrigin[];
 }
 
@@ -265,8 +268,39 @@ export class RunLaunchManifestService {
       sandbox,
       budget: structuredClone(input.budgetPolicy),
       workspaceTrust: {
-        ...input.workspaceTrust,
+        schemaVersion: input.workspaceTrust.schemaVersion,
+        status: input.workspaceTrust.status,
         source: sanitizeProviderRuntimeDiagnostic(input.workspaceTrust.source),
+        policyVersion:
+          input.workspaceTrust.decision?.policyVersion ?? WORKSPACE_EXECUTION_TRUST_POLICY_VERSION,
+        identityDigest: input.workspaceTrust.identity.digest,
+        inventoryDigest: input.workspaceTrust.inventory.digest,
+        inventoryEntryCount: input.workspaceTrust.inventory.entries.length,
+        containsExecutableConfiguration: input.workspaceTrust.inventory.entries.some(
+          (entry) => entry.posture === 'executable'
+        ),
+        requestedCapabilities: [
+          ...new Set(
+            input.workspaceTrust.inventory.entries.flatMap((entry) => entry.requestedCapabilities)
+          ),
+        ].sort(),
+        ...(input.workspaceTrust.decision
+          ? {
+              decisionId: input.workspaceTrust.decision.id,
+              decisionMode: input.workspaceTrust.decision.mode,
+              ...(input.workspaceTrust.decision.expiresAt
+                ? { decisionExpiresAt: input.workspaceTrust.decision.expiresAt }
+                : {}),
+            }
+          : {}),
+        inventory: input.workspaceTrust.inventory.entries.map((entry) => ({
+          id: entry.id,
+          pathDigest: entry.canonicalPathDigest,
+          kind: entry.kind,
+          posture: entry.posture,
+          sourceFingerprint: entry.sourceFingerprint,
+          requestedCapabilities: [...entry.requestedCapabilities].sort(),
+        })),
       },
       origins: [...input.origins]
         .map((origin) => ({
