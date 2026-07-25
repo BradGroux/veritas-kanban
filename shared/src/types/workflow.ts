@@ -252,6 +252,7 @@ export interface WorkflowRootAdmissionBinding {
   admissionTaskId: string;
   attemptId: string;
   reservationId: string;
+  executionTree: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
 }
 
 export interface WorkflowStepAdmissionBinding {
@@ -261,6 +262,7 @@ export interface WorkflowStepAdmissionBinding {
   attemptId: string;
   reservationId?: string;
   decision: import('./admission-control.types.js').AdmissionDecision;
+  executionTree: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
 }
 
 export interface WorkflowRun {
@@ -271,6 +273,7 @@ export interface WorkflowRun {
   workflowVersion: number;
   taskId?: string; // Optional task association
   admission?: WorkflowRootAdmissionBinding;
+  executionTree?: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps
@@ -306,6 +309,7 @@ export interface StepRun {
   runRetry?: import('./run-recovery.types.js').RunRecoveryRecord;
   /** Durable admission evidence for the latest executable step attempt. */
   admission?: WorkflowStepAdmissionBinding;
+  executionTree?: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
 
   // Loop-specific state
   loopState?: {

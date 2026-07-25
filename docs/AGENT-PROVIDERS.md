@@ -976,10 +976,21 @@ are released and blocked for operator reconciliation. Caller-supplied
 idempotency values are represented by a stable SHA-256 identity in durable
 records; the original value is not stored.
 
+Every reservation also carries a versioned execution-tree identity. Resume,
+follow-up, fork, retry, fallback, provider handoff, workflow-step, and
+child-agent launches preserve the same root objective and exact parent edge.
+The capacity claim and strictest applicable workspace, agent, workflow, run,
+and root-objective budget claim share one atomic repository operation.
+Idempotent node usage events convert reserved tokens, cost, tool calls,
+runtime, idle time, retries, and fan-out into committed attribution. Release
+returns only unused reservation; committed usage remains in the tree.
+
 Inspect reservations with `vk admission list`, `vk admission get <id>`, or the
-matching read-only REST endpoints. Use `--workflow-run`, `--workflow-step`, or
-`--root-reservation` to follow a workflow tree. Machine consumers should use
-`--json`.
+matching read-only REST endpoints. Use `--workflow-run`, `--workflow-step`,
+`--root-reservation`, or `--root-objective` to follow a tree. Use
+`vk admission tree <root-objective-id>` for aggregate totals, remaining policy
+capacity, blocking policies, and bounded contributors. Machine consumers
+should use `--json`.
 
 ## Local And Cloud Profiles
 

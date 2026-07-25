@@ -15,6 +15,10 @@ import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import { findLimitingAdmissionPolicies } from './admission-capacity.js';
+import {
+  findLimitingExecutionTreeBudgetPolicies,
+  releaseExecutionTreeBudget,
+} from './execution-tree-budget.js';
 import type { AdmissionReservationRepository } from './interfaces.js';
 
 const MAX_LOG_BYTES = 128 * 1024 * 1024;
@@ -64,6 +68,21 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
         if (limitingPolicies.length > 0) {
           return { created: false, limitingPolicies };
         }
+        const limitingBudgets = findLimitingExecutionTreeBudgetPolicies(
+          [...materialized.values()].filter((record) => record.id !== existing.id),
+          reclaimed
+        );
+        if (limitingBudgets.terminal.length > 0 || limitingBudgets.retryable.length > 0) {
+          return {
+            created: false,
+            limitingPolicies: [],
+            limitingBudgetPolicies:
+              limitingBudgets.terminal.length > 0
+                ? limitingBudgets.terminal
+                : limitingBudgets.retryable,
+            budgetRetryable: limitingBudgets.terminal.length === 0,
+          };
+        }
         await this.appendSnapshot(reclaimed, snapshots);
         return {
           record: reclaimed,
@@ -74,6 +93,21 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       }
       const limitingPolicies = findLimitingAdmissionPolicies([...materialized.values()], requested);
       if (limitingPolicies.length > 0) return { created: false, limitingPolicies };
+      const limitingBudgets = findLimitingExecutionTreeBudgetPolicies(
+        [...materialized.values()],
+        requested
+      );
+      if (limitingBudgets.terminal.length > 0 || limitingBudgets.retryable.length > 0) {
+        return {
+          created: false,
+          limitingPolicies: [],
+          limitingBudgetPolicies:
+            limitingBudgets.terminal.length > 0
+              ? limitingBudgets.terminal
+              : limitingBudgets.retryable,
+          budgetRetryable: limitingBudgets.terminal.length === 0,
+        };
+      }
       await this.appendSnapshot(requested, snapshots);
       return { record: requested, created: true, limitingPolicies: [] };
     });
@@ -100,6 +134,16 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       .filter(
         (record) =>
           !query.rootReservationId || record.request.rootReservationId === query.rootReservationId
+      )
+      .filter(
+        (record) =>
+          !query.rootObjectiveId ||
+          record.request.executionTree?.rootObjectiveId === query.rootObjectiveId
+      )
+      .filter((record) => !query.nodeId || record.request.executionTree?.nodeId === query.nodeId)
+      .filter(
+        (record) =>
+          !query.parentNodeId || record.request.executionTree?.parentNodeId === query.parentNodeId
       )
       .filter((record) => !states || states.has(record.state))
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
@@ -148,6 +192,7 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
         ...current,
         revision: current.revision + 1,
         state: 'expired',
+        executionBudget: releaseExecutionTreeBudget(current.executionBudget),
         updatedAt: now,
       });
       await this.appendSnapshot(next, snapshots);

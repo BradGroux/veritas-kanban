@@ -2464,6 +2464,14 @@ Retry and fallback attempts release the prior child reservation before
 claiming another. Global, workspace, root-task, provider, and host limits use
 the same durable policies as direct task launches.
 
+The root and every executable step also persist `execution-tree-identity/v1`.
+Step, retry, and fallback edges retain the workflow root objective and exact
+parent node. The admission repository evaluates capacity and the aggregate
+workflow/root budget in the same file lock or SQLite `BEGIN IMMEDIATE`
+transaction. Each step commits only its own provider-reported usage; cumulative
+workflow totals are not copied into child records. This keeps deep, wide, and
+replayed workflows attributable without descendant double counting.
+
 Temporary step overload blocks the workflow with the limiting policy retained
 in the run; an impossible request fails the run. Durable fair queues and
 priority aging are scheduler concerns layered on this controller, not hidden

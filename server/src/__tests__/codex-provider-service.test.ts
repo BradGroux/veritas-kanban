@@ -182,6 +182,7 @@ import type {
   SandboxPolicyDryRunResult,
   Task,
   TaskAttempt,
+  ExecutionTreeIdentity,
 } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import {
@@ -290,6 +291,8 @@ function testAdmissionControl(): AdmissionControlService {
       reservation: { id: `admission-test-${input.taskId}-${++sequence}` },
     })),
     bindAttempt: vi.fn(async (id: string) => ({ id })),
+    get: vi.fn(async (id: string) => ({ id, request: { budgetPolicies: [] } })),
+    recordBudgetUsage: vi.fn(async (id: string) => ({ id })),
     release: vi.fn(async (id: string) => ({ id })),
     releaseIfUnbound: vi.fn(async (id: string) => ({ id })),
     releaseByAttempt: vi.fn(async () => null),
@@ -692,6 +695,77 @@ describe('ClawdbotAgentService Codex providers', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
+  it('isolates independent roots and preserves identity across provider handoffs', () => {
+    const service = testableService(tmpDir);
+    const buildExecutionTreeIdentity = (
+      service as unknown as {
+        buildExecutionTreeIdentity(input: {
+          taskId: string;
+          workspaceId: string;
+          attemptId: string;
+          parentAttempt?: TaskAttempt;
+          provider: 'codex-cli' | 'claude-code';
+          conversationIntent: 'fresh' | 'follow-up';
+          rootIdempotencyKey?: string;
+        }): ExecutionTreeIdentity;
+      }
+    ).buildExecutionTreeIdentity.bind(service);
+    const first = buildExecutionTreeIdentity({
+      taskId: task.id,
+      workspaceId: 'veritas',
+      attemptId: 'attempt-root-a',
+      provider: 'codex-cli',
+      conversationIntent: 'fresh',
+    });
+    const second = buildExecutionTreeIdentity({
+      taskId: task.id,
+      workspaceId: 'veritas',
+      attemptId: 'attempt-root-b',
+      provider: 'codex-cli',
+      conversationIntent: 'fresh',
+    });
+    expect(second.rootObjectiveId).not.toBe(first.rootObjectiveId);
+    const keyedFirst = buildExecutionTreeIdentity({
+      taskId: task.id,
+      workspaceId: 'veritas',
+      attemptId: 'attempt-keyed-a',
+      provider: 'codex-cli',
+      conversationIntent: 'fresh',
+      rootIdempotencyKey: 'stable-launch-key',
+    });
+    const keyedRetry = buildExecutionTreeIdentity({
+      taskId: task.id,
+      workspaceId: 'veritas',
+      attemptId: 'attempt-keyed-b',
+      provider: 'codex-cli',
+      conversationIntent: 'fresh',
+      rootIdempotencyKey: 'stable-launch-key',
+    });
+    expect(keyedRetry).toEqual(keyedFirst);
+
+    const handoff = buildExecutionTreeIdentity({
+      taskId: task.id,
+      workspaceId: 'veritas',
+      attemptId: 'attempt-handoff',
+      parentAttempt: {
+        id: first.nodeId,
+        agent: 'codex',
+        status: 'complete',
+        started: '2026-07-25T12:00:00.000Z',
+        provider: 'codex-cli',
+        executionTree: first,
+      } as TaskAttempt,
+      provider: 'claude-code',
+      conversationIntent: 'follow-up',
+    });
+    expect(handoff).toMatchObject({
+      rootObjectiveId: first.rootObjectiveId,
+      parentNodeId: first.nodeId,
+      edge: 'provider-handoff',
+      depth: 1,
+    });
+  });
+
   it(
     'runs the Codex CLI adapter against mocked JSONL and records telemetry',
     { timeout: 20_000 },
@@ -699,10 +773,23 @@ describe('ClawdbotAgentService Codex providers', () => {
       const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
       mockSpawn.mockReturnValue(createFakeChild(fixture));
       const service = testableService(tmpDir);
+      const admission = (service as unknown as { admission: AdmissionControlService }).admission;
 
       const status = await service.startAgent(task.id, 'codex');
 
       expect(status.status).toBe('running');
+      expect(status.executionTree).toMatchObject({
+        schemaVersion: 'execution-tree-identity/v1',
+        nodeId: status.attemptId,
+        edge: 'root',
+        depth: 0,
+      });
+      expect(admission.admit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionTree: status.executionTree,
+          budgetRequest: expect.objectContaining({ fanOut: 1, retries: 0 }),
+        })
+      );
       expect(status.runLaunchManifest).toMatchObject({
         schemaVersion: 'run-launch-manifest/v1',
         taskId: task.id,

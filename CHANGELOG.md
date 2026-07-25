@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added versioned execution-tree identities and aggregate budget reservations
+  to direct attempts, conversation continuations, retries, fallbacks, provider
+  handoffs, child agents, workflow roots, and workflow steps. Capacity and the
+  strictest applicable workspace, agent, workflow, run, and root-objective
+  budgets are now claimed atomically through the same file lock or SQLite
+  transaction. Idempotent usage events convert reservations into attributable
+  committed input/output/total tokens, cost, tool calls, runtime, idle time,
+  retries, and fan-out without counting descendant totals again. Terminal
+  release preserves committed usage and returns unused reservations. REST and
+  `vk admission tree` expose bounded totals, remaining policy capacity,
+  contributors, and the exact blocking policies (#1052).
 - Routed workflow roots and every provider-backed workflow step through the
   durable admission controller. A root now reserves `workflow-control`
   capacity before the run becomes active, while each executable step reserves

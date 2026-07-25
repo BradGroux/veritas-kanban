@@ -237,6 +237,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   Completion, interruption, cancellation, and start failure release once;
   restart recovery may reclaim only after the durable run supervisor verifies
   the original live process or session.
+- Bind every executable reservation to `execution-tree-identity/v1`. Descendants
+  retain the root objective and exact parent edge across resume, follow-up,
+  fork, retry, fallback, provider handoff, workflow step, and child-agent
+  launches. Claim capacity and aggregate budget in the same repository lock or
+  transaction. Usage events must be idempotent and attributable to one node;
+  never copy cumulative parent or descendant totals into another contributor.
+  Release unused reservation while retaining committed usage.
 - Persist `run-supervisor/v1` before provider dispatch. Restart recovery must
   validate the exact runtime, task-envelope, launch-manifest, worktree, host,
   lease, and process/session identity; replay only after the durable event

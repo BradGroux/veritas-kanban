@@ -8,6 +8,10 @@ import type {
 } from '@veritas-kanban/shared';
 import { AdmissionReservationSchema } from '../../schemas/admission-control-schemas.js';
 import { findLimitingAdmissionPolicies } from '../admission-capacity.js';
+import {
+  findLimitingExecutionTreeBudgetPolicies,
+  releaseExecutionTreeBudget,
+} from '../execution-tree-budget.js';
 import type { AdmissionReservationRepository } from '../interfaces.js';
 import type { SqliteDatabase } from './database.js';
 
@@ -52,6 +56,24 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
           connection.exec('COMMIT');
           return { created: false, limitingPolicies };
         }
+        const limitingBudgets = findLimitingExecutionTreeBudgetPolicies(
+          this.executionTreeReservations(requested.request.executionTree?.rootObjectiveId).filter(
+            (record) => record.id !== existing.id
+          ),
+          reclaimed
+        );
+        if (limitingBudgets.terminal.length > 0 || limitingBudgets.retryable.length > 0) {
+          connection.exec('COMMIT');
+          return {
+            created: false,
+            limitingPolicies: [],
+            limitingBudgetPolicies:
+              limitingBudgets.terminal.length > 0
+                ? limitingBudgets.terminal
+                : limitingBudgets.retryable,
+            budgetRetryable: limitingBudgets.terminal.length === 0,
+          };
+        }
         this.updateRow(reclaimed, existing.revision);
         connection.exec('COMMIT');
         return {
@@ -66,13 +88,30 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         connection.exec('COMMIT');
         return { created: false, limitingPolicies };
       }
+      const limitingBudgets = findLimitingExecutionTreeBudgetPolicies(
+        this.executionTreeReservations(requested.request.executionTree?.rootObjectiveId),
+        requested
+      );
+      if (limitingBudgets.terminal.length > 0 || limitingBudgets.retryable.length > 0) {
+        connection.exec('COMMIT');
+        return {
+          created: false,
+          limitingPolicies: [],
+          limitingBudgetPolicies:
+            limitingBudgets.terminal.length > 0
+              ? limitingBudgets.terminal
+              : limitingBudgets.retryable,
+          budgetRetryable: limitingBudgets.terminal.length === 0,
+        };
+      }
       connection
         .prepare(
           `INSERT INTO admission_reservations (
              id, workspace_id, task_id, root_task_id, provider, host_id, state, revision,
              idempotency_key, lease_expires_at, workflow_run_id, workflow_step_id,
-             root_reservation_id, reservation_json, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             root_reservation_id, root_objective_id, node_id, parent_node_id,
+             reservation_json, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           requested.id,
@@ -88,6 +127,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
           requested.request.workflowRunId ?? null,
           requested.request.workflowStepId ?? null,
           requested.request.rootReservationId ?? null,
+          requested.request.executionTree?.rootObjectiveId ?? null,
+          requested.request.executionTree?.nodeId ?? null,
+          requested.request.executionTree?.parentNodeId ?? null,
           JSON.stringify(requested),
           requested.createdAt,
           requested.updatedAt
@@ -123,6 +165,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
     if (query.workflowRunId) add('workflow_run_id = ?', query.workflowRunId);
     if (query.workflowStepId) add('workflow_step_id = ?', query.workflowStepId);
     if (query.rootReservationId) add('root_reservation_id = ?', query.rootReservationId);
+    if (query.rootObjectiveId) add('root_objective_id = ?', query.rootObjectiveId);
+    if (query.nodeId) add('node_id = ?', query.nodeId);
+    if (query.parentNodeId) add('parent_node_id = ?', query.parentNodeId);
     if (query.states?.length) {
       clauses.push(`state IN (${query.states.map(() => '?').join(', ')})`);
       parameters.push(...query.states);
@@ -194,6 +239,15 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
     return rows.map((row) => AdmissionReservationSchema.parse(JSON.parse(row.reservation_json)));
   }
 
+  private executionTreeReservations(rootObjectiveId: string | undefined): AdmissionReservation[] {
+    if (!rootObjectiveId) return [];
+    const rows = this.database
+      .getConnection()
+      .prepare('SELECT reservation_json FROM admission_reservations WHERE root_objective_id = ?')
+      .all(rootObjectiveId) as unknown as ReservationRow[];
+    return rows.map((row) => AdmissionReservationSchema.parse(JSON.parse(row.reservation_json)));
+  }
+
   private expireInTransaction(now: string): AdmissionReservation[] {
     const rows = this.database
       .getConnection()
@@ -208,6 +262,7 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         ...current,
         revision: current.revision + 1,
         state: 'expired',
+        executionBudget: releaseExecutionTreeBudget(current.executionBudget),
         updatedAt: now,
       });
       this.updateRow(expired, current.revision);
@@ -223,6 +278,7 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
          SET workspace_id = ?, task_id = ?, root_task_id = ?, provider = ?, host_id = ?,
              state = ?, revision = ?, idempotency_key = ?, lease_expires_at = ?,
              workflow_run_id = ?, workflow_step_id = ?, root_reservation_id = ?,
+             root_objective_id = ?, node_id = ?, parent_node_id = ?,
              reservation_json = ?, updated_at = ?
          WHERE id = ? AND revision = ?`
       )
@@ -239,6 +295,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         record.request.workflowRunId ?? null,
         record.request.workflowStepId ?? null,
         record.request.rootReservationId ?? null,
+        record.request.executionTree?.rootObjectiveId ?? null,
+        record.request.executionTree?.nodeId ?? null,
+        record.request.executionTree?.parentNodeId ?? null,
         JSON.stringify(record),
         record.updatedAt,
         record.id,

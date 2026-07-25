@@ -1065,14 +1065,14 @@ SQLite tables with JSON payload columns plus query indexes. This keeps the v4
 service contracts intact while preventing SQLite mode from writing operational
 state back to `.veritas-kanban/*.json` or telemetry NDJSON files.
 
-| Runtime table            | Stored data                                                                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `activity_events`        | Complete activity entries plus type, task, agent, and created-time columns.                                                    |
-| `status_history`         | Complete status transition entries plus previous/new status and task columns.                                                  |
-| `telemetry_events`       | Complete telemetry events plus type, task, project, token, duration, and result columns.                                       |
-| `run_events`             | Complete `run-event/v1` envelopes plus ordered attempt cursor, provider identity, dedupe, and receive columns.                 |
-| `run_supervisors`        | Complete `run-supervisor/v1` snapshots plus task/attempt, state, revision, lease owner/expiry, and recovery indexes.           |
-| `admission_reservations` | Versioned capacity reservations plus task/workspace/root/provider/host scopes, lease state, revision, and idempotency indexes. |
+| Runtime table            | Stored data                                                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activity_events`        | Complete activity entries plus type, task, agent, and created-time columns.                                                                                                                   |
+| `status_history`         | Complete status transition entries plus previous/new status and task columns.                                                                                                                 |
+| `telemetry_events`       | Complete telemetry events plus type, task, project, token, duration, and result columns.                                                                                                      |
+| `run_events`             | Complete `run-event/v1` envelopes plus ordered attempt cursor, provider identity, dedupe, and receive columns.                                                                                |
+| `run_supervisors`        | Complete `run-supervisor/v1` snapshots plus task/attempt, state, revision, lease owner/expiry, and recovery indexes.                                                                          |
+| `admission_reservations` | Versioned capacity and execution-tree budget reservations plus task/workspace/root/provider/host scopes, root objective/node/parent indexes, lease state, revision, and idempotency evidence. |
 
 `ActivityService`, `StatusHistoryService`, `TelemetryService`,
 `RunEventJournalService`, `RunSupervisorService`, and `AdmissionControlService`

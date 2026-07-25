@@ -14,6 +14,20 @@ export const AgentBudgetLimitsSchema = z
   })
   .strict();
 
+export const AgentBudgetUsageSchema = z
+  .object({
+    inputTokens: z.number().int().min(0),
+    outputTokens: z.number().int().min(0),
+    totalTokens: z.number().int().min(0),
+    costUsd: z.number().min(0),
+    toolCalls: z.number().int().min(0),
+    runtimeSeconds: z.number().int().min(0),
+    idleRuntimeSeconds: z.number().int().min(0),
+    retries: z.number().int().min(0),
+    fanOut: z.number().int().min(0),
+  })
+  .strict();
+
 export const AgentBudgetPolicySchema = z
   .object({
     enabled: z.boolean().optional(),
