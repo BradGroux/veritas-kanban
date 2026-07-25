@@ -140,7 +140,7 @@ export class AdmissionControlService {
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
   private readonly heartbeatEligible = new Set<string>();
   private readonly queueHeartbeatTimers = new Map<string, NodeJS.Timeout>();
-  private readonly heartbeatTasks = new Set<Promise<void>>();
+  private readonly heartbeatTasks = new Map<string, Promise<void>>();
   private readonly capacityListeners = new Set<() => void>();
   private disposed = false;
 
@@ -888,7 +888,7 @@ export class AdmissionControlService {
 
   async dispose(): Promise<void> {
     if (this.disposed) {
-      await Promise.allSettled([...this.heartbeatTasks]);
+      await Promise.allSettled([...this.heartbeatTasks.values()]);
       return;
     }
     this.disposed = true;
@@ -896,7 +896,7 @@ export class AdmissionControlService {
     for (const id of this.queueHeartbeatTimers.keys()) this.stopQueueHeartbeat(id);
     this.heartbeatEligible.clear();
     this.capacityListeners.clear();
-    await Promise.allSettled([...this.heartbeatTasks]);
+    await Promise.allSettled([...this.heartbeatTasks.values()]);
     this.configService.dispose();
   }
 
@@ -1068,7 +1068,7 @@ export class AdmissionControlService {
     );
     const timer = setInterval(() => {
       if (this.disposed) return;
-      this.trackHeartbeatTask(
+      this.trackHeartbeatTask(`queue:${queueId}`, () =>
         this.renewQueueClaim(queueId, claim.reservation.id)
           .then(() => undefined)
           .catch(() => {
@@ -1132,7 +1132,7 @@ export class AdmissionControlService {
     );
     const timer = setInterval(() => {
       if (this.disposed) return;
-      this.trackHeartbeatTask(
+      this.trackHeartbeatTask(`reservation:${id}`, () =>
         this.renew(id)
           .then((renewed) => {
             if (renewed.state !== 'active') this.stopHeartbeat(id);
@@ -1151,9 +1151,13 @@ export class AdmissionControlService {
     this.heartbeatTimers.delete(id);
   }
 
-  private trackHeartbeatTask(task: Promise<void>): void {
-    this.heartbeatTasks.add(task);
-    void task.finally(() => this.heartbeatTasks.delete(task));
+  private trackHeartbeatTask(key: string, start: () => Promise<void>): void {
+    if (this.disposed || this.heartbeatTasks.has(key)) return;
+    const task = start();
+    this.heartbeatTasks.set(key, task);
+    void task.finally(() => {
+      if (this.heartbeatTasks.get(key) === task) this.heartbeatTasks.delete(key);
+    });
   }
 }
 
