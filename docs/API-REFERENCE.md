@@ -4177,9 +4177,10 @@ credentials or prompts. Workflow records identify the run, optional step, and
 root reservation. Overloaded starts return a `409` conflict with
 `details.code` set to `ADMISSION_OVERLOAD`, the limiting scope, and bounded
 `retryAfterMs`. A request larger than a configured ceiling returns
-`ADMISSION_POLICY_DENIED`. A step-level retryable overload blocks the workflow
-without creating a partially active attempt; terminal policy denial fails the
-run and releases its root.
+`ADMISSION_POLICY_DENIED`. A queueable workflow-root or provider-step overload
+instead persists the run or step with admission state `waiting` and status
+`pending`, without creating a partially active provider attempt. Terminal
+policy denial fails the run and releases its root.
 
 Execution-tree reservations include `execution-tree-identity/v1` and durable
 requested, remaining, committed, released-unused, and idempotent usage-event
@@ -4218,6 +4219,21 @@ reconstructable from durable task configuration and continue to fail closed
 with `ADMISSION_OVERLOAD`. Queue bounds and retry behavior are configured under
 `features.admission.queue`. Queue inspection endpoints are added separately;
 reservation inspection remains unchanged.
+
+Workflow roots and provider-backed steps use the same durable queue internally.
+Their queue targets preserve the workflow version, run revision, task and step
+identity, retry or fallback sequence, execution-tree edge, selected provider
+and host, and immutable runtime and phase digests. Queue records never copy
+workflow context, prompts, tool arguments, or credentials. Before dispatch,
+Veritas revalidates the persisted run, workflow version, step state, provider
+runtime, host, phase authority, budgets, and reservation evidence. Drift
+terminalizes the queue entry and run without calling the provider.
+
+A pre-dispatch failure releases capacity and may requeue with bounded backoff.
+Once the queue entry is durably `dispatched`, workflow recovery owns the run.
+Startup reconciliation resumes a root or step that stopped at that ownership
+boundary exactly once; already-running provider work continues to use the
+existing operator-reconciliation rules.
 
 ---
 

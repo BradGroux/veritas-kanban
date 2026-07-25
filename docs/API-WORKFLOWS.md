@@ -2141,13 +2141,14 @@ export interface ParallelSubStep {
 
 ```typescript
 export type WorkflowRunStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed';
+export type WorkflowAdmissionState = 'waiting' | 'dispatching' | 'active' | 'terminal';
 
 export interface WorkflowRun {
   id: string; // run_<timestamp>_<nanoid>
   workflowId: string;
   workflowVersion: number;
   taskId?: string; // optional task association
-  admission?: WorkflowRootAdmissionBinding; // durable root reservation identity
+  admission?: WorkflowRootAdmissionBinding; // durable root reservation or queue identity
   status: WorkflowRunStatus;
   currentStep?: string; // current step ID
   context: Record<string, unknown>; // shared context across steps
@@ -2176,7 +2177,7 @@ export interface StepRun {
   retries: number;
   output?: string; // path to output file
   error?: string;
-  admission?: WorkflowStepAdmissionBinding; // latest executable attempt decision
+  admission?: WorkflowStepAdmissionBinding; // latest executable attempt or queue decision
 
   // Loop-specific state
   loopState?: {
@@ -2187,6 +2188,12 @@ export interface StepRun {
   };
 }
 ```
+
+When root or step capacity is temporarily unavailable, the corresponding
+admission binding has `state: "waiting"` and a durable `queueEntryId`. The run
+and step remain `pending`; provider execution is not marked active. A claimed
+entry briefly uses `dispatching` while Veritas transfers durable ownership to
+workflow recovery, then becomes `active` before provider execution.
 
 ### ToolPolicy
 

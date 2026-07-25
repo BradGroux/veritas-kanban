@@ -95,6 +95,21 @@ export function releaseExecutionTreeBudget(
   };
 }
 
+export function reactivateExecutionTreeBudget(
+  existing: ExecutionTreeBudgetState | undefined,
+  requested: ExecutionTreeBudgetState | undefined
+): ExecutionTreeBudgetState | undefined {
+  if (!existing || !requested) return requested;
+  const remaining = subtractBudgetUsage(requested.requested, existing.committed);
+  return {
+    requested: { ...requested.requested },
+    remaining,
+    committed: { ...existing.committed },
+    releasedUnused: subtractBudgetUsage(existing.releasedUnused, remaining),
+    events: [...existing.events],
+  };
+}
+
 function sameExecutionTree(record: AdmissionReservation, candidate: AdmissionReservation): boolean {
   return (
     record.request.executionTree?.rootObjectiveId ===

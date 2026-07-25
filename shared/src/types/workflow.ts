@@ -244,23 +244,29 @@ export interface ParallelSubStep {
 export type WorkflowRunStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed';
 export type StepRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export const WORKFLOW_ADMISSION_SCHEMA_VERSION = 'workflow-admission/v1' as const;
+export type WorkflowAdmissionState = 'waiting' | 'dispatching' | 'active' | 'terminal';
 
 export interface WorkflowRootAdmissionBinding {
   schemaVersion: typeof WORKFLOW_ADMISSION_SCHEMA_VERSION;
+  state?: WorkflowAdmissionState;
   workspaceId: string;
   rootTaskId: string;
   admissionTaskId: string;
   attemptId: string;
-  reservationId: string;
+  reservationId?: string;
+  queueEntryId?: string;
+  decision?: import('./admission-control.types.js').AdmissionDecision;
   executionTree: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
 }
 
 export interface WorkflowStepAdmissionBinding {
   schemaVersion: typeof WORKFLOW_ADMISSION_SCHEMA_VERSION;
+  state?: WorkflowAdmissionState;
   sequence: number;
   admissionTaskId: string;
   attemptId: string;
   reservationId?: string;
+  queueEntryId?: string;
   decision: import('./admission-control.types.js').AdmissionDecision;
   executionTree: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
 }

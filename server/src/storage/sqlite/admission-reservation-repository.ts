@@ -20,8 +20,10 @@ import {
   AdmissionReservationSchema,
 } from '../../schemas/admission-control-schemas.js';
 import { findLimitingAdmissionPolicies } from '../admission-capacity.js';
+import { sameAdmissionQueueTarget } from '../admission-queue-identity.js';
 import {
   findLimitingExecutionTreeBudgetPolicies,
+  reactivateExecutionTreeBudget,
   releaseExecutionTreeBudget,
 } from '../execution-tree-budget.js';
 import type { AdmissionReservationRepository } from '../interfaces.js';
@@ -84,7 +86,7 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
       if (existingRow) {
         const existing = AdmissionQueueEntrySchema.parse(JSON.parse(existingRow.queue_json));
         connection.exec('COMMIT');
-        if (existing.agent !== input.queue.agent) {
+        if (!sameAdmissionQueueTarget(existing, input.queue)) {
           return { ...claimed, queueConflict: true };
         }
         return {
@@ -168,6 +170,7 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         record: requested,
         now: input.now,
         reclaimExpired: true,
+        reclaimReleased: true,
       });
       if (!claimed.record) {
         connection.exec('COMMIT');
@@ -388,13 +391,20 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
       if (existing.request.idempotencyKey !== requested.request.idempotencyKey) {
         throw new Error(`Admission reservation ${requested.id} has conflicting identity.`);
       }
-      if (existing.state !== 'expired' || !input.reclaimExpired) {
+      const reclaimable =
+        (existing.state === 'expired' && input.reclaimExpired) ||
+        (existing.state === 'released' && input.reclaimReleased);
+      if (!reclaimable) {
         return { record: existing, created: false, limitingPolicies: [] };
       }
       const reclaimed = AdmissionReservationSchema.parse({
         ...requested,
         revision: existing.revision + 1,
         createdAt: existing.createdAt,
+        executionBudget: reactivateExecutionTreeBudget(
+          existing.executionBudget,
+          requested.executionBudget
+        ),
       });
       const limitingPolicies = findLimitingAdmissionPolicies(
         this.activeReservations().filter((record) => record.id !== existing.id),

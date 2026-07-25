@@ -9,6 +9,7 @@ import type {
   AdmissionQueueClaim,
   AdmissionQueueEntry,
   AdmissionQueueListQuery,
+  AdmissionQueueTarget,
   AdmissionReservation,
   AdmissionReservationClaimOrQueueResult,
   AdmissionReservationListQuery,
@@ -68,6 +69,13 @@ export interface DirectAdmissionQueueInput {
   agent: AgentType;
   attemptId: string;
 }
+
+export interface WorkflowAdmissionQueueInput {
+  target: Exclude<AdmissionQueueTarget, { kind: 'direct' }>;
+  attemptId: string;
+}
+
+export type AdmissionQueueInput = DirectAdmissionQueueInput | WorkflowAdmissionQueueInput;
 
 export interface RecoverAdmissionInput {
   workspaceId: string;
@@ -162,14 +170,14 @@ export class AdmissionControlService {
 
   async admitOrQueue(
     input: AdmissionRequestInput,
-    queue: DirectAdmissionQueueInput
+    queue: AdmissionQueueInput
   ): Promise<AdmissionDecision> {
     return this.admitInternal(input, queue);
   }
 
   private async admitInternal(
     input: AdmissionRequestInput,
-    queue?: DirectAdmissionQueueInput
+    queue?: AdmissionQueueInput
   ): Promise<AdmissionDecision> {
     const settings = await this.settings();
     const now = this.now();
@@ -237,13 +245,33 @@ export class AdmissionControlService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
-    const queueable = Boolean(queue && settings.queue.enabled && request.source === 'direct');
+    const queueTarget: AdmissionQueueTarget | null =
+      queue && 'target' in queue
+        ? queue.target
+        : queue
+          ? { kind: 'direct', agent: queue.agent }
+          : null;
+    const queueable = Boolean(
+      queue &&
+      queueTarget &&
+      settings.queue.enabled &&
+      ((queueTarget.kind === 'direct' && request.source === 'direct') ||
+        (queueTarget.kind === 'workflow-root' &&
+          request.source === 'workflow' &&
+          request.workflowRunId === queueTarget.workflowRunId &&
+          !request.workflowStepId) ||
+        (queueTarget.kind === 'workflow-step' &&
+          ['workflow', 'recovery', 'fallback'].includes(request.source) &&
+          request.workflowRunId === queueTarget.workflowRunId &&
+          request.workflowStepId === queueTarget.workflowStepId))
+    );
     const claimed: AdmissionReservationClaimOrQueueResult = queueable
       ? await this.repository.claimOrEnqueue({
           record,
           queue: {
             id: queueEntryId(idempotencyKey),
-            agent: queue?.agent as AgentType,
+            ...(queueTarget?.kind === 'direct' ? { agent: queueTarget.agent } : {}),
+            target: queueTarget as AdmissionQueueTarget,
             attemptId: queue?.attemptId as string,
             request,
             policies,
