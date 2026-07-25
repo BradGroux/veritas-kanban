@@ -109,6 +109,9 @@ This cadence extends the deterministic CI selector delivered in
   workflows unless the pull request changes that product boundary.
 - Test the behavior and meaningful failure modes. Do not use raw test count as
   a quality measure.
+- The dependency-free delivery cadence checker guards these rules in
+  pre-commit and the early CI scope-control job without installing packages or
+  running workspace tests.
 
 ### Branch Merge Protocol
 

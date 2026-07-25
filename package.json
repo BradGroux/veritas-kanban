@@ -34,6 +34,7 @@
     "lint:budget": "node scripts/lint-warning-budget.mjs --max-warnings=600",
     "lint:report": "node scripts/lint-warning-budget.mjs --all-rules",
     "lint:fix": "eslint . --fix",
+    "check:delivery-cadence": "node --test scripts/check-delivery-cadence.test.mjs && node scripts/check-delivery-cadence.mjs",
     "check:pnpm-settings": "node scripts/check-pnpm-settings.mjs",
     "check:security-artifacts": "node scripts/check-security-artifacts.mjs",
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
