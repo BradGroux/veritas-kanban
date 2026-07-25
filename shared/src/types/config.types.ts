@@ -566,6 +566,14 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
     rootTasks: {},
     providers: {},
     hosts: {},
+    queue: {
+      enabled: true,
+      globalLimit: 1_000,
+      workspaceLimit: 100,
+      leaseMs: 30_000,
+      retryBackoffMs: 5_000,
+      maxRetries: 3,
+    },
   },
   enforcement: {
     squadChat: false,

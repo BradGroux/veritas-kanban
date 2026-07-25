@@ -1346,6 +1346,39 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON admission_reservations(parent_node_id, updated_at DESC);
     `,
   },
+  {
+    version: 26,
+    name: '0026_durable_admission_queue',
+    up: `
+      CREATE TABLE admission_queue (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        state TEXT NOT NULL
+          CHECK (state IN ('queued', 'leased', 'requeued', 'dispatched', 'terminal')),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        enqueue_sequence INTEGER NOT NULL CHECK (enqueue_sequence > 0),
+        available_at TEXT NOT NULL,
+        lease_expires_at TEXT,
+        queue_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX idx_admission_queue_active_task
+        ON admission_queue(task_id)
+        WHERE state IN ('queued', 'leased', 'requeued');
+
+      CREATE INDEX idx_admission_queue_fifo
+        ON admission_queue(state, available_at, enqueue_sequence, id);
+
+      CREATE INDEX idx_admission_queue_workspace
+        ON admission_queue(workspace_id, state, enqueue_sequence);
+
+      CREATE INDEX idx_admission_queue_lease
+        ON admission_queue(state, lease_expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

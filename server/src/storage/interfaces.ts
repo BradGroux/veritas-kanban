@@ -47,9 +47,17 @@ import type {
   AdmissionReservation,
   AdmissionReservationClaimInput,
   AdmissionReservationClaimResult,
+  AdmissionReservationClaimOrQueueInput,
+  AdmissionReservationClaimOrQueueResult,
   AdmissionReservationCompareAndSetInput,
   AdmissionReservationCompareAndSetResult,
   AdmissionReservationListQuery,
+  AdmissionQueuedClaimInput,
+  AdmissionQueuedClaimResult,
+  AdmissionQueueCompareAndSetInput,
+  AdmissionQueueCompareAndSetResult,
+  AdmissionQueueEntry,
+  AdmissionQueueListQuery,
   RunToolCatalog,
   ToolServerDefinition,
   ToolServerDiscovery,
@@ -434,12 +442,24 @@ export interface RunSupervisorRepository {
 export interface AdmissionReservationRepository {
   /** Atomically expire stale leases, evaluate aggregate policies, and reserve capacity. */
   claim(input: AdmissionReservationClaimInput): Promise<AdmissionReservationClaimResult>;
+  /** Atomically reserve capacity or persist one bounded queue entry. */
+  claimOrEnqueue(
+    input: AdmissionReservationClaimOrQueueInput
+  ): Promise<AdmissionReservationClaimOrQueueResult>;
+  /** Atomically claim the FIFO head and its admission capacity. */
+  claimQueued(input: AdmissionQueuedClaimInput): Promise<AdmissionQueuedClaimResult>;
   get(id: string): Promise<AdmissionReservation | null>;
   list(query: AdmissionReservationListQuery): Promise<AdmissionReservation[]>;
   compareAndSet(
     input: AdmissionReservationCompareAndSetInput
   ): Promise<AdmissionReservationCompareAndSetResult>;
   expireLeases(now: string): Promise<AdmissionReservation[]>;
+  getQueueEntry(id: string): Promise<AdmissionQueueEntry | null>;
+  listQueue(query: AdmissionQueueListQuery): Promise<AdmissionQueueEntry[]>;
+  compareAndSetQueue(
+    input: AdmissionQueueCompareAndSetInput
+  ): Promise<AdmissionQueueCompareAndSetResult>;
+  expireQueueLeases(now: string): Promise<AdmissionQueueEntry[]>;
 }
 
 // ---------------------------------------------------------------------------

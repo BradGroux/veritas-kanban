@@ -129,6 +129,7 @@ import type {
   WorkspaceExecutionTrustEvaluation,
   WorkspaceExecutionTrustScanResult,
   AdmissionReservationRelease,
+  AdmissionQueueClaim,
   ExecutionTreeBudgetPolicy,
   ExecutionTreeEdgeKind,
   ExecutionTreeIdentity,
@@ -338,6 +339,22 @@ export interface AgentStatus {
   executionTree?: ExecutionTreeIdentity;
 }
 
+export interface AgentQueueStatus {
+  taskId: string;
+  attemptId: string;
+  queueId: string;
+  agent: AgentType;
+  status: 'queued';
+  enqueuedAt: string;
+  retryAfterMs: number;
+  limitingScopes: Array<{
+    scope: string;
+    scopeId: string;
+  }>;
+}
+
+export type AgentLaunchStatus = AgentStatus | AgentQueueStatus;
+
 export interface AgentOutput {
   type: 'stdout' | 'stderr' | 'stdin' | 'system';
   content: string;
@@ -358,6 +375,8 @@ export interface AgentStartOptions {
   recovery?: RunRecoveryRecord;
   admissionIdempotencyKey?: string;
   rootTaskId?: string;
+  /** Internal durable queue claim. API callers cannot supply this field. */
+  admissionQueueClaim?: AdmissionQueueClaim;
 }
 
 export interface AgentMessageOptions {
@@ -522,6 +541,7 @@ export class ClawdbotAgentService {
   private approvalBroker: RunApprovalBrokerService;
   private runSupervisor: RunSupervisorService;
   private admission: AdmissionControlService;
+  private admissionQueueDrain?: Promise<void>;
   private conversationLifecycle: ConversationLifecycleService;
   private toolControlPlane: ToolControlPlaneService;
   private runToolBridge: RunToolBridgeService;
@@ -623,6 +643,134 @@ export class ClawdbotAgentService {
 
   private async ensureLogsDir(): Promise<void> {
     await fs.mkdir(this.logsDir, { recursive: true });
+  }
+
+  async reconcileQueuedLaunches(): Promise<void> {
+    if (this.admissionQueueDrain) return this.admissionQueueDrain;
+    let continueDraining = false;
+    this.admissionQueueDrain = this.drainAdmissionQueue().then((hasMore) => {
+      continueDraining = hasMore;
+    });
+    try {
+      await this.admissionQueueDrain;
+    } finally {
+      this.admissionQueueDrain = undefined;
+    }
+    if (continueDraining) this.scheduleAdmissionQueueDrain();
+  }
+
+  private scheduleAdmissionQueueDrain(): void {
+    queueMicrotask(() => {
+      void this.reconcileQueuedLaunches().catch((error) => {
+        log.error({ err: error }, '[ClawdbotAgent] Admission queue drain failed');
+      });
+    });
+  }
+
+  private async drainAdmissionQueue(): Promise<boolean> {
+    for (let index = 0; index < 100; index++) {
+      const claim = await this.admission.claimNextQueued();
+      if (!claim) return false;
+      const { entry, reservation } = claim;
+      if (startingAgents.has(entry.request.taskId) || pendingAgents.has(entry.request.taskId)) {
+        await this.admission
+          .release(reservation.id, 'start-failed', `queue-task-busy:${entry.id}`)
+          .catch(() => {});
+        await this.admission.requeueQueueEntry(
+          entry.id,
+          'QUEUE_TASK_BUSY',
+          'The task already has a launch owner.'
+        );
+        continue;
+      }
+
+      startingAgents.add(entry.request.taskId);
+      try {
+        const result = await this.startReservedAgent(entry.request.taskId, entry.agent, {
+          rootTaskId: entry.request.rootTaskId,
+          admissionQueueClaim: claim,
+        });
+        if (result.status === 'queued') {
+          throw new ConflictError('A leased queue entry cannot enqueue itself again.', {
+            code: 'ADMISSION_QUEUE_RECURSION',
+            queueId: entry.id,
+          });
+        }
+      } catch (error) {
+        const current = await this.admission.getQueueEntry(entry.id);
+        const task = await this.taskService.getTask(entry.request.taskId);
+        if (current.state === 'dispatched' || task?.attempt?.id === entry.attemptId) {
+          if (current.state !== 'dispatched') {
+            await this.admission
+              .release(reservation.id, 'start-failed', `queue-attempt-persisted:${entry.id}`)
+              .catch(() => {});
+            await this.admission.terminateQueueEntry(
+              entry.id,
+              'QUEUE_ATTEMPT_PERSISTED',
+              'Attempt state became durable before dispatch ownership could be confirmed.'
+            );
+          }
+          continue;
+        }
+        await this.admission
+          .release(reservation.id, 'start-failed', `queue-launch-failed:${entry.id}`)
+          .catch(() => {});
+        const failure = this.queueDispatchFailure(error);
+        if (failure.terminal) {
+          await this.admission.terminateQueueEntry(entry.id, failure.code, failure.reason);
+        } else {
+          await this.admission.requeueQueueEntry(entry.id, failure.code, failure.reason);
+        }
+      } finally {
+        startingAgents.delete(entry.request.taskId);
+      }
+    }
+    return true;
+  }
+
+  private queueDispatchFailure(error: unknown): {
+    terminal: boolean;
+    code: string;
+    reason: string;
+  } {
+    const candidate = error as {
+      message?: unknown;
+      statusCode?: unknown;
+      details?: unknown;
+    };
+    const details =
+      candidate.details && typeof candidate.details === 'object'
+        ? (candidate.details as Record<string, unknown>)
+        : {};
+    const detailCode = typeof details.code === 'string' ? details.code : undefined;
+    const statusCode = typeof candidate.statusCode === 'number' ? candidate.statusCode : undefined;
+    const redactedReason = this.redactTraceText(
+      typeof candidate.message === 'string'
+        ? candidate.message
+        : 'Queued launch failed before dispatch.'
+    );
+    const terminal =
+      error instanceof AgentReadinessError ||
+      detailCode === 'ADMISSION_QUEUE_DRIFT' ||
+      detailCode === 'ADMISSION_QUEUE_RECURSION' ||
+      statusCode === 400 ||
+      statusCode === 403 ||
+      statusCode === 404;
+    return {
+      terminal,
+      code: (
+        detailCode ?? (terminal ? 'QUEUE_AUTHORITY_REJECTED' : 'QUEUE_TRANSIENT_FAILURE')
+      ).slice(0, 160),
+      reason: redactedReason.trim().slice(0, 1_000) || 'Queued launch failed before dispatch.',
+    };
+  }
+
+  private requireRunningLaunch(result: AgentLaunchStatus): AgentStatus {
+    if (result.status !== 'queued') return result;
+    throw new ConflictError('This launch source cannot enter the direct admission queue.', {
+      code: 'ADMISSION_QUEUE_SOURCE_DENIED',
+      queueId: result.queueId,
+    });
   }
 
   /**
@@ -1244,10 +1392,12 @@ export class ClawdbotAgentService {
     );
 
     try {
-      const child = await this.startAgent(
-        taskId,
-        launching.selectedAgent,
-        this.recoveryLaunchOptions(claimedAttempt, launching)
+      const child = this.requireRunningLaunch(
+        await this.startAgent(
+          taskId,
+          launching.selectedAgent,
+          this.recoveryLaunchOptions(claimedAttempt, launching)
+        )
       );
       await this.appendRunEvent(
         taskId,
@@ -1725,7 +1875,7 @@ export class ClawdbotAgentService {
     taskId: string,
     agentType?: AgentType,
     options: AgentStartOptions = {}
-  ): Promise<AgentStatus> {
+  ): Promise<AgentLaunchStatus> {
     if (startingAgents.has(taskId) || pendingAgents.has(taskId)) {
       throw new ConflictError('An agent is already running or starting for this task');
     }
@@ -1742,7 +1892,7 @@ export class ClawdbotAgentService {
     taskId: string,
     agentType?: AgentType,
     options: AgentStartOptions = {}
-  ): Promise<AgentStatus> {
+  ): Promise<AgentLaunchStatus> {
     // Get task
     let task = await this.taskService.getTask(taskId);
     if (!task) {
@@ -1934,7 +2084,7 @@ export class ClawdbotAgentService {
     }
 
     // Create attempt
-    const attemptId = `attempt_${nanoid(8)}`;
+    const attemptId = options.admissionQueueClaim?.entry.attemptId ?? `attempt_${nanoid(8)}`;
     const startedAt = new Date().toISOString();
     if (!task.git?.worktreePath) {
       throw new Error(`Task "${taskId}" lost its worktree allocation before launch`);
@@ -2122,17 +2272,19 @@ export class ClawdbotAgentService {
       conversationRequest.forkTurnId,
       conversationRequest.intent
     );
-    const executionTree = this.buildExecutionTreeIdentity({
-      taskId,
-      rootTaskId: options.rootTaskId,
-      workspaceId: taskEnvelope.workspace.workspaceId,
-      attemptId,
-      parentAttempt,
-      provider,
-      conversationIntent: conversation.intent,
-      recoveryAction: options.recovery?.action,
-      rootIdempotencyKey: options.admissionIdempotencyKey,
-    });
+    const executionTree =
+      options.admissionQueueClaim?.entry.request.executionTree ??
+      this.buildExecutionTreeIdentity({
+        taskId,
+        rootTaskId: options.rootTaskId,
+        workspaceId: taskEnvelope.workspace.workspaceId,
+        attemptId,
+        parentAttempt,
+        provider,
+        conversationIntent: conversation.intent,
+        recoveryAction: options.recovery?.action,
+        rootIdempotencyKey: options.admissionIdempotencyKey,
+      });
     const inheritedBudgetPolicies = parentAttempt?.admissionReservationId
       ? ((await this.admission.get(parentAttempt.admissionReservationId)).request.budgetPolicies ??
         [])
@@ -2151,7 +2303,7 @@ export class ClawdbotAgentService {
         isRoot: !parentAttempt,
       }),
     ]);
-    const admissionDecision = await this.admission.admit({
+    const admissionInput = {
       taskId,
       rootTaskId: options.rootTaskId,
       workspaceId: taskEnvelope.workspace.workspaceId,
@@ -2171,27 +2323,117 @@ export class ClawdbotAgentService {
         fanOut: 1,
         retries: options.recovery ? 1 : 0,
       },
-    });
-    if (admissionDecision.outcome !== 'admitted' || !admissionDecision.reservation) {
+    } as const;
+    const queueableDirectLaunch =
+      !options.admissionQueueClaim &&
+      conversationRequest.mode === 'fresh' &&
+      !conversationRequest.message &&
+      !options.recovery &&
+      !options.parentAttemptId &&
+      !options.profileId &&
+      !options.overrideReason &&
+      !options.sandboxPresetId &&
+      !options.budget &&
+      !options.requiredRuntimeCapabilities?.length &&
+      !options.commitPolicy &&
+      !options.phase;
+    const admissionDecision = options.admissionQueueClaim
+      ? undefined
+      : queueableDirectLaunch
+        ? await this.admission.admitOrQueue(admissionInput, { agent, attemptId })
+        : await this.admission.admit(admissionInput);
+    if (admissionDecision?.outcome === 'queued' && admissionDecision.queueEntry) {
+      try {
+        await this.filesystemSandbox.cleanup(filesystemSandboxPlan);
+      } catch {
+        // The queue is durable; best-effort cleanup must not discard the launch request.
+      }
+      this.scheduleAdmissionQueueDrain();
+      return {
+        taskId,
+        attemptId: admissionDecision.queueEntry.attemptId,
+        queueId: admissionDecision.queueEntry.id,
+        agent,
+        status: 'queued',
+        enqueuedAt: admissionDecision.queueEntry.createdAt,
+        retryAfterMs: admissionDecision.queueEntry.retryAfterMs,
+        limitingScopes: admissionDecision.queueEntry.limitingPolicies.map((policy) => ({
+          scope: policy.scope,
+          scopeId: policy.scopeId,
+        })),
+      };
+    }
+    if (
+      admissionDecision &&
+      (admissionDecision.outcome !== 'admitted' || !admissionDecision.reservation)
+    ) {
       throw new ConflictError(
         admissionDecision.outcome === 'retryable-overload'
           ? 'Agent launch is waiting for admission capacity.'
-          : 'Agent launch violates an admission policy.',
+          : admissionDecision.outcome === 'queue-overflow'
+            ? 'The admission queue is full.'
+            : 'Agent launch violates an admission policy.',
         {
           code:
             admissionDecision.outcome === 'retryable-overload'
               ? 'ADMISSION_OVERLOAD'
-              : 'ADMISSION_POLICY_DENIED',
+              : admissionDecision.outcome === 'queue-overflow'
+                ? 'ADMISSION_QUEUE_OVERFLOW'
+                : 'ADMISSION_POLICY_DENIED',
           decision: admissionDecision,
         }
       );
     }
+    const queuedClaim = options.admissionQueueClaim;
+    if (queuedClaim) {
+      const queuedRequest = queuedClaim.reservation.request;
+      const driftFields = [
+        queuedClaim.entry.state !== 'leased' ? 'queueState' : undefined,
+        queuedClaim.entry.attemptId !== attemptId ? 'attemptId' : undefined,
+        queuedClaim.entry.agent !== agent ? 'agent' : undefined,
+        queuedClaim.entry.reservationId !== queuedClaim.reservation.id
+          ? 'reservationId'
+          : undefined,
+        queuedRequest.source !== 'direct' ? 'source' : undefined,
+        queuedRequest.taskId !== taskId ? 'taskId' : undefined,
+        queuedRequest.rootTaskId !== (options.rootTaskId ?? taskId) ? 'rootTaskId' : undefined,
+        queuedRequest.workspaceId !== taskEnvelope.workspace.workspaceId
+          ? 'workspaceId'
+          : undefined,
+        queuedRequest.provider !== provider ? 'provider' : undefined,
+        queuedRequest.hostId !== runLaunchManifest.routing.selectedHost ? 'hostId' : undefined,
+        JSON.stringify(queuedRequest.executionTree) !== JSON.stringify(executionTree)
+          ? 'executionTree'
+          : undefined,
+        JSON.stringify(queuedRequest.budgetPolicies ?? []) !==
+        JSON.stringify(executionBudgetPolicies)
+          ? 'budgetPolicies'
+          : undefined,
+      ].filter((field): field is string => Boolean(field));
+      if (driftFields.length > 0) {
+        throw new ConflictError('Queued launch authority changed before dispatch.', {
+          code: 'ADMISSION_QUEUE_DRIFT',
+          queueId: queuedClaim.entry.id,
+          driftFields,
+        });
+      }
+    }
+    const admissionReservationCandidate =
+      queuedClaim?.reservation ?? admissionDecision?.reservation;
+    if (!admissionReservationCandidate) {
+      throw new ConflictError('Agent launch has no admission reservation.', {
+        code: 'ADMISSION_RESERVATION_MISSING',
+      });
+    }
     let admissionReservation;
     try {
-      admissionReservation = await this.admission.bindAttempt(
-        admissionDecision.reservation.id,
-        attemptId
-      );
+      admissionReservation = queuedClaim
+        ? await this.admission.bindQueuedAttempt(
+            queuedClaim.entry.id,
+            admissionReservationCandidate.id,
+            attemptId
+          )
+        : await this.admission.bindAttempt(admissionReservationCandidate.id, attemptId);
       await this.admission.recordBudgetUsage(admissionReservation.id, {
         schemaVersion: 'execution-tree-budget-event/v1',
         id: `launch_${attemptId}`,
@@ -2207,7 +2449,7 @@ export class ClawdbotAgentService {
     } catch (error) {
       await this.admission
         .releaseIfUnbound(
-          admissionDecision.reservation.id,
+          admissionReservationCandidate.id,
           'start-failed',
           `bind-failed:${attemptId}`
         )
@@ -2443,6 +2685,9 @@ export class ClawdbotAgentService {
       await this.taskService.patchTaskAttempt(taskId, attemptId, {
         runSupervisorId: supervisorId,
       });
+      if (queuedClaim) {
+        await this.admission.markQueueDispatched(queuedClaim.entry.id, attemptId);
+      }
       const startedEvent = await this.appendRunEvent(
         taskId,
         attemptId,
@@ -3700,6 +3945,7 @@ export class ClawdbotAgentService {
     if (!reservationId) return;
     try {
       await this.admission.release(reservationId, reason, idempotencyKey);
+      this.scheduleAdmissionQueueDrain();
     } catch (error) {
       log.error(
         { err: error, reservationId, reason },
@@ -3954,11 +4200,13 @@ export class ClawdbotAgentService {
       await this.findAttempt(sourceAttemptId),
       'resume'
     );
-    return this.startAgent(taskId, source.attempt.agent, {
-      ...options,
-      parentAttemptId: source.attempt.id,
-      conversation: { mode: 'resume', intent: 'resume', sourceAttemptId, message },
-    });
+    return this.requireRunningLaunch(
+      await this.startAgent(taskId, source.attempt.agent, {
+        ...options,
+        parentAttemptId: source.attempt.id,
+        conversation: { mode: 'resume', intent: 'resume', sourceAttemptId, message },
+      })
+    );
   }
 
   async followUpConversation(
@@ -3971,16 +4219,18 @@ export class ClawdbotAgentService {
       await this.findAttempt(sourceAttemptId),
       'resume'
     );
-    return this.startAgent(taskId, source.attempt.agent, {
-      ...options,
-      parentAttemptId: source.attempt.id,
-      conversation: {
-        mode: 'resume',
-        intent: 'follow-up',
-        sourceAttemptId,
-        message,
-      },
-    });
+    return this.requireRunningLaunch(
+      await this.startAgent(taskId, source.attempt.agent, {
+        ...options,
+        parentAttemptId: source.attempt.id,
+        conversation: {
+          mode: 'resume',
+          intent: 'follow-up',
+          sourceAttemptId,
+          message,
+        },
+      })
+    );
   }
 
   async forkConversation(
@@ -3994,17 +4244,19 @@ export class ClawdbotAgentService {
       await this.findAttempt(sourceAttemptId),
       'fork'
     );
-    return this.startAgent(taskId, source.attempt.agent, {
-      ...options,
-      parentAttemptId: source.attempt.id,
-      conversation: {
-        mode: 'fork',
-        intent: 'fork',
-        sourceAttemptId,
-        message,
-        ...(forkTurnId ? { forkTurnId } : {}),
-      },
-    });
+    return this.requireRunningLaunch(
+      await this.startAgent(taskId, source.attempt.agent, {
+        ...options,
+        parentAttemptId: source.attempt.id,
+        conversation: {
+          mode: 'fork',
+          intent: 'fork',
+          sourceAttemptId,
+          message,
+          ...(forkTurnId ? { forkTurnId } : {}),
+        },
+      })
+    );
   }
 
   async compactConversation(

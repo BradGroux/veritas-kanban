@@ -415,11 +415,19 @@ describe('Feature Settings Schema', () => {
           'codex-cli': { processSlots: 4 },
           'workflow-control': { concurrentRuns: 3 },
         },
+        queue: {
+          globalLimit: 1_000,
+          workspaceLimit: 100,
+          leaseMs: 30_000,
+          retryBackoffMs: 5_000,
+          maxRetries: 3,
+        },
       },
     });
     expect(result.admission?.global?.concurrentRuns).toBe(8);
     expect(result.admission?.providers?.['codex-cli']?.processSlots).toBe(4);
     expect(result.admission?.providers?.['workflow-control']?.concurrentRuns).toBe(3);
+    expect(result.admission?.queue?.workspaceLimit).toBe(100);
     expect(() =>
       FeatureSettingsPatchSchema.parse({
         admission: { leaseMs: 10_000, heartbeatMs: 10_000 },
@@ -428,6 +436,19 @@ describe('Feature Settings Schema', () => {
     expect(() =>
       FeatureSettingsPatchSchema.parse({
         admission: { defaultRequest: { runSlots: 0 } },
+      })
+    ).toThrow();
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: { queue: { globalLimit: -1 } },
+      })
+    ).toThrow();
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: {
+          heartbeatMs: 10_000,
+          queue: { leaseMs: 10_000 },
+        },
       })
     ).toThrow();
   });

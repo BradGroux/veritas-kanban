@@ -1,4 +1,5 @@
 import type { ExecutableAgentProvider } from './config.types.js';
+import type { AgentType } from './task.types.js';
 import type {
   ExecutionTreeBudgetPolicy,
   ExecutionTreeBudgetState,
@@ -11,6 +12,7 @@ import type { AgentBudgetUsage } from './agent-budget.types.js';
 export const ADMISSION_REQUEST_SCHEMA_VERSION = 'admission-request/v1' as const;
 export const ADMISSION_DECISION_SCHEMA_VERSION = 'admission-decision/v1' as const;
 export const ADMISSION_RESERVATION_SCHEMA_VERSION = 'admission-reservation/v1' as const;
+export const ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION = 'admission-queue-entry/v1' as const;
 export const ADMISSION_CONTROL_PROVIDER = 'workflow-control' as const;
 export type AdmissionProvider = ExecutableAgentProvider | typeof ADMISSION_CONTROL_PROVIDER;
 
@@ -27,8 +29,19 @@ export type AdmissionScope = (typeof ADMISSION_SCOPES)[number];
 export const ADMISSION_RESERVATION_STATES = ['active', 'released', 'expired'] as const;
 export type AdmissionReservationState = (typeof ADMISSION_RESERVATION_STATES)[number];
 
+export const ADMISSION_QUEUE_STATES = [
+  'queued',
+  'leased',
+  'requeued',
+  'dispatched',
+  'terminal',
+] as const;
+export type AdmissionQueueState = (typeof ADMISSION_QUEUE_STATES)[number];
+
 export const ADMISSION_DECISION_OUTCOMES = [
   'admitted',
+  'queued',
+  'queue-overflow',
   'retryable-overload',
   'terminal-policy-denial',
 ] as const;
@@ -114,16 +127,69 @@ export interface AdmissionReservation {
   updatedAt: string;
 }
 
+export interface AdmissionQueueTerminalEvidence {
+  code: string;
+  reason: string;
+  recordedAt: string;
+}
+
+export interface AdmissionQueueEntry {
+  schemaVersion: typeof ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION;
+  id: string;
+  revision: number;
+  state: AdmissionQueueState;
+  enqueueSequence: number;
+  agent: AgentType;
+  attemptId: string;
+  request: AdmissionRequest;
+  policies: AdmissionLimitPolicy[];
+  limitingPolicies: AdmissionLimitPolicy[];
+  limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
+  retryAfterMs: number;
+  retryCount: number;
+  maxRetries: number;
+  availableAt: string;
+  lease?: AdmissionReservationLease;
+  reservationId?: string;
+  dispatchedAttemptId?: string;
+  terminal?: AdmissionQueueTerminalEvidence;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AdmissionDecision {
   schemaVersion: typeof ADMISSION_DECISION_SCHEMA_VERSION;
   outcome: AdmissionDecisionOutcome;
   request: AdmissionRequest;
   reservation?: AdmissionReservation;
+  queueEntry?: AdmissionQueueEntry;
   limitingPolicies: AdmissionLimitPolicy[];
   limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
   retryAfterMs?: number;
   reason: string;
   decidedAt: string;
+}
+
+export interface AdmissionQueueListQuery {
+  workspaceId?: string;
+  taskId?: string;
+  states?: AdmissionQueueState[];
+  eligibleAt?: string;
+  limit?: number;
+}
+
+export interface AdmissionQueueDraft {
+  id: string;
+  agent: AgentType;
+  attemptId: string;
+  request: AdmissionRequest;
+  policies: AdmissionLimitPolicy[];
+  limitingPolicies: AdmissionLimitPolicy[];
+  limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
+  retryAfterMs: number;
+  maxRetries: number;
+  availableAt: string;
+  createdAt: string;
 }
 
 export interface AdmissionReservationListQuery {
@@ -169,6 +235,53 @@ export interface AdmissionReservationClaimResult {
   budgetRetryable?: boolean;
 }
 
+export interface AdmissionReservationClaimOrQueueInput {
+  record: AdmissionReservation;
+  queue: AdmissionQueueDraft;
+  now: string;
+  globalQueueLimit: number;
+  workspaceQueueLimit: number;
+}
+
+export interface AdmissionReservationClaimOrQueueResult extends AdmissionReservationClaimResult {
+  queueEntry?: AdmissionQueueEntry;
+  queueOverflow?: 'global' | 'workspace';
+  queueConflict?: boolean;
+}
+
+export interface AdmissionQueuedClaimInput {
+  queueId: string;
+  expectedRevision: number;
+  record: AdmissionReservation;
+  now: string;
+}
+
+export interface AdmissionQueuedClaimResult {
+  entry?: AdmissionQueueEntry;
+  reservation?: AdmissionReservation;
+  stale: boolean;
+  limitingPolicies: AdmissionLimitPolicy[];
+  limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
+  budgetRetryable?: boolean;
+}
+
+export interface AdmissionQueueCompareAndSetInput {
+  id: string;
+  expectedRevision: number;
+  next: AdmissionQueueEntry;
+}
+
+export interface AdmissionQueueCompareAndSetResult {
+  record?: AdmissionQueueEntry;
+  updated: boolean;
+  reason?: 'not-found' | 'stale-revision' | 'invalid-revision';
+}
+
+export interface AdmissionQueueClaim {
+  entry: AdmissionQueueEntry;
+  reservation: AdmissionReservation;
+}
+
 export interface AdmissionBudgetUsageInput {
   reservationId: string;
   event: ExecutionTreeBudgetUsageEvent;
@@ -192,4 +305,12 @@ export interface AdmissionSettings {
   rootTasks: Record<string, AdmissionCapacityLimit>;
   providers: Partial<Record<AdmissionProvider, AdmissionCapacityLimit>>;
   hosts: Record<string, AdmissionCapacityLimit>;
+  queue: {
+    enabled: boolean;
+    globalLimit: number;
+    workspaceLimit: number;
+    leaseMs: number;
+    retryBackoffMs: number;
+    maxRetries: number;
+  };
 }

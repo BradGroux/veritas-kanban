@@ -3,6 +3,8 @@ import {
   ADMISSION_DECISION_OUTCOMES,
   ADMISSION_DECISION_SCHEMA_VERSION,
   ADMISSION_CONTROL_PROVIDER,
+  ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION,
+  ADMISSION_QUEUE_STATES,
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   ADMISSION_RESERVATION_STATES,
@@ -211,12 +213,76 @@ export const AdmissionReservationSchema = z
     }
   });
 
+export const AdmissionQueueEntrySchema = z
+  .object({
+    schemaVersion: z.literal(ADMISSION_QUEUE_ENTRY_SCHEMA_VERSION),
+    id: identifier,
+    revision: z.number().int().positive(),
+    state: z.enum(ADMISSION_QUEUE_STATES),
+    enqueueSequence: z.number().int().positive(),
+    agent: identifier,
+    attemptId: identifier,
+    request: AdmissionRequestSchema,
+    policies: z.array(AdmissionLimitPolicySchema).max(6),
+    limitingPolicies: z.array(AdmissionLimitPolicySchema).max(6),
+    limitingBudgetPolicies: z.array(ExecutionTreeBudgetPolicySchema).max(16).optional(),
+    retryAfterMs: z.number().int().min(250).max(60_000),
+    retryCount: z.number().int().min(0).max(100),
+    maxRetries: z.number().int().min(0).max(100),
+    availableAt: z.string().datetime(),
+    lease: AdmissionReservationLeaseSchema.optional(),
+    reservationId: identifier.optional(),
+    dispatchedAttemptId: identifier.optional(),
+    terminal: z
+      .object({
+        code: z.string().trim().min(1).max(160),
+        reason: z.string().trim().min(1).max(1_000),
+        recordedAt: z.string().datetime(),
+      })
+      .strict()
+      .optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict()
+  .superRefine((entry, ctx) => {
+    if (entry.state === 'leased' && (!entry.lease || !entry.reservationId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Leased queue entries require lease and reservation evidence.',
+        path: ['lease'],
+      });
+    }
+    if (entry.state === 'dispatched' && (!entry.reservationId || !entry.dispatchedAttemptId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Dispatched queue entries require reservation and attempt evidence.',
+        path: ['dispatchedAttemptId'],
+      });
+    }
+    if (entry.state === 'terminal' && !entry.terminal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Terminal queue entries require terminal evidence.',
+        path: ['terminal'],
+      });
+    }
+    if (entry.state !== 'terminal' && entry.terminal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Only terminal queue entries may contain terminal evidence.',
+        path: ['terminal'],
+      });
+    }
+  });
+
 export const AdmissionDecisionSchema = z
   .object({
     schemaVersion: z.literal(ADMISSION_DECISION_SCHEMA_VERSION),
     outcome: z.enum(ADMISSION_DECISION_OUTCOMES),
     request: AdmissionRequestSchema,
     reservation: AdmissionReservationSchema.optional(),
+    queueEntry: AdmissionQueueEntrySchema.optional(),
     limitingPolicies: z.array(AdmissionLimitPolicySchema).max(6),
     limitingBudgetPolicies: z.array(ExecutionTreeBudgetPolicySchema).max(16).optional(),
     retryAfterMs: z.number().int().min(250).max(60_000).optional(),

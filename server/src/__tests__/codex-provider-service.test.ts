@@ -183,6 +183,7 @@ import type {
   Task,
   TaskAttempt,
   ExecutionTreeIdentity,
+  AdmissionQueueClaim,
 } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import {
@@ -285,12 +286,15 @@ function testableService(
 
 function testAdmissionControl(): AdmissionControlService {
   let sequence = 0;
+  const admit = vi.fn(async (input: { taskId: string }) => ({
+    outcome: 'admitted',
+    reservation: { id: `admission-test-${input.taskId}-${++sequence}` },
+  }));
   return {
-    admit: vi.fn(async (input: { taskId: string }) => ({
-      outcome: 'admitted',
-      reservation: { id: `admission-test-${input.taskId}-${++sequence}` },
-    })),
+    admit,
+    admitOrQueue: admit,
     bindAttempt: vi.fn(async (id: string) => ({ id })),
+    bindQueuedAttempt: vi.fn(async (_queueId: string, id: string) => ({ id })),
     get: vi.fn(async (id: string) => ({ id, request: { budgetPolicies: [] } })),
     recordBudgetUsage: vi.fn(async (id: string) => ({ id })),
     release: vi.fn(async (id: string) => ({ id })),
@@ -298,6 +302,7 @@ function testAdmissionControl(): AdmissionControlService {
     releaseByAttempt: vi.fn(async () => null),
     expireAbandoned: vi.fn(async () => []),
     recoverVerifiedRun: vi.fn(async () => null),
+    claimNextQueued: vi.fn(async () => null),
   } as unknown as AdmissionControlService;
 }
 
@@ -766,6 +771,142 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
   });
 
+  it('queues a reconstructable direct launch and dispatches its claim exactly once', async () => {
+    const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
+    mockSpawn.mockReturnValue(createFakeChild(fixture));
+    const admission = testAdmissionControl();
+    let claim: AdmissionQueueClaim | undefined;
+    let currentEntry: AdmissionQueueClaim['entry'] | undefined;
+    vi.mocked(admission.admitOrQueue).mockImplementation(async (input, queue) => {
+      const now = '2026-07-25T12:00:00.000Z';
+      const request = {
+        schemaVersion: 'admission-request/v1',
+        idempotencyKey: `sha256:${'a'.repeat(64)}`,
+        source: 'direct',
+        taskId: input.taskId,
+        rootTaskId: input.rootTaskId ?? input.taskId,
+        workspaceId: input.workspaceId,
+        provider: input.provider,
+        hostId: input.hostId,
+        executionTree: input.executionTree,
+        budgetPolicies: input.budgetPolicies,
+        budgetRequest: input.budgetRequest,
+        requested: { runSlots: 1, processSlots: 1, estimatedMemoryMb: 512 },
+        requestedAt: now,
+      } as AdmissionQueueClaim['entry']['request'];
+      const queuedEntry = {
+        schemaVersion: 'admission-queue-entry/v1',
+        id: 'admission_queue_direct_fixture',
+        revision: 1,
+        state: 'queued',
+        enqueueSequence: 1,
+        agent: queue.agent,
+        attemptId: queue.attemptId,
+        request,
+        policies: [],
+        limitingPolicies: [
+          {
+            id: 'global:global',
+            scope: 'global',
+            scopeId: 'global',
+            limits: { concurrentRuns: 1 },
+          },
+        ],
+        retryAfterMs: 250,
+        retryCount: 0,
+        maxRetries: 3,
+        availableAt: now,
+        createdAt: now,
+        updatedAt: now,
+      } as AdmissionQueueClaim['entry'];
+      const lease = {
+        ownerId: 'queue-worker',
+        hostId: 'execution-host-a',
+        processId: 101,
+        acquiredAt: now,
+        heartbeatAt: now,
+        expiresAt: '2026-07-25T12:00:30.000Z',
+      };
+      currentEntry = {
+        ...queuedEntry,
+        revision: 2,
+        state: 'leased',
+        lease,
+        reservationId: 'admission_direct_fixture',
+      };
+      claim = {
+        entry: currentEntry,
+        reservation: {
+          schemaVersion: 'admission-reservation/v1',
+          id: 'admission_direct_fixture',
+          revision: 1,
+          state: 'active',
+          request,
+          policies: [],
+          lease,
+          createdAt: now,
+          updatedAt: now,
+        },
+      };
+      return {
+        schemaVersion: 'admission-decision/v1',
+        outcome: 'queued',
+        request,
+        queueEntry: queuedEntry,
+        limitingPolicies: queuedEntry.limitingPolicies,
+        retryAfterMs: queuedEntry.retryAfterMs,
+        reason: 'Queued for test.',
+        decidedAt: now,
+      };
+    });
+    admission.getQueueEntry = vi.fn(async () => currentEntry as AdmissionQueueClaim['entry']);
+    admission.markQueueDispatched = vi.fn(async (_id, attemptId) => {
+      currentEntry = {
+        ...(currentEntry as AdmissionQueueClaim['entry']),
+        revision: (currentEntry?.revision ?? 0) + 1,
+        state: 'dispatched',
+        dispatchedAttemptId: attemptId,
+      };
+      return currentEntry;
+    });
+    admission.requeueQueueEntry = vi.fn();
+    admission.terminateQueueEntry = vi.fn();
+    const service = testableService(
+      tmpDir,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      testWorkspaceExecutionTrust(),
+      admission
+    );
+
+    const queued = await service.startAgent(task.id, 'codex');
+    expect(queued).toMatchObject({
+      taskId: task.id,
+      status: 'queued',
+      queueId: 'admission_queue_direct_fixture',
+      retryAfterMs: 250,
+      limitingScopes: [{ scope: 'global', scopeId: 'global' }],
+    });
+    expect(admission.bindAttempt).not.toHaveBeenCalled();
+    expect(task.attempt).toBeUndefined();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    vi.mocked(admission.claimNextQueued).mockReset();
+    vi.mocked(admission.claimNextQueued)
+      .mockResolvedValueOnce(claim as AdmissionQueueClaim)
+      .mockResolvedValue(null);
+    await service.reconcileQueuedLaunches();
+    await service.reconcileQueuedLaunches();
+
+    expect(admission.markQueueDispatched).toHaveBeenCalledTimes(1);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(task.attempt?.id).toBe(claim?.entry.attemptId);
+    await waitFor(() => expect(task.attempt?.status).toBe('complete'));
+  });
+
   it(
     'runs the Codex CLI adapter against mocked JSONL and records telemetry',
     { timeout: 20_000 },
@@ -784,10 +925,14 @@ describe('ClawdbotAgentService Codex providers', () => {
         edge: 'root',
         depth: 0,
       });
-      expect(admission.admit).toHaveBeenCalledWith(
+      expect(admission.admitOrQueue).toHaveBeenCalledWith(
         expect.objectContaining({
           executionTree: status.executionTree,
           budgetRequest: expect.objectContaining({ fanOut: 1, retries: 0 }),
+        }),
+        expect.objectContaining({
+          agent: 'codex',
+          attemptId: status.attemptId,
         })
       );
       expect(status.runLaunchManifest).toMatchObject({
@@ -3534,7 +3679,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('blocks provider dispatch before attempt persistence when admission is overloaded', async () => {
+  it('blocks a non-reconstructable launch before attempt persistence when admission is overloaded', async () => {
     const admit = vi.fn().mockResolvedValue({
       schemaVersion: 'admission-decision/v1',
       outcome: 'retryable-overload',
@@ -3574,7 +3719,9 @@ describe('ClawdbotAgentService Codex providers', () => {
       admission
     );
 
-    await expect(service.startAgent(task.id, 'codex')).rejects.toMatchObject({
+    await expect(
+      service.startAgent(task.id, 'codex', { commitPolicy: 'forbidden' })
+    ).rejects.toMatchObject({
       statusCode: 409,
       details: expect.objectContaining({ code: 'ADMISSION_OVERLOAD' }),
     });

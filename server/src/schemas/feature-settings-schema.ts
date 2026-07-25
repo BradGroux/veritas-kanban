@@ -249,6 +249,17 @@ const AdmissionSettingsSchema = z
       )
       .optional(),
     hosts: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
+    queue: z
+      .object({
+        enabled: z.boolean().optional(),
+        globalLimit: z.number().int().min(0).max(100_000).optional(),
+        workspaceLimit: z.number().int().min(0).max(100_000).optional(),
+        leaseMs: z.number().int().min(5_000).max(300_000).optional(),
+        retryBackoffMs: z.number().int().min(250).max(60_000).optional(),
+        maxRetries: z.number().int().min(0).max(100).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -260,6 +271,17 @@ const AdmissionSettingsSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'admission.heartbeatMs must be less than admission.leaseMs',
+        path: ['heartbeatMs'],
+      });
+    }
+    if (
+      value.heartbeatMs !== undefined &&
+      value.queue?.leaseMs !== undefined &&
+      value.heartbeatMs >= value.queue.leaseMs
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'admission.heartbeatMs must be less than admission.queue.leaseMs',
         path: ['heartbeatMs'],
       });
     }
