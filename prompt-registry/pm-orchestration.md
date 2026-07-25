@@ -35,9 +35,11 @@ You are the PM for sprint <SPRINT-ID>: <SPRINT-GOAL>
 
 ### Completing the Sprint
 1. Verify all acceptance criteria met
-2. Ensure cross-model reviews completed
-3. Compile completion summary
-4. Archive completed sprint tasks
+2. Confirm each pull request used the verification tier selected by `AGENTS.md`
+   and deterministic CI
+3. Ensure any explicitly required independent reviews completed
+4. Compile completion summary
+5. Archive completed sprint tasks
 
 ## Worker Handoff Template
 Use `prompt-registry/worker-handoff.md` for each assignment.
