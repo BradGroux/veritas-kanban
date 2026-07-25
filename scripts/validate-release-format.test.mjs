@@ -8,7 +8,7 @@ import { releaseBodyFormattingIssues } from './validate-release.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const cleanBody = `Veritas Kanban 6.0.2 is the supported stable release.
+const cleanBody = `Veritas Kanban 6.0.2 is the supported stable release. This paragraph is intentionally longer than the previous 240-character limit because Markdown source should use one logical line per paragraph and let GitHub wrap the rendered text to the available page width instead of forcing narrow manual breaks into the release notes.
 
 ## What changed
 
@@ -33,7 +33,6 @@ test('rejects release formatting that forces narrow or manual line breaks', () =
     ['HTML break', 'First paragraph.<br>\n'],
     ['blockquote', '> Narrow callout.\n'],
     ['hard-wrapped prose', 'First half of a paragraph\nsecond half of the paragraph.\n'],
-    ['overlong prose block', `${'word '.repeat(50)}end\n`],
     ['unclosed code fence', '```bash\nbrew update\n'],
   ];
 
