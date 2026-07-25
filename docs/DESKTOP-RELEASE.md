@@ -193,13 +193,15 @@ policy is tracked in
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
   hand-author or repair the live body separately.
 - Use one logical source line per prose paragraph and let GitHub wrap it to the
-  available width. Keep release structure to level-two headings, combine
-  sentence-sized fragments into complete paragraphs, and reserve lists for
-  content that is genuinely easier to scan as a list.
+  available width. Keep release structure to level-two headings. Use Markdown
+  lists for parallel changes instead of stacking bold-led paragraphs that look
+  like accidental carriage returns. Combine sentence-sized fragments into
+  complete paragraphs.
 - Run `Desktop Release` only after Developer ID signing secrets and exactly one
   complete notarization credential set are configured.
 - Inspect the rendered release on both the releases index and tag page. Confirm
-  prose uses natural page-width wrapping and no sentence-sized fragments were
+  prose uses natural page-width wrapping, parallel items have visible list
+  markers, and no unmarked paragraph stack or sentence-sized fragment was
   introduced.
 - Confirm notarization succeeds with the intended credential mode and the DMG
   installs without Gatekeeper warnings on a clean Mac.

@@ -24,9 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Reworked GitHub release notes to use natural page-width prose instead of
-  fragmented micro-sections, and expanded the release-format gate to reject
-  nested headings and consecutive sentence-sized prose blocks in v6.0.2 and
+- Reworked GitHub release notes to use natural page-width prose and visible
+  lists instead of unmarked stacks of bold-led paragraphs. The release-format
+  gate now rejects nested headings, bold-led prose items, and consecutive
+  sentence-sized blocks even when blank lines separate them in v6.0.2 and
   later release bodies (#1025).
 
 ## [6.0.2] - 2026-07-24

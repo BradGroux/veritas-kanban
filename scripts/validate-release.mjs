@@ -363,6 +363,12 @@ export function releaseBodyFormattingIssues(value, options = {}) {
       );
     }
 
+    if (compactLayout && !blockLine.listItem && /^\*\*[^*]+\*\*\s+\S/.test(trimmed)) {
+      issues.push(
+        `line ${lineNumber} uses a bold-led prose block; use a Markdown list for parallel release items`
+      );
+    }
+
     const proseBlock =
       !blockLine.heading && !blockLine.listItem && !blockLine.tableRow && trimmed.length < 160;
 

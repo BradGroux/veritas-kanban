@@ -41,6 +41,10 @@ test('rejects release formatting that forces narrow or manual line breaks', () =
       'consecutive short prose blocks',
       'First short thought.\n\nSecond short thought.\n\nThird short thought.\n',
     ],
+    [
+      'bold-led prose items',
+      '## What changed\n\n**First labeled change.** This long release item looks like a list entry but has no list marker, so its paragraph break appears accidental in the rendered GitHub release even when the source line itself is not manually wrapped.\n\n**Second labeled change.** This second long release item proves the format guard rejects the broken structure based on its semantics rather than an arbitrary character limit.\n',
+    ],
     ['unclosed code fence', '```bash\nbrew update\n'],
   ];
 
