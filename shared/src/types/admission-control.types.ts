@@ -1,4 +1,12 @@
 import type { ExecutableAgentProvider } from './config.types.js';
+import type {
+  ExecutionTreeBudgetPolicy,
+  ExecutionTreeBudgetState,
+  ExecutionTreeBudgetSummary,
+  ExecutionTreeBudgetUsageEvent,
+  ExecutionTreeIdentity,
+} from './execution-tree-budget.types.js';
+import type { AgentBudgetUsage } from './agent-budget.types.js';
 
 export const ADMISSION_REQUEST_SCHEMA_VERSION = 'admission-request/v1' as const;
 export const ADMISSION_DECISION_SCHEMA_VERSION = 'admission-decision/v1' as const;
@@ -69,6 +77,9 @@ export interface AdmissionRequest {
   workflowRunId?: string;
   workflowStepId?: string;
   rootReservationId?: string;
+  executionTree?: ExecutionTreeIdentity;
+  budgetPolicies?: ExecutionTreeBudgetPolicy[];
+  budgetRequest?: AgentBudgetUsage;
   requested: AdmissionCapacityRequest;
   requestedAt: string;
 }
@@ -98,6 +109,7 @@ export interface AdmissionReservation {
   attemptId?: string;
   lease: AdmissionReservationLease;
   release?: AdmissionReservationRelease;
+  executionBudget?: ExecutionTreeBudgetState;
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +120,7 @@ export interface AdmissionDecision {
   request: AdmissionRequest;
   reservation?: AdmissionReservation;
   limitingPolicies: AdmissionLimitPolicy[];
+  limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
   retryAfterMs?: number;
   reason: string;
   decidedAt: string;
@@ -122,6 +135,9 @@ export interface AdmissionReservationListQuery {
   workflowRunId?: string;
   workflowStepId?: string;
   rootReservationId?: string;
+  rootObjectiveId?: string;
+  nodeId?: string;
+  parentNodeId?: string;
   states?: AdmissionReservationState[];
   limit?: number;
 }
@@ -149,7 +165,21 @@ export interface AdmissionReservationClaimResult {
   created: boolean;
   reclaimed?: boolean;
   limitingPolicies: AdmissionLimitPolicy[];
+  limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
+  budgetRetryable?: boolean;
 }
+
+export interface AdmissionBudgetUsageInput {
+  reservationId: string;
+  event: ExecutionTreeBudgetUsageEvent;
+}
+
+export interface AdmissionExecutionTreeSummaryInput {
+  rootObjectiveId: string;
+  limit?: number;
+}
+
+export type AdmissionExecutionTreeSummary = ExecutionTreeBudgetSummary;
 
 export interface AdmissionSettings {
   enabled: boolean;

@@ -10,12 +10,18 @@ import type {
   AdmissionReservationListQuery,
   AdmissionReservationRelease,
   AdmissionSettings,
+  AgentBudgetUsage,
+  ExecutionTreeBudgetPolicy,
+  ExecutionTreeBudgetSummary,
+  ExecutionTreeBudgetUsageEvent,
+  ExecutionTreeIdentity,
 } from '@veritas-kanban/shared';
 import {
   ADMISSION_DECISION_SCHEMA_VERSION,
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   DEFAULT_FEATURE_SETTINGS,
+  ZERO_AGENT_BUDGET_USAGE,
 } from '@veritas-kanban/shared';
 import {
   AdmissionDecisionSchema,
@@ -24,6 +30,12 @@ import {
 import type { AdmissionReservationRepository } from '../storage/interfaces.js';
 import { FileAdmissionReservationRepository } from '../storage/admission-reservation-repository.js';
 import { requestExceedsPolicies } from '../storage/admission-capacity.js';
+import {
+  applyExecutionTreeBudgetEvent,
+  initializeExecutionTreeBudget,
+  releaseExecutionTreeBudget,
+  summarizeExecutionTreeBudget,
+} from '../storage/execution-tree-budget.js';
 import { getStorage, getStorageTypeFromEnv } from '../storage/index.js';
 import { ConfigService } from './config-service.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
@@ -39,6 +51,9 @@ export interface AdmissionRequestInput {
   workflowRunId?: string;
   workflowStepId?: string;
   rootReservationId?: string;
+  executionTree?: ExecutionTreeIdentity;
+  budgetPolicies?: ExecutionTreeBudgetPolicy[];
+  budgetRequest?: Partial<AgentBudgetUsage>;
   source?: AdmissionLaunchSource;
   idempotencyKey?: string;
   requested?: Partial<AdmissionCapacityRequest>;
@@ -141,6 +156,16 @@ export class AdmissionControlService {
       ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
       ...(input.workflowStepId ? { workflowStepId: input.workflowStepId } : {}),
       ...(input.rootReservationId ? { rootReservationId: input.rootReservationId } : {}),
+      ...(input.executionTree ? { executionTree: input.executionTree } : {}),
+      ...(input.budgetPolicies ? { budgetPolicies: input.budgetPolicies } : {}),
+      ...(input.executionTree
+        ? {
+            budgetRequest: {
+              ...ZERO_AGENT_BUDGET_USAGE,
+              ...input.budgetRequest,
+            },
+          }
+        : {}),
       requested: {
         ...requested,
         runSlots: Math.max(1, requested.runSlots),
@@ -165,11 +190,32 @@ export class AdmissionControlService {
       state: 'active',
       request,
       policies,
+      ...(request.executionTree
+        ? {
+            executionBudget: initializeExecutionTreeBudget(
+              request.budgetRequest ?? { ...ZERO_AGENT_BUDGET_USAGE }
+            ),
+          }
+        : {}),
       lease: this.newLease(now, settings.leaseMs),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
     const claimed = await this.repository.claim({ record, now: now.toISOString() });
+    if (claimed.limitingBudgetPolicies?.length) {
+      return this.decision(
+        claimed.budgetRetryable ? 'retryable-overload' : 'terminal-policy-denial',
+        request,
+        [],
+        claimed.budgetRetryable
+          ? 'Active execution-tree reservations currently consume the configured budget.'
+          : 'Committed execution-tree usage exhausts a configured budget.',
+        now,
+        claimed.budgetRetryable ? settings.retryAfterMs : undefined,
+        undefined,
+        claimed.limitingBudgetPolicies
+      );
+    }
     if (claimed.limitingPolicies.length > 0) {
       return this.decision(
         'retryable-overload',
@@ -261,6 +307,7 @@ export class AdmissionControlService {
       return {
         ...current,
         state: 'released',
+        executionBudget: releaseExecutionTreeBudget(current.executionBudget),
         release: {
           reason,
           idempotencyKey,
@@ -281,6 +328,7 @@ export class AdmissionControlService {
       return {
         ...current,
         state: 'released',
+        executionBudget: releaseExecutionTreeBudget(current.executionBudget),
         release: {
           reason,
           idempotencyKey,
@@ -323,11 +371,17 @@ export class AdmissionControlService {
       now: now.toISOString(),
       reclaimExpired: true,
     });
-    if (claimed.limitingPolicies.length > 0 || !claimed.record) {
+    if (
+      claimed.limitingPolicies.length > 0 ||
+      claimed.limitingBudgetPolicies?.length ||
+      !claimed.record
+    ) {
       throw new ConflictError('Verified live run could not reclaim admission capacity.', {
         taskId: input.taskId,
         attemptId: input.attemptId,
         limitingPolicies: claimed.limitingPolicies,
+        limitingBudgetPolicies: claimed.limitingBudgetPolicies,
+        budgetRetryable: claimed.budgetRetryable,
       });
     }
     if (claimed.record.state !== 'active') {
@@ -361,6 +415,68 @@ export class AdmissionControlService {
   async list(query: AdmissionReservationListQuery = {}): Promise<AdmissionReservation[]> {
     await this.expireAbandoned();
     return this.repository.list(query);
+  }
+
+  async recordBudgetUsage(
+    reservationId: string,
+    event: ExecutionTreeBudgetUsageEvent
+  ): Promise<AdmissionReservation> {
+    return this.mutate(reservationId, (current, now) => {
+      if (!current.executionBudget) {
+        throw new ConflictError('Admission reservation does not track an execution-tree budget.', {
+          reservationId,
+        });
+      }
+      const isReplay = current.executionBudget.events.some(
+        (candidate) => candidate.id === event.id
+      );
+      if (
+        isReplay &&
+        !current.executionBudget.events.some(
+          (candidate) =>
+            candidate.id === event.id && JSON.stringify(candidate) === JSON.stringify(event)
+        )
+      ) {
+        throw new ConflictError('Execution-tree budget event conflicts with recorded evidence.', {
+          reservationId,
+          eventId: event.id,
+        });
+      }
+      if (current.state !== 'active' && !isReplay) {
+        throw new ConflictError(
+          'Terminal admission reservations reject new execution-tree budget evidence.',
+          {
+            reservationId,
+            reservationState: current.state,
+            eventId: event.id,
+          }
+        );
+      }
+      const executionBudget = applyExecutionTreeBudgetEvent(current.executionBudget, event);
+      if (executionBudget === current.executionBudget) return current;
+      return {
+        ...current,
+        executionBudget,
+        updatedAt: now.toISOString(),
+      };
+    });
+  }
+
+  async getExecutionTreeSummary(
+    rootObjectiveId: string,
+    limit = 100
+  ): Promise<ExecutionTreeBudgetSummary> {
+    await this.expireAbandoned();
+    const records = await this.repository.list({
+      rootObjectiveId,
+      limit: 10_000,
+    });
+    return summarizeExecutionTreeBudget(
+      rootObjectiveId,
+      records,
+      Math.min(Math.max(1, limit), 1_000),
+      this.now().toISOString()
+    );
   }
 
   async findByAttempt(
@@ -422,7 +538,8 @@ export class AdmissionControlService {
     reason: string,
     now: Date,
     retryAfterMs?: number,
-    reservation?: AdmissionReservation
+    reservation?: AdmissionReservation,
+    limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[]
   ): AdmissionDecision {
     return AdmissionDecisionSchema.parse({
       schemaVersion: ADMISSION_DECISION_SCHEMA_VERSION,
@@ -430,6 +547,7 @@ export class AdmissionControlService {
       request,
       reservation,
       limitingPolicies,
+      limitingBudgetPolicies,
       retryAfterMs,
       reason,
       decidedAt: now.toISOString(),
@@ -536,6 +654,9 @@ function sameRequestIdentity(
     left.workflowRunId === right.workflowRunId &&
     left.workflowStepId === right.workflowStepId &&
     left.rootReservationId === right.rootReservationId &&
+    JSON.stringify(left.executionTree) === JSON.stringify(right.executionTree) &&
+    JSON.stringify(left.budgetPolicies) === JSON.stringify(right.budgetPolicies) &&
+    JSON.stringify(left.budgetRequest) === JSON.stringify(right.budgetRequest) &&
     JSON.stringify(left.requested) === JSON.stringify(right.requested)
   );
 }

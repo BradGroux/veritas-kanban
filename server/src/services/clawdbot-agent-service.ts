@@ -15,6 +15,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { nanoid } from 'nanoid';
 import fs from 'fs/promises';
 import path from 'path';
+import { createHash } from 'node:crypto';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
 import { getTelemetryService } from './telemetry-service.js';
@@ -128,6 +129,9 @@ import type {
   WorkspaceExecutionTrustEvaluation,
   WorkspaceExecutionTrustScanResult,
   AdmissionReservationRelease,
+  ExecutionTreeBudgetPolicy,
+  ExecutionTreeEdgeKind,
+  ExecutionTreeIdentity,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
@@ -331,6 +335,7 @@ export interface AgentStatus {
   conversation: ConversationLifecycleRecord;
   controls: ProviderRuntimeControlSet;
   admissionReservationId?: string;
+  executionTree?: ExecutionTreeIdentity;
 }
 
 export interface AgentOutput {
@@ -393,6 +398,7 @@ interface PendingAgent {
   provider: ExecutableAgentProvider;
   model?: string;
   budget?: AgentBudgetState;
+  executionTreeUsage: AgentBudgetUsage;
   recoveryBudgetBase?: AgentBudgetUsage;
   budgetStopped?: boolean;
   agentProfile?: AgentProfileLaunchMetadata;
@@ -408,6 +414,7 @@ interface PendingAgent {
   conversation: ConversationLifecycleRecord;
   supervisorId?: string;
   admissionReservationId?: string;
+  executionTree?: ExecutionTreeIdentity;
   recoveredControl?: boolean;
   threadId?: string;
   abortController?: AbortController;
@@ -1334,6 +1341,10 @@ export class ClawdbotAgentService {
       provider,
       model: attempt.model,
       budget: supervisor.budget ?? attempt.budget,
+      executionTreeUsage: recoveredAdmission?.executionBudget?.committed ?? {
+        ...ZERO_AGENT_BUDGET_USAGE,
+      },
+      executionTree: attempt.executionTree ?? recoveredAdmission?.request.executionTree,
       recoveryBudgetBase: attempt.runRetry?.cumulativeBudget,
       agentProfile: attempt.agentProfile,
       providerRuntimeManifest: attempt.providerRuntimeManifest,
@@ -2111,6 +2122,35 @@ export class ClawdbotAgentService {
       conversationRequest.forkTurnId,
       conversationRequest.intent
     );
+    const executionTree = this.buildExecutionTreeIdentity({
+      taskId,
+      rootTaskId: options.rootTaskId,
+      workspaceId: taskEnvelope.workspace.workspaceId,
+      attemptId,
+      parentAttempt,
+      provider,
+      conversationIntent: conversation.intent,
+      recoveryAction: options.recovery?.action,
+      rootIdempotencyKey: options.admissionIdempotencyKey,
+    });
+    const inheritedBudgetPolicies = parentAttempt?.admissionReservationId
+      ? ((await this.admission.get(parentAttempt.admissionReservationId)).request.budgetPolicies ??
+        [])
+      : [];
+    const executionBudgetPolicies = mergeExecutionTreeBudgetPolicies([
+      ...inheritedBudgetPolicies.filter(
+        (policy) => policy.scope !== 'agent' || policy.scopeId === agent
+      ),
+      ...this.executionTreeBudgetPolicies({
+        executionTree,
+        workspaceId: taskEnvelope.workspace.workspaceId,
+        agent,
+        attemptId,
+        budgetPolicy,
+        budgetSources,
+        isRoot: !parentAttempt,
+      }),
+    ]);
     const admissionDecision = await this.admission.admit({
       taskId,
       rootTaskId: options.rootTaskId,
@@ -2125,6 +2165,12 @@ export class ClawdbotAgentService {
           ? 'direct'
           : 'conversation',
       idempotencyKey: options.admissionIdempotencyKey,
+      executionTree,
+      budgetPolicies: executionBudgetPolicies,
+      budgetRequest: {
+        fanOut: 1,
+        retries: options.recovery ? 1 : 0,
+      },
     });
     if (admissionDecision.outcome !== 'admitted' || !admissionDecision.reservation) {
       throw new ConflictError(
@@ -2146,6 +2192,18 @@ export class ClawdbotAgentService {
         admissionDecision.reservation.id,
         attemptId
       );
+      await this.admission.recordBudgetUsage(admissionReservation.id, {
+        schemaVersion: 'execution-tree-budget-event/v1',
+        id: `launch_${attemptId}`,
+        mode: 'delta',
+        usage: {
+          ...ZERO_AGENT_BUDGET_USAGE,
+          fanOut: 1,
+          retries: options.recovery ? 1 : 0,
+        },
+        source: 'agent-launch',
+        occurredAt: startedAt,
+      });
     } catch (error) {
       await this.admission
         .releaseIfUnbound(
@@ -2180,6 +2238,12 @@ export class ClawdbotAgentService {
       activePhaseEvidence: runLaunchManifest.phase?.evidence,
       conversation,
       admissionReservationId: admissionReservation.id,
+      executionTree,
+      executionTreeUsage: {
+        ...ZERO_AGENT_BUDGET_USAGE,
+        fanOut: 1,
+        retries: options.recovery ? 1 : 0,
+      },
       filesystemSandboxPlan,
       budget: budgetPolicy
         ? {
@@ -2237,6 +2301,7 @@ export class ClawdbotAgentService {
       runRetry,
       conversation,
       admissionReservationId: admissionReservation.id,
+      executionTree,
     };
 
     const usesManagedWorktree = Boolean(task.git.worktreeManifestId && task.git.worktreeLeaseId);
@@ -2613,6 +2678,7 @@ export class ClawdbotAgentService {
       conversation,
       controls: providerRuntimeControls(providerRuntimeManifest),
       admissionReservationId: admissionReservation.id,
+      executionTree,
     };
   }
 
@@ -3324,7 +3390,7 @@ export class ClawdbotAgentService {
           durationMs: new Date(endedAt).getTime() - new Date(pending.startedAt).getTime(),
         };
       })());
-    if (pending.budget?.enabled && !pending.completionBudgetEvaluated) {
+    if (!pending.completionBudgetEvaluated) {
       // Terminal ownership wins over an older usage report. Waiting behind that
       // report can deadlock when it is itself waiting for this finalization.
       if (!budgetEvaluations.has(pending)) {
@@ -3394,6 +3460,7 @@ export class ClawdbotAgentService {
           runLaunchManifest: pending.runLaunchManifest,
           runSupervisorId: pending.supervisorId,
           admissionReservationId: pending.admissionReservationId,
+          executionTree: pending.executionTree,
           runLaunchManifestTraceId: pending.runLaunchManifestTraceId,
           runLaunchParentAttemptId: pending.runLaunchParentAttemptId,
           runLaunchManifestDrift: pending.runLaunchManifestDrift,
@@ -4161,6 +4228,7 @@ export class ClawdbotAgentService {
         usageAttemptId: attemptId,
       });
     }
+    await this.recordExecutionTreeUsage(pending, delta, actionType);
     if (!pending?.budget?.enabled || !pending.budget.policy) return;
 
     const evaluation = await this.serializeBudgetEvaluation(
@@ -4241,6 +4309,30 @@ export class ClawdbotAgentService {
           .map((event) => event.message)
           .join(' ')}`,
       };
+    });
+  }
+
+  private async recordExecutionTreeUsage(
+    pending: PendingAgent,
+    delta: Partial<AgentBudgetUsage>,
+    source: string
+  ): Promise<void> {
+    if (!pending.admissionReservationId) return;
+    await this.serializeBudgetEvaluation(pending, async () => {
+      const usage = getAgentBudgetService().mergeUsage(pending.executionTreeUsage, delta);
+      const digest = createHash('sha256')
+        .update(`${source}:${JSON.stringify(usage)}`)
+        .digest('hex')
+        .slice(0, 32);
+      await this.admission.recordBudgetUsage(pending.admissionReservationId as string, {
+        schemaVersion: 'execution-tree-budget-event/v1',
+        id: `usage_${digest}`,
+        mode: 'snapshot',
+        usage,
+        source,
+        occurredAt: pending.startedAt,
+      });
+      pending.executionTreeUsage = usage;
     });
   }
 
@@ -8182,6 +8274,8 @@ export class ClawdbotAgentService {
       activePhaseEvidence: pending.activePhaseEvidence,
       conversation: pending.conversation,
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
+      admissionReservationId: pending.admissionReservationId,
+      executionTree: pending.executionTree,
     };
   }
 
@@ -9593,6 +9687,115 @@ export class ClawdbotAgentService {
     );
   }
 
+  private buildExecutionTreeIdentity(input: {
+    taskId: string;
+    rootTaskId?: string;
+    workspaceId: string;
+    attemptId: string;
+    parentAttempt?: TaskAttempt;
+    provider: ExecutableAgentProvider;
+    conversationIntent: ConversationLifecycleRecord['intent'];
+    recoveryAction?: RunRecoveryRecord['action'];
+    rootIdempotencyKey?: string;
+  }): ExecutionTreeIdentity {
+    const parent = input.parentAttempt?.executionTree;
+    const parentNodeId = parent?.nodeId ?? input.parentAttempt?.id;
+    const parentTaskId = input.parentAttempt?.runLaunchManifest?.taskId;
+    const isChildAgent = Boolean(parentTaskId && parentTaskId !== input.taskId);
+    const rootIdempotencyKey = input.rootIdempotencyKey?.trim();
+    const nodeId =
+      !parentNodeId && rootIdempotencyKey
+        ? `node_${createHash('sha256')
+            .update(`idempotency:${rootIdempotencyKey}`)
+            .digest('hex')
+            .slice(0, 32)}`
+        : input.attemptId;
+    let edge: ExecutionTreeEdgeKind = 'root';
+    if (parentNodeId) {
+      edge =
+        input.recoveryAction === 'fallback'
+          ? 'fallback'
+          : input.recoveryAction
+            ? 'retry'
+            : isChildAgent
+              ? 'child-agent'
+              : input.parentAttempt?.provider !== input.provider
+                ? 'provider-handoff'
+                : input.conversationIntent === 'resume'
+                  ? 'resume'
+                  : input.conversationIntent === 'follow-up'
+                    ? 'follow-up'
+                    : input.conversationIntent === 'fork'
+                      ? 'fork'
+                      : 'follow-up';
+    }
+    const objectiveSeed = `${input.workspaceId}:${input.rootTaskId ?? input.taskId}:${
+      parentNodeId ?? nodeId
+    }`;
+    return {
+      schemaVersion: 'execution-tree-identity/v1',
+      rootObjectiveId:
+        parent?.rootObjectiveId ??
+        `objective_${createHash('sha256').update(objectiveSeed).digest('hex').slice(0, 32)}`,
+      nodeId,
+      ...(parentNodeId ? { parentNodeId } : {}),
+      edge,
+      depth: parent ? parent.depth + 1 : parentNodeId ? 1 : 0,
+    };
+  }
+
+  private executionTreeBudgetPolicies(input: {
+    executionTree: ExecutionTreeIdentity;
+    workspaceId: string;
+    agent: AgentType;
+    attemptId: string;
+    budgetPolicy?: AgentBudgetPolicy;
+    budgetSources: {
+      workspaceBudget?: AgentBudgetPolicy;
+      agentBudget?: AgentBudgetPolicy;
+      profileBudget?: AgentBudgetPolicy;
+      runBudget?: AgentBudgetPolicy;
+    };
+    isRoot: boolean;
+  }): ExecutionTreeBudgetPolicy[] {
+    return [
+      executionTreePolicy(
+        input.budgetSources.workspaceBudget,
+        'workspace',
+        input.workspaceId,
+        'Workspace budget'
+      ),
+      executionTreePolicy(
+        input.budgetSources.agentBudget,
+        'agent',
+        input.agent,
+        `Agent ${input.agent} budget`
+      ),
+      executionTreePolicy(
+        input.budgetSources.profileBudget,
+        'agent',
+        input.agent,
+        `Agent profile ${input.agent} budget`,
+        `profile:${input.agent}`
+      ),
+      executionTreePolicy(
+        input.budgetSources.runBudget,
+        'run',
+        input.executionTree.rootObjectiveId,
+        'Run budget',
+        'effective-run'
+      ),
+      input.isRoot
+        ? executionTreePolicy(
+            input.budgetPolicy,
+            'root-objective',
+            input.executionTree.rootObjectiveId,
+            'Root objective budget'
+          )
+        : undefined,
+    ].filter((policy): policy is ExecutionTreeBudgetPolicy => Boolean(policy));
+  }
+
   private async resolveParentAttempt(
     task: Task,
     parentAttemptId?: string
@@ -9984,6 +10187,53 @@ function commandText(value: unknown): string {
     if (candidate) return candidate;
   }
   return '';
+}
+
+function executionTreePolicy(
+  policy: AgentBudgetPolicy | undefined,
+  scope: ExecutionTreeBudgetPolicy['scope'],
+  scopeId: string,
+  fallbackName: string,
+  identitySuffix = ''
+): ExecutionTreeBudgetPolicy | undefined {
+  if (
+    !policy ||
+    policy.enabled === false ||
+    !policy.limits ||
+    Object.keys(policy.limits).length === 0
+  ) {
+    return undefined;
+  }
+  const identity = `${scope}:${scopeId}:${identitySuffix}`;
+  return {
+    id: `budget_${createHash('sha256').update(identity).digest('hex').slice(0, 32)}`,
+    scope,
+    scopeId,
+    name: policy.name?.trim() || fallbackName,
+    limits: { ...policy.limits },
+    hardAction: policy.hardAction ?? 'pause',
+  };
+}
+
+function mergeExecutionTreeBudgetPolicies(
+  policies: ExecutionTreeBudgetPolicy[]
+): ExecutionTreeBudgetPolicy[] {
+  const merged = new Map<string, ExecutionTreeBudgetPolicy>();
+  for (const policy of policies) {
+    const current = merged.get(policy.id);
+    if (!current) {
+      merged.set(policy.id, policy);
+      continue;
+    }
+    const limits = { ...current.limits };
+    for (const [metric, limit] of Object.entries(policy.limits)) {
+      const currentLimit = limits[metric as keyof typeof limits];
+      limits[metric as keyof typeof limits] =
+        currentLimit === undefined ? limit : Math.min(currentLimit, limit);
+    }
+    merged.set(policy.id, { ...current, limits });
+  }
+  return [...merged.values()];
 }
 
 // Export singleton

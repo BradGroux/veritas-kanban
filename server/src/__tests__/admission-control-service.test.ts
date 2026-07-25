@@ -7,6 +7,8 @@ import {
   DEFAULT_FEATURE_SETTINGS,
   type AdmissionCapacityLimit,
   type AdmissionSettings,
+  type ExecutionTreeBudgetPolicy,
+  ZERO_AGENT_BUDGET_USAGE,
 } from '@veritas-kanban/shared';
 import { AdmissionControlService } from '../services/admission-control-service.js';
 import { FileAdmissionReservationRepository } from '../storage/admission-reservation-repository.js';
@@ -74,6 +76,40 @@ async function repositoryFor(backend: 'file' | 'sqlite') {
   database.open();
   databases.push(database);
   return new SqliteAdmissionReservationRepository(database);
+}
+
+const treePolicy: ExecutionTreeBudgetPolicy = {
+  id: 'budget_root_objective',
+  scope: 'root-objective',
+  scopeId: 'objective-a',
+  name: 'Root objective budget',
+  limits: { totalTokens: 100, fanOut: 2 },
+  hardAction: 'pause',
+};
+
+function treeRequest(
+  taskId: string,
+  nodeId: string,
+  parentNodeId?: string,
+  budgetRequest: Partial<typeof ZERO_AGENT_BUDGET_USAGE> = { fanOut: 1 },
+  identity: {
+    edge?: 'child-agent' | 'retry' | 'fallback';
+    depth?: number;
+  } = {}
+) {
+  return {
+    ...request(taskId, `tree:${nodeId}`),
+    executionTree: {
+      schemaVersion: 'execution-tree-identity/v1' as const,
+      rootObjectiveId: 'objective-a',
+      nodeId,
+      ...(parentNodeId ? { parentNodeId } : {}),
+      edge: parentNodeId ? (identity.edge ?? 'child-agent') : ('root' as const),
+      depth: parentNodeId ? (identity.depth ?? 1) : 0,
+    },
+    budgetPolicies: [treePolicy],
+    budgetRequest,
+  };
 }
 
 describe('AdmissionControlService', () => {
@@ -222,6 +258,199 @@ describe('AdmissionControlService', () => {
 });
 
 describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (backend) => {
+  it('atomically reserves, converts, summarizes, and releases execution-tree budgets', async () => {
+    const repository = await repositoryFor(backend);
+    const service = createService(repository, configuredSettings());
+    const root = await service.admit(treeRequest('task-tree-root', 'node-root'));
+    const rootId = root.reservation?.id as string;
+    await service.bindAttempt(rootId, 'attempt-root');
+    await service.recordBudgetUsage(rootId, {
+      schemaVersion: 'execution-tree-budget-event/v1',
+      id: 'root-launch',
+      mode: 'delta',
+      usage: { ...ZERO_AGENT_BUDGET_USAGE, fanOut: 1 },
+      source: 'test-launch',
+      occurredAt: '2026-07-25T12:00:00.000Z',
+    });
+    await expect(
+      service.admit({
+        ...treeRequest('task-tree-looser-policy', 'node-looser-policy', 'node-root', {
+          totalTokens: 150,
+        }),
+        budgetPolicies: [
+          {
+            ...treePolicy,
+            limits: { totalTokens: 200, fanOut: 2 },
+          },
+        ],
+      })
+    ).resolves.toMatchObject({
+      outcome: 'terminal-policy-denial',
+      limitingBudgetPolicies: [
+        expect.objectContaining({
+          id: treePolicy.id,
+          limits: expect.objectContaining({ totalTokens: 100 }),
+        }),
+      ],
+    });
+
+    const child = await service.admit(
+      treeRequest('task-tree-child', 'node-child', 'node-root', {
+        fanOut: 1,
+        totalTokens: 50,
+      })
+    );
+    expect(child.outcome).toBe('admitted');
+    const childId = child.reservation?.id as string;
+    await service.bindAttempt(childId, 'attempt-child');
+    const usageEvent = {
+      schemaVersion: 'execution-tree-budget-event/v1' as const,
+      id: 'child-usage',
+      mode: 'snapshot' as const,
+      usage: { ...ZERO_AGENT_BUDGET_USAGE, fanOut: 1, totalTokens: 20 },
+      source: 'test-result',
+      occurredAt: '2026-07-25T12:00:01.000Z',
+    };
+    const recorded = await service.recordBudgetUsage(childId, usageEvent);
+    await expect(service.recordBudgetUsage(childId, usageEvent)).resolves.toEqual(recorded);
+    await expect(
+      service.recordBudgetUsage(childId, { ...usageEvent, source: 'conflicting-result' })
+    ).rejects.toMatchObject({ statusCode: 409 });
+
+    const released = await service.release(childId, 'completed', 'completed:child');
+    expect(released.executionBudget).toMatchObject({
+      committed: { totalTokens: 20, fanOut: 1 },
+      remaining: { totalTokens: 0, fanOut: 0 },
+      releasedUnused: { totalTokens: 30 },
+    });
+    await expect(service.recordBudgetUsage(childId, usageEvent)).resolves.toEqual(released);
+    await expect(
+      service.recordBudgetUsage(childId, {
+        ...usageEvent,
+        id: 'late-child-usage',
+        occurredAt: '2026-07-25T12:00:02.000Z',
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await expect(service.getExecutionTreeSummary('objective-a')).resolves.toMatchObject({
+      committed: { totalTokens: 20, fanOut: 2 },
+      reserved: { totalTokens: 0, fanOut: 0 },
+      contributorCount: 2,
+      contributors: expect.arrayContaining([
+        expect.objectContaining({
+          identity: expect.objectContaining({ nodeId: 'node-child', parentNodeId: 'node-root' }),
+        }),
+      ]),
+    });
+    await expect(
+      repository.list({ rootObjectiveId: 'objective-a', parentNodeId: 'node-root' })
+    ).resolves.toHaveLength(1);
+
+    await expect(
+      service.admit(treeRequest('task-tree-overflow', 'node-overflow', 'node-root'))
+    ).resolves.toMatchObject({
+      outcome: 'terminal-policy-denial',
+      limitingBudgetPolicies: [{ id: treePolicy.id }],
+    });
+  });
+
+  it('serializes competing execution-tree budget claims under the capacity lock', async () => {
+    const repository = await repositoryFor(backend);
+    const left = createService(repository, configuredSettings(), { ownerId: 'owner-budget-left' });
+    const right = createService(repository, configuredSettings(), {
+      ownerId: 'owner-budget-right',
+    });
+    const root = await left.admit(treeRequest('task-budget-root', 'node-root'));
+    await left.bindAttempt(root.reservation?.id as string, 'attempt-budget-root');
+    const decisions = await Promise.all([
+      left.admit(treeRequest('task-budget-left', 'node-left', 'node-root')),
+      right.admit(treeRequest('task-budget-right', 'node-right', 'node-root')),
+    ]);
+    expect(decisions.map((decision) => decision.outcome).sort()).toEqual([
+      'admitted',
+      'retryable-overload',
+    ]);
+    expect(decisions.find((decision) => decision.outcome === 'retryable-overload')).toMatchObject({
+      limitingBudgetPolicies: [{ id: treePolicy.id }],
+    });
+  });
+
+  it('reuses released capacity across deep retry and fallback branches', async () => {
+    const repository = await repositoryFor(backend);
+    const service = createService(repository, configuredSettings());
+    const branchPolicy: ExecutionTreeBudgetPolicy = {
+      ...treePolicy,
+      id: 'budget_deep_wide_tree',
+      limits: { totalTokens: 100, fanOut: 10 },
+    };
+    const withPolicy = (
+      taskId: string,
+      nodeId: string,
+      parentNodeId?: string,
+      budgetRequest: Partial<typeof ZERO_AGENT_BUDGET_USAGE> = { fanOut: 1 },
+      identity: { edge?: 'child-agent' | 'retry' | 'fallback'; depth?: number } = {}
+    ) => ({
+      ...treeRequest(taskId, nodeId, parentNodeId, budgetRequest, identity),
+      budgetPolicies: [branchPolicy],
+    });
+
+    const root = await service.admit(withPolicy('task-branch-root', 'node-branch-root'));
+    await service.bindAttempt(root.reservation?.id as string, 'attempt-branch-root');
+    const retry = await service.admit(
+      withPolicy(
+        'task-branch-retry',
+        'node-branch-retry',
+        'node-branch-root',
+        { totalTokens: 60, fanOut: 1, retries: 1 },
+        { edge: 'retry' }
+      )
+    );
+    await service.bindAttempt(retry.reservation?.id as string, 'attempt-branch-retry');
+    await service.release(retry.reservation?.id as string, 'failed', 'retry-replaced');
+
+    const fallback = await service.admit(
+      withPolicy(
+        'task-branch-fallback',
+        'node-branch-fallback',
+        'node-branch-retry',
+        { totalTokens: 60, fanOut: 1, retries: 1 },
+        { edge: 'fallback', depth: 2 }
+      )
+    );
+    expect(fallback.outcome).toBe('admitted');
+    await service.bindAttempt(fallback.reservation?.id as string, 'attempt-branch-fallback');
+    const siblings = await Promise.all([
+      service.admit(
+        withPolicy('task-branch-left', 'node-branch-left', 'node-branch-root', {
+          totalTokens: 10,
+          fanOut: 1,
+        })
+      ),
+      service.admit(
+        withPolicy('task-branch-right', 'node-branch-right', 'node-branch-root', {
+          totalTokens: 10,
+          fanOut: 1,
+        })
+      ),
+    ]);
+    expect(siblings.every((decision) => decision.outcome === 'admitted')).toBe(true);
+    await expect(service.getExecutionTreeSummary('objective-a')).resolves.toMatchObject({
+      reserved: { totalTokens: 80, fanOut: 4, retries: 1 },
+      contributorCount: 5,
+      contributors: expect.arrayContaining([
+        expect.objectContaining({
+          identity: expect.objectContaining({
+            nodeId: 'node-branch-fallback',
+            parentNodeId: 'node-branch-retry',
+            edge: 'fallback',
+            depth: 2,
+          }),
+        }),
+      ]),
+    });
+  });
+
   it('serializes competing claims and releases the winner idempotently', async () => {
     const repository = await repositoryFor(backend);
     const settings = configuredSettings({ global: { concurrentRuns: 1 } });

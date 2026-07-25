@@ -1331,6 +1331,21 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON admission_reservations(root_reservation_id, updated_at DESC);
     `,
   },
+  {
+    version: 25,
+    name: '0025_execution_tree_budget_reservations',
+    up: `
+      ALTER TABLE admission_reservations ADD COLUMN root_objective_id TEXT;
+      ALTER TABLE admission_reservations ADD COLUMN node_id TEXT;
+      ALTER TABLE admission_reservations ADD COLUMN parent_node_id TEXT;
+
+      CREATE INDEX idx_admission_reservations_execution_tree
+        ON admission_reservations(root_objective_id, updated_at DESC);
+
+      CREATE INDEX idx_admission_reservations_execution_parent
+        ON admission_reservations(parent_node_id, updated_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

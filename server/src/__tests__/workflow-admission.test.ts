@@ -168,7 +168,25 @@ describe('workflow admission', () => {
           provider: 'codex-sdk',
           hostId: 'local-process',
           rootReservationId: root?.id,
+          executionTree: {
+            rootObjectiveId: root?.request.executionTree?.rootObjectiveId,
+            parentNodeId: root?.request.executionTree?.nodeId,
+            edge: 'workflow-step',
+            depth: 1,
+          },
         },
+      });
+      expect(root?.request.executionTree).toMatchObject({
+        edge: 'root',
+        depth: 0,
+      });
+      await expect(
+        harness.admission.getExecutionTreeSummary(
+          root?.request.executionTree?.rootObjectiveId as string
+        )
+      ).resolves.toMatchObject({
+        committed: { fanOut: 2 },
+        contributorCount: 2,
       });
       await expect(
         harness.admission.admit({

@@ -4147,14 +4147,16 @@ before attempt persistence or provider dispatch. Workflow roots use the
 `workflow-control` admission provider; child steps use the resolved execution
 provider and selected host. Inspection requires `agent:read`.
 
-| Method | Path                 | Description                                             |
-| ------ | -------------------- | ------------------------------------------------------- |
-| `GET`  | `/api/admission`     | List reservations with optional scope and state filters |
-| `GET`  | `/api/admission/:id` | Inspect one durable reservation                         |
+| Method | Path                                   | Description                                             |
+| ------ | -------------------------------------- | ------------------------------------------------------- |
+| `GET`  | `/api/admission`                       | List reservations with optional scope and state filters |
+| `GET`  | `/api/admission/tree/:rootObjectiveId` | Summarize one aggregate execution tree                  |
+| `GET`  | `/api/admission/:id`                   | Inspect one durable reservation                         |
 
 List filters are `workspaceId`, `taskId`, `rootTaskId`, `provider`, `hostId`,
-`workflowRunId`, `workflowStepId`, `rootReservationId`, repeatable `state`
-(`active`, `released`, `expired`), and `limit` (1-1000).
+`workflowRunId`, `workflowStepId`, `rootReservationId`, `rootObjectiveId`,
+`nodeId`, `parentNodeId`, repeatable `state` (`active`, `released`, `expired`),
+and `limit` (1-1000).
 
 ```http
 GET /api/v1/admission?state=active&provider=codex-cli&limit=25
@@ -4162,6 +4164,10 @@ GET /api/v1/admission?state=active&provider=codex-cli&limit=25
 
 ```http
 GET /api/v1/admission?workflowRunId=run_20260725_abc123&state=active
+```
+
+```http
+GET /api/v1/admission/tree/objective_0123456789abcdef?limit=100
 ```
 
 The response contains `admission-reservation/v1` records with the versioned
@@ -4174,6 +4180,13 @@ root reservation. Overloaded starts return a `409` conflict with
 `ADMISSION_POLICY_DENIED`. A step-level retryable overload blocks the workflow
 without creating a partially active attempt; terminal policy denial fails the
 run and releases its root.
+
+Execution-tree reservations include `execution-tree-identity/v1` and durable
+requested, remaining, committed, released-unused, and idempotent usage-event
+state. The tree summary aggregates each node once and returns committed and
+active reserved usage, per-policy remaining limits, the policy that blocks the
+next launch, bounded contributors, and truncation evidence. Committed usage is
+retained after release; only unused reservation returns to the tree.
 
 Direct `POST /api/v1/agents/:taskId/start` callers may send an opaque
 `X-Idempotency-Key` header (8-240 characters). The header takes precedence

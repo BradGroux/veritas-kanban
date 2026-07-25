@@ -20,6 +20,8 @@ import {
   type AdmissionDecision,
   type AdmissionReservation,
   type AdmissionReservationRelease,
+  type ExecutionTreeBudgetPolicy,
+  type ExecutionTreeIdentity,
   type RunRecoveryRecord,
   type Task,
   type WorkflowPipelineRoleStatusPatch,
@@ -377,12 +379,51 @@ export class WorkflowRunService {
 
   private async admitWorkflowRoot(
     run: WorkflowRun,
-    task: Task | null
+    task: Task | null,
+    budgetSources?: {
+      workspaceBudget?: AgentBudgetPolicy;
+      workflowBudget?: AgentBudgetPolicy;
+      runBudget?: AgentBudgetPolicy;
+    }
   ): Promise<NonNullable<WorkflowRun['admission']>> {
     const admissionTaskId = this.rootAdmissionTaskId(run.id);
     const attemptId = admissionTaskId;
     const workspaceId = this.workflowWorkspaceId(task);
     const rootTaskId = run.taskId ?? admissionTaskId;
+    const executionTree: ExecutionTreeIdentity =
+      run.executionTree ??
+      ({
+        schemaVersion: 'execution-tree-identity/v1',
+        rootObjectiveId: `objective_${createHash('sha256')
+          .update(`${workspaceId}:${rootTaskId}:${run.id}`)
+          .digest('hex')
+          .slice(0, 32)}`,
+        nodeId: attemptId,
+        edge: 'root',
+        depth: 0,
+      } as const);
+    run.executionTree = executionTree;
+    const budgetPolicies = mergeWorkflowExecutionTreePolicies([
+      workflowExecutionTreePolicy(
+        budgetSources?.workspaceBudget,
+        'workspace',
+        workspaceId,
+        'Workspace budget'
+      ),
+      workflowExecutionTreePolicy(
+        budgetSources?.workflowBudget,
+        'workflow',
+        run.workflowId,
+        'Workflow budget'
+      ),
+      workflowExecutionTreePolicy(budgetSources?.runBudget, 'run', run.id, 'Workflow run budget'),
+      workflowExecutionTreePolicy(
+        run.budget?.policy,
+        'root-objective',
+        executionTree.rootObjectiveId,
+        'Root objective budget'
+      ),
+    ]);
     const decision = await this.admission.admit({
       taskId: admissionTaskId,
       rootTaskId,
@@ -397,6 +438,9 @@ export class WorkflowRunService {
         processSlots: 0,
         estimatedMemoryMb: 0,
       },
+      executionTree,
+      budgetPolicies,
+      budgetRequest: { fanOut: 1 },
     });
     if (decision.outcome !== 'admitted' || !decision.reservation) {
       throw this.admissionConflict(decision, 'Workflow root');
@@ -404,6 +448,14 @@ export class WorkflowRunService {
     let reservation: AdmissionReservation;
     try {
       reservation = await this.admission.bindAttempt(decision.reservation.id, attemptId);
+      await this.admission.recordBudgetUsage(reservation.id, {
+        schemaVersion: 'execution-tree-budget-event/v1',
+        id: `launch_${attemptId}`,
+        mode: 'delta',
+        usage: { ...ZERO_AGENT_BUDGET_USAGE, fanOut: 1 },
+        source: 'workflow-root-launch',
+        occurredAt: run.startedAt,
+      });
     } catch (error) {
       await this.admission
         .releaseIfUnbound(
@@ -421,6 +473,7 @@ export class WorkflowRunService {
       admissionTaskId,
       attemptId,
       reservationId: reservation.id,
+      executionTree,
     };
   }
 
@@ -443,6 +496,22 @@ export class WorkflowRunService {
         recoveredReservationId: recovered?.id,
       });
     }
+    if (!run.admission.executionTree) {
+      const executionTree: ExecutionTreeIdentity = recovered.request.executionTree ??
+        run.executionTree ?? {
+          schemaVersion: 'execution-tree-identity/v1',
+          rootObjectiveId: `objective_${createHash('sha256')
+            .update(`${run.admission.workspaceId}:${run.admission.rootTaskId}:${run.id}`)
+            .digest('hex')
+            .slice(0, 32)}`,
+          nodeId: run.admission.attemptId,
+          edge: 'root',
+          depth: 0,
+        };
+      run.executionTree = executionTree;
+      run.admission = { ...run.admission, executionTree };
+      await this.saveRun(run);
+    }
   }
 
   private async admitWorkflowStep(
@@ -461,6 +530,21 @@ export class WorkflowRunService {
     const sequence = (stepRun.admission?.sequence ?? 0) + 1;
     const admissionTaskId = this.stepAdmissionTaskId(run.id, step.id, sequence);
     const attemptId = admissionTaskId;
+    const parentExecutionTree = run.admission.executionTree;
+    const executionTree: ExecutionTreeIdentity = {
+      schemaVersion: 'execution-tree-identity/v1',
+      rootObjectiveId: parentExecutionTree.rootObjectiveId,
+      nodeId: attemptId,
+      parentNodeId: parentExecutionTree.nodeId,
+      edge:
+        stepRun.runRetry?.action === 'fallback'
+          ? 'fallback'
+          : stepRun.runRetry
+            ? 'retry'
+            : 'workflow-step',
+      depth: parentExecutionTree.depth + 1,
+    };
+    stepRun.executionTree = executionTree;
     const hostId =
       preparation.hostRouting.selectedHostId ??
       (preparation.runtimeProvider === 'openclaw' ? 'openclaw-gateway' : 'local-process');
@@ -480,6 +564,13 @@ export class WorkflowRunService {
       workflowStepId: step.id,
       rootReservationId: run.admission.reservationId,
       idempotencyKey: `workflow-step:${run.id}:${step.id}:${sequence}:${randomUUID()}`,
+      executionTree,
+      budgetPolicies: (await this.admission.get(run.admission.reservationId)).request
+        .budgetPolicies,
+      budgetRequest: {
+        fanOut: Math.max(1, step.parallel?.steps.length ?? 1),
+        retries: stepRun.runRetry ? 1 : 0,
+      },
     });
     const binding: NonNullable<StepRun['admission']> = {
       schemaVersion: WORKFLOW_ADMISSION_SCHEMA_VERSION,
@@ -487,12 +578,25 @@ export class WorkflowRunService {
       admissionTaskId,
       attemptId,
       decision,
+      executionTree,
     };
     if (decision.outcome !== 'admitted' || !decision.reservation) {
       throw new WorkflowStepAdmissionError(binding);
     }
     try {
       const reservation = await this.admission.bindAttempt(decision.reservation.id, attemptId);
+      await this.admission.recordBudgetUsage(reservation.id, {
+        schemaVersion: 'execution-tree-budget-event/v1',
+        id: `launch_${attemptId}`,
+        mode: 'delta',
+        usage: {
+          ...ZERO_AGENT_BUDGET_USAGE,
+          fanOut: Math.max(1, step.parallel?.steps.length ?? 1),
+          retries: stepRun.runRetry ? 1 : 0,
+        },
+        source: 'workflow-step-launch',
+        occurredAt: run.startedAt,
+      });
       return {
         ...binding,
         reservationId: reservation.id,
@@ -547,12 +651,15 @@ export class WorkflowRunService {
     const safeInitialContext = this.validateExternalContext(initialContext, 'Initial context');
     const config = await getConfigService().getConfig();
     const budgetService = getAgentBudgetService();
-    const budgetPolicy = budgetService.resolve({
+    const budgetSources = {
       workspaceBudget: config.features?.budget?.enabled
         ? config.features.budget.defaultRunBudget
         : undefined,
       workflowBudget: workflow.config?.budget,
       runBudget,
+    };
+    const budgetPolicy = budgetService.resolve({
+      ...budgetSources,
     });
     const hasWorkflowAgentBudget = workflow.agents.some(
       (agent) =>
@@ -641,7 +748,7 @@ export class WorkflowRunService {
     };
 
     try {
-      run.admission = await this.admitWorkflowRoot(run, task);
+      run.admission = await this.admitWorkflowRoot(run, task, budgetSources);
       run.status = 'running';
       await this.saveRun(run);
       await this.snapshotWorkflow(run.id, workflow);
@@ -752,6 +859,25 @@ export class WorkflowRunService {
 
           providerDispatchStarted = preparation.kind === 'agent';
           const result = await this.stepExecutor.executeStep(step, run, preparation);
+          if (stepRun.admission?.reservationId) {
+            const runtimeSeconds = stepRun.startedAt
+              ? Math.max(0, Math.ceil((Date.now() - new Date(stepRun.startedAt).getTime()) / 1_000))
+              : 0;
+            await this.admission.recordBudgetUsage(stepRun.admission.reservationId, {
+              schemaVersion: 'execution-tree-budget-event/v1',
+              id: `usage_${stepRun.admission.attemptId}`,
+              mode: 'snapshot',
+              usage: {
+                ...ZERO_AGENT_BUDGET_USAGE,
+                ...result.budgetUsage,
+                runtimeSeconds: Math.max(runtimeSeconds, result.budgetUsage?.runtimeSeconds ?? 0),
+                fanOut: Math.max(1, step.parallel?.steps.length ?? 1),
+                retries: stepRun.runRetry ? 1 : 0,
+              },
+              source: 'workflow-step-result',
+              occurredAt: stepRun.startedAt ?? run.startedAt,
+            });
+          }
           await this.releaseStepAdmission(
             stepRun,
             'completed',
@@ -1940,6 +2066,52 @@ export interface WorkflowRunServiceOptions {
   runRecoveryPolicy?: RunRecoveryPolicyService;
   stepExecutor?: WorkflowStepExecutor;
   admission?: AdmissionControlService;
+}
+
+function workflowExecutionTreePolicy(
+  policy: AgentBudgetPolicy | undefined,
+  scope: ExecutionTreeBudgetPolicy['scope'],
+  scopeId: string,
+  fallbackName: string
+): ExecutionTreeBudgetPolicy | undefined {
+  if (
+    !policy ||
+    policy.enabled === false ||
+    !policy.limits ||
+    Object.keys(policy.limits).length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    id: `budget_${createHash('sha256').update(`${scope}:${scopeId}`).digest('hex').slice(0, 32)}`,
+    scope,
+    scopeId,
+    name: policy.name?.trim() || fallbackName,
+    limits: { ...policy.limits },
+    hardAction: policy.hardAction ?? 'pause',
+  };
+}
+
+function mergeWorkflowExecutionTreePolicies(
+  policies: Array<ExecutionTreeBudgetPolicy | undefined>
+): ExecutionTreeBudgetPolicy[] {
+  const merged = new Map<string, ExecutionTreeBudgetPolicy>();
+  for (const policy of policies) {
+    if (!policy) continue;
+    const current = merged.get(policy.id);
+    if (!current) {
+      merged.set(policy.id, policy);
+      continue;
+    }
+    const limits = { ...current.limits };
+    for (const [metric, limit] of Object.entries(policy.limits)) {
+      const currentLimit = limits[metric as keyof typeof limits];
+      limits[metric as keyof typeof limits] =
+        currentLimit === undefined ? limit : Math.min(currentLimit, limit);
+    }
+    merged.set(policy.id, { ...current, limits });
+  }
+  return [...merged.values()];
 }
 
 // Singleton

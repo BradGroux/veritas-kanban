@@ -35,6 +35,12 @@ describe('vk admission commands', () => {
       'execute',
       '--root-reservation',
       'admission_root',
+      '--root-objective',
+      'objective-a',
+      '--node',
+      'node-child',
+      '--parent-node',
+      'node-root',
       '--state',
       'active',
       'released',
@@ -44,7 +50,7 @@ describe('vk admission commands', () => {
     ]);
 
     expect(api).toHaveBeenCalledWith(
-      '/api/admission?workspaceId=workspace-a&workflowRunId=run_1234567890_abcdef&workflowStepId=execute&rootReservationId=admission_root&state=active&state=released&limit=25'
+      '/api/admission?workspaceId=workspace-a&workflowRunId=run_1234567890_abcdef&workflowStepId=execute&rootReservationId=admission_root&rootObjectiveId=objective-a&nodeId=node-child&parentNodeId=node-root&state=active&state=released&limit=25'
     );
     expect(JSON.parse(String(output.mock.calls[0][0]))).toEqual({
       generatedAt: '2026-07-25T10:00:00.000Z',
@@ -65,6 +71,34 @@ describe('vk admission commands', () => {
     expect(JSON.parse(String(output.mock.calls[0][0]))).toEqual({
       id: 'admission_1',
       state: 'released',
+    });
+    output.mockRestore();
+  });
+
+  it('inspects an aggregate execution tree as JSON', async () => {
+    api.mockResolvedValue({
+      schemaVersion: 'execution-tree-budget-summary/v1',
+      rootObjectiveId: 'objective-a',
+      contributors: [],
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const program = new Command().exitOverride();
+    registerAdmissionCommands(program);
+
+    await program.parseAsync([
+      'node',
+      'vk',
+      'admission',
+      'tree',
+      'objective-a',
+      '--limit',
+      '25',
+      '--json',
+    ]);
+
+    expect(api).toHaveBeenCalledWith('/api/admission/tree/objective-a?limit=25');
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toMatchObject({
+      rootObjectiveId: 'objective-a',
     });
     output.mockRestore();
   });

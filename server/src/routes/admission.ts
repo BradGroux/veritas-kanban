@@ -18,6 +18,9 @@ const listQuerySchema = z
     workflowRunId: z.string().trim().min(1).max(240).optional(),
     workflowStepId: z.string().trim().min(1).max(240).optional(),
     rootReservationId: z.string().trim().min(1).max(240).optional(),
+    rootObjectiveId: z.string().trim().min(1).max(240).optional(),
+    nodeId: z.string().trim().min(1).max(240).optional(),
+    parentNodeId: z.string().trim().min(1).max(240).optional(),
     state: z
       .union([z.string(), z.array(z.string())])
       .optional()
@@ -42,6 +45,9 @@ router.get(
         workflowRunId: raw.workflowRunId,
         workflowStepId: raw.workflowStepId,
         rootReservationId: raw.rootReservationId,
+        rootObjectiveId: raw.rootObjectiveId,
+        nodeId: raw.nodeId,
+        parentNodeId: raw.parentNodeId,
         states: raw.state,
         limit: raw.limit,
       });
@@ -49,6 +55,22 @@ router.get(
         generatedAt: new Date().toISOString(),
         reservations: await admission.list(query),
       });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+  })
+);
+
+router.get(
+  '/tree/:rootObjectiveId',
+  asyncHandler(async (req, res) => {
+    try {
+      const rootObjectiveId = z.string().trim().min(1).max(240).parse(req.params.rootObjectiveId);
+      const limit = z.coerce.number().int().min(1).max(1_000).default(100).parse(req.query.limit);
+      res.json(await admission.getExecutionTreeSummary(rootObjectiveId, limit));
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);

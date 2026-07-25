@@ -43,6 +43,7 @@ export * from './skill-capability.types.js';
 export * from './skill-security.types.js';
 export * from './sandbox-policy.types.js';
 export * from './agent-budget.types.js';
+export * from './execution-tree-budget.types.js';
 export * from './agent-profile-package.types.js';
 export * from './team-roster.types.js';
 export * from './buzz-definition.types.js';

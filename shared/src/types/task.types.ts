@@ -78,6 +78,7 @@ export interface TaskAttempt {
   runLaunchManifest?: import('./run-launch-manifest.types.js').RunLaunchManifest;
   runSupervisorId?: string;
   admissionReservationId?: string;
+  executionTree?: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
   runRecovery?: import('./run-supervisor.types.js').RunSupervisorRecoveryRecord;
   runLaunchManifestTraceId?: string;
   runLaunchParentAttemptId?: string;
