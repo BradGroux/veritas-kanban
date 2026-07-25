@@ -815,7 +815,7 @@ function isPathWithin(basePath: string, targetPath: string): boolean {
   );
 }
 
-function normalizeWorkspaceId(value: string): string {
+export function normalizeWorkspaceId(value: string): string {
   const normalized = value.trim();
   if (normalized.length <= 160) return normalized;
   const suffix = createHash('sha256').update(normalized).digest('hex').slice(0, 16);

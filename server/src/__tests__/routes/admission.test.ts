@@ -29,7 +29,7 @@ describe('admission routes', () => {
     admission.list.mockResolvedValue([{ id: 'admission_1', state: 'active' }]);
 
     const response = await request(createApp()).get(
-      '/api/admission?workspaceId=workspace-a&state=active&state=released&limit=25'
+      '/api/admission?workspaceId=workspace-a&workflowRunId=run_1234567890_abcdef&workflowStepId=execute&rootReservationId=admission_root&state=active&state=released&limit=25'
     );
 
     expect(response.status).toBe(200);
@@ -40,6 +40,9 @@ describe('admission routes', () => {
     expect(admission.list).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: 'workspace-a',
+        workflowRunId: 'run_1234567890_abcdef',
+        workflowStepId: 'execute',
+        rootReservationId: 'admission_root',
         states: ['active', 'released'],
         limit: 25,
       })

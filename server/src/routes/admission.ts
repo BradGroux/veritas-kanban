@@ -15,6 +15,9 @@ const listQuerySchema = z
     rootTaskId: z.string().trim().min(1).max(240).optional(),
     provider: z.string().trim().min(1).max(80).optional(),
     hostId: z.string().trim().min(1).max(240).optional(),
+    workflowRunId: z.string().trim().min(1).max(240).optional(),
+    workflowStepId: z.string().trim().min(1).max(240).optional(),
+    rootReservationId: z.string().trim().min(1).max(240).optional(),
     state: z
       .union([z.string(), z.array(z.string())])
       .optional()
@@ -36,6 +39,9 @@ router.get(
         rootTaskId: raw.rootTaskId,
         provider: raw.provider,
         hostId: raw.hostId,
+        workflowRunId: raw.workflowRunId,
+        workflowStepId: raw.workflowStepId,
+        rootReservationId: raw.rootReservationId,
         states: raw.state,
         limit: raw.limit,
       });

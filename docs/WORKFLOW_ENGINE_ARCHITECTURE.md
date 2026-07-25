@@ -2450,113 +2450,24 @@ async function getDirSize(dirPath: string): Promise<number> {
 }
 ```
 
-**Concurrency Limits**:
+**Concurrency and Capacity Admission**:
 
-```typescript
-// server/src/config/workflow-config.ts
+Workflow concurrency is not authorized by process-local sets, counters, or
+queues. `WorkflowRunService` obtains an atomic
+`admission-reservation/v1` root claim before a run becomes active. The root
+uses admission provider `workflow-control` and binds its workspace, root task,
+run ID, host, and lease.
 
-export const WORKFLOW_CONCURRENCY_CONFIG = {
-  // Maximum concurrent workflow runs globally
-  maxConcurrentRuns: 5,
+Every provider-backed step resolves its runtime and host first, then obtains a
+child reservation before mutating the step attempt or dispatching the adapter.
+Retry and fallback attempts release the prior child reservation before
+claiming another. Global, workspace, root-task, provider, and host limits use
+the same durable policies as direct task launches.
 
-  // Maximum concurrent runs per workflow
-  maxConcurrentRunsPerWorkflow: 2,
-
-  // Maximum concurrent steps per workflow run (for parallel steps)
-  maxConcurrentStepsPerRun: 3,
-
-  // Queue size (pending runs waiting for a slot)
-  maxQueueSize: 20,
-};
-```
-
-**Concurrency Enforcement**:
-
-```typescript
-// server/src/services/workflow-run-service.ts (updated)
-
-import { WORKFLOW_CONCURRENCY_CONFIG } from '../config/workflow-config.js';
-
-export class WorkflowRunService {
-  private activeRuns: Set<string> = new Set(); // Run IDs currently executing
-  private runQueue: Array<{ runId: string; workflowId: string }> = [];
-
-  async startRun(
-    workflowId: string,
-    taskId?: string,
-    initialContext?: Record<string, any>
-  ): Promise<WorkflowRun> {
-    // Check global concurrency limit
-    if (this.activeRuns.size >= WORKFLOW_CONCURRENCY_CONFIG.maxConcurrentRuns) {
-      // Queue the run
-      if (this.runQueue.length >= WORKFLOW_CONCURRENCY_CONFIG.maxQueueSize) {
-        throw new Error('Workflow run queue is full — try again later');
-      }
-
-      const run = await this.createRun(workflowId, taskId, initialContext);
-      run.status = 'pending';
-      await this.saveRun(run);
-
-      this.runQueue.push({ runId: run.id, workflowId });
-
-      log.info({ runId: run.id, queuePosition: this.runQueue.length }, 'Run queued');
-      return run;
-    }
-
-    // Check per-workflow concurrency limit
-    let activeRunsForWorkflow = 0;
-    for (const runId of this.activeRuns) {
-      const existingRun = await this.getRun(runId);
-      if (existingRun?.workflowId === workflowId) {
-        activeRunsForWorkflow++;
-      }
-    }
-
-    if (activeRunsForWorkflow >= WORKFLOW_CONCURRENCY_CONFIG.maxConcurrentRunsPerWorkflow) {
-      throw new Error(`Workflow ${workflowId} has too many active runs`);
-    }
-
-    // Start the run
-    const run = await this.createRun(workflowId, taskId, initialContext);
-    this.activeRuns.add(run.id);
-
-    // Execute (async)
-    this.executeRun(run, workflow).finally(() => {
-      this.activeRuns.delete(run.id);
-      this.processQueue(); // Start next queued run
-    });
-
-    return run;
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.runQueue.length === 0) return;
-    if (this.activeRuns.size >= WORKFLOW_CONCURRENCY_CONFIG.maxConcurrentRuns) return;
-
-    const { runId, workflowId } = this.runQueue.shift()!;
-    const run = await this.getRun(runId);
-    if (!run) return;
-
-    // Update status and start execution
-    run.status = 'running';
-    await this.saveRun(run);
-    broadcastWorkflowStatus(run);
-
-    this.activeRuns.add(run.id);
-
-    const workflow = await this.workflowService.loadWorkflow(workflowId);
-    if (!workflow) {
-      log.error({ runId, workflowId }, 'Workflow not found for queued run');
-      return;
-    }
-
-    this.executeRun(run, workflow).finally(() => {
-      this.activeRuns.delete(run.id);
-      this.processQueue();
-    });
-  }
-}
-```
+Temporary step overload blocks the workflow with the limiting policy retained
+in the run; an impossible request fails the run. Durable fair queues and
+priority aging are scheduler concerns layered on this controller, not hidden
+inside the workflow service.
 
 **OpenClaw Session Cleanup**:
 

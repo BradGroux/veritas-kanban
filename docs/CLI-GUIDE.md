@@ -598,14 +598,19 @@ Inspect the capacity reservation that must exist before a provider can start:
 ```bash
 vk admission list
 vk admission list --state active --provider codex-cli --json
+vk admission list --workflow-run run_20260725_abc123 --json
+vk admission list --workflow-run run_20260725_abc123 --workflow-step implement
+vk admission list --root-reservation admission_0123456789abcdef
 vk admission get admission_0123456789abcdef --json
 ```
 
 `admission list` filters by workspace, task, root task, provider, host, state,
-and result limit. Active records show the lease expiry and requested run,
-process, and estimated-memory capacity. Released records retain the terminal
-reason and idempotency identity for operator diagnosis. These are read-only
-commands and require `agent:read`.
+workflow run, workflow step, root reservation, and result limit. Active records
+show the lease expiry and requested run, process, and estimated-memory
+capacity. Workflow roots use provider `workflow-control`; executable child
+steps show their resolved provider, selected host, and root reservation.
+Released records retain the terminal reason and idempotency identity for
+operator diagnosis. These are read-only commands and require `agent:read`.
 
 ---
 

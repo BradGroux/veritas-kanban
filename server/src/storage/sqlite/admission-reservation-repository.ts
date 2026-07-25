@@ -70,8 +70,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         .prepare(
           `INSERT INTO admission_reservations (
              id, workspace_id, task_id, root_task_id, provider, host_id, state, revision,
-             idempotency_key, lease_expires_at, reservation_json, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             idempotency_key, lease_expires_at, workflow_run_id, workflow_step_id,
+             root_reservation_id, reservation_json, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           requested.id,
@@ -84,6 +85,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
           requested.revision,
           requested.request.idempotencyKey,
           requested.lease.expiresAt,
+          requested.request.workflowRunId ?? null,
+          requested.request.workflowStepId ?? null,
+          requested.request.rootReservationId ?? null,
           JSON.stringify(requested),
           requested.createdAt,
           requested.updatedAt
@@ -116,6 +120,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
     if (query.rootTaskId) add('root_task_id = ?', query.rootTaskId);
     if (query.provider) add('provider = ?', query.provider);
     if (query.hostId) add('host_id = ?', query.hostId);
+    if (query.workflowRunId) add('workflow_run_id = ?', query.workflowRunId);
+    if (query.workflowStepId) add('workflow_step_id = ?', query.workflowStepId);
+    if (query.rootReservationId) add('root_reservation_id = ?', query.rootReservationId);
     if (query.states?.length) {
       clauses.push(`state IN (${query.states.map(() => '?').join(', ')})`);
       parameters.push(...query.states);
@@ -215,6 +222,7 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         `UPDATE admission_reservations
          SET workspace_id = ?, task_id = ?, root_task_id = ?, provider = ?, host_id = ?,
              state = ?, revision = ?, idempotency_key = ?, lease_expires_at = ?,
+             workflow_run_id = ?, workflow_step_id = ?, root_reservation_id = ?,
              reservation_json = ?, updated_at = ?
          WHERE id = ? AND revision = ?`
       )
@@ -228,6 +236,9 @@ export class SqliteAdmissionReservationRepository implements AdmissionReservatio
         record.revision,
         record.request.idempotencyKey,
         record.lease.expiresAt,
+        record.request.workflowRunId ?? null,
+        record.request.workflowStepId ?? null,
+        record.request.rootReservationId ?? null,
         JSON.stringify(record),
         record.updatedAt,
         record.id,

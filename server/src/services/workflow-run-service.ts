@@ -5,8 +5,10 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { createHash, randomUUID } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import {
+  ADMISSION_CONTROL_PROVIDER,
   buildWorkflowPipelineSummary,
   DEFAULT_ROUTING_CONFIG,
   ZERO_AGENT_BUDGET_USAGE,
@@ -15,14 +17,23 @@ import {
   type AgentBudgetThresholdEvent,
   type AgentBudgetUsage,
   type AgentType,
+  type AdmissionDecision,
+  type AdmissionReservation,
+  type AdmissionReservationRelease,
   type RunRecoveryRecord,
+  type Task,
   type WorkflowPipelineRoleStatusPatch,
   type WorkflowSubagentRunStatus,
   type WorkflowSubagentTelemetry,
+  WORKFLOW_ADMISSION_SCHEMA_VERSION,
 } from '@veritas-kanban/shared';
 import type { WorkflowRun, StepRun, WorkflowDefinition, WorkflowStep } from '../types/workflow.js';
 import { getWorkflowService } from './workflow-service.js';
-import { WorkflowStepExecutor, HumanGateBlockError } from './workflow-step-executor.js';
+import {
+  WorkflowStepExecutor,
+  HumanGateBlockError,
+  type WorkflowAgentStepPreparation,
+} from './workflow-step-executor.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { broadcastWorkflowStatus } from './broadcast-service.js';
@@ -37,19 +48,22 @@ import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { atomicWriteFile } from '../storage/fs-helpers.js';
 import { withFileLock } from './file-lock.js';
+import {
+  AdmissionControlService,
+  getAdmissionControlService,
+} from './admission-control-service.js';
+import { normalizeWorkspaceId } from './task-envelope-service.js';
 
 const log = createLogger('workflow-run');
 
-// Concurrency limits
-const MAX_CONCURRENT_RUNS = 10;
 /** Default maximum cross-step reroutes per run before exhaustion policy fires (#780) */
 const MAX_REROUTES_DEFAULT = 10;
-let activeRunCount = 0;
 const scheduledWorkflowRecoveries = new Map<
   string,
   { stepId: string; timer: ReturnType<typeof setTimeout> }
 >();
 const RUN_ID_PATTERN = /^run_\d{10,}_[a-zA-Z0-9_-]{6,}$/;
+const WORKFLOW_ADMISSION_ID_PREFIX = 'workflow';
 const RESERVED_CONTEXT_KEYS = new Set([
   'task',
   'workflow',
@@ -62,6 +76,32 @@ const RESERVED_CONTEXT_KEYS = new Set([
   '_gateApproval',
 ]);
 
+class WorkflowStepAdmissionError extends Error {
+  readonly decision: AdmissionDecision;
+
+  constructor(readonly binding: NonNullable<StepRun['admission']>) {
+    const decision = binding.decision;
+    super(
+      decision.outcome === 'retryable-overload'
+        ? 'Workflow step is waiting for admission capacity.'
+        : 'Workflow step violates an admission policy.'
+    );
+    this.name = 'WorkflowStepAdmissionError';
+    this.decision = decision;
+  }
+}
+
+class WorkflowRunChangedError extends ConflictError {
+  constructor(runId: string, expectedRevision: number, currentRevision?: number) {
+    super('Workflow run changed during persistence', {
+      runId,
+      expectedRevision,
+      currentRevision,
+    });
+    this.name = 'WorkflowRunChangedError';
+  }
+}
+
 export class WorkflowRunService {
   private runsDir: string;
   private workflowService: ReturnType<typeof getWorkflowService>;
@@ -70,12 +110,14 @@ export class WorkflowRunService {
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
   private readonly runRecoveryPolicy: RunRecoveryPolicyService;
+  private readonly admission: AdmissionControlService;
 
   constructor(options: string | WorkflowRunServiceOptions = {}) {
     const resolvedOptions = typeof options === 'string' ? { runsDir: options } : options;
     this.runsDir = resolvedOptions.runsDir || getWorkflowRunsDir();
     this.workflowService = resolvedOptions.workflowService ?? getWorkflowService();
     this.runRecoveryPolicy = resolvedOptions.runRecoveryPolicy ?? new RunRecoveryPolicyService();
+    this.admission = resolvedOptions.admission ?? getAdmissionControlService();
     this.stepExecutor =
       resolvedOptions.stepExecutor ??
       new WorkflowStepExecutor(resolvedOptions.runsDir, {
@@ -301,6 +343,190 @@ export class WorkflowRunService {
     }
   }
 
+  private rootAdmissionTaskId(runId: string): string {
+    return `${WORKFLOW_ADMISSION_ID_PREFIX}-root:${runId}`;
+  }
+
+  private stepAdmissionTaskId(runId: string, stepId: string, sequence: number): string {
+    const digest = createHash('sha256')
+      .update(`${runId}:${stepId}:${sequence}`)
+      .digest('hex')
+      .slice(0, 32);
+    return `${WORKFLOW_ADMISSION_ID_PREFIX}-step:${digest}`;
+  }
+
+  private workflowWorkspaceId(task: Task | null): string {
+    if (!task) return 'local';
+    return normalizeWorkspaceId(task.project?.trim() || task.git?.repo || task.id);
+  }
+
+  private admissionConflict(decision: AdmissionDecision, subject: string): ConflictError {
+    return new ConflictError(
+      decision.outcome === 'retryable-overload'
+        ? `${subject} is waiting for admission capacity.`
+        : `${subject} violates an admission policy.`,
+      {
+        code:
+          decision.outcome === 'retryable-overload'
+            ? 'ADMISSION_OVERLOAD'
+            : 'ADMISSION_POLICY_DENIED',
+        decision,
+      }
+    );
+  }
+
+  private async admitWorkflowRoot(
+    run: WorkflowRun,
+    task: Task | null
+  ): Promise<NonNullable<WorkflowRun['admission']>> {
+    const admissionTaskId = this.rootAdmissionTaskId(run.id);
+    const attemptId = admissionTaskId;
+    const workspaceId = this.workflowWorkspaceId(task);
+    const rootTaskId = run.taskId ?? admissionTaskId;
+    const decision = await this.admission.admit({
+      taskId: admissionTaskId,
+      rootTaskId,
+      workspaceId,
+      provider: ADMISSION_CONTROL_PROVIDER,
+      hostId: this.admission.getExecutionHostId(),
+      source: 'workflow',
+      workflowRunId: run.id,
+      idempotencyKey: `workflow-root:${run.id}:${randomUUID()}`,
+      requested: {
+        runSlots: 1,
+        processSlots: 0,
+        estimatedMemoryMb: 0,
+      },
+    });
+    if (decision.outcome !== 'admitted' || !decision.reservation) {
+      throw this.admissionConflict(decision, 'Workflow root');
+    }
+    let reservation: AdmissionReservation;
+    try {
+      reservation = await this.admission.bindAttempt(decision.reservation.id, attemptId);
+    } catch (error) {
+      await this.admission
+        .releaseIfUnbound(
+          decision.reservation.id,
+          'start-failed',
+          `workflow-root-bind-failed:${run.id}`
+        )
+        .catch(() => {});
+      throw error;
+    }
+    return {
+      schemaVersion: WORKFLOW_ADMISSION_SCHEMA_VERSION,
+      workspaceId,
+      rootTaskId,
+      admissionTaskId,
+      attemptId,
+      reservationId: reservation.id,
+    };
+  }
+
+  private async ensureWorkflowRootAdmission(run: WorkflowRun): Promise<void> {
+    if (!run.admission) {
+      const task = run.taskId ? await getTaskService().getTask(run.taskId) : null;
+      run.admission = await this.admitWorkflowRoot(run, task);
+      await this.saveRun(run);
+      return;
+    }
+    const recovered = await this.admission.recoverVerifiedRun({
+      workspaceId: run.admission.workspaceId,
+      taskId: run.admission.admissionTaskId,
+      attemptId: run.admission.attemptId,
+    });
+    if (!recovered || recovered.id !== run.admission.reservationId) {
+      throw new ConflictError('Workflow root admission could not be recovered.', {
+        runId: run.id,
+        expectedReservationId: run.admission.reservationId,
+        recoveredReservationId: recovered?.id,
+      });
+    }
+  }
+
+  private async admitWorkflowStep(
+    run: WorkflowRun,
+    step: WorkflowStep,
+    preparation: WorkflowAgentStepPreparation
+  ): Promise<NonNullable<StepRun['admission']>> {
+    if (!run.admission) {
+      throw new ConflictError('Workflow root admission is missing before step launch.', {
+        runId: run.id,
+        stepId: step.id,
+      });
+    }
+    const stepRun = run.steps.find((candidate) => candidate.stepId === step.id);
+    if (!stepRun) throw new Error(`Workflow run is missing step state for ${step.id}`);
+    const sequence = (stepRun.admission?.sequence ?? 0) + 1;
+    const admissionTaskId = this.stepAdmissionTaskId(run.id, step.id, sequence);
+    const attemptId = admissionTaskId;
+    const hostId =
+      preparation.hostRouting.selectedHostId ??
+      (preparation.runtimeProvider === 'openclaw' ? 'openclaw-gateway' : 'local-process');
+    const decision = await this.admission.admit({
+      taskId: admissionTaskId,
+      rootTaskId: run.admission.rootTaskId,
+      workspaceId: run.admission.workspaceId,
+      provider: preparation.runtimeProvider,
+      hostId,
+      source:
+        stepRun.runRetry?.action === 'fallback'
+          ? 'fallback'
+          : stepRun.runRetry
+            ? 'recovery'
+            : 'workflow',
+      workflowRunId: run.id,
+      workflowStepId: step.id,
+      rootReservationId: run.admission.reservationId,
+      idempotencyKey: `workflow-step:${run.id}:${step.id}:${sequence}:${randomUUID()}`,
+    });
+    const binding: NonNullable<StepRun['admission']> = {
+      schemaVersion: WORKFLOW_ADMISSION_SCHEMA_VERSION,
+      sequence,
+      admissionTaskId,
+      attemptId,
+      decision,
+    };
+    if (decision.outcome !== 'admitted' || !decision.reservation) {
+      throw new WorkflowStepAdmissionError(binding);
+    }
+    try {
+      const reservation = await this.admission.bindAttempt(decision.reservation.id, attemptId);
+      return {
+        ...binding,
+        reservationId: reservation.id,
+      };
+    } catch (error) {
+      await this.admission
+        .releaseIfUnbound(
+          decision.reservation.id,
+          'start-failed',
+          `workflow-step-bind-failed:${attemptId}`
+        )
+        .catch(() => {});
+      throw error;
+    }
+  }
+
+  private async releaseStepAdmission(
+    stepRun: StepRun,
+    reason: AdmissionReservationRelease['reason'],
+    idempotencyKey: string
+  ): Promise<void> {
+    if (!stepRun.admission?.reservationId) return;
+    await this.admission.release(stepRun.admission.reservationId, reason, idempotencyKey);
+  }
+
+  private async releaseRootAdmission(
+    run: WorkflowRun,
+    reason: AdmissionReservationRelease['reason'],
+    idempotencyKey: string
+  ): Promise<void> {
+    if (!run.admission?.reservationId) return;
+    await this.admission.release(run.admission.reservationId, reason, idempotencyKey);
+  }
+
   /**
    * Start a new workflow run
    */
@@ -310,13 +536,6 @@ export class WorkflowRunService {
     initialContext?: Record<string, unknown>,
     runBudget?: AgentBudgetPolicy
   ): Promise<WorkflowRun> {
-    // Check concurrency limit
-    if (activeRunCount >= MAX_CONCURRENT_RUNS) {
-      throw new ValidationError(
-        `Maximum concurrent workflow runs (${MAX_CONCURRENT_RUNS}) exceeded. Wait for active runs to complete.`
-      );
-    }
-
     const workflow = await this.workflowService.loadWorkflow(workflowId);
     if (!workflow) {
       throw new NotFoundError(`Workflow ${workflowId} not found`);
@@ -368,8 +587,8 @@ export class WorkflowRunService {
       workflowId: workflow.id,
       workflowVersion: workflow.version,
       taskId,
-      status: 'running',
-      currentStep: workflow.steps[0].id,
+      status: 'pending',
+      currentStep: workflow.steps[0]?.id,
       context: {
         // Workflow variables
         ...workflow.variables,
@@ -421,11 +640,29 @@ export class WorkflowRunService {
       })),
     };
 
-    // Persist initial run state
-    await this.saveRun(run);
-
-    // Snapshot workflow YAML into run directory (for version immutability)
-    await this.snapshotWorkflow(run.id, workflow);
+    try {
+      run.admission = await this.admitWorkflowRoot(run, task);
+      run.status = 'running';
+      await this.saveRun(run);
+      await this.snapshotWorkflow(run.id, workflow);
+    } catch (error) {
+      if (run.admission) {
+        if (run.revision) {
+          run.status = 'failed';
+          run.error = error instanceof Error ? error.message : 'Workflow start failed';
+          run.completedAt = new Date().toISOString();
+          await this.saveRun(run).catch((saveError) => {
+            log.error({ err: saveError, runId }, 'Failed to persist workflow start failure');
+          });
+        }
+        await this.releaseRootAdmission(run, 'start-failed', `start-failed:${run.id}`).catch(
+          (releaseError) => {
+            log.error({ err: releaseError, runId }, 'Failed to release workflow root admission');
+          }
+        );
+      }
+      throw error;
+    }
 
     log.info({ runId, workflowId, workflowVersion: workflow.version }, 'Workflow run started');
 
@@ -441,34 +678,50 @@ export class WorkflowRunService {
    * Execute the workflow run (iterates through steps with retry logic)
    */
   private async executeRun(run: WorkflowRun, workflow: WorkflowDefinition): Promise<void> {
-    // Increment active run counter
-    activeRunCount++;
-
     try {
       // Build initial step queue (skip already completed/skipped steps on resume)
       const stepQueue: string[] = this.buildStepQueue(run, workflow);
 
       while (stepQueue.length > 0) {
-        const stepId = stepQueue.shift()!;
-        const step = workflow.steps.find((s) => s.id === stepId)!;
+        const stepId = stepQueue.shift();
+        if (!stepId) break;
+        const step = workflow.steps.find((s) => s.id === stepId);
+        if (!step) {
+          throw new Error(`Workflow definition is missing queued step ${stepId}`);
+        }
         if (await this.evaluateRunBudget(run, workflow, step, 'workflow.step.start', true)) {
           await this.saveRun(run);
           broadcastWorkflowStatus(run);
+          if (run.status === 'failed') {
+            await this.releaseRootAdmission(
+              run,
+              'failed',
+              `workflow-budget-start:${run.id}:${step.id}`
+            );
+          }
           return;
         }
 
         // Skip if step already completed/skipped (defensive when retry_step rebuilds queue)
-        const existingStepRun = run.steps.find((s) => s.stepId === step.id)!;
+        const existingStepRun = run.steps.find((s) => s.stepId === step.id);
+        if (!existingStepRun) {
+          throw new Error(`Workflow run is missing step state for ${step.id}`);
+        }
         if (existingStepRun.status === 'completed' || existingStepRun.status === 'skipped') {
           continue;
         }
 
         const stepRun = existingStepRun;
+        let providerDispatchStarted = false;
 
         try {
           // Resolve runtime, sandbox, host, and phase authority before creating
           // or mutating the executable step attempt.
           const preparation = await this.stepExecutor.prepareStep(step, run);
+          if (preparation.kind === 'agent') {
+            stepRun.admission = await this.admitWorkflowStep(run, step, preparation);
+          }
+          run.status = 'running';
           run.currentStep = step.id;
           stepRun.agent ??= preparation.step.agent ?? step.agent;
           this.stepExecutor.applyPreparation(run, preparation);
@@ -485,10 +738,25 @@ export class WorkflowRunService {
             };
           }
           this.syncPipelineSummary(run, workflow);
-          await this.saveRun(run);
+          try {
+            await this.saveRun(run);
+          } catch (error) {
+            await this.releaseStepAdmission(
+              stepRun,
+              'start-failed',
+              `workflow-step-persist-failed:${run.id}:${step.id}:${stepRun.admission?.sequence ?? 0}`
+            );
+            throw error;
+          }
           broadcastWorkflowStatus(run);
 
+          providerDispatchStarted = preparation.kind === 'agent';
           const result = await this.stepExecutor.executeStep(step, run, preparation);
+          await this.releaseStepAdmission(
+            stepRun,
+            'completed',
+            `workflow-step-completed:${run.id}:${step.id}:${stepRun.admission?.sequence ?? 0}`
+          );
           if (result.budgetUsage) {
             const budgetBlocked = await this.evaluateRunBudget(
               run,
@@ -501,15 +769,24 @@ export class WorkflowRunService {
             if (budgetBlocked) {
               await this.saveRun(run);
               broadcastWorkflowStatus(run);
+              if ((run.status as WorkflowRun['status']) === 'failed') {
+                await this.releaseRootAdmission(
+                  run,
+                  'failed',
+                  `workflow-budget-usage:${run.id}:${step.id}`
+                );
+              }
               return;
             }
           }
 
           stepRun.status = 'completed';
           stepRun.completedAt = new Date().toISOString();
+          if (!stepRun.startedAt) {
+            throw new Error(`Workflow step ${step.id} completed without a start timestamp`);
+          }
           stepRun.duration = Math.floor(
-            (new Date(stepRun.completedAt).getTime() - new Date(stepRun.startedAt!).getTime()) /
-              1000
+            (new Date(stepRun.completedAt).getTime() - new Date(stepRun.startedAt).getTime()) / 1000
           );
           stepRun.output = result.outputPath;
 
@@ -521,6 +798,38 @@ export class WorkflowRunService {
           broadcastWorkflowStatus(run);
         } catch (err: unknown) {
           run.currentStep = step.id;
+          if (err instanceof WorkflowStepAdmissionError) {
+            stepRun.admission = err.binding;
+            stepRun.error = err.message;
+            run.error = err.message;
+            if (err.decision.outcome === 'retryable-overload') {
+              stepRun.status = 'pending';
+              stepRun.completedAt = undefined;
+              run.status = 'blocked';
+            } else {
+              stepRun.status = 'failed';
+              stepRun.completedAt = new Date().toISOString();
+              run.status = 'failed';
+              run.completedAt = stepRun.completedAt;
+            }
+            this.syncPipelineSummary(run, workflow);
+            await this.saveRun(run);
+            broadcastWorkflowStatus(run);
+            if (run.status === 'failed') {
+              await this.releaseRootAdmission(
+                run,
+                'failed',
+                `workflow-step-admission-denied:${run.id}:${step.id}`
+              );
+            }
+            return;
+          }
+
+          await this.releaseStepAdmission(
+            stepRun,
+            providerDispatchStarted ? 'failed' : 'start-failed',
+            `workflow-step-error:${run.id}:${step.id}:${stepRun.admission?.sequence ?? 0}`
+          );
           // --- Gate human-escalation (#778) ---
           // HumanGateBlockError is a clean, expected pause — not a real failure.
           // Handle it before the generic failure path so on_fail is not misapplied.
@@ -600,20 +909,26 @@ export class WorkflowRunService {
       this.syncPipelineSummary(run, workflow);
       await this.saveRun(run);
       broadcastWorkflowStatus(run);
+      await this.releaseRootAdmission(run, 'completed', `workflow-completed:${run.id}`);
 
       log.info({ runId: run.id, workflowId: run.workflowId }, 'Workflow run completed');
     } catch (err: unknown) {
+      if (err instanceof WorkflowRunChangedError) {
+        log.info({ runId: run.id }, 'Workflow execution ownership changed before persistence');
+        return;
+      }
       run.status = 'failed';
       run.error = err instanceof Error ? err.message : 'Unknown error';
       run.completedAt = new Date().toISOString();
       this.syncPipelineSummary(run, workflow);
-      await this.saveRun(run);
-      broadcastWorkflowStatus(run);
+      try {
+        await this.saveRun(run);
+        broadcastWorkflowStatus(run);
+      } finally {
+        await this.releaseRootAdmission(run, 'failed', `workflow-failed:${run.id}`);
+      }
 
       log.error({ runId: run.id, err }, 'Workflow run failed');
-    } finally {
-      // Decrement active run counter
-      activeRunCount--;
     }
   }
 
@@ -788,7 +1103,10 @@ export class WorkflowRunService {
       }
 
       // Reset the retry step's state
-      const retryStepRun = run.steps.find((s) => s.stepId === retryStep.id)!;
+      const retryStepRun = run.steps.find((s) => s.stepId === retryStep.id);
+      if (!retryStepRun) {
+        throw new Error(`Workflow run is missing retry step state for ${retryStep.id}`);
+      }
       retryStepRun.status = 'pending';
       retryStepRun.retries = 0;
       retryStepRun.error = undefined;
@@ -845,36 +1163,60 @@ export class WorkflowRunService {
   }
 
   async reconcilePendingRecoveries(): Promise<void> {
+    await this.admission.expireAbandoned();
     const runs = (await this.listRuns()).filter(
       (run) => run.status === 'pending' || run.status === 'running'
     );
     let scheduledCount = 0;
     for (const run of runs) {
-      const stepRun = run.steps.find((step) => step.stepId === run.currentStep);
-      const recovery = stepRun?.runRetry;
-      if (!stepRun || !recovery) {
-        continue;
-      }
-      if (recovery.state === 'launched' && run.status === 'running') {
-        stepRun.runRetry = {
-          ...recovery,
-          state: 'approval-required',
-          action: 'approval',
-          reason:
-            'The server restarted after recovery launch and cannot prove the provider terminal state.',
-          backoffMs: 0,
-          handoff: {
-            summary: 'Workflow recovery requires operator reconciliation after restart.',
-            nextActions: [
-              'Inspect the provider session and persisted step output.',
-              'Confirm no provider work remains before resuming or replacing the run.',
-            ],
-          },
-        };
+      try {
+        await this.ensureWorkflowRootAdmission(run);
+      } catch (error) {
         run.status = 'blocked';
-        run.error = stepRun.runRetry.handoff?.summary ?? stepRun.runRetry.reason;
+        run.error =
+          error instanceof Error
+            ? `Workflow root admission recovery failed: ${error.message}`
+            : 'Workflow root admission recovery failed.';
         await this.saveRun(run);
         broadcastWorkflowStatus(run);
+        continue;
+      }
+      const stepRun = run.steps.find((step) => step.stepId === run.currentStep);
+      const recovery = stepRun?.runRetry;
+      if (stepRun?.status === 'running') {
+        await this.releaseStepAdmission(
+          stepRun,
+          'reconciled',
+          `workflow-step-restart:${run.id}:${stepRun.stepId}:${stepRun.admission?.sequence ?? 0}`
+        );
+        if (recovery?.state === 'launched') {
+          stepRun.runRetry = {
+            ...recovery,
+            state: 'approval-required',
+            action: 'approval',
+            reason:
+              'The server restarted after recovery launch and cannot prove the provider terminal state.',
+            backoffMs: 0,
+            handoff: {
+              summary: 'Workflow recovery requires operator reconciliation after restart.',
+              nextActions: [
+                'Inspect the provider session and persisted step output.',
+                'Confirm no provider work remains before resuming or replacing the run.',
+              ],
+            },
+          };
+        }
+        stepRun.status = 'failed';
+        stepRun.error =
+          stepRun.runRetry?.handoff?.summary ??
+          'Workflow step requires operator reconciliation after server restart.';
+        run.status = 'blocked';
+        run.error = stepRun.error;
+        await this.saveRun(run);
+        broadcastWorkflowStatus(run);
+        continue;
+      }
+      if (!stepRun || !recovery) {
         continue;
       }
       if (!['scheduled', 'launching'].includes(recovery.state)) continue;
@@ -936,6 +1278,11 @@ export class WorkflowRunService {
     run.status = 'blocked';
     run.error = cancelled.handoff?.summary ?? cancelled.reason;
     await this.saveRun(run);
+    await this.releaseStepAdmission(
+      stepRun,
+      'cancelled',
+      `workflow-recovery-cancelled:${run.id}:${stepId}:${cancelled.sequence}`
+    );
     this.clearScheduledWorkflowRecovery(runId, stepId);
     broadcastWorkflowStatus(run);
     return run;
@@ -984,32 +1331,10 @@ export class WorkflowRunService {
       this.scheduleWorkflowRecovery(runId, stepId, recoveryToReschedule);
       return;
     }
-    const launchedAt = new Date().toISOString();
-    stepRun.runRetry = {
-      ...recovery,
-      state: 'launched',
-      launchedAt,
-      launchedRunId: `${run.id}:${stepId}:${recovery.sequence}`,
-      selectedAgent: stepRun.agent ?? recovery.selectedAgent,
-    };
-    stepRun.status = 'pending';
-    stepRun.error = undefined;
-    run.status = 'running';
-    run.error = undefined;
-    try {
-      await this.saveRun(run);
-    } catch (error) {
-      if (error instanceof ConflictError) {
-        log.info({ runId, stepId }, 'Workflow recovery claim lost to another process');
-        return;
-      }
-      throw error;
-    }
-
     const workflow = await this.workflowService.loadWorkflow(run.workflowId);
     if (!workflow) {
       stepRun.runRetry = {
-        ...stepRun.runRetry,
+        ...recovery,
         state: 'exhausted',
         action: 'terminal',
         reason: `Workflow ${run.workflowId} no longer exists.`,
@@ -1023,8 +1348,39 @@ export class WorkflowRunService {
       run.error = stepRun.runRetry.reason;
       run.completedAt = new Date().toISOString();
       await this.saveRun(run);
+      await this.releaseRootAdmission(
+        run,
+        'failed',
+        `workflow-recovery-definition-missing:${run.id}`
+      );
       broadcastWorkflowStatus(run);
       return;
+    }
+    try {
+      await this.ensureWorkflowRootAdmission(run);
+    } catch (error) {
+      if (error instanceof WorkflowRunChangedError) {
+        log.info({ runId, stepId }, 'Workflow recovery admission claim lost to another process');
+        return;
+      }
+      throw error;
+    }
+    stepRun.runRetry = {
+      ...recovery,
+      state: 'launching',
+      selectedAgent: stepRun.agent ?? recovery.selectedAgent,
+    };
+    stepRun.status = 'pending';
+    stepRun.error = undefined;
+    run.error = undefined;
+    try {
+      await this.saveRun(run);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        log.info({ runId, stepId }, 'Workflow recovery claim lost to another process');
+        return;
+      }
+      throw error;
     }
 
     void this.executeRun(run, workflow).catch((error) => {
@@ -1199,6 +1555,12 @@ export class WorkflowRunService {
       throw new ValidationError(`Run ${runId} is not blocked (status: ${run.status})`);
     }
 
+    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
+    if (!workflow) {
+      throw new NotFoundError(`Workflow ${run.workflowId} not found`);
+    }
+    await this.ensureWorkflowRootAdmission(run);
+
     // Merge resume context after rejecting attempts to replace server-owned context.
     run.context = {
       ...run.context,
@@ -1209,12 +1571,6 @@ export class WorkflowRunService {
     run.status = 'running';
     run.error = undefined;
     await this.saveRun(run);
-
-    // Resume execution
-    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
-    if (!workflow) {
-      throw new NotFoundError(`Workflow ${run.workflowId} not found`);
-    }
 
     this.syncPipelineSummary(run, workflow);
     await this.saveRun(run);
@@ -1329,6 +1685,7 @@ export class WorkflowRunService {
       this.syncPipelineSummary(run, workflow);
     }
     await this.saveRun(run);
+    await this.releaseRootAdmission(run, 'failed', `workflow-gate-rejected:${run.id}:${stepId}`);
     broadcastWorkflowStatus(run);
 
     log.warn({ runId, stepId, rejectedBy }, 'Gate step rejected — run failed');
@@ -1519,10 +1876,7 @@ export class WorkflowRunService {
 
     if (this.repository) {
       if (!this.repository.save(nextRun, expectedRevision)) {
-        throw new ConflictError('Workflow run changed during persistence', {
-          runId: run.id,
-          expectedRevision,
-        });
+        throw new WorkflowRunChangedError(run.id, expectedRevision);
       }
       Object.assign(run, nextRun);
       return;
@@ -1546,11 +1900,7 @@ export class WorkflowRunService {
         (current && currentRevision !== expectedRevision) ||
         (!current && expectedRevision !== 0)
       ) {
-        throw new ConflictError('Workflow run changed during persistence', {
-          runId: run.id,
-          expectedRevision,
-          currentRevision: current?.revision,
-        });
+        throw new WorkflowRunChangedError(run.id, expectedRevision, current?.revision);
       }
       await atomicWriteFile(runPath, JSON.stringify(nextRun, null, 2));
     });
@@ -1589,6 +1939,7 @@ export interface WorkflowRunServiceOptions {
   workflowService?: ReturnType<typeof getWorkflowService>;
   runRecoveryPolicy?: RunRecoveryPolicyService;
   stepExecutor?: WorkflowStepExecutor;
+  admission?: AdmissionControlService;
 }
 
 // Singleton

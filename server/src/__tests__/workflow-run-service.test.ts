@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { workflowAdmissionStub } from './helpers/workflow-admission-stub.js';
 
 const mockLoadWorkflow = vi.fn();
 const mockListWorkflowsMetadata = vi.fn();
@@ -88,7 +89,10 @@ describe('WorkflowRunService', () => {
     mockValidateFallbackAgent.mockResolvedValue({});
     mockGetFallback.mockResolvedValue(null);
     const mod = await import('../services/workflow-run-service.js');
-    service = new mod.WorkflowRunService(tmpDir);
+    service = new mod.WorkflowRunService({
+      runsDir: tmpDir,
+      admission: workflowAdmissionStub(),
+    });
   });
 
   afterEach(async () => {

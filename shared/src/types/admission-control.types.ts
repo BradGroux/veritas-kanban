@@ -3,6 +3,8 @@ import type { ExecutableAgentProvider } from './config.types.js';
 export const ADMISSION_REQUEST_SCHEMA_VERSION = 'admission-request/v1' as const;
 export const ADMISSION_DECISION_SCHEMA_VERSION = 'admission-decision/v1' as const;
 export const ADMISSION_RESERVATION_SCHEMA_VERSION = 'admission-reservation/v1' as const;
+export const ADMISSION_CONTROL_PROVIDER = 'workflow-control' as const;
+export type AdmissionProvider = ExecutableAgentProvider | typeof ADMISSION_CONTROL_PROVIDER;
 
 export const ADMISSION_SCOPES = [
   'global',
@@ -62,8 +64,11 @@ export interface AdmissionRequest {
   taskId: string;
   rootTaskId: string;
   workspaceId: string;
-  provider: ExecutableAgentProvider;
+  provider: AdmissionProvider;
   hostId: string;
+  workflowRunId?: string;
+  workflowStepId?: string;
+  rootReservationId?: string;
   requested: AdmissionCapacityRequest;
   requestedAt: string;
 }
@@ -112,8 +117,11 @@ export interface AdmissionReservationListQuery {
   workspaceId?: string;
   taskId?: string;
   rootTaskId?: string;
-  provider?: ExecutableAgentProvider;
+  provider?: AdmissionProvider;
   hostId?: string;
+  workflowRunId?: string;
+  workflowStepId?: string;
+  rootReservationId?: string;
   states?: AdmissionReservationState[];
   limit?: number;
 }
@@ -152,6 +160,6 @@ export interface AdmissionSettings {
   global: AdmissionCapacityLimit;
   workspaces: Record<string, AdmissionCapacityLimit>;
   rootTasks: Record<string, AdmissionCapacityLimit>;
-  providers: Partial<Record<ExecutableAgentProvider, AdmissionCapacityLimit>>;
+  providers: Partial<Record<AdmissionProvider, AdmissionCapacityLimit>>;
   hosts: Record<string, AdmissionCapacityLimit>;
 }

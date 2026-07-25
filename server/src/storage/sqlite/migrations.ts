@@ -1316,6 +1316,21 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON admission_reservations(state, lease_expires_at);
     `,
   },
+  {
+    version: 24,
+    name: '0024_workflow_admission_reservations',
+    up: `
+      ALTER TABLE admission_reservations ADD COLUMN workflow_run_id TEXT;
+      ALTER TABLE admission_reservations ADD COLUMN workflow_step_id TEXT;
+      ALTER TABLE admission_reservations ADD COLUMN root_reservation_id TEXT;
+
+      CREATE INDEX idx_admission_reservations_workflow
+        ON admission_reservations(workflow_run_id, workflow_step_id, updated_at DESC);
+
+      CREATE INDEX idx_admission_reservations_root_reservation
+        ON admission_reservations(root_reservation_id, updated_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

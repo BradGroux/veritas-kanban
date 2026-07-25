@@ -21,6 +21,9 @@ export function registerAdmissionCommands(program: Command): void {
     .option('--root-task <id>', 'Filter by root task')
     .option('--provider <provider>', 'Filter by provider')
     .option('--host <id>', 'Filter by launch host')
+    .option('--workflow-run <id>', 'Filter by workflow run')
+    .option('--workflow-step <id>', 'Filter by workflow step')
+    .option('--root-reservation <id>', 'Filter by workflow root reservation')
     .option('--state <states...>', 'Filter by state (active, released, expired)')
     .option('--limit <count>', 'Maximum records', '100')
     .option('--json', 'Output as JSON')
@@ -32,6 +35,9 @@ export function registerAdmissionCommands(program: Command): void {
         if (options.rootTask) query.set('rootTaskId', options.rootTask);
         if (options.provider) query.set('provider', options.provider);
         if (options.host) query.set('hostId', options.host);
+        if (options.workflowRun) query.set('workflowRunId', options.workflowRun);
+        if (options.workflowStep) query.set('workflowStepId', options.workflowStep);
+        if (options.rootReservation) query.set('rootReservationId', options.rootReservation);
         for (const state of (options.state ?? []) as AdmissionReservationState[]) {
           query.append('state', state);
         }
@@ -84,6 +90,13 @@ function printReservation(reservation: AdmissionReservation, verbose = false): v
       `  workspace=${reservation.request.workspaceId} root=${reservation.request.rootTaskId} host=${reservation.request.hostId}`
     )
   );
+  if (reservation.request.workflowRunId) {
+    console.log(
+      chalk.dim(
+        `  workflow=${reservation.request.workflowRunId} step=${reservation.request.workflowStepId ?? 'root'} root-reservation=${reservation.request.rootReservationId ?? reservation.id}`
+      )
+    );
+  }
   console.log(
     chalk.dim(
       `  capacity runs=${reservation.request.requested.runSlots} processes=${reservation.request.requested.processSlots} memory=${reservation.request.requested.estimatedMemoryMb}MB`

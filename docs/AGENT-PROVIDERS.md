@@ -925,13 +925,17 @@ Soft thresholds create `budget-policy` governance traces and visible warnings. H
 
 ## Execution Admission
 
-Every direct task launch receives a durable `admission-reservation/v1` record
-before Veritas persists an attempt or calls a provider adapter. Reservations
-account for run slots, process slots, and operator-estimated memory across
-optional global, workspace, root-task, provider, and host ceilings. Estimated
-memory is a configured planning value, not a runtime memory prediction.
-An invariant one-run-per-task policy also prevents concurrent duplicate
-launches across server processes.
+Every direct task launch, workflow root, and provider-backed workflow step
+receives a durable `admission-reservation/v1` record before Veritas persists
+an executable attempt or calls a provider adapter. Workflow roots use the
+explicit `workflow-control` admission provider and reserve no provider process
+or memory estimate. Each executable child step uses its resolved provider,
+selected host, workflow run, step, and root reservation. Reservations account
+for run slots, process slots, and operator-estimated memory across optional
+global, workspace, root-task, provider, and host ceilings. Estimated memory is
+a configured planning value, not a runtime memory prediction. An invariant
+one-run-per-admission-task policy also prevents concurrent duplicate launches
+across server processes.
 
 Configure ceilings through `PATCH /api/settings/features`:
 
@@ -945,6 +949,9 @@ Configure ceilings through `PATCH /api/settings/features`:
     },
     "providers": {
       "codex-cli": {
+        "concurrentRuns": 4
+      },
+      "workflow-control": {
         "concurrentRuns": 4
       }
     },
@@ -961,13 +968,18 @@ An individual request larger than a ceiling receives a terminal policy denial.
 Temporary exhaustion returns a retryable overload decision with the limiting
 scope and bounded retry guidance. Active leases renew while the verified run is
 live; completion, interruption, cancellation, or launch failure releases the
-reservation idempotently. After restart, only a run verified through its
-durable supervisor may reclaim an expired reservation. Caller-supplied
+reservation idempotently. Workflow retry and fallback attempts release the
+prior step reservation before acquiring another. After restart, task runs use
+their durable supervisor and workflow runs use the exact persisted root
+binding before reclaiming a reservation. Unverified in-flight workflow steps
+are released and blocked for operator reconciliation. Caller-supplied
 idempotency values are represented by a stable SHA-256 identity in durable
 records; the original value is not stored.
 
 Inspect reservations with `vk admission list`, `vk admission get <id>`, or the
-matching read-only REST endpoints. Machine consumers should use `--json`.
+matching read-only REST endpoints. Use `--workflow-run`, `--workflow-step`, or
+`--root-reservation` to follow a workflow tree. Machine consumers should use
+`--json`.
 
 ## Local And Cloud Profiles
 

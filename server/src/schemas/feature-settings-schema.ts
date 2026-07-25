@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { AgentBudgetPolicySchema } from './agent-budget-schemas.js';
-import { BOARD_COLUMN_ID_PATTERN, EXECUTABLE_AGENT_PROVIDERS } from '@veritas-kanban/shared';
+import {
+  ADMISSION_CONTROL_PROVIDER,
+  BOARD_COLUMN_ID_PATTERN,
+  EXECUTABLE_AGENT_PROVIDERS,
+} from '@veritas-kanban/shared';
 
 // Dangerous keys check
 const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
@@ -239,7 +243,10 @@ const AdmissionSettingsSchema = z
     workspaces: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
     rootTasks: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
     providers: z
-      .partialRecord(z.enum(EXECUTABLE_AGENT_PROVIDERS), AdmissionCapacityLimitSchema)
+      .partialRecord(
+        z.enum([...EXECUTABLE_AGENT_PROVIDERS, ADMISSION_CONTROL_PROVIDER]),
+        AdmissionCapacityLimitSchema
+      )
       .optional(),
     hosts: z.record(z.string().min(1).max(240), AdmissionCapacityLimitSchema).optional(),
   })

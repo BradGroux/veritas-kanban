@@ -91,6 +91,16 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       .filter((record) => !query.rootTaskId || record.request.rootTaskId === query.rootTaskId)
       .filter((record) => !query.provider || record.request.provider === query.provider)
       .filter((record) => !query.hostId || record.request.hostId === query.hostId)
+      .filter(
+        (record) => !query.workflowRunId || record.request.workflowRunId === query.workflowRunId
+      )
+      .filter(
+        (record) => !query.workflowStepId || record.request.workflowStepId === query.workflowStepId
+      )
+      .filter(
+        (record) =>
+          !query.rootReservationId || record.request.rootReservationId === query.rootReservationId
+      )
       .filter((record) => !states || states.has(record.state))
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
       .slice(0, query.limit ?? 100);
