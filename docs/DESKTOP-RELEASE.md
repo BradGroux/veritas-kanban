@@ -192,6 +192,10 @@ policy is tracked in
   `pnpm validate:release -- --version X.Y.Z`, and publish that exact file with
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
   hand-author or repair the live body separately.
+- Use one logical source line per prose paragraph and let GitHub wrap it to the
+  available width. Keep release structure to level-two headings, combine
+  sentence-sized fragments into complete paragraphs, and reserve lists for
+  content that is genuinely easier to scan as a list.
 - Run `Desktop Release` only after Developer ID signing secrets and exactly one
   complete notarization credential set are configured.
 - Inspect the rendered release on both the releases index and tag page. Confirm
