@@ -4150,6 +4150,8 @@ provider and selected host. Inspection requires `agent:read`.
 | Method | Path                                   | Description                                             |
 | ------ | -------------------------------------- | ------------------------------------------------------- |
 | `GET`  | `/api/admission`                       | List reservations with optional scope and state filters |
+| `GET`  | `/api/admission/queue`                 | List the bounded, redacted admission queue view         |
+| `GET`  | `/api/admission/queue/:id`             | Inspect one redacted queue entry                        |
 | `GET`  | `/api/admission/tree/:rootObjectiveId` | Summarize one aggregate execution tree                  |
 | `GET`  | `/api/admission/:id`                   | Inspect one durable reservation                         |
 
@@ -4157,6 +4159,34 @@ List filters are `workspaceId`, `taskId`, `rootTaskId`, `provider`, `hostId`,
 `workflowRunId`, `workflowStepId`, `rootReservationId`, `rootObjectiveId`,
 `nodeId`, `parentNodeId`, repeatable `state` (`active`, `released`, `expired`),
 and `limit` (1-1000).
+
+Queue-list filters are `workspaceId`, `rootObjectiveId`, `nodeId`, repeatable
+`source`, repeatable `state`, raw numeric `priority`, repeatable
+`limitingScope`, `minAgeMs`, `maxAgeMs`, `page`, and `limit` (1-200).
+
+```http
+GET /api/v1/admission/queue?state=queued&source=workflow&minAgeMs=60000&page=1&limit=25
+```
+
+Queue list responses use `admission-queue-list/v1`; individual entries and
+get responses use `admission-queue-inspection/v1`. Every response carries a
+generation timestamp and `conditional: true`. Entries report current
+scheduler position, raw and effective priority, age promotion, readiness,
+lease posture, redacted limiting policies, conditional start factors, and
+persisted selection evidence. Global and per-workspace depth are reported
+against configured queue bounds. Workspace depth includes both the operator
+workspace identifier and its stable redacted key. Safe navigation fields expose
+the workspace, task, attempt, workflow run, workflow step, root objective, and
+execution-tree node identifiers that exist for the entry. Host and root-task
+identities remain hashed.
+
+Pagination is deterministic for the bounded snapshot. `snapshotTruncated`
+signals that older terminal history fell outside the 1,000-entry inspection
+window. Position and readiness can change after generation because arrivals,
+capacity, policy, backoff, and lease state can change. Responses never promise
+an exact start time and never contain raw host or root-task identities, full
+launch payloads, idempotency material, prompts, messages, tool arguments, or
+credentials.
 
 ```http
 GET /api/v1/admission?state=active&provider=codex-cli&limit=25
@@ -4217,7 +4247,8 @@ profile, readiness override, sandbox or budget override, explicit runtime
 capability, commit policy, phase, recovery, or parent attempt are not
 reconstructable from durable task configuration and continue to fail closed
 with `ADMISSION_OVERLOAD`. Queue bounds and retry behavior are configured under
-`features.admission.queue`. Queue inspection endpoints are added separately;
+`features.admission.queue`. Queue inspection is available through
+`GET /api/v1/admission/queue` and `GET /api/v1/admission/queue/:id`;
 reservation inspection remains unchanged.
 
 Workflow roots and provider-backed steps use the same durable queue internally.

@@ -1,8 +1,14 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import type {
+  AdmissionLaunchSource,
+  AdmissionQueueGetResponse,
+  AdmissionQueueInspectionEntry,
+  AdmissionQueueListResponse,
+  AdmissionQueueState,
   AdmissionReservation,
   AdmissionReservationState,
+  AdmissionScope,
   ExecutionTreeBudgetSummary,
 } from '@veritas-kanban/shared';
 import { api } from '../utils/api.js';
@@ -16,6 +22,89 @@ export function registerAdmissionCommands(program: Command): void {
   const admission = program
     .command('admission')
     .description('Inspect durable execution admission reservations');
+
+  const queue = admission.command('queue').description('Inspect the durable admission queue');
+
+  queue
+    .command('list')
+    .description('List queued, leased, dispatched, or terminal admission entries')
+    .option('--workspace <id>', 'Filter by workspace')
+    .option('--root-objective <id>', 'Filter by execution-tree root objective')
+    .option('--node <id>', 'Filter by execution-tree node')
+    .option('--source <sources...>', 'Filter by launch source')
+    .option('--state <states...>', 'Filter by queue state')
+    .option('--priority <level>', 'Filter by raw numeric priority')
+    .option('--limiting-scope <scopes...>', 'Filter by limiting scope')
+    .option('--min-age <milliseconds>', 'Minimum queue age in milliseconds')
+    .option('--max-age <milliseconds>', 'Maximum queue age in milliseconds')
+    .option('--page <number>', 'Result page', '1')
+    .option('--limit <count>', 'Maximum entries per page', '100')
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
+      try {
+        const query = new URLSearchParams();
+        if (options.workspace) query.set('workspaceId', options.workspace);
+        if (options.rootObjective) query.set('rootObjectiveId', options.rootObjective);
+        if (options.node) query.set('nodeId', options.node);
+        for (const source of (options.source ?? []) as AdmissionLaunchSource[]) {
+          query.append('source', source);
+        }
+        for (const state of (options.state ?? []) as AdmissionQueueState[]) {
+          query.append('state', state);
+        }
+        if (options.priority) query.set('priority', options.priority);
+        for (const scope of (options.limitingScope ?? []) as AdmissionScope[]) {
+          query.append('limitingScope', scope);
+        }
+        if (options.minAge) query.set('minAgeMs', options.minAge);
+        if (options.maxAge) query.set('maxAgeMs', options.maxAge);
+        query.set('page', options.page);
+        query.set('limit', options.limit);
+        const result = await api<AdmissionQueueListResponse>(
+          `/api/admission/queue?${query.toString()}`
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        if (result.entries.length === 0) {
+          console.log(chalk.dim('No admission queue entries matched.'));
+          return;
+        }
+        for (const entry of result.entries) printQueueEntry(entry);
+        console.log(
+          chalk.dim(
+            `Conditional snapshot at ${result.generatedAt}; ${result.depth.global.current}/${result.depth.global.limit} global queue slots used.`
+          )
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  queue
+    .command('get <id>')
+    .description('Inspect one admission queue entry')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const result = await api<AdmissionQueueGetResponse>(
+          `/api/admission/queue/${encodeURIComponent(id)}`
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        printQueueEntry(result.entry, true);
+        console.log(
+          chalk.dim(
+            `Conditional snapshot at ${result.generatedAt}; capacity, policy, arrivals, and leases may change position.`
+          )
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
 
   admission
     .command('list')
@@ -104,6 +193,27 @@ export function registerAdmissionCommands(program: Command): void {
         printError(error);
       }
     });
+}
+
+function printQueueEntry(entry: AdmissionQueueInspectionEntry, verbose = false): void {
+  console.log(
+    `${entry.position ?? '-'} ${entry.state} ${chalk.bold(entry.id)} priority=${entry.rawPriority}->${entry.effectivePriority} readiness=${entry.readiness}`
+  );
+  console.log(
+    chalk.dim(
+      `  source=${entry.launch.source} target=${entry.launch.target} age=${entry.ageMs}ms lease=${entry.lease.posture}`
+    )
+  );
+  if (verbose) {
+    console.log(
+      chalk.dim(
+        `  retries=${entry.retry.count}/${entry.retry.maximum} available=${entry.retry.availableAt}`
+      )
+    );
+    console.log(
+      chalk.dim(`  conditional=${entry.conditionalStartFactors.join(',') || 'capacity-recheck'}`)
+    );
+  }
 }
 
 function printReservation(reservation: AdmissionReservation, verbose = false): void {

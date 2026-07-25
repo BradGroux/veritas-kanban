@@ -587,6 +587,166 @@ describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (b
     expect(stillQueued.selectionEvidence).toBeUndefined();
   });
 
+  it('projects a filtered, redacted queue view and inspects leased evidence', async () => {
+    const repository = await repositoryFor(backend);
+    let now = new Date('2026-07-25T12:00:00.000Z');
+    const settings = configuredSettings({ global: { concurrentRuns: 1 } });
+    const service = createService(repository, settings, {
+      now: () => now,
+      ownerId: `owner-inspection-${backend}`,
+    });
+    await expect(service.inspectQueue({ page: 1, limit: 1 })).resolves.toMatchObject({
+      depth: { global: { current: 0, limit: 1_000 }, workspaces: [] },
+      pagination: {
+        page: 1,
+        limit: 1,
+        total: 0,
+        hasMore: false,
+        snapshotTruncated: false,
+      },
+      entries: [],
+    });
+    const active = await service.admit(request(`task-inspection-active-${backend}`));
+    const low = await service.admitOrQueue(
+      treeRequest(`task-inspection-low-${backend}`, 'node-low'),
+      {
+        agent: 'codex',
+        attemptId: `attempt-inspection-low-${backend}`,
+        priority: 'low',
+      }
+    );
+    const high = await service.admitOrQueue(
+      {
+        ...request(`task-inspection-high-${backend}`),
+        workspaceId: 'workspace-b',
+      },
+      {
+        agent: 'codex',
+        attemptId: `attempt-inspection-high-${backend}`,
+        priority: 'critical',
+      }
+    );
+    now = new Date('2026-07-25T12:02:00.000Z');
+
+    const listed = await service.inspectQueue({
+      workspaceId: 'workspace-a',
+      rootObjectiveId: 'objective-a',
+      nodeId: 'node-low',
+      sources: ['direct'],
+      states: ['queued'],
+      priority: 0,
+      limitingScopes: ['global'],
+      minAgeMs: 60_000,
+      maxAgeMs: 180_000,
+      page: 1,
+      limit: 10,
+    });
+
+    expect(listed).toMatchObject({
+      schemaVersion: 'admission-queue-list/v1',
+      generatedAt: now.toISOString(),
+      conditional: true,
+      depth: {
+        global: { current: 2, limit: 1_000 },
+        workspaces: expect.arrayContaining([
+          expect.objectContaining({
+            workspaceId: 'workspace-a',
+            workspaceKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            current: 1,
+            limit: 100,
+          }),
+        ]),
+      },
+      pagination: { page: 1, limit: 10, total: 1, hasMore: false },
+      entries: [
+        {
+          id: low.queueEntry?.id,
+          state: 'queued',
+          position: 2,
+          rawPriority: 0,
+          effectivePriority: 2,
+          agePromotion: 2,
+          ageMs: 120_000,
+          readiness: 'conditional',
+          lease: { posture: 'none' },
+          launch: {
+            source: 'direct',
+            target: 'direct',
+            provider: 'codex-cli',
+            workspaceId: 'workspace-a',
+            taskKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            workspaceKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            rootObjectiveKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            nodeKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          },
+          navigation: {
+            taskId: `task-inspection-low-${backend}`,
+            attemptId: `attempt-inspection-low-${backend}`,
+            executionTree: {
+              rootObjectiveId: 'objective-a',
+              nodeId: 'node-low',
+              edge: 'root',
+              depth: 0,
+            },
+          },
+          limitingPolicies: [
+            {
+              scope: 'global',
+              scopeKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+              limits: { concurrentRuns: 1 },
+            },
+          ],
+          conditionalStartFactors: expect.arrayContaining([
+            'queue-eligibility',
+            'active-reservation-release',
+            'policy-recheck',
+          ]),
+        },
+      ],
+    });
+    const serialized = JSON.stringify(listed);
+    expect(serialized).toContain('workspace-a');
+    expect(serialized).toContain(`task-inspection-low-${backend}`);
+    expect(serialized).not.toContain(`tree:node-low`);
+    expect(serialized).not.toContain('idempotencyKey');
+
+    const firstPage = await service.inspectQueue({ page: 1, limit: 1 });
+    const secondPage = await service.inspectQueue({ page: 2, limit: 1 });
+    expect(firstPage).toMatchObject({
+      pagination: { page: 1, limit: 1, total: 2, hasMore: true },
+      entries: [{ id: high.queueEntry?.id, position: 1 }],
+    });
+    expect(secondPage).toMatchObject({
+      pagination: { page: 2, limit: 1, total: 2, hasMore: false },
+      entries: [{ id: low.queueEntry?.id, position: 2 }],
+    });
+
+    await service.release(
+      active.reservation?.id as string,
+      'completed',
+      `release-inspection-active-${backend}`
+    );
+    const claim = await service.claimNextQueued();
+    expect(claim?.entry.id).toBe(high.queueEntry?.id);
+
+    const inspected = await service.inspectQueueEntry(high.queueEntry?.id as string);
+    expect(inspected).toMatchObject({
+      schemaVersion: 'admission-queue-inspection/v1',
+      conditional: true,
+      entry: {
+        id: high.queueEntry?.id,
+        state: 'leased',
+        readiness: 'reserved',
+        lease: { posture: 'active', expiresAt: claim?.entry.lease?.expiresAt },
+        selectionEvidence: {
+          selectedQueueEntryId: high.queueEntry?.id,
+          capacityReadiness: 'ready',
+        },
+      },
+    });
+    expect(inspected.entry.position).toBeUndefined();
+  });
+
   it('reactivates a released pre-dispatch reservation when the queue retries', async () => {
     const repository = await repositoryFor(backend);
     let now = new Date('2026-07-25T12:00:00.000Z');

@@ -1042,7 +1042,12 @@ matching read-only REST endpoints. Use `--workflow-run`, `--workflow-step`,
 `--root-reservation`, or `--root-objective` to follow a tree. Use
 `vk admission tree <root-objective-id>` for aggregate totals, remaining policy
 capacity, blocking policies, and bounded contributors. Machine consumers
-should use `--json`.
+should use `--json`. Inspect the conditional, redacted queue view with
+`vk admission queue list`, `vk admission queue get <queue-id>`, or the matching
+`/api/v1/admission/queue` endpoints. Queue position is evidence at the response
+generation time, never an exact start-time promise. Machine consumers may use
+the safe `navigation` identifiers to open related task, attempt, workflow, and
+execution-tree views without accessing the redacted launch payload.
 
 ## Local And Cloud Profiles
 

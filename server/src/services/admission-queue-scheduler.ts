@@ -23,6 +23,12 @@ export interface AdmissionQueueRanking {
   deferredWorkspaceKey?: string;
 }
 
+export interface AdmissionQueueOrdering {
+  candidates: RankedAdmissionQueueCandidate[];
+  snapshotSize: number;
+  deferredWorkspaceKey?: string;
+}
+
 export interface RankAdmissionQueueEntriesInput {
   entries: AdmissionQueueEntry[];
   history: AdmissionQueueSelectionEvidence[];
@@ -33,6 +39,20 @@ export interface RankAdmissionQueueEntriesInput {
 export function rankAdmissionQueueEntries(
   input: RankAdmissionQueueEntriesInput
 ): AdmissionQueueRanking {
+  const ordered = orderAdmissionQueueEntries(input);
+  const evaluated = ordered.candidates.slice(0, input.settings.evaluationLimit);
+
+  return {
+    candidates: evaluated,
+    snapshotSize: ordered.snapshotSize,
+    evaluatedCount: evaluated.length,
+    ...(ordered.deferredWorkspaceKey ? { deferredWorkspaceKey: ordered.deferredWorkspaceKey } : {}),
+  };
+}
+
+export function orderAdmissionQueueEntries(
+  input: RankAdmissionQueueEntriesInput
+): AdmissionQueueOrdering {
   assertSchedulerSettings(input.settings);
   const nowMs = Date.parse(input.now);
   if (!Number.isFinite(nowMs)) throw new Error('Admission scheduler requires a valid timestamp.');
@@ -49,26 +69,9 @@ export function rankAdmissionQueueEntries(
       left.selectedQueueEntryId.localeCompare(right.selectedQueueEntryId)
   );
   const deferredWorkspaceKey = workspaceAtBurstLimit(history, input.settings.workspaceBurstLimit);
-  const candidates: RankedAdmissionQueueCandidate[] = eligible.map((entry) => {
-    const rawPriority = normalizeNumericPriority(
-      entry.priority ?? input.settings.defaultPriority,
-      input.settings
-    );
-    const ageMs = Math.max(0, nowMs - Date.parse(entry.createdAt));
-    const agePromotion = Math.min(
-      input.settings.maxAgePromotion,
-      Math.floor(ageMs / input.settings.agingIntervalMs)
-    );
-    return {
-      entry,
-      workspaceKey: workspaceKey(entry.request.workspaceId),
-      rawPriority,
-      ageMs,
-      agePromotion,
-      effectivePriority: Math.min(input.settings.priorityLevels - 1, rawPriority + agePromotion),
-      workspaceTurn: 'normal',
-    };
-  });
+  const candidates = eligible.map((entry) =>
+    scoreAdmissionQueueEntryAt(entry, nowMs, input.settings)
+  );
   const fairnessApplies =
     deferredWorkspaceKey !== undefined &&
     candidates.some((candidate) => candidate.workspaceKey !== deferredWorkspaceKey);
@@ -92,13 +95,46 @@ export function rankAdmissionQueueEntries(
       candidates[index] = { ...candidates[index], workspaceTurn: 'fairness-promoted' };
     }
   }
-  const evaluated = candidates.slice(0, input.settings.evaluationLimit);
-
   return {
-    candidates: evaluated,
+    candidates,
     snapshotSize: eligible.length,
-    evaluatedCount: evaluated.length,
     ...(fairnessApplies ? { deferredWorkspaceKey } : {}),
+  };
+}
+
+export function scoreAdmissionQueueEntry(
+  entry: AdmissionQueueEntry,
+  now: string,
+  settings: AdmissionQueueSchedulerSettings
+): RankedAdmissionQueueCandidate {
+  assertSchedulerSettings(settings);
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) throw new Error('Admission scheduler requires a valid timestamp.');
+  return scoreAdmissionQueueEntryAt(entry, nowMs, settings);
+}
+
+function scoreAdmissionQueueEntryAt(
+  entry: AdmissionQueueEntry,
+  nowMs: number,
+  settings: AdmissionQueueSchedulerSettings
+): RankedAdmissionQueueCandidate {
+  const rawPriority = normalizeNumericPriority(
+    entry.priority ?? settings.defaultPriority,
+    settings
+  );
+  const ageMs = Math.max(0, nowMs - Date.parse(entry.createdAt));
+  const agePromotion = Math.min(
+    settings.maxAgePromotion,
+    Math.floor(ageMs / settings.agingIntervalMs)
+  );
+  return {
+    entry,
+    workspaceKey: workspaceKey(entry.request.workspaceId),
+    rawPriority,
+    ageMs,
+    agePromotion,
+    effectivePriority: Math.min(settings.priorityLevels - 1, rawPriority + agePromotion),
+    workspaceTurn: 'normal',
   };
 }
 
