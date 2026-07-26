@@ -336,6 +336,7 @@ export interface SearchKnowledgeCollectionInput {
 export interface KnowledgeSearchResult {
   id: string;
   kind: 'raw-source' | 'derived-page';
+  backend: 'qmd' | 'keyword';
   title: string;
   snippet: string;
   score: number;
@@ -347,7 +348,7 @@ export interface KnowledgeSearchResult {
 
 export interface KnowledgeSearchResponse {
   query: string;
-  backend: 'keyword';
+  backend: 'qmd' | 'keyword';
   degraded: boolean;
   reason?: string;
   results: KnowledgeSearchResult[];

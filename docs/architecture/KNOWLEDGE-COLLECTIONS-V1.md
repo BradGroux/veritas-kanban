@@ -78,16 +78,18 @@ The REST API deliberately returns source metadata, not stored source content. Co
 
 Bounded keyword search spans immutable raw snapshots and current derived pages. Callers can search both layers or restrict the request to one. Raw hits cite their immutable source revision. Derived hits retain the deduplicated claim citations stored on the page, so consumers can distinguish evidence from synthesis and follow each material claim back to its registered source.
 
-The response follows the existing search degradation contract. Keyword requests return `backend: "keyword"` and `degraded: false`. `auto` or `qmd` requests currently return the same cited keyword results with `degraded: true` and an explicit reason; collection data is not silently presented as semantic/QMD output before a collection index exists.
+For `auto` or `qmd`, current derived page digests produce a Markdown projection under the runtime directory. Each workspace collection receives a hashed QMD collection name inside an isolated `QMD_CONFIG_DIR` and `INDEX_PATH`; the adapter registers it with the documented `collection add --mask "**/*.md"` command, marks it excluded from unscoped QMD queries, refreshes only when projection digests change, and queries it with an exact `-c` filter. QMD paths are accepted only when they map back to an eligible page ID, and citations come from the authoritative page record rather than QMD output. Set `VERITAS_QMD_KNOWLEDGE_EMBED=true` to refresh embeddings for changed projections.
+
+The response follows the existing search degradation contract. QMD-ranked derived hits identify `backend: "qmd"` while raw-source hits identify `backend: "keyword"`. Missing QMD, refresh/query failure, or a raw-only scope returns cited keyword results with `degraded: true` and an explicit reason.
 
 ## Current delivery boundary
 
-This foundation does not yet claim QMD collection indexing, query promotion, cited work-product export, redaction-aware query projections, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited keyword search, and proposal transaction and must not add an alternate source or page store.
+This foundation does not yet claim query promotion, cited work-product export, policy-aware content redaction beyond secret-shaped snippets, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited search, and proposal transaction and must not add an alternate source or page store.
 
 The next implementation slices are:
 
-1. QMD indexing with keyword fallback for derived pages; and
-2. cited query promotion, redaction, launch-manifest restrictions, and export enforcement through the same proposal workflow.
+1. cited query promotion through the proposal workflow; and
+2. policy-aware redaction, launch-manifest restrictions, and cited export enforcement.
 
 ## Code
 

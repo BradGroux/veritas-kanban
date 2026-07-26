@@ -12,6 +12,7 @@ import {
   KnowledgeCollectionService,
   type KnowledgeCollectionActor,
 } from '../services/knowledge-collection-service.js';
+import type { KnowledgeQmdSearchAdapter } from '../services/knowledge-qmd-search-service.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SQLITE_BASE_MIGRATIONS } from '../storage/sqlite/migrations.js';
 
@@ -317,7 +318,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       backend: 'keyword',
       degraded: true,
     });
-    expect(response.reason).toContain('not yet indexed by QMD');
+    expect(response.reason).toContain('qmd unavailable');
     expect(response.results.map((result) => result.snippet).join(' ')).not.toContain(
       'private-search-secret'
     );
@@ -355,6 +356,49 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     ).toMatchObject({
       degraded: false,
       results: [expect.objectContaining({ kind: 'derived-page' })],
+    });
+
+    const qmdService = await createService(storageType, {
+      search: async ({ pages }) => [
+        {
+          pageId: pages[0].id,
+          score: 0.97,
+          snippet: 'QMD ranked gateway architecture.',
+        },
+      ],
+    });
+    const qmdCollection = await qmdService.createCollection(WORKSPACE_ID, ADMIN, {
+      ...COLLECTION_INPUT,
+      operationId: 'create-qmd-search',
+      slug: 'qmd-search',
+    });
+    const qmdSource = await qmdService.registerSource(
+      WORKSPACE_ID,
+      qmdCollection.id,
+      ADMIN,
+      inlineSource({ operationId: 'qmd-source', content: 'Gateway evidence' })
+    );
+    await proposeAndApplyPages(qmdService, WORKSPACE_ID, qmdCollection.id, ADMIN, {
+      operationId: 'qmd-page',
+      pages: [pageCandidate('qmd-gateway', qmdSource.id)],
+    });
+    expect(
+      await qmdService.searchCollection(WORKSPACE_ID, qmdCollection.id, AGENT, {
+        query: 'gateway',
+        scope: 'derived-pages',
+        backend: 'qmd',
+      })
+    ).toMatchObject({
+      backend: 'qmd',
+      degraded: false,
+      results: [
+        expect.objectContaining({
+          kind: 'derived-page',
+          backend: 'qmd',
+          score: 0.97,
+          citations: [expect.objectContaining({ sourceId: qmdSource.id })],
+        }),
+      ],
     });
   });
 
@@ -681,7 +725,14 @@ it('upgrades a source-only SQLite database before applying ingestion proposals',
   ).toBe(2);
 });
 
-async function createService(storageType: 'file' | 'sqlite'): Promise<KnowledgeCollectionService> {
+async function createService(
+  storageType: 'file' | 'sqlite',
+  qmdSearch: KnowledgeQmdSearchAdapter = {
+    search: async () => {
+      throw new Error('qmd unavailable');
+    },
+  }
+): Promise<KnowledgeCollectionService> {
   const root = await mkdtemp(path.join(tmpdir(), `veritas-knowledge-${storageType}-`));
   let tick = 0;
   const now = () => new Date(Date.UTC(2026, 6, 25, 12, 0, tick++));
@@ -690,11 +741,13 @@ async function createService(storageType: 'file' | 'sqlite'): Promise<KnowledgeC
       ? new KnowledgeCollectionService({
           storageType,
           filePath: path.join(root, 'knowledge-collections.json'),
+          qmdSearch,
           now,
         })
       : new KnowledgeCollectionService({
           storageType,
           sqliteConnectionOptions: { databasePath: path.join(root, 'knowledge.db') },
+          qmdSearch,
           now,
         });
   cleanups.push(async () => {
