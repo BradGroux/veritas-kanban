@@ -12,6 +12,11 @@ import path from 'path';
 import { createLogger } from '../lib/logger.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { getAllStatus as getCircuitBreakerStatus } from '../services/circuit-registry.js';
+import {
+  getDependencyCircuitExecutionService,
+  getDependencyCircuitRegistryService,
+  storageDependencyIdentity,
+} from '../services/dependency-circuit-runtime.js';
 import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import type { WebSocketServer } from 'ws';
 
@@ -59,6 +64,21 @@ async function checkStorage(): Promise<'ok' | 'fail'> {
     return 'ok';
   } catch (err) {
     log.warn({ err, dataDir }, 'Storage check failed');
+    return 'fail';
+  }
+}
+
+async function checkStorageThroughCircuit(): Promise<'ok' | 'fail'> {
+  try {
+    return await getDependencyCircuitExecutionService().execute(
+      storageDependencyIdentity(process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file'),
+      async () => {
+        const status = await checkStorage();
+        if (status === 'fail') throw new Error('Storage health check failed.');
+        return status;
+      }
+    );
+  } catch {
     return 'fail';
   }
 }
@@ -182,7 +202,7 @@ healthRouter.get('/live', (_req, res) => {
 healthRouter.get('/ready', async (_req, res) => {
   try {
     const [storage, disk, tasksFile] = await Promise.all([
-      checkStorage(),
+      checkStorageThroughCircuit(),
       checkDisk(),
       checkTasksFile(),
     ]);
@@ -233,7 +253,7 @@ healthRouter.get('/ready', async (_req, res) => {
  */
 async function buildDeepHealthPayload() {
   const [storage, disk, tasksFile] = await Promise.all([
-    checkStorage(),
+    checkStorageThroughCircuit(),
     checkDisk(),
     checkTasksFile(),
   ]);
@@ -266,11 +286,30 @@ async function buildDeepHealthPayload() {
 
   // Get circuit breaker status for all registered services
   const circuitBreakers = getCircuitBreakerStatus();
+  let dependencyCircuits: Awaited<
+    ReturnType<ReturnType<typeof getDependencyCircuitRegistryService>['listSnapshots']>
+  > = [];
+  let dependencyCircuitError: string | undefined;
+  try {
+    dependencyCircuits = await getDependencyCircuitRegistryService().listSnapshots();
+  } catch (error) {
+    dependencyCircuitError = error instanceof Error ? error.message : 'Unknown persistence error';
+    log.warn({ err: error }, 'Dependency circuit diagnostics failed');
+  }
+  const dependencyCircuitSummary = {
+    total: dependencyCircuits.length,
+    closed: dependencyCircuits.filter((circuit) => circuit.state === 'closed').length,
+    open: dependencyCircuits.filter((circuit) => circuit.state === 'open').length,
+    halfOpen: dependencyCircuits.filter((circuit) => circuit.state === 'half-open').length,
+  };
 
   return {
     status:
       storageStatus === 'fail' ||
       disk === 'fail' ||
+      dependencyCircuitSummary.open > 0 ||
+      dependencyCircuitSummary.halfOpen > 0 ||
+      dependencyCircuitError !== undefined ||
       (process.env.VERITAS_STORAGE === 'sqlite' && sqlite?.healthPosture !== 'healthy')
         ? 'degraded'
         : 'ok',
@@ -289,6 +328,11 @@ async function buildDeepHealthPayload() {
     },
     wsConnections,
     circuitBreakers,
+    dependencyCircuits: {
+      summary: dependencyCircuitSummary,
+      circuits: dependencyCircuits,
+      error: dependencyCircuitError,
+    },
     sqlite,
     node: {
       version: process.version,

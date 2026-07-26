@@ -292,6 +292,14 @@ import {
   type PhaseTransitionService,
 } from './phase-transition-service.js';
 import { verifyPhaseCapabilityEvidenceDigest } from './phase-capability-service.js';
+import {
+  defaultDependencyCircuitExecutionService,
+  providerDependencyIdentity,
+} from './dependency-circuit-runtime.js';
+import {
+  DependencyCircuitExecutionService,
+  type DependencyCircuitExecutionOptions,
+} from './dependency-circuit-routing-service.js';
 const log = createLogger('clawdbot-agent-service');
 
 const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -306,6 +314,23 @@ const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*([^\s"'`,}]+)/gi, '$1=[REDACTED]'],
 ];
 const CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES = 64 * 1024;
+const providerDependencyExecutionOptions = {
+  signalsForError: (error: unknown) => {
+    const candidate =
+      error instanceof Error
+        ? (error as Error & { code?: string; status?: number; statusCode?: number })
+        : undefined;
+    return {
+      callerCancelled: candidate?.name === 'AbortError',
+      timedOut:
+        candidate?.name === 'TimeoutError' ||
+        candidate?.code === 'ETIMEDOUT' ||
+        /\\btime(?:d)?\\s*out\\b/i.test(candidate?.message ?? ''),
+      statusCode: candidate?.statusCode ?? candidate?.status,
+      errorCode: candidate?.code,
+    };
+  },
+} satisfies DependencyCircuitExecutionOptions;
 
 export interface AgentProviderStartContext {
   task: Task;
@@ -610,6 +635,7 @@ export class ClawdbotAgentService {
   private phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'> &
     Partial<Pick<PhaseTransitionService, 'list'>>;
   private runPhaseAuthority: RunPhaseAuthorityService;
+  private dependencyExecution: DependencyCircuitExecutionService;
   private logsDir: string;
 
   constructor(
@@ -654,7 +680,8 @@ export class ClawdbotAgentService {
     reflectionExtractionJobs: Pick<
       ReflectionExtractionJobService,
       'enqueue'
-    > = getReflectionExtractionJobService()
+    > = getReflectionExtractionJobService(),
+    dependencyExecution: DependencyCircuitExecutionService = defaultDependencyCircuitExecutionService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -684,6 +711,7 @@ export class ClawdbotAgentService {
     this.runEgressGateway = runEgressGateway;
     this.durableGoalSupervisor = durableGoalSupervisor;
     this.reflectionExtractionJobs = reflectionExtractionJobs;
+    this.dependencyExecution = dependencyExecution;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -1888,11 +1916,17 @@ export class ClawdbotAgentService {
       budgetEvaluation.modelOverride && profileAgentConfig
         ? { ...profileAgentConfig, model: budgetEvaluation.modelOverride }
         : profileAgentConfig;
-    const providerRuntimeManifest = await adapter.probe({
-      agentConfig: launchAgentConfig,
-      health: agentHealth,
-      cwd: this.expandPath(task.git.worktreePath),
-    });
+    const providerProbeCwd = this.expandPath(task.git.worktreePath);
+    const providerRuntimeManifest = await this.dependencyExecution.execute(
+      providerDependencyIdentity(provider, launchAgentConfig?.model, task.project),
+      () =>
+        adapter.probe({
+          agentConfig: launchAgentConfig,
+          health: agentHealth,
+          cwd: providerProbeCwd,
+        }),
+      providerDependencyExecutionOptions
+    );
     const harnessSupport = evaluateHarnessSupportStatus(
       launchAgentConfig as AgentConfig,
       agentHealth,
@@ -2192,11 +2226,17 @@ export class ClawdbotAgentService {
       budgetEvaluation.modelOverride && profileAgentConfig
         ? { ...profileAgentConfig, model: budgetEvaluation.modelOverride }
         : profileAgentConfig;
-    const providerRuntimeManifest = await adapter.probe({
-      agentConfig: launchAgentConfig,
-      health: agentHealth,
-      cwd: this.expandPath(task.git.worktreePath),
-    });
+    const providerProbeCwd = this.expandPath(task.git.worktreePath);
+    const providerRuntimeManifest = await this.dependencyExecution.execute(
+      providerDependencyIdentity(provider, launchAgentConfig?.model, task.project),
+      () =>
+        adapter.probe({
+          agentConfig: launchAgentConfig,
+          health: agentHealth,
+          cwd: providerProbeCwd,
+        }),
+      providerDependencyExecutionOptions
+    );
     const harnessSupport = evaluateHarnessSupportStatus(
       launchAgentConfig as AgentConfig,
       agentHealth,
@@ -3075,20 +3115,31 @@ export class ClawdbotAgentService {
       };
       await this.admission.assertExecutionTreeLaunchAllowed(executionTree.rootObjectiveId);
       this.assertProviderAdmissionEvidence(providerAdmission, attempt);
-      await adapter.start({
-        task,
-        agentConfig: launchAgentConfig,
-        transport: providerTransport,
-        logPath,
-        attemptId,
-        startedAt,
-        emitter,
-        attempt,
-        sandboxPolicy: trustSandbox.policy,
-        runLaunchManifest,
-        conversation,
-        admission: providerAdmission,
-      });
+      await this.dependencyExecution.execute(
+        providerDependencyIdentity(
+          provider,
+          launchAgentConfig?.model,
+          taskEnvelope.workspace.workspaceId
+        ),
+        () =>
+          Promise.resolve(
+            adapter.start({
+              task,
+              agentConfig: launchAgentConfig,
+              transport: providerTransport,
+              logPath,
+              attemptId,
+              startedAt,
+              emitter,
+              attempt,
+              sandboxPolicy: trustSandbox.policy,
+              runLaunchManifest,
+              conversation,
+              admission: providerAdmission,
+            })
+          ),
+        providerDependencyExecutionOptions
+      );
     } catch (error: unknown) {
       const startError = error instanceof Error ? error : new Error(String(error));
       await this.releaseAdmission(
@@ -5170,7 +5221,11 @@ export class ClawdbotAgentService {
   ): Promise<ProviderRuntimeManifest> {
     const provider = this.resolveAgentProvider(agentConfig, agent);
     const health = await this.assertAgentAvailable(agent, agentConfig);
-    return this.resolveProviderAdapter(provider, surface).probe({ agentConfig, health });
+    return this.dependencyExecution.execute(
+      providerDependencyIdentity(provider, agentConfig.model),
+      () => this.resolveProviderAdapter(provider, surface).probe({ agentConfig, health }),
+      providerDependencyExecutionOptions
+    );
   }
 
   private async assertAgentAvailable(

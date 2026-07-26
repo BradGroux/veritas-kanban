@@ -29,6 +29,9 @@ import {
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteToolControlPlaneRepository } from '../storage/sqlite/tool-control-plane-repository.js';
 import { calculateCredentialDefinitionDigest } from '../utils/credential-broker-digest.js';
+import { DependencyCircuitExecutionService } from '../services/dependency-circuit-routing-service.js';
+import { DependencyCircuitRegistryService } from '../services/dependency-circuit-registry-service.js';
+import { InMemoryDependencyCircuitStateRepository } from '../storage/dependency-circuit-state-repository.js';
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
 const MANIFEST_DIGEST = `sha256:${'f'.repeat(64)}`;
@@ -117,6 +120,7 @@ function fixture(
       'getDefinition' | 'issueLease' | 'withCredential'
     >;
     phaseAuthority?: Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes' | 'binding'>;
+    dependencyExecution?: DependencyCircuitExecutionService;
   } = {}
 ) {
   const requests: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -200,6 +204,9 @@ function fixture(
     now: () => new Date('2026-07-24T12:00:00.000Z'),
     environment: options.environment ?? {},
     ...(options.phaseAuthority ? { phaseAuthority: options.phaseAuthority } : {}),
+    ...(options.dependencyExecution
+      ? { dependencyExecution: options.dependencyExecution }
+      : {}),
   });
   return { service, open, requests, append, requestApproval };
 }
@@ -236,6 +243,47 @@ async function catalog(
 }
 
 describe('ToolControlPlaneService', () => {
+  it('reports discovery and invocation through scoped dependency circuits', async () => {
+    const registry = new DependencyCircuitRegistryService({
+      repository: new InMemoryDependencyCircuitStateRepository(),
+    });
+    const dependencyExecution = new DependencyCircuitExecutionService(registry);
+    const { service } = fixture({ dependencyExecution });
+
+    await catalog(service);
+    await service.invoke(
+      {
+        taskId: 'task-tools',
+        attemptId: 'attempt-tools',
+        serverId: 'fixture',
+        tool: 'search',
+        arguments: { query: 'bounded' },
+        operationId: 'circuit-call',
+      },
+      'agent-a'
+    );
+
+    expect(await registry.listSnapshots()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependency: expect.objectContaining({ kind: 'mcp-server' }),
+          state: 'closed',
+          sampleCount: 1,
+          lastOutcome: 'success',
+        }),
+        expect.objectContaining({
+          dependency: expect.objectContaining({
+            kind: 'mcp-server',
+            provider: 'codex-app-server',
+          }),
+          state: 'closed',
+          sampleCount: 1,
+          lastOutcome: 'success',
+        }),
+      ])
+    );
+  });
+
   it('verifies runtime health before reusing cached schemas and invalidates on definition change', async () => {
     const { service, open, requests } = fixture();
     const created = await service.createDefinition(definition());

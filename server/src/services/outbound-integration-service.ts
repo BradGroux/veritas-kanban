@@ -9,6 +9,14 @@ import {
   type UrlValidationOptions,
 } from '../utils/url-validation.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import {
+  defaultDependencyCircuitExecutionService,
+  integrationDependencyIdentity,
+} from './dependency-circuit-runtime.js';
+import {
+  DependencyCircuitExecutionService,
+  DependencyRouteUnavailableError,
+} from './dependency-circuit-routing-service.js';
 
 export type OutboundEndpointType =
   | 'broadcast-webhook'
@@ -104,11 +112,29 @@ export interface OutboundIntegrationServiceOptions {
   storageDir?: string;
   persist?: boolean;
   audit?: (event: AuditEvent) => Promise<void>;
+  dependencyExecution?: DependencyCircuitExecutionService;
 }
 
 const DEFAULT_AUTH: OutboundEndpointAuth = { type: 'none' };
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_DELIVERIES = 500;
+
+class OutboundDependencyResponseError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly responseText?: string
+  ) {
+    super(`Outbound dependency returned HTTP ${statusCode}.`);
+    this.name = 'OutboundDependencyResponseError';
+  }
+}
+
+class OutboundPolicyBlockError extends Error {
+  constructor() {
+    super('URL blocked by outbound URL policy');
+    this.name = 'OutboundPolicyBlockError';
+  }
+}
 
 function openClawGatewayValidationOptions(): UrlValidationOptions {
   return {
@@ -178,6 +204,7 @@ export class OutboundIntegrationService {
   private readonly storageDir: string;
   private readonly persist: boolean;
   private readonly audit: (event: AuditEvent) => Promise<void>;
+  private readonly dependencyExecution: DependencyCircuitExecutionService;
   private loaded = false;
   private endpoints = new Map<string, OutboundEndpointRecord>();
   private deliveries: OutboundDeliveryAttempt[] = [];
@@ -186,6 +213,8 @@ export class OutboundIntegrationService {
     this.storageDir = options.storageDir || path.join(getRuntimeDir(), 'outbound-integrations');
     this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.audit = options.audit || auditLog;
+    this.dependencyExecution =
+      options.dependencyExecution ?? defaultDependencyCircuitExecutionService();
   }
 
   async registerEndpoint(input: OutboundEndpointInput): Promise<OutboundEndpointRecord> {
@@ -278,15 +307,42 @@ export class OutboundIntegrationService {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await safeFetch(
-        endpoint.url,
-        {
-          method,
-          headers: request.headers,
-          body: request.body,
-          signal: controller.signal,
+      const response = await this.dependencyExecution.execute(
+        integrationDependencyIdentity(registered.id, registered.type),
+        async () => {
+          const candidate = await safeFetch(
+            endpoint.url,
+            {
+              method,
+              headers: request.headers,
+              body: request.body,
+              signal: controller.signal,
+            },
+            endpoint.validationOptions
+          );
+          if (!candidate) throw new OutboundPolicyBlockError();
+          if (candidate.status === 429 || candidate.status >= 500) {
+            throw new OutboundDependencyResponseError(
+              candidate.status,
+              await readLimitedResponseText(candidate, request.responseBodyLimit)
+            );
+          }
+          return candidate;
         },
-        endpoint.validationOptions
+        {
+          signalsForError: (error) => {
+            if (error instanceof OutboundPolicyBlockError) return { policyBlocked: true };
+            if (error instanceof OutboundDependencyResponseError) {
+              return { statusCode: error.statusCode };
+            }
+            const candidate =
+              error instanceof Error ? (error as Error & { code?: string }) : undefined;
+            return {
+              timedOut: candidate?.name === 'AbortError' || candidate?.code === 'ETIMEDOUT',
+              errorCode: candidate?.code,
+            };
+          },
+        }
       );
 
       if (!response) {
@@ -330,8 +386,16 @@ export class OutboundIntegrationService {
       };
     } catch (err) {
       const message = this.sanitizeError(err, endpoint.url);
+      const circuitRejected = err instanceof DependencyRouteUnavailableError;
+      const policyBlocked = err instanceof OutboundPolicyBlockError;
+      const dependencyResponse =
+        err instanceof OutboundDependencyResponseError ? err : undefined;
       const status: OutboundDeliveryStatus =
-        err instanceof Error && err.name === 'AbortError' ? 'timeout' : 'failed';
+        circuitRejected || policyBlocked
+          ? 'blocked'
+          : err instanceof Error && err.name === 'AbortError'
+            ? 'timeout'
+            : 'failed';
       const attempt = await this.recordDelivery({
         endpoint: registered,
         method,
@@ -340,12 +404,22 @@ export class OutboundIntegrationService {
         durationMs: Math.round(performance.now() - start),
         retryOf: request.retryOf,
         attempt: request.attempt,
-        error: status === 'timeout' ? `Timed out after ${timeoutMs}ms` : message,
+        responseStatus: dependencyResponse?.statusCode,
+        error:
+          status === 'timeout'
+            ? `Timed out after ${timeoutMs}ms`
+            : circuitRejected
+              ? 'Dependency circuit rejected outbound delivery.'
+              : policyBlocked
+                ? err.message
+              : message,
       });
       return {
         ok: false,
         status,
         attemptId: attempt.id,
+        responseStatus: dependencyResponse?.statusCode,
+        responseText: dependencyResponse?.responseText,
         error: attempt.error,
       };
     } finally {
