@@ -49,6 +49,17 @@ export {
   type WorktreeManifestRepository,
 } from './worktree-manifest-repository.js';
 export {
+  FileWorkspaceCheckpointRepository,
+  getWorkspaceCheckpointsDir,
+  type FileWorkspaceCheckpointRepositoryOptions,
+  type WorkspaceCheckpointCaptureInput,
+  type WorkspaceCheckpointCommandResult,
+  type WorkspaceCheckpointCommandRunner,
+  type WorkspaceCheckpointListQuery,
+  type WorkspaceCheckpointLookup,
+  type WorkspaceCheckpointRepository,
+} from './workspace-checkpoint-repository.js';
+export {
   FileDependencyCircuitStateRepository,
   InMemoryDependencyCircuitStateRepository,
   type DependencyCircuitStateRepository,

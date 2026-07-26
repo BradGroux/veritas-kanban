@@ -69,6 +69,7 @@ export * from './runtime-hook.types.js';
 export * from './auth.types.js';
 export * from './credential-broker.types.js';
 export * from './worktree-manifest.types.js';
+export * from './workspace-checkpoint.types.js';
 export * from './run-approval.types.js';
 export * from './conversation-lifecycle.types.js';
 export * from './tool-control-plane.types.js';
