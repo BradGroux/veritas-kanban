@@ -43,6 +43,11 @@ vi.mock('../../services/task-service.js', () => ({
     getTask = mockGetTask;
     updateTask = mockUpdateTask;
   },
+  getTaskService: () => ({
+    listTasks: mockListTasks,
+    getTask: mockGetTask,
+    updateTask: mockUpdateTask,
+  }),
 }));
 
 vi.mock('../../services/config-service.js', () => {
