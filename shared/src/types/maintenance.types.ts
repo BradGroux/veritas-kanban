@@ -9,6 +9,7 @@ export type DataLifecycleClassId =
   | 'workProducts'
   | 'telemetry'
   | 'workflowRuns'
+  | 'runOutputArtifacts'
   | 'notifications'
   | 'chat'
   | 'audit'

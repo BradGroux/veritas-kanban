@@ -111,6 +111,7 @@ export class MaintenanceService {
     const generatedAt = new Date().toISOString();
     const sqlite = getSqliteStorageDiagnostics();
     const workProducts = await getWorkProductService().maintenancePreview();
+    const runOutputArtifacts = await this.collectRunOutputArtifactStats(generatedAt);
     const [
       storageRoot,
       runtimeDir,
@@ -224,6 +225,16 @@ export class MaintenanceService {
           )
         ),
       },
+      {
+        id: 'run-output-artifacts',
+        label: 'Governed run output artifacts',
+        bytes: runOutputArtifacts.bytes,
+        itemCount: runOutputArtifacts.itemCount,
+        cleanupEligibleCount: runOutputArtifacts.cleanupEligibleCount,
+        retainedReason:
+          'Active-run leases retain bodies; expired and quarantined metadata remains as causal tombstones.',
+        lastUsedAt: runOutputArtifacts.lastUsedAt,
+      },
     ];
 
     return {
@@ -241,6 +252,7 @@ export class MaintenanceService {
         tableCounts: {
           work_products: workProducts.totals.products,
           work_product_versions: workProducts.totals.versions,
+          run_output_artifacts: runOutputArtifacts.itemCount,
         },
       }),
       cleanupPreview: {
@@ -319,12 +331,14 @@ export class MaintenanceService {
         'raw prompts',
         'raw chat content',
         'generated sensitive text',
+        'raw run output artifact bodies',
       ],
       redactionRules: [
         'Bearer tokens, API keys, JWTs, opaque tokens, and long hashes are replaced.',
         'Local home, project, storage, runtime, and log paths are replaced with redacted path labels.',
         'Log files are included as redacted tails only, capped at 200 lines per source.',
         'Admission queue diagnostics use the bounded inspection projection and never include durable replay targets.',
+        'Run output artifact bodies are excluded; lifecycle summaries contain metadata and policy only.',
       ],
       files: summary.logs.map((source) => this.redactLogSource(source)),
     };
@@ -375,6 +389,37 @@ export class MaintenanceService {
         };
       })
     );
+  }
+
+  private async collectRunOutputArtifactStats(now: string): Promise<{
+    bytes: number;
+    itemCount: number;
+    cleanupEligibleCount: number;
+    lastUsedAt?: string;
+  }> {
+    try {
+      const artifacts = await getStorage().runOutputArtifacts.list({
+        workspaceId: 'local',
+        limit: 2_000,
+      });
+      const current = Date.parse(now);
+      const available = artifacts.filter((artifact) => artifact.state === 'available');
+      return {
+        bytes: available.reduce((total, artifact) => total + artifact.storedBytes, 0),
+        itemCount: artifacts.length,
+        cleanupEligibleCount: available.filter(
+          (artifact) =>
+            Date.parse(artifact.retention.expiresAt) <= current &&
+            (!artifact.retention.activeLeaseUntil ||
+              Date.parse(artifact.retention.activeLeaseUntil) <= current)
+        ).length,
+        lastUsedAt: this.latestDate(
+          artifacts.map((artifact) => artifact.redaction.validatedAt)
+        ),
+      };
+    } catch {
+      return { bytes: 0, itemCount: 0, cleanupEligibleCount: 0 };
+    }
   }
 
   private async buildHealthChecks(checkedAt: string): Promise<MaintenanceHealthCheck[]> {

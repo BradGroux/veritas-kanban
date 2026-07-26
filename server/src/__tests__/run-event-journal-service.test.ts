@@ -14,6 +14,9 @@ import { SqliteRunEventRepository } from '../storage/sqlite/run-event-repository
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SQLITE_BASE_MIGRATIONS } from '../storage/sqlite/migrations.js';
 import { RunEventJournalService } from '../services/run-event-journal-service.js';
+import { RunOutputArtifactService } from '../services/run-output-artifact-service.js';
+import { RunOutputSpillService } from '../services/run-output-spill-service.js';
+import { FileRunOutputArtifactRepository } from '../storage/run-output-artifact-repository.js';
 import { getProviderRunEventMapper } from '../services/provider-run-event-mappers.js';
 import { RunEventEnvelopeSchema, RunEventKindSchema } from '../schemas/run-event-schemas.js';
 
@@ -129,24 +132,120 @@ describe('RunEventJournalService', () => {
     });
   });
 
-  it('drops payload bodies that remain oversized after bounded normalization', async () => {
+  it('spills oversized payloads once and journals a bounded governed reference', async () => {
     const directory = await temporaryDirectory();
-    const journal = new RunEventJournalService(new FileRunEventRepository(directory));
-    const result = await journal.append(
-      appendInput({
-        payload: {
-          chunks: Array.from(
-            { length: 10 },
-            (_, index) => `${index}:${'bounded provider output '.repeat(360)}`
-          ),
-        },
+    const artifactDirectory = await temporaryDirectory();
+    const artifacts = new FileRunOutputArtifactRepository(artifactDirectory);
+    const artifactService = new RunOutputArtifactService(
+      artifacts,
+      new RunOutputSpillService({
+        schemaVersion: 'run-output-spill-policy/v1',
+        inlineBytes: 8 * 1024,
+        maxQueryBytes: 32 * 1024,
+        maxJsonDepth: 12,
+        retentionSeconds: 3_600,
+        activeLeaseSeconds: 0,
+        allowBinaryPersistence: false,
+        allowCompressedPersistence: false,
       })
     );
+    const journal = new RunEventJournalService(
+      new FileRunEventRepository(directory),
+      artifactService
+    );
+    const oversized = appendInput({
+      providerEventId: 'provider_oversized_1',
+      payload: {
+        chunks: Array.from(
+          { length: 10 },
+          (_, index) => `${index}:${'bounded provider output '.repeat(360)}`
+        ),
+      },
+    });
+    const result = await journal.append(oversized);
+    const duplicate = await journal.append(oversized);
 
-    expect(result.event.redaction.status).toBe('dropped');
-    expect(result.event.payload).toMatchObject({ dropped: true });
+    expect(duplicate).toEqual({ event: result.event, appended: false });
+    expect(result.event.payload).toMatchObject({
+      spilled: true,
+      originalPayloadBytes: expect.any(Number),
+    });
+    expect(result.event.payload.outputArtifact).toMatchObject({
+      schemaVersion: 'run-output-preview/v1',
+      inline: false,
+      truncated: true,
+      truncationReason: 'event-limit',
+      artifact: {
+        state: 'available',
+      },
+    });
     expect(result.event.redaction.persistedBytes).toBeLessThan(32 * 1024);
+    const persisted = await artifacts.list({ workspaceId: 'local' });
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toMatchObject({
+      scope: {
+        taskId: 'task_1',
+        runId: 'attempt_1',
+        attemptId: 'attempt_1',
+      },
+      source: {
+        kind: 'run-event',
+        eventId: result.event.eventId,
+      },
+      truncationReason: 'event-limit',
+    });
   });
+
+  it.each(['codex-cli', 'claude-code', 'openclaw'] as const)(
+    'uses the same spill preview contract for %s',
+    async (provider) => {
+      const directory = await temporaryDirectory();
+      const artifactDirectory = await temporaryDirectory();
+      const artifacts = new FileRunOutputArtifactRepository(artifactDirectory);
+      const journal = new RunEventJournalService(
+        new FileRunEventRepository(directory),
+        new RunOutputArtifactService(
+          artifacts,
+          new RunOutputSpillService({
+            schemaVersion: 'run-output-spill-policy/v1',
+            inlineBytes: 8 * 1024,
+            maxQueryBytes: 32 * 1024,
+            maxJsonDepth: 12,
+            retentionSeconds: 3_600,
+            activeLeaseSeconds: 0,
+            allowBinaryPersistence: false,
+            allowCompressedPersistence: false,
+          })
+        )
+      );
+
+      const result = await journal.append(
+        appendInput({
+          providerEventId: `${provider}_oversized_1`,
+          source: { provider, adapter: provider, agent: provider },
+          payload: { content: 'provider-neutral output line\n'.repeat(400) },
+        })
+      );
+
+      expect(result.event.payload.outputArtifact).toMatchObject({
+        schemaVersion: 'run-output-preview/v1',
+        inline: false,
+        mediaType: 'application/json',
+        contentClass: 'json',
+        truncated: true,
+        truncationReason: 'event-limit',
+        artifact: {
+          state: 'available',
+          operations: ['metadata', 'byte-range', 'line-range', 'json-path', 'download'],
+        },
+        queryHints: {
+          maxResultBytes: 32 * 1024,
+          maxJsonDepth: 12,
+        },
+      });
+      expect(await artifacts.list({ workspaceId: 'local' })).toHaveLength(1);
+    }
+  );
 
   it.runIf(process.platform !== 'win32')('refuses a symlinked journal target', async () => {
     const directory = await temporaryDirectory();

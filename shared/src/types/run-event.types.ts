@@ -89,6 +89,7 @@ export interface RunEventEnvelope {
 }
 
 export interface RunEventAppendInput {
+  workspaceId?: string;
   taskId: string;
   attemptId: string;
   sessionId?: string;
