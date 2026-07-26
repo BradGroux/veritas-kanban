@@ -1379,6 +1379,44 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON admission_queue(state, lease_expires_at);
     `,
   },
+  {
+    version: 27,
+    name: '0027_durable_goals',
+    up: `
+      CREATE TABLE durable_goals (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        root_task_id TEXT,
+        root_workflow_id TEXT,
+        state TEXT NOT NULL CHECK (
+          state IN (
+            'active',
+            'paused',
+            'blocked',
+            'awaiting-approval',
+            'usage-limited',
+            'budget-limited',
+            'complete',
+            'cancelled',
+            'failed'
+          )
+        ),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        goal_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_durable_goals_workspace_state_updated
+        ON durable_goals(workspace_id, state, updated_at DESC);
+
+      CREATE INDEX idx_durable_goals_root_task
+        ON durable_goals(root_task_id, updated_at DESC);
+
+      CREATE INDEX idx_durable_goals_root_workflow
+        ON durable_goals(root_workflow_id, updated_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

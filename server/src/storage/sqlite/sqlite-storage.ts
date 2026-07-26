@@ -15,6 +15,7 @@ import { SqliteRunEventRepository } from './run-event-repository.js';
 import { SqliteRunApprovalRepository } from './run-approval-repository.js';
 import { SqlitePhaseTransitionRepository } from './phase-transition-repository.js';
 import { SqliteRunSupervisorRepository } from './run-supervisor-repository.js';
+import { SqliteDurableGoalRepository } from './durable-goal-repository.js';
 import { SqliteAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { SqliteToolControlPlaneRepository } from './tool-control-plane-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
@@ -39,6 +40,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly runApprovals: SqliteRunApprovalRepository;
   readonly phaseTransitions: SqlitePhaseTransitionRepository;
   readonly runSupervisors: SqliteRunSupervisorRepository;
+  readonly durableGoals: SqliteDurableGoalRepository;
   readonly admissionReservations: SqliteAdmissionReservationRepository;
   readonly toolControlPlane: SqliteToolControlPlaneRepository;
 
@@ -64,6 +66,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.runApprovals = new SqliteRunApprovalRepository(this.sqlite);
     this.phaseTransitions = new SqlitePhaseTransitionRepository(this.sqlite);
     this.runSupervisors = new SqliteRunSupervisorRepository(this.sqlite);
+    this.durableGoals = new SqliteDurableGoalRepository(this.sqlite);
     this.admissionReservations = new SqliteAdmissionReservationRepository(this.sqlite);
     this.toolControlPlane = new SqliteToolControlPlaneRepository(this.sqlite);
   }

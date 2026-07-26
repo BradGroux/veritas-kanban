@@ -1072,13 +1072,15 @@ state back to `.veritas-kanban/*.json` or telemetry NDJSON files.
 | `telemetry_events`       | Complete telemetry events plus type, task, project, token, duration, and result columns.                                                                                                      |
 | `run_events`             | Complete `run-event/v1` envelopes plus ordered attempt cursor, provider identity, dedupe, and receive columns.                                                                                |
 | `run_supervisors`        | Complete `run-supervisor/v1` snapshots plus task/attempt, state, revision, lease owner/expiry, and recovery indexes.                                                                          |
+| `durable_goals`          | Complete `durable-goal/v1` objective state, root task/workflow identity, compare-and-set revision, blockers, continuation chain, usage, and completion-evidence requirements.                  |
 | `admission_reservations` | Versioned capacity and execution-tree budget reservations plus task/workspace/root/provider/host scopes, root objective/node/parent indexes, lease state, revision, and idempotency evidence. |
 
 `ActivityService`, `StatusHistoryService`, `TelemetryService`,
-`RunEventJournalService`, `RunSupervisorService`, and `AdmissionControlService`
-select these SQLite repositories when `VERITAS_STORAGE=sqlite`. File storage
-still forces the file-backed services to `storageType='file'`, so explicit file
-mode cannot be accidentally flipped by the environment.
+`RunEventJournalService`, `RunSupervisorService`, `DurableGoalService`, and
+`AdmissionControlService` select these SQLite repositories when
+`VERITAS_STORAGE=sqlite`. File storage still forces the file-backed services to
+`storageType='file'`, so explicit file mode cannot be accidentally flipped by
+the environment.
 
 Dashboard metric aggregation uses the same active storage backend. In SQLite
 mode, `/metrics/all`, `/metrics/trends`, agent comparison, task cost, and
