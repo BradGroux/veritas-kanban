@@ -204,6 +204,9 @@ function ReflectionCandidateItem({
   busy: boolean;
 }) {
   const canReview = canWrite && candidate.status === 'pending';
+  const requiresTypedPromotion =
+    candidate.status === 'pending' && candidate.promotionTarget !== 'task-lesson';
+  const canAcceptHere = canReview && !requiresTypedPromotion;
   const isMergeable = canReview && candidate.duplicateCount > 1 && !!candidate.duplicateOf;
 
   return (
@@ -236,11 +239,16 @@ function ReflectionCandidateItem({
               size="xs"
               variant="light"
               color="green"
-              disabled={!canReview || busy}
+              disabled={!canAcceptHere || busy}
+              title={
+                requiresTypedPromotion
+                  ? 'This target requires explicit typed review input through the API.'
+                  : undefined
+              }
               leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
               onClick={onAccept}
             >
-              Accept
+              {requiresTypedPromotion ? 'Typed review' : 'Accept'}
             </Button>
             <Button
               size="xs"
@@ -280,6 +288,11 @@ function ReflectionCandidateItem({
           <Meta label="Correction" value={candidate.correction} />
           <Meta label="Next" value={candidate.nextAttempt} />
           <Meta label="Target" value={promotionLabel(candidate.promotionTarget)} />
+          {requiresTypedPromotion && (
+            <Text size="xs" c="blue">
+              Wider promotion requires explicit typed target input and a reviewer.
+            </Text>
+          )}
         </Stack>
 
         {candidate.evidence.length > 0 && (

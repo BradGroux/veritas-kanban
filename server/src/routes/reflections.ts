@@ -5,6 +5,7 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { getReflectionConsolidationService } from '../services/reflection-consolidation-service.js';
 import { getReflectionService } from '../services/reflection-service.js';
+import { policySchema } from '../schemas/policy-schemas.js';
 
 const router: RouterType = Router();
 
@@ -21,6 +22,7 @@ const sourceKindSchema = z.enum([
 const promotionTargetSchema = z.enum([
   'task-lesson',
   'memory',
+  'team',
   'decision',
   'profile',
   'template',
@@ -39,6 +41,41 @@ const memoryDomainSchema = z.object({
   id: z.string().trim().min(1).max(160),
   workspaceId: z.string().trim().min(1).max(160),
 });
+const targetIdSchema = z.string().trim().min(1).max(160);
+const capabilitySchema = z.string().trim().min(1).max(160);
+const typedPromotionSchema = z.discriminatedUnion('target', [
+  z.object({
+    target: z.literal('memory'),
+    workspaceId: targetIdSchema,
+  }),
+  z.object({
+    target: z.literal('team'),
+    rosterId: targetIdSchema,
+    memberId: targetIdSchema,
+    capabilitiesToAdd: z.array(capabilitySchema).min(1).max(80),
+  }),
+  z.object({
+    target: z.literal('profile'),
+    profileId: targetIdSchema,
+    capabilitiesToAdd: z.array(capabilitySchema).min(1).max(80),
+  }),
+  z.object({
+    target: z.literal('template'),
+    templateId: targetIdSchema,
+  }),
+  z.object({
+    target: z.literal('decision'),
+    agentId: targetIdSchema,
+    taskId: targetIdSchema,
+    confidenceLevel: z.number().min(0).max(1),
+    riskScore: z.number().min(0).max(100),
+    parentDecisionId: targetIdSchema.optional(),
+  }),
+  z.object({
+    target: z.literal('policy'),
+    policy: policySchema,
+  }),
+]);
 
 const sourceSchema = z
   .object({
@@ -91,11 +128,26 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
-const acceptReflectionSchema = z.object({
-  reviewedBy: z.string().min(1).max(120).optional(),
-  promotionTarget: promotionTargetSchema.optional(),
-  reviewerNote: z.string().max(2000).optional(),
-});
+const acceptReflectionSchema = z
+  .object({
+    reviewedBy: z.string().min(1).max(120).optional(),
+    promotionTarget: promotionTargetSchema.optional(),
+    promotion: typedPromotionSchema.optional(),
+    reviewerNote: z.string().max(2000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.promotion &&
+      value.promotionTarget &&
+      value.promotion.target !== value.promotionTarget
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['promotion'],
+        message: 'promotion.target must match promotionTarget',
+      });
+    }
+  });
 
 const rejectReflectionSchema = z.object({
   reviewedBy: z.string().min(1).max(120).optional(),
