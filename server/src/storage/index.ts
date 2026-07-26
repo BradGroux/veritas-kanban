@@ -62,6 +62,13 @@ export {
   type WorkspaceCheckpointRepository,
 } from './workspace-checkpoint-repository.js';
 export {
+  GitWorkspaceCheckpointDiffRunner,
+  type GitWorkspaceCheckpointDiffRunnerOptions,
+  type WorkspaceCheckpointDiffCommandResult,
+  type WorkspaceCheckpointDiffCommandRunner,
+  type WorkspaceCheckpointDiffRunner,
+} from './workspace-checkpoint-diff-runner.js';
+export {
   FileDependencyCircuitStateRepository,
   InMemoryDependencyCircuitStateRepository,
   type DependencyCircuitStateRepository,

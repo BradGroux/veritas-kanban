@@ -1,4 +1,5 @@
 export const WORKSPACE_CHECKPOINT_SCHEMA_VERSION = 'workspace-checkpoint/v1' as const;
+export const WORKSPACE_CHECKPOINT_DIFF_SCHEMA_VERSION = 'workspace-checkpoint-diff/v1' as const;
 
 export const WORKSPACE_CHECKPOINT_BOUNDARIES = [
   'before-user-turn',
@@ -88,4 +89,60 @@ export interface WorkspaceCheckpoint {
   storedBytes: number;
   createdAt: string;
   digest: string;
+}
+
+export type WorkspaceCheckpointDiffLineKind = 'context' | 'addition' | 'deletion';
+export type WorkspaceCheckpointFileChangeKind = 'added' | 'modified' | 'deleted' | 'mode-changed';
+
+export interface WorkspaceCheckpointDiffLine {
+  kind: WorkspaceCheckpointDiffLineKind;
+  content: string;
+  oldLineNumber?: number;
+  newLineNumber?: number;
+}
+
+export interface WorkspaceCheckpointDiffHunk {
+  header: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: WorkspaceCheckpointDiffLine[];
+}
+
+export interface WorkspaceCheckpointFileDiff {
+  path: string;
+  kind: WorkspaceCheckpointFileChangeKind;
+  source: WorkspaceCheckpointFileSource;
+  fromState: WorkspaceCheckpointFileState;
+  toState: WorkspaceCheckpointFileState;
+  fromMode?: number;
+  toMode?: number;
+  fromContentDigest?: string;
+  toContentDigest?: string;
+  additions: number;
+  deletions: number;
+  hunks: WorkspaceCheckpointDiffHunk[];
+}
+
+export interface WorkspaceCheckpointDiff {
+  schemaVersion: typeof WORKSPACE_CHECKPOINT_DIFF_SCHEMA_VERSION;
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  fromCheckpoint: Pick<WorkspaceCheckpoint, 'id' | 'boundary' | 'createdAt' | 'digest'>;
+  toCheckpoint: Pick<WorkspaceCheckpoint, 'id' | 'boundary' | 'createdAt' | 'digest'>;
+  directParent: true;
+  git: {
+    headChanged: boolean;
+    branchChanged: boolean;
+    indexChanged: boolean;
+    statusChanged: boolean;
+  };
+  summary: {
+    filesChanged: number;
+    additions: number;
+    deletions: number;
+  };
+  files: WorkspaceCheckpointFileDiff[];
 }
