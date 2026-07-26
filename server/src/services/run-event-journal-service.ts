@@ -196,6 +196,18 @@ function spillSourceName(payload: Record<string, unknown>): string | undefined {
   return candidate ? redactString(candidate).slice(0, 240) : undefined;
 }
 
+function spillRoutingEvidence(payload: Record<string, unknown>): Record<string, unknown> {
+  const evidence: Record<string, unknown> = {};
+  if (typeof payload.providerType === 'string') evidence.providerType = payload.providerType;
+  if (typeof payload.tool === 'string') evidence.tool = payload.tool;
+  if (Array.isArray(payload.paths)) {
+    evidence.paths = payload.paths
+      .filter((entry): entry is string => typeof entry === 'string')
+      .slice(0, 100);
+  }
+  return evidence;
+}
+
 function deterministicArtifactId(input: RunEventAppendInput, eventId: string): string {
   const identity =
     input.dedupeKey ??
@@ -261,6 +273,7 @@ export class RunEventJournalService {
         : undefined;
     const eventPayload = spillPreview
       ? {
+          ...sanitizePayload(spillRoutingEvidence(input.payload)).payload,
           spilled: true,
           originalPayloadBytes: countBytes(serialized ?? ''),
           outputArtifact: spillPreview,

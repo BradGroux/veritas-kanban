@@ -156,6 +156,9 @@ describe('RunEventJournalService', () => {
     const oversized = appendInput({
       providerEventId: 'provider_oversized_1',
       payload: {
+        providerType: 'item.completed',
+        tool: 'Write',
+        paths: ['server/src/index.ts'],
         chunks: Array.from(
           { length: 10 },
           (_, index) => `${index}:${'bounded provider output '.repeat(360)}`
@@ -169,6 +172,9 @@ describe('RunEventJournalService', () => {
     expect(result.event.payload).toMatchObject({
       spilled: true,
       originalPayloadBytes: expect.any(Number),
+      providerType: 'item.completed',
+      tool: 'Write',
+      paths: ['server/src/index.ts'],
     });
     expect(result.event.payload.outputArtifact).toMatchObject({
       schemaVersion: 'run-output-preview/v1',
@@ -458,6 +464,36 @@ describe('provider run event mappers', () => {
     ).toMatchObject({
       kind: 'tool.started',
       providerEventId: 'tool_1',
+    });
+    expect(
+      getProviderRunEventMapper('codex-cli').mapEvent('item.completed', {
+        item: {
+          id: 'file_1',
+          type: 'file_change',
+          file_path: './server/src/index.ts',
+          ignored: { path: '../outside.ts' },
+        },
+      })
+    ).toMatchObject({
+      kind: 'file.changed',
+      payload: { paths: ['server/src/index.ts'] },
+    });
+    expect(
+      getProviderRunEventMapper('claude-code').mapEvent('assistant.tool_use', {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              name: 'Write',
+              input: { file_path: 'docs/guide.md' },
+            },
+          ],
+        },
+      })
+    ).toMatchObject({
+      kind: 'tool.started',
+      payload: { tool: 'Write', paths: ['docs/guide.md'] },
     });
   });
 

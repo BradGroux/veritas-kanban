@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { ExecutableAgentProvider, RunEventKind } from '@veritas-kanban/shared';
+import {
+  extractProviderEventPaths,
+  extractProviderEventToolName,
+} from './provider-event-evidence.js';
 
 export interface ProviderMappedRunEvent {
   kind: RunEventKind;
@@ -49,6 +53,25 @@ function nestedRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function providerPayload(
+  providerType: string,
+  event: Record<string, unknown>,
+  summary: string | undefined,
+  kind: RunEventKind
+): Record<string, unknown> {
+  const carriesFileEvidence =
+    kind === 'file.changed' || kind === 'tool.started' || kind === 'tool.completed';
+  const paths = carriesFileEvidence ? extractProviderEventPaths(event) : [];
+  const tool = carriesFileEvidence ? extractProviderEventToolName(event) : undefined;
+  return {
+    providerType,
+    summary,
+    ...(paths.length > 0 ? { paths } : {}),
+    ...(tool ? { tool } : {}),
+    raw: event,
+  };
 }
 
 function eventIdentity(event: Record<string, unknown>): {
@@ -166,15 +189,12 @@ function codexMapper(
     },
     mapEvent(providerType, event, summary) {
       const identity = eventIdentity(event);
+      const kind = itemKind(providerType, event);
       return {
         ...identity,
-        kind: itemKind(providerType, event),
+        kind,
         dedupeKey: providerDedupeKey(provider, providerType, identity.providerEventId),
-        payload: {
-          providerType,
-          summary,
-          raw: event,
-        },
+        payload: providerPayload(providerType, event, summary, kind),
       };
     },
   };
@@ -189,11 +209,12 @@ const HERMES_MAPPER: ProviderRunEventMapper = {
   },
   mapEvent(providerType, event, summary) {
     const identity = eventIdentity(event);
+    const kind = itemKind(providerType, event);
     return {
       ...identity,
-      kind: itemKind(providerType, event),
+      kind,
       dedupeKey: providerDedupeKey('hermes-cli', providerType, identity.providerEventId),
-      payload: { providerType, summary, raw: event },
+      payload: providerPayload(providerType, event, summary, kind),
     };
   },
 };
@@ -230,11 +251,12 @@ const CLAUDE_CODE_MAPPER: ProviderRunEventMapper = {
   },
   mapEvent(providerType, event, summary) {
     const identity = eventIdentity(event);
+    const kind = claudeCodeKind(providerType);
     return {
       ...identity,
-      kind: claudeCodeKind(providerType),
+      kind,
       dedupeKey: providerDedupeKey('claude-code', providerType, identity.providerEventId),
-      payload: { providerType, summary, raw: event },
+      payload: providerPayload(providerType, event, summary, kind),
     };
   },
 };
@@ -248,11 +270,12 @@ const OPENCLAW_MAPPER: ProviderRunEventMapper = {
   },
   mapEvent(providerType, event, summary) {
     const identity = eventIdentity(event);
+    const kind = itemKind(providerType, event);
     return {
       ...identity,
-      kind: itemKind(providerType, event),
+      kind,
       dedupeKey: providerDedupeKey('openclaw', providerType, identity.providerEventId),
-      payload: { providerType, summary, raw: event },
+      payload: providerPayload(providerType, event, summary, kind),
     };
   },
 };
@@ -266,11 +289,12 @@ const ACP_MAPPER: ProviderRunEventMapper = {
   },
   mapEvent(providerType, event, summary) {
     const identity = eventIdentity(event);
+    const kind = itemKind(providerType, event);
     return {
       ...identity,
-      kind: itemKind(providerType, event),
+      kind,
       dedupeKey: providerDedupeKey('acp-stdio', providerType, identity.providerEventId),
-      payload: { providerType, summary, raw: event },
+      payload: providerPayload(providerType, event, summary, kind),
     };
   },
 };
