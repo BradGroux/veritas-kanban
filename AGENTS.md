@@ -269,6 +269,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - Tool-server environment values and credential values are never persisted.
   Credential-bound tool definitions remain fail-closed until the provider
   launch credential broker is active.
+- Run-owned commands use `run-terminal-handle/v1`, never a provider's generic
+  stdin channel. The current runtime supports background pipe mode with
+  manifest-approved executable, cwd, and environment posture, bounded
+  cursor-addressable redacted output, and process-group termination. PTY,
+  foreground detachment, interactive stdin, restart reattachment, and
+  multi-handle waits fail closed until their typed controls ship.
 
 ---
 
