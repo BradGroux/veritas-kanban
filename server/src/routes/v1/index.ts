@@ -34,6 +34,7 @@ import {
   feedbackAccess,
   goalAccess,
   integrationsAccess,
+  knowledgeAccess,
   maintenanceAccess,
   notificationAccess,
   policyAccess,
@@ -152,6 +153,7 @@ import { queueMonitorRoutes } from '../queue-monitors.js';
 import { toolControlPlaneRoutes } from '../tool-control-plane.js';
 import { admissionRoutes } from '../admission.js';
 import { goalRoutes } from '../goals.js';
+import { knowledgeCollectionRoutes } from '../knowledge-collections.js';
 
 const v1Router: IRouter = Router();
 
@@ -208,6 +210,7 @@ v1Router.use('/agents', agentRoutingAccess, agentRoutingRoutes); // Must be befo
 v1Router.use('/agents', agentTaskAccess, agentRoutes);
 v1Router.use('/admission', admissionAccess, admissionRoutes);
 v1Router.use('/goals', goalAccess, goalRoutes);
+v1Router.use('/knowledge/collections', knowledgeAccess, knowledgeCollectionRoutes);
 v1Router.use('/diff', diffAccess, diffRoutes);
 v1Router.use('/automation', taskAccess, automationRoutes);
 v1Router.use('/summary', reportAccess, summaryRoutes);

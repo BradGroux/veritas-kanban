@@ -65,6 +65,7 @@
 52. [Additional Endpoint Groups](#additional-endpoint-groups)
 53. [Execution Admission](#execution-admission)
 54. [Durable Goals](#durable-goals)
+55. [Knowledge Collections](#knowledge-collections)
 
 ---
 
@@ -4695,6 +4696,64 @@ goal's exact current run becomes the source. The endpoint rejects stale
 revisions, missing current-run evidence, non-active states, and exhausted
 rollover limits. Its planned handoff and admission idempotency key are durable,
 so startup reconciliation cannot duplicate a fresh conversation.
+
+## Knowledge Collections
+
+Knowledge collections establish a workspace-scoped, immutable source catalog for derived project knowledge. Route access requires `work_product:read` for reads and `work_product:write` for writes. Collection policies then apply the authenticated actor's `admin`, `agent`, or `read-only` role and source-classification ceiling.
+
+| Method | Path                                                   | Description                          |
+| ------ | ------------------------------------------------------ | ------------------------------------ |
+| `GET`  | `/api/knowledge/collections`                           | List collections readable by actor   |
+| `POST` | `/api/knowledge/collections`                           | Create one versioned collection      |
+| `GET`  | `/api/knowledge/collections/:collectionId`             | Read collection metadata             |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources`     | List immutable source revisions      |
+| `POST` | `/api/knowledge/collections/:collectionId/sources`     | Register one source revision         |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId` | Read source metadata          |
+
+Collection and source lists accept `page` (default `1`) and `limit` (default `100`, maximum `500`). Pagination metadata is returned through the standard API response envelope.
+
+Create operations are idempotent. The operation identity is persisted only as a digest and cannot be reused with changed input.
+
+```json
+{
+  "operationId": "create-product-knowledge",
+  "slug": "product-knowledge",
+  "name": "Product knowledge",
+  "definition": {
+    "schemaVersion": "knowledge-collection-definition/v1",
+    "version": 1,
+    "pageKinds": ["concept", "decision", "overview"],
+    "requiredMetadata": ["owner", "reviewState"],
+    "naming": "stable-id",
+    "links": "bidirectional",
+    "ingestion": "review-required",
+    "maxPageVersions": 25
+  },
+  "accessPolicy": {
+    "readRoles": ["admin", "agent"],
+    "writeRoles": ["admin", "agent"],
+    "maxSourceClassification": "confidential",
+    "exportPolicy": "redacted-only"
+  }
+}
+```
+
+Register an inline snapshot by sending `storage: "content-addressed-blob"` and bounded UTF-8 `content`. Veritas computes its SHA-256 digest and byte count. Register an externally retained source with `storage: "content-addressed-reference"`, `contentHash`, and `contentBytes`; Veritas records the immutable identity without copying content.
+
+```json
+{
+  "operationId": "readme-revision-1",
+  "sourceKey": "product-readme",
+  "uri": "repo://README.md",
+  "mediaType": "text/markdown",
+  "owner": "product",
+  "classification": "internal",
+  "storage": "content-addressed-blob",
+  "content": "# Product"
+}
+```
+
+Repeated source keys create a revision chain rather than replacing prior evidence. REST returns metadata only and does not expose stored source content. Derived pages, ingestion proposals, citation-aware search, promotion, and export are later slices documented in [Knowledge Collections v1](architecture/KNOWLEDGE-COLLECTIONS-V1.md).
 
 ---
 
