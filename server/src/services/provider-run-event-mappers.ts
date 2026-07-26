@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ExecutableAgentProvider, RunEventKind } from '@veritas-kanban/shared';
 import {
+  extractProviderEventHunkRanges,
   extractProviderEventPaths,
   extractProviderEventToolName,
 } from './provider-event-evidence.js';
@@ -64,11 +65,13 @@ function providerPayload(
   const carriesFileEvidence =
     kind === 'file.changed' || kind === 'tool.started' || kind === 'tool.completed';
   const paths = carriesFileEvidence ? extractProviderEventPaths(event) : [];
+  const hunkRanges = carriesFileEvidence ? extractProviderEventHunkRanges(event) : [];
   const tool = carriesFileEvidence ? extractProviderEventToolName(event) : undefined;
   return {
     providerType,
     summary,
     ...(paths.length > 0 ? { paths } : {}),
+    ...(hunkRanges.length > 0 ? { hunkRanges } : {}),
     ...(tool ? { tool } : {}),
     raw: event,
   };
@@ -150,7 +153,9 @@ function itemKind(type: string, event: Record<string, unknown>): RunEventKind {
   if (
     itemType.includes('file_change') ||
     itemType.includes('filechange') ||
-    normalized.includes('file.change')
+    normalized.includes('file.change') ||
+    normalized.includes('filechange') ||
+    normalized.includes('file/change')
   ) {
     return 'file.changed';
   }

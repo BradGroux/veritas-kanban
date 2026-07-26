@@ -3,15 +3,18 @@ import type {
   RunEventPage,
   RunEventQuery,
   WorkspaceCheckpointDiff,
+  WorkspaceCheckpointDiffHunk,
   WorkspaceCheckpointFileDiff,
   WorkspaceCheckpointHunkAttribution,
 } from '@veritas-kanban/shared';
 import { ConflictError } from '../middleware/error-handler.js';
 import {
+  extractProviderEventHunkRanges,
   extractProviderEventPaths,
   extractProviderEventToolName,
   isWriteCapableProviderTool,
   normalizeWorkspaceEvidencePath,
+  type ProviderEventHunkRange,
 } from './provider-event-evidence.js';
 import { RunEventJournalService } from './run-event-journal-service.js';
 import {
@@ -39,12 +42,11 @@ interface CheckpointEventWindow {
 
 interface AttributionEvidence {
   source: Exclude<WorkspaceCheckpointHunkAttribution['source'], 'unknown'>;
-  basis: Exclude<
-    WorkspaceCheckpointHunkAttribution['basis'],
-    'mixed-file-evidence' | 'no-file-evidence'
-  >;
+  basis:
+    'provider-file-event' | 'write-tool-event' | 'operator-file-event' | 'filesystem-file-event';
   event: RunEventEnvelope;
   tool?: string;
+  hunkRanges: ProviderEventHunkRange[];
 }
 
 export class WorkspaceCheckpointAttributionService {
@@ -145,10 +147,25 @@ export class WorkspaceCheckpointAttributionService {
     evidence: AttributionEvidence[]
   ): WorkspaceCheckpointFileDiff {
     const attribution = summarizeAttribution(evidence);
+    const hasExactHunkEvidence =
+      evidence.length > 0 &&
+      evidence.every((entry) => entry.hunkRanges.some((range) => range.path === file.path));
     return {
       ...file,
       attribution,
-      hunks: file.hunks.map((hunk) => ({ ...hunk, attribution })),
+      hunks: file.hunks.map((hunk) => ({
+        ...hunk,
+        attribution: hasExactHunkEvidence
+          ? summarizeAttribution(
+              evidence.filter((entry) =>
+                entry.hunkRanges.some(
+                  (range) => range.path === file.path && overlapsHunk(range, hunk)
+                )
+              ),
+              'checkpoint-hunk-window'
+            )
+          : attribution,
+      })),
     };
   }
 
@@ -167,26 +184,27 @@ export class WorkspaceCheckpointAttributionService {
   }
 
   private evidenceForEvent(event: RunEventEnvelope): AttributionEvidence | undefined {
+    const hunkRanges = normalizedEventHunkRanges(event);
     if (event.kind === 'file.changed') {
       if (event.source.provider === 'operator') {
-        return { source: 'operator', basis: 'operator-file-event', event };
+        return { source: 'operator', basis: 'operator-file-event', event, hunkRanges };
       }
       if (event.source.provider === 'system') {
-        return { source: 'external', basis: 'filesystem-file-event', event };
+        return { source: 'external', basis: 'filesystem-file-event', event, hunkRanges };
       }
-      return { source: 'agent-tool', basis: 'provider-file-event', event };
+      return { source: 'agent-tool', basis: 'provider-file-event', event, hunkRanges };
     }
 
     if (event.kind === 'tool.started' || event.kind === 'tool.completed') {
       const tool = normalizedEventTool(event);
       if (!isWriteCapableProviderTool(tool)) return undefined;
       if (event.source.provider === 'operator') {
-        return { source: 'operator', basis: 'operator-file-event', event, tool };
+        return { source: 'operator', basis: 'operator-file-event', event, tool, hunkRanges };
       }
       if (event.source.provider === 'system') {
-        return { source: 'external', basis: 'filesystem-file-event', event, tool };
+        return { source: 'external', basis: 'filesystem-file-event', event, tool, hunkRanges };
       }
-      return { source: 'agent-tool', basis: 'write-tool-event', event, tool };
+      return { source: 'agent-tool', basis: 'write-tool-event', event, tool, hunkRanges };
     }
     return undefined;
   }
@@ -210,13 +228,51 @@ function normalizedEventTool(event: RunEventEnvelope): string | undefined {
     : extractProviderEventToolName(event.payload);
 }
 
-function summarizeAttribution(evidence: AttributionEvidence[]): WorkspaceCheckpointHunkAttribution {
+function normalizedEventHunkRanges(event: RunEventEnvelope): ProviderEventHunkRange[] {
+  const normalized = event.payload.hunkRanges;
+  if (Array.isArray(normalized)) {
+    return normalized.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const record = entry as Record<string, unknown>;
+      const path =
+        typeof record.path === 'string' ? normalizeWorkspaceEvidencePath(record.path) : undefined;
+      if (
+        !path ||
+        !isBoundedRangeValue(record.oldStart, 10_000_000) ||
+        !isBoundedRangeValue(record.oldLines, 1_000_000) ||
+        !isBoundedRangeValue(record.newStart, 10_000_000) ||
+        !isBoundedRangeValue(record.newLines, 1_000_000)
+      ) {
+        return [];
+      }
+      return [
+        {
+          path,
+          oldStart: record.oldStart as number,
+          oldLines: record.oldLines as number,
+          newStart: record.newStart as number,
+          newLines: record.newLines as number,
+        },
+      ];
+    });
+  }
+  return extractProviderEventHunkRanges(event.payload.raw ?? event.payload);
+}
+
+function isBoundedRangeValue(value: unknown, maximum: number): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= maximum;
+}
+
+function summarizeAttribution(
+  evidence: AttributionEvidence[],
+  scope: WorkspaceCheckpointHunkAttribution['scope'] = 'checkpoint-file-window'
+): WorkspaceCheckpointHunkAttribution {
   if (evidence.length === 0) {
     return {
       source: 'unknown',
       confidence: 'none',
-      basis: 'no-file-evidence',
-      scope: 'checkpoint-file-window',
+      basis: scope === 'checkpoint-hunk-window' ? 'no-hunk-evidence' : 'no-file-evidence',
+      scope,
       evidenceEventIds: [],
     };
   }
@@ -226,8 +282,8 @@ function summarizeAttribution(evidence: AttributionEvidence[]): WorkspaceCheckpo
     return {
       source: 'unknown',
       confidence: 'ambiguous',
-      basis: 'mixed-file-evidence',
-      scope: 'checkpoint-file-window',
+      basis: scope === 'checkpoint-hunk-window' ? 'mixed-hunk-evidence' : 'mixed-file-evidence',
+      scope,
       evidenceEventIds: eventIds,
     };
   }
@@ -248,13 +304,37 @@ function summarizeAttribution(evidence: AttributionEvidence[]): WorkspaceCheckpo
   return {
     source,
     confidence: 'high',
-    basis: bases.size === 1 ? evidence[0].basis : sourceBasis(source),
-    scope: 'checkpoint-file-window',
+    basis:
+      scope === 'checkpoint-hunk-window'
+        ? 'hunk-range-event'
+        : bases.size === 1
+          ? evidence[0].basis
+          : sourceBasis(source),
+    scope,
     evidenceEventIds: eventIds,
     ...(providers.size === 1 && provider ? { provider } : {}),
     ...(agents.size === 1 && agent ? { agent } : {}),
     ...(tools.size === 1 && tool ? { tool } : {}),
   };
+}
+
+function overlapsHunk(range: ProviderEventHunkRange, hunk: WorkspaceCheckpointDiffHunk): boolean {
+  return (
+    lineRangesOverlap(range.oldStart, range.oldLines, hunk.oldStart, hunk.oldLines) &&
+    lineRangesOverlap(range.newStart, range.newLines, hunk.newStart, hunk.newLines)
+  );
+}
+
+function lineRangesOverlap(
+  leftStart: number,
+  leftLines: number,
+  rightStart: number,
+  rightLines: number
+): boolean {
+  if (leftLines === 0 && rightLines === 0) return leftStart === rightStart;
+  if (leftLines === 0) return leftStart >= rightStart && leftStart <= rightStart + rightLines;
+  if (rightLines === 0) return rightStart >= leftStart && rightStart <= leftStart + leftLines;
+  return leftStart < rightStart + rightLines && rightStart < leftStart + leftLines;
 }
 
 function trustedCheckpointEventId(event: RunEventEnvelope): string | undefined {
@@ -268,10 +348,7 @@ function trustedCheckpointEventId(event: RunEventEnvelope): string | undefined {
 
 function sourceBasis(
   source: Exclude<WorkspaceCheckpointHunkAttribution['source'], 'unknown'>
-): Exclude<
-  WorkspaceCheckpointHunkAttribution['basis'],
-  'mixed-file-evidence' | 'no-file-evidence'
-> {
+): 'provider-file-event' | 'write-tool-event' | 'operator-file-event' | 'filesystem-file-event' {
   if (source === 'operator') return 'operator-file-event';
   if (source === 'external') return 'filesystem-file-event';
   return 'provider-file-event';

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added preview-first, attributable workspace checkpoint rewind for run-owned worktrees. Immutable content-addressed checkpoints capture Git, index, files, exclusions, ownership, conversation cursors, causal hunk evidence, bounded retention, and direct comparisons; conflict-aware previews bind stable evidence to exact critical approval; recoverable storage transactions preserve descendant state on failure. The production control route now quiesces an exact active Codex app-server turn and forks an earlier approved turn into a new live provider thread, while ambiguous cursors, external edits, unsupported providers, stale runtime evidence, and unresolved conflicts fail closed (#872).
+- Added preview-first, attributable workspace checkpoint rewind for run-owned worktrees. Immutable content-addressed checkpoints capture Git, index, files, exclusions, ownership, conversation cursors, exact provider hunk ranges where explicit unified diffs exist, bounded retention, and direct comparisons; conflict-aware previews bind stable evidence to exact critical approval; recoverable storage transactions preserve descendant state on failure. The production control route now quiesces an exact active Codex app-server turn and forks an earlier approved turn into a new live provider thread, while ambiguous cursors, external edits, unsupported providers, stale runtime evidence, and unresolved conflicts fail closed (#872).
 - Added durable execution-tree cancellation and a provider-neutral fan-out
   circuit breaker. Operators can cancel one queued launch or an entire root
   objective through REST, `vk admission`, and Operations; root cancellation is

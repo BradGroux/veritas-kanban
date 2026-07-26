@@ -231,4 +231,117 @@ describe('WorkspaceCheckpointAttributionService', () => {
     });
     expect(result.files[0].attribution?.source).toBe('unknown');
   });
+
+  it('attributes separate hunks when every write event carries exact unified-diff ranges', async () => {
+    const path = 'mixed-ranges.ts';
+    const file = changedFile(path);
+    file.hunks = [
+      {
+        header: '@@ -10 +10 @@',
+        oldStart: 10,
+        oldLines: 1,
+        newStart: 10,
+        newLines: 1,
+        lines: [],
+      },
+      {
+        header: '@@ -30,2 +30,2 @@',
+        oldStart: 30,
+        oldLines: 2,
+        newStart: 30,
+        newLines: 2,
+        lines: [],
+      },
+      {
+        header: '@@ -50 +50 @@',
+        oldStart: 50,
+        oldLines: 1,
+        newStart: 50,
+        newLines: 1,
+        lines: [],
+      },
+      {
+        header: '@@ -70 +70 @@',
+        oldStart: 70,
+        oldLines: 1,
+        newStart: 70,
+        newLines: 1,
+        lines: [],
+      },
+    ];
+    const checkpointDiff = diff([path]);
+    checkpointDiff.files = [file];
+    const events = [
+      event(1, 'workspace.checkpoint.created', systemSource, {
+        checkpointId: fromCheckpointId,
+      }),
+      event(2, 'file.changed', codexSource, {
+        paths: [path],
+        hunkRanges: [
+          { path, oldStart: 10, oldLines: 1, newStart: 10, newLines: 1 },
+          { path, oldStart: 70, oldLines: 1, newStart: 70, newLines: 1 },
+        ],
+      }),
+      event(3, 'file.changed', operatorSource, {
+        paths: [path],
+        hunkRanges: [
+          { path, oldStart: 30, oldLines: 2, newStart: 30, newLines: 2 },
+          { path, oldStart: 70, oldLines: 1, newStart: 70, newLines: 1 },
+        ],
+      }),
+      event(4, 'workspace.checkpoint.created', systemSource, {
+        checkpointId: toCheckpointId,
+      }),
+    ];
+    const service = new WorkspaceCheckpointAttributionService({
+      diffs: { compare: vi.fn(async () => checkpointDiff) },
+      events: {
+        list: vi.fn(async () => ({
+          schemaVersion: 'run-event/v1',
+          taskId: input.taskId,
+          attemptId: input.attemptId,
+          events,
+          nextCursor: 4,
+          hasMore: false,
+        })),
+      },
+    });
+
+    const result = await service.compare(input);
+
+    expect(result.files[0].attribution).toMatchObject({
+      source: 'unknown',
+      confidence: 'ambiguous',
+      basis: 'mixed-file-evidence',
+      scope: 'checkpoint-file-window',
+    });
+    expect(result.files[0].hunks[0].attribution).toMatchObject({
+      source: 'agent-tool',
+      confidence: 'high',
+      basis: 'hunk-range-event',
+      scope: 'checkpoint-hunk-window',
+      evidenceEventIds: ['event-2'],
+    });
+    expect(result.files[0].hunks[1].attribution).toMatchObject({
+      source: 'operator',
+      confidence: 'high',
+      basis: 'hunk-range-event',
+      scope: 'checkpoint-hunk-window',
+      evidenceEventIds: ['event-3'],
+    });
+    expect(result.files[0].hunks[2].attribution).toEqual({
+      source: 'unknown',
+      confidence: 'none',
+      basis: 'no-hunk-evidence',
+      scope: 'checkpoint-hunk-window',
+      evidenceEventIds: [],
+    });
+    expect(result.files[0].hunks[3].attribution).toEqual({
+      source: 'unknown',
+      confidence: 'ambiguous',
+      basis: 'mixed-hunk-evidence',
+      scope: 'checkpoint-hunk-window',
+      evidenceEventIds: ['event-2', 'event-3'],
+    });
+  });
 });

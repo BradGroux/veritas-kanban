@@ -109,14 +109,17 @@ export type WorkspaceCheckpointAttributionBasis =
   | 'write-tool-event'
   | 'operator-file-event'
   | 'filesystem-file-event'
+  | 'hunk-range-event'
   | 'mixed-file-evidence'
-  | 'no-file-evidence';
+  | 'mixed-hunk-evidence'
+  | 'no-file-evidence'
+  | 'no-hunk-evidence';
 
 export interface WorkspaceCheckpointHunkAttribution {
   source: WorkspaceCheckpointAttributionSource;
   confidence: WorkspaceCheckpointAttributionConfidence;
   basis: WorkspaceCheckpointAttributionBasis;
-  scope: 'checkpoint-file-window';
+  scope: 'checkpoint-file-window' | 'checkpoint-hunk-window';
   evidenceEventIds: string[];
   provider?: string;
   agent?: string;
