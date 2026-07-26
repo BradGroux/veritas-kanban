@@ -10,6 +10,7 @@ import type {
   DurableGoalRecord,
 } from '@veritas-kanban/shared';
 import { ZERO_AGENT_BUDGET_USAGE } from '@veritas-kanban/shared';
+import { ConflictError, ValidationError } from '../middleware/error-handler.js';
 import { DurableGoalService, getDurableGoalService } from './durable-goal-service.js';
 
 const NON_TERMINAL_STATES = [
@@ -37,6 +38,7 @@ export interface DurableGoalContinuationDispatchRequest {
   goal: DurableGoalRecord;
   sourceTaskId: string;
   sourceAttemptId: string;
+  kind: DurableGoalContinuationAttempt['kind'];
   message: string;
   admissionIdempotencyKey: string;
   remainingBudget?: AgentBudgetLimits;
@@ -69,6 +71,12 @@ export interface DurableGoalReconcileTaskInput {
   currentAttemptRunning?: boolean;
 }
 
+export interface DurableGoalRolloverApprovalInput {
+  goalId: string;
+  expectedRevision: number;
+  actorId: string;
+}
+
 export interface DurableGoalSupervisionResult {
   action:
     | 'not-found'
@@ -77,6 +85,7 @@ export interface DurableGoalSupervisionResult {
     | 'complete'
     | 'blocked'
     | 'paused'
+    | 'awaiting-approval'
     | 'usage-limited'
     | 'budget-limited'
     | 'dispatched'
@@ -170,16 +179,43 @@ export class DurableGoalSupervisorService {
       return { action: 'budget-limited', goal };
     }
 
-    if (!input.completion.continuation) {
-      goal = await this.blockGoal(goal, {
-        id: stableId('blocker', goal.id, input.attemptId, 'continuation-handle'),
-        code: 'CONTINUATION_HANDLE_MISSING',
-        summary: 'The provider did not return a verified continuation handle.',
-        attempts: 1,
-        nextSafeAction:
-          'Start an operator-approved rollover or use a provider with resume support.',
-        recordedAt: input.completion.completedAt,
+    const rolloverReason = requiredRolloverReason(goal, input.completion);
+    if (rolloverReason) {
+      const rolloverLimit = goal.continuation.maxRollovers ?? 0;
+      if (rolloverCount(goal) >= rolloverLimit) {
+        if (!input.completion.continuation && !goal.continuation.compactAfterTokens) {
+          goal = await this.blockMissingContinuation(goal, input);
+          return { action: 'blocked', goal };
+        }
+        goal = await this.goals.transition(goal.id, {
+          expectedRevision: goal.revision,
+          to: 'usage-limited',
+          actorId: 'durable-goal-supervisor',
+          reason: `A conversation rollover is required, but the ${rolloverLimit}-rollover limit is exhausted.`,
+        });
+        return { action: 'usage-limited', goal };
+      }
+      if (goal.continuation.requireApprovalForRollover) {
+        goal = await this.goals.transition(goal.id, {
+          expectedRevision: goal.revision,
+          to: 'awaiting-approval',
+          actorId: 'durable-goal-supervisor',
+          reason: `Conversation rollover approval is required: ${rolloverReason}`,
+        });
+        return { action: 'awaiting-approval', goal };
+      }
+      goal = await this.goals.planContinuation(goal.id, {
+        expectedRevision: goal.revision,
+        sourceTaskId: input.taskId,
+        sourceAttemptId: input.attemptId,
+        kind: 'rollover',
+        message: rolloverMessage(goal, input.completion, rolloverReason),
       });
+      return this.dispatchPlanned(goal, input.attemptId, dispatch);
+    }
+
+    if (!input.completion.continuation) {
+      goal = await this.blockMissingContinuation(goal, input);
       return { action: 'blocked', goal };
     }
 
@@ -198,6 +234,73 @@ export class DurableGoalSupervisorService {
       });
     }
     return this.dispatchPlanned(goal, input.attemptId, dispatch);
+  }
+
+  async approveRollover(
+    input: DurableGoalRolloverApprovalInput,
+    dispatch: DurableGoalContinuationDispatcher
+  ): Promise<DurableGoalSupervisionResult> {
+    let goal = await this.goals.get(input.goalId);
+    if (goal.revision !== input.expectedRevision) {
+      throw new ConflictError('Durable goal compare-and-set revision is stale.', {
+        goalId: goal.id,
+        expectedRevision: input.expectedRevision,
+        currentRevision: goal.revision,
+      });
+    }
+    if (!['active', 'awaiting-approval'].includes(goal.state)) {
+      throw new ValidationError('Only active or awaiting-approval goals can roll over.', {
+        goalId: goal.id,
+        state: goal.state,
+      });
+    }
+    const rolloverLimit = goal.continuation.maxRollovers ?? 0;
+    if (rolloverLimit === 0 || rolloverCount(goal) >= rolloverLimit) {
+      throw new ValidationError('The durable goal has no remaining conversation rollovers.', {
+        goalId: goal.id,
+        maxRollovers: rolloverLimit,
+        rollovers: rolloverCount(goal),
+      });
+    }
+    const sourceAttemptId = goal.currentRun?.attemptId;
+    const sourceRun = sourceAttemptId
+      ? [...goal.continuationChain].reverse().find((run) => run.attemptId === sourceAttemptId)
+      : undefined;
+    if (!sourceAttemptId || !sourceRun) {
+      throw new ValidationError('Conversation rollover requires a linked source attempt.', {
+        goalId: goal.id,
+      });
+    }
+    if (goal.state === 'awaiting-approval') {
+      goal = await this.goals.transition(goal.id, {
+        expectedRevision: goal.revision,
+        to: 'active',
+        actorId: input.actorId,
+        reason: 'Approved the pending bounded conversation rollover.',
+      });
+    }
+    const existing = goal.continuationAttempts.find(
+      (attempt) => attempt.sourceAttemptId === sourceAttemptId
+    );
+    if (existing) {
+      return {
+        action: 'already-handled',
+        goal,
+        continuation: existing,
+      };
+    }
+    goal = await this.goals.planContinuation(goal.id, {
+      expectedRevision: goal.revision,
+      sourceTaskId: sourceRun.taskId,
+      sourceAttemptId,
+      kind: 'rollover',
+      message: rolloverMessage(
+        goal,
+        undefined,
+        `Operator ${input.actorId} approved a fresh conversation handoff.`
+      ),
+    });
+    return this.dispatchPlanned(goal, sourceAttemptId, dispatch);
   }
 
   async reconcilePlannedForTask(
@@ -263,6 +366,7 @@ export class DurableGoalSupervisorService {
         goal,
         sourceTaskId: planned.sourceTaskId,
         sourceAttemptId: planned.sourceAttemptId,
+        kind: planned.kind,
         message: planned.message,
         admissionIdempotencyKey: planned.admissionIdempotencyKey,
         remainingBudget: remainingBudget(goal),
@@ -354,6 +458,20 @@ export class DurableGoalSupervisorService {
       blocker,
     });
   }
+
+  private blockMissingContinuation(
+    goal: DurableGoalRecord,
+    input: DurableGoalCompletionInput
+  ): Promise<DurableGoalRecord> {
+    return this.blockGoal(goal, {
+      id: stableId('blocker', goal.id, input.attemptId, 'continuation-handle'),
+      code: 'CONTINUATION_HANDLE_MISSING',
+      summary: 'The provider did not return a verified continuation handle.',
+      attempts: 1,
+      nextSafeAction: 'Configure a bounded rollover or use a provider with resume support.',
+      recordedAt: input.completion.completedAt,
+    });
+  }
 }
 
 function completionEvidence(
@@ -426,6 +544,56 @@ function failedRunBlocker(completion: CompletionResult): DurableGoalBlocker {
   };
 }
 
+function requiredRolloverReason(
+  goal: DurableGoalRecord,
+  completion: CompletionResult
+): string | undefined {
+  const threshold = goal.continuation.compactAfterTokens;
+  const tokens = tokensSinceLastRollover(goal);
+  if (threshold !== undefined && tokens >= threshold) {
+    return `The active conversation accumulated ${tokens} tokens, meeting the ${threshold}-token rollover threshold.`;
+  }
+  if (!completion.continuation && (goal.continuation.maxRollovers ?? 0) > 0) {
+    return 'The provider returned no verified resume handle, so continuation requires a fresh conversation.';
+  }
+  return undefined;
+}
+
+function rolloverCount(goal: DurableGoalRecord): number {
+  return goal.continuationAttempts.filter(
+    (attempt) => attempt.kind === 'rollover' && attempt.state === 'dispatched'
+  ).length;
+}
+
+function tokensSinceLastRollover(goal: DurableGoalRecord): number {
+  const latest = [...goal.continuationAttempts]
+    .reverse()
+    .find(
+      (attempt) =>
+        attempt.kind === 'rollover' && attempt.state === 'dispatched' && attempt.resultAttemptId
+    );
+  if (!latest?.resultAttemptId) {
+    return goal.usageEvents.reduce((total, event) => total + event.usage.totalTokens, 0);
+  }
+  const rolloverIndex = goal.continuationChain.findIndex(
+    (run) => run.attemptId === latest.resultAttemptId
+  );
+  if (rolloverIndex < 0) return 0;
+  const rolloverAttempts = new Set(
+    goal.continuationChain
+      .slice(rolloverIndex)
+      .map((run) => run.attemptId)
+      .filter((attemptId): attemptId is string => Boolean(attemptId))
+  );
+  return goal.usageEvents.reduce(
+    (total, event) =>
+      event.attemptId && rolloverAttempts.has(event.attemptId)
+        ? total + event.usage.totalTokens
+        : total,
+    0
+  );
+}
+
 function continuationMessage(goal: DurableGoalRecord, completion: CompletionResult): string {
   const evidenced = new Set(goal.completionEvidence.map((evidence) => evidence.requirementId));
   const remaining = goal.completionRequirements
@@ -445,6 +613,86 @@ function continuationMessage(goal: DurableGoalRecord, completion: CompletionResu
     '',
     'Keep the existing constraints and authority boundaries. Do not mark the goal complete without verified evidence.',
   ].join('\n');
+}
+
+function rolloverMessage(
+  goal: DurableGoalRecord,
+  completion: CompletionResult | undefined,
+  reason: string
+): string {
+  const evidenced = new Set(goal.completionEvidence.map((evidence) => evidence.requirementId));
+  const list = (values: string[], empty: string) =>
+    values.length > 0 ? values.map((value) => `- ${truncateUtf8(value, 700)}`) : [`- ${empty}`];
+  const message = [
+    `Start a fresh conversation for durable goal ${goal.id} at revision ${goal.revision}.`,
+    '',
+    `Rollover reason: ${reason}`,
+    '',
+    'Objective:',
+    truncateUtf8(goal.objective, 4_000),
+    '',
+    'Constraints:',
+    ...list(goal.constraints.slice(0, 20), 'No additional constraints recorded.'),
+    '',
+    'Acceptance criteria:',
+    ...list(goal.acceptanceCriteria.slice(0, 20), 'No acceptance criteria recorded.'),
+    '',
+    'Verified evidence links:',
+    ...list(
+      goal.completionEvidence
+        .slice(-30)
+        .map(
+          (evidence) => `${evidence.requirementId} -> ${evidence.evidenceId}: ${evidence.summary}`
+        ),
+      'No completion evidence has been verified.'
+    ),
+    '',
+    'Remaining required evidence:',
+    ...list(
+      goal.completionRequirements
+        .filter((requirement) => requirement.required && !evidenced.has(requirement.id))
+        .map((requirement) => `${requirement.id}: ${requirement.description}`),
+      'Re-evaluate all acceptance criteria before completion.'
+    ),
+    '',
+    'Recent durable decisions:',
+    ...list(
+      goal.transitions
+        .slice(-20)
+        .map(
+          (transition) =>
+            `revision ${transition.revision} ${transition.from} -> ${transition.to} by ${transition.actorId}: ${transition.reason}`
+        ),
+      'No state decisions recorded.'
+    ),
+    '',
+    `Cumulative usage: ${JSON.stringify(goal.usage)}`,
+    `Prior run attempts: ${goal.continuationChain
+      .slice(-30)
+      .map((run) => run.attemptId ?? run.taskId)
+      .join(', ')}`,
+    ...(completion ? ['', `Last run summary: ${completion.summary}`] : []),
+    '',
+    'Continue from this durable contract. Preserve the existing authority boundaries, inspect linked evidence when needed, and do not repeat verified side effects or mark the goal complete without its required evidence.',
+  ].join('\n');
+  return truncateUtf8(message, 18_000);
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) return value;
+  const suffix = '\n[truncated; inspect the durable goal record for full context]';
+  const contentLimit = Math.max(0, maxBytes - Buffer.byteLength(suffix, 'utf8'));
+  let low = 0;
+  let high = value.length;
+  while (low < high) {
+    const midpoint = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(value.slice(0, midpoint), 'utf8') <= contentLimit) {
+      low = midpoint;
+    } else {
+      high = midpoint - 1;
+    }
+  }
+  return `${value.slice(0, low).trimEnd()}${suffix}`;
 }
 
 function dispatchErrorCode(error: unknown): string {

@@ -12,8 +12,16 @@ const goals = vi.hoisted(() => ({
   linkRun: vi.fn(),
 }));
 
+const agents = vi.hoisted(() => ({
+  rolloverDurableGoal: vi.fn(),
+}));
+
 vi.mock('../../services/durable-goal-service.js', () => ({
   getDurableGoalService: () => goals,
+}));
+
+vi.mock('../../services/clawdbot-agent-service.js', () => ({
+  clawdbotAgentService: agents,
 }));
 
 import { goalRoutes } from '../../routes/goals.js';
@@ -166,5 +174,25 @@ describe('durable goal routes', () => {
     });
     expect(spoofed.status).toBe(400);
     expect(goals.transition).not.toHaveBeenCalled();
+  });
+
+  it('approves a bounded rollover with server-derived workspace and actor identity', async () => {
+    goals.get.mockResolvedValue({ id: GOAL_ID, workspaceId: 'workspace-a' });
+    agents.rolloverDurableGoal.mockResolvedValue({
+      action: 'dispatched',
+      goal: { id: GOAL_ID, revision: 7 },
+      continuation: { kind: 'rollover', resultAttemptId: 'attempt-7' },
+    });
+
+    const response = await request(createApp()).post(`/api/goals/${GOAL_ID}/rollover`).send({
+      expectedRevision: 6,
+    });
+
+    expect(response.status).toBe(201);
+    expect(agents.rolloverDurableGoal).toHaveBeenCalledWith(GOAL_ID, 6, 'user-brad');
+    expect(response.body).toMatchObject({
+      action: 'dispatched',
+      continuation: { kind: 'rollover', resultAttemptId: 'attempt-7' },
+    });
   });
 });
