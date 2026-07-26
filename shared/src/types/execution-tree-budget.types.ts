@@ -9,6 +9,8 @@ export const EXECUTION_TREE_BUDGET_EVENT_SCHEMA_VERSION = 'execution-tree-budget
 export const EXECUTION_TREE_BUDGET_SUMMARY_SCHEMA_VERSION =
   'execution-tree-budget-summary/v1' as const;
 export const EXECUTION_TREE_CONTROL_SCHEMA_VERSION = 'execution-tree-control/v1' as const;
+export const EXECUTION_TREE_BREAKER_EVIDENCE_SCHEMA_VERSION =
+  'execution-tree-breaker-evidence/v1' as const;
 
 export const EXECUTION_TREE_EDGE_KINDS = [
   'root',
@@ -84,11 +86,48 @@ export interface ExecutionTreeBudgetContributor {
 export interface ExecutionTreeControl {
   schemaVersion: typeof EXECUTION_TREE_CONTROL_SCHEMA_VERSION;
   rootObjectiveId: string;
-  state: 'paused' | 'cancelled';
+  state: 'paused' | 'resumed' | 'cancelled';
   trigger: 'operator' | 'fan-out-breaker';
   reason: string;
   idempotencyKey: string;
   recordedAt: string;
+  evidence?: ExecutionTreeBreakerEvidence;
+  resumedAt?: string;
+  resumeReason?: string;
+  resumeIdempotencyKey?: string;
+}
+
+export type ExecutionTreeBreakerSignal =
+  | 'descendant-limit'
+  | 'depth-limit'
+  | 'active-reservation-limit'
+  | 'queued-descendant-limit'
+  | 'capacity-pressure'
+  | 'budget-pressure';
+
+export interface ExecutionTreeBreakerEvidence {
+  schemaVersion: typeof EXECUTION_TREE_BREAKER_EVIDENCE_SCHEMA_VERSION;
+  rootObjectiveId: string;
+  evaluatedAt: string;
+  signals: ExecutionTreeBreakerSignal[];
+  observed: {
+    descendants: number;
+    maxDepth: number;
+    activeReservations: number;
+    queuedDescendants: number;
+    capacityPressurePercent: number;
+    budgetPressurePercent: number;
+  };
+  thresholds: {
+    maxDescendants: number;
+    maxDepth: number;
+    maxActiveReservations: number;
+    maxQueuedDescendants: number;
+    pressureActivationDescendants: number;
+    capacityPressurePercent: number;
+    budgetPressurePercent: number;
+  };
+  recoveryGuidance: string[];
 }
 
 export interface ExecutionTreeBudgetSummary {

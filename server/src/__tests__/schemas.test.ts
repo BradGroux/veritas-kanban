@@ -430,6 +430,16 @@ describe('Feature Settings Schema', () => {
             evaluationLimit: 32,
           },
         },
+        fanOutBreaker: {
+          enabled: true,
+          maxDescendants: 256,
+          maxDepth: 16,
+          maxActiveReservations: 64,
+          maxQueuedDescendants: 64,
+          pressureActivationDescendants: 8,
+          capacityPressurePercent: 95,
+          budgetPressurePercent: 95,
+        },
       },
     });
     expect(result.admission?.global?.concurrentRuns).toBe(8);
@@ -437,6 +447,7 @@ describe('Feature Settings Schema', () => {
     expect(result.admission?.providers?.['workflow-control']?.concurrentRuns).toBe(3);
     expect(result.admission?.queue?.workspaceLimit).toBe(100);
     expect(result.admission?.queue?.scheduler?.evaluationLimit).toBe(32);
+    expect(result.admission?.fanOutBreaker?.maxDescendants).toBe(256);
     expect(() =>
       FeatureSettingsPatchSchema.parse({
         admission: { leaseMs: 10_000, heartbeatMs: 10_000 },
@@ -482,6 +493,15 @@ describe('Feature Settings Schema', () => {
               defaultPriority: 1,
               maxAgePromotion: 2,
             },
+          },
+        },
+      })
+    ).toThrow();
+    expect(() =>
+      FeatureSettingsPatchSchema.parse({
+        admission: {
+          fanOutBreaker: {
+            capacityPressurePercent: 101,
           },
         },
       })

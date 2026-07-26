@@ -582,6 +582,16 @@ export const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
         evaluationLimit: 32,
       },
     },
+    fanOutBreaker: {
+      enabled: true,
+      maxDescendants: 256,
+      maxDepth: 16,
+      maxActiveReservations: 64,
+      maxQueuedDescendants: 64,
+      pressureActivationDescendants: 8,
+      capacityPressurePercent: 95,
+      budgetPressurePercent: 95,
+    },
   },
   enforcement: {
     squadChat: false,

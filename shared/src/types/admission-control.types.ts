@@ -588,6 +588,16 @@ export interface AdmissionSettings {
     maxRetries: number;
     scheduler: AdmissionQueueSchedulerSettings;
   };
+  fanOutBreaker: {
+    enabled: boolean;
+    maxDescendants: number;
+    maxDepth: number;
+    maxActiveReservations: number;
+    maxQueuedDescendants: number;
+    pressureActivationDescendants: number;
+    capacityPressurePercent: number;
+    budgetPressurePercent: number;
+  };
 }
 
 export type AdmissionQueuePriority = number | TaskPriority;

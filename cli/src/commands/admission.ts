@@ -13,6 +13,7 @@ import type {
   AdmissionReservationState,
   AdmissionScope,
   ExecutionTreeBudgetSummary,
+  ExecutionTreeControl,
 } from '@veritas-kanban/shared';
 import { api } from '../utils/api.js';
 
@@ -248,6 +249,36 @@ export function registerAdmissionCommands(program: Command): void {
     });
 
   admission
+    .command('resume-tree <root-objective-id>')
+    .description('Resume an eligible execution tree after its fan-out breaker pauses')
+    .requiredOption('--reason <text>', 'Operator reason for resuming expansion')
+    .option('--idempotency-key <key>', 'Stable identity for safe retries')
+    .option('--json', 'Output as JSON')
+    .action(async (rootObjectiveId, options) => {
+      try {
+        const result = await api<ExecutionTreeControl>(
+          `/api/admission/tree/${encodeURIComponent(rootObjectiveId)}/resume`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              reason: options.reason,
+              idempotencyKey:
+                options.idempotencyKey ?? `vk-cli:tree-resume:${rootObjectiveId}:${randomUUID()}`,
+            }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        console.log(chalk.green(`✓ Resumed execution tree ${result.rootObjectiveId}`));
+        console.log(chalk.dim(`Recorded: ${result.resumedAt}; reason: ${result.resumeReason}`));
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  admission
     .command('get <id>')
     .description('Inspect one admission reservation')
     .option('--json', 'Output as JSON')
@@ -337,12 +368,20 @@ function printReservation(reservation: AdmissionReservation, verbose = false): v
 function printExecutionTreeSummary(summary: ExecutionTreeBudgetSummary): void {
   console.log(chalk.bold(`Execution tree ${summary.rootObjectiveId}`));
   if (summary.control) {
+    const color = summary.control.state === 'resumed' ? chalk.green : chalk.red;
     console.log(
-      chalk.red(
+      color(
         `  control=${summary.control.state} trigger=${summary.control.trigger} recorded=${summary.control.recordedAt}`
       )
     );
     console.log(chalk.dim(`  reason=${summary.control.reason}`));
+    if (summary.control.resumedAt) {
+      console.log(
+        chalk.dim(
+          `  resumed=${summary.control.resumedAt} resume-reason=${summary.control.resumeReason}`
+        )
+      );
+    }
   }
   console.log(
     `  committed tokens=${summary.committed.totalTokens} cost=$${summary.committed.costUsd.toFixed(4)} tools=${summary.committed.toolCalls} runtime=${summary.committed.runtimeSeconds}s retries=${summary.committed.retries} fan-out=${summary.committed.fanOut}`

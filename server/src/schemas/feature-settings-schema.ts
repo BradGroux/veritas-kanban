@@ -291,6 +291,19 @@ const AdmissionSettingsSchema = z
       })
       .strict()
       .optional(),
+    fanOutBreaker: z
+      .object({
+        enabled: z.boolean().optional(),
+        maxDescendants: z.number().int().min(1).max(100_000).optional(),
+        maxDepth: z.number().int().min(1).max(1_000).optional(),
+        maxActiveReservations: z.number().int().min(1).max(100_000).optional(),
+        maxQueuedDescendants: z.number().int().min(1).max(100_000).optional(),
+        pressureActivationDescendants: z.number().int().min(1).max(100_000).optional(),
+        capacityPressurePercent: z.number().min(1).max(100).optional(),
+        budgetPressurePercent: z.number().min(1).max(100).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
