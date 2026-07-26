@@ -8,6 +8,7 @@ export const EXECUTION_TREE_IDENTITY_SCHEMA_VERSION = 'execution-tree-identity/v
 export const EXECUTION_TREE_BUDGET_EVENT_SCHEMA_VERSION = 'execution-tree-budget-event/v1' as const;
 export const EXECUTION_TREE_BUDGET_SUMMARY_SCHEMA_VERSION =
   'execution-tree-budget-summary/v1' as const;
+export const EXECUTION_TREE_CONTROL_SCHEMA_VERSION = 'execution-tree-control/v1' as const;
 
 export const EXECUTION_TREE_EDGE_KINDS = [
   'root',
@@ -80,9 +81,20 @@ export interface ExecutionTreeBudgetContributor {
   updatedAt: string;
 }
 
+export interface ExecutionTreeControl {
+  schemaVersion: typeof EXECUTION_TREE_CONTROL_SCHEMA_VERSION;
+  rootObjectiveId: string;
+  state: 'paused' | 'cancelled';
+  trigger: 'operator' | 'fan-out-breaker';
+  reason: string;
+  idempotencyKey: string;
+  recordedAt: string;
+}
+
 export interface ExecutionTreeBudgetSummary {
   schemaVersion: typeof EXECUTION_TREE_BUDGET_SUMMARY_SCHEMA_VERSION;
   rootObjectiveId: string;
+  control?: ExecutionTreeControl;
   committed: AgentBudgetUsage;
   reserved: AgentBudgetUsage;
   policies: ExecutionTreeBudgetPolicyStatus[];

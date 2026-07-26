@@ -8,10 +8,17 @@ const admission = vi.hoisted(() => ({
   get: vi.fn(),
   inspectQueue: vi.fn(),
   inspectQueueEntry: vi.fn(),
+  cancelQueuedLaunch: vi.fn(),
 }));
+
+const cancelExecutionTree = vi.hoisted(() => vi.fn());
 
 vi.mock('../../services/admission-control-service.js', () => ({
   getAdmissionControlService: () => admission,
+}));
+
+vi.mock('../../services/clawdbot-agent-service.js', () => ({
+  clawdbotAgentService: { cancelExecutionTree },
 }));
 
 import { admissionRoutes } from '../../routes/admission.js';
@@ -121,6 +128,48 @@ describe('admission routes', () => {
     expect(admission.inspectQueueEntry).toHaveBeenCalledWith('admission_queue_1');
     expect(invalid.status).toBe(400);
     expect(admission.inspectQueue).not.toHaveBeenCalled();
+  });
+
+  it('cancels queued launches and execution trees with stable operator identity', async () => {
+    admission.cancelQueuedLaunch.mockResolvedValue({
+      schemaVersion: 'execution-tree-cancellation/v1',
+      scope: 'queued-launch',
+      queueEntry: { id: 'admission_queue_1', state: 'terminal' },
+    });
+    cancelExecutionTree.mockResolvedValue({
+      schemaVersion: 'execution-tree-cancellation/v1',
+      scope: 'execution-tree',
+      rootObjectiveId: 'objective-a',
+      queueEntriesCancelled: 2,
+      interruptedAttempts: 1,
+      runningAttempts: [],
+    });
+    const app = createApp();
+    const queued = await request(app).post('/api/admission/queue/admission_queue_1/cancel').send({
+      idempotencyKey: 'cancel-queue-entry-123',
+      reason: 'Operator cancelled the queued launch.',
+    });
+    const tree = await request(app).post('/api/admission/tree/objective-a/cancel').send({
+      idempotencyKey: 'cancel-execution-tree-123',
+      reason: 'Operator cancelled runaway expansion.',
+    });
+
+    expect(queued.status).toBe(200);
+    expect(admission.cancelQueuedLaunch).toHaveBeenCalledWith('admission_queue_1', {
+      idempotencyKey: 'cancel-queue-entry-123',
+      reason: 'Operator cancelled the queued launch.',
+    });
+    expect(tree.status).toBe(200);
+    expect(cancelExecutionTree).toHaveBeenCalledWith('objective-a', {
+      idempotencyKey: 'cancel-execution-tree-123',
+      reason: 'Operator cancelled runaway expansion.',
+    });
+
+    const invalid = await request(app)
+      .post('/api/admission/tree/objective-a/cancel')
+      .send({ idempotencyKey: 'short', reason: 'too short' });
+    expect(invalid.status).toBe(400);
+    expect(cancelExecutionTree).toHaveBeenCalledTimes(1);
   });
 
   it('returns a validation error for an invalid reservation identifier', async () => {

@@ -1,11 +1,14 @@
 import { Command } from 'commander';
+import { randomUUID } from 'node:crypto';
 import chalk from 'chalk';
 import type {
+  AdmissionExecutionTreeCancellationResult,
   AdmissionLaunchSource,
   AdmissionQueueGetResponse,
   AdmissionQueueInspectionEntry,
   AdmissionQueueListResponse,
   AdmissionQueueState,
+  AdmissionQueuedCancellationResult,
   AdmissionReservation,
   AdmissionReservationState,
   AdmissionScope,
@@ -75,6 +78,39 @@ export function registerAdmissionCommands(program: Command): void {
         console.log(
           chalk.dim(
             `Conditional snapshot at ${result.generatedAt}; ${result.depth.global.current}/${result.depth.global.limit} global queue slots used.`
+          )
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  queue
+    .command('cancel <id>')
+    .description('Cancel one queued launch before provider dispatch')
+    .requiredOption('--reason <text>', 'Operator reason for cancellation')
+    .option('--idempotency-key <key>', 'Stable identity for safe retries')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const result = await api<AdmissionQueuedCancellationResult>(
+          `/api/admission/queue/${encodeURIComponent(id)}/cancel`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              reason: options.reason,
+              idempotencyKey: options.idempotencyKey ?? `vk-cli:queue-cancel:${id}:${randomUUID()}`,
+            }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        console.log(chalk.green(`✓ Cancelled queued launch ${result.queueEntry.id}`));
+        console.log(
+          chalk.dim(
+            `State: ${result.queueEntry.state}; reservation released: ${result.reservationReleased}`
           )
         );
       } catch (error) {
@@ -178,6 +214,40 @@ export function registerAdmissionCommands(program: Command): void {
     });
 
   admission
+    .command('cancel-tree <root-objective-id>')
+    .description('Cancel queued and verified running work for one execution tree')
+    .requiredOption('--reason <text>', 'Operator reason for cancellation')
+    .option('--idempotency-key <key>', 'Stable identity for safe retries')
+    .option('--json', 'Output as JSON')
+    .action(async (rootObjectiveId, options) => {
+      try {
+        const result = await api<AdmissionExecutionTreeCancellationResult>(
+          `/api/admission/tree/${encodeURIComponent(rootObjectiveId)}/cancel`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              reason: options.reason,
+              idempotencyKey:
+                options.idempotencyKey ?? `vk-cli:tree-cancel:${rootObjectiveId}:${randomUUID()}`,
+            }),
+          }
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        console.log(chalk.green(`✓ Cancelled execution tree ${result.rootObjectiveId}`));
+        console.log(
+          chalk.dim(
+            `Queued: ${result.queueEntriesCancelled}; interrupted: ${result.interruptedAttempts}; remaining verified runs: ${result.runningAttempts.length}`
+          )
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  admission
     .command('get <id>')
     .description('Inspect one admission reservation')
     .option('--json', 'Output as JSON')
@@ -266,6 +336,14 @@ function printReservation(reservation: AdmissionReservation, verbose = false): v
 
 function printExecutionTreeSummary(summary: ExecutionTreeBudgetSummary): void {
   console.log(chalk.bold(`Execution tree ${summary.rootObjectiveId}`));
+  if (summary.control) {
+    console.log(
+      chalk.red(
+        `  control=${summary.control.state} trigger=${summary.control.trigger} recorded=${summary.control.recordedAt}`
+      )
+    );
+    console.log(chalk.dim(`  reason=${summary.control.reason}`));
+  }
   console.log(
     `  committed tokens=${summary.committed.totalTokens} cost=$${summary.committed.costUsd.toFixed(4)} tools=${summary.committed.toolCalls} runtime=${summary.committed.runtimeSeconds}s retries=${summary.committed.retries} fan-out=${summary.committed.fanOut}`
   );

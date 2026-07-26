@@ -4154,13 +4154,15 @@ before attempt persistence or provider dispatch. Workflow roots use the
 `workflow-control` admission provider; child steps use the resolved execution
 provider and selected host. Inspection requires `agent:read`.
 
-| Method | Path                                   | Description                                             |
-| ------ | -------------------------------------- | ------------------------------------------------------- |
-| `GET`  | `/api/admission`                       | List reservations with optional scope and state filters |
-| `GET`  | `/api/admission/queue`                 | List the bounded, redacted admission queue view         |
-| `GET`  | `/api/admission/queue/:id`             | Inspect one redacted queue entry                        |
-| `GET`  | `/api/admission/tree/:rootObjectiveId` | Summarize one aggregate execution tree                  |
-| `GET`  | `/api/admission/:id`                   | Inspect one durable reservation                         |
+| Method | Path                                          | Description                                                    |
+| ------ | --------------------------------------------- | -------------------------------------------------------------- |
+| `GET`  | `/api/admission`                              | List reservations with optional scope and state filters        |
+| `GET`  | `/api/admission/queue`                        | List the bounded, redacted admission queue view                |
+| `GET`  | `/api/admission/queue/:id`                    | Inspect one redacted queue entry                               |
+| `POST` | `/api/admission/queue/:id/cancel`             | Cancel one queued launch before provider dispatch              |
+| `GET`  | `/api/admission/tree/:rootObjectiveId`        | Summarize one aggregate execution tree and its control state   |
+| `POST` | `/api/admission/tree/:rootObjectiveId/cancel` | Cancel queued and verified running work for one execution tree |
+| `GET`  | `/api/admission/:id`                          | Inspect one durable reservation                                |
 
 List filters are `workspaceId`, `taskId`, `rootTaskId`, `provider`, `hostId`,
 `workflowRunId`, `workflowStepId`, `rootReservationId`, `rootObjectiveId`,
@@ -4223,8 +4225,34 @@ Execution-tree reservations include `execution-tree-identity/v1` and durable
 requested, remaining, committed, released-unused, and idempotent usage-event
 state. The tree summary aggregates each node once and returns committed and
 active reserved usage, per-policy remaining limits, the policy that blocks the
-next launch, bounded contributors, and truncation evidence. Committed usage is
-retained after release; only unused reservation returns to the tree.
+next launch, bounded contributors, truncation evidence, and any durable
+`execution-tree-control/v1` cancellation or circuit-breaker state. Committed
+usage is retained after release; only unused reservation returns to the tree.
+
+Cancellation requests require `admin:manage` and a strict JSON body:
+
+```json
+{
+  "idempotencyKey": "operator-request-20260725-001",
+  "reason": "Operator stopped runaway child-agent expansion."
+}
+```
+
+`POST /api/v1/admission/queue/:id/cancel` terminalizes a queued or leased
+launch before dispatch and releases its reservation. A dispatched entry must
+be controlled through its verified run instead. `POST
+/api/v1/admission/tree/:rootObjectiveId/cancel` first records cancellation on
+the root reservation, then drains queued descendants, releases unbound
+reservations, and interrupts verified running attempts owned by the local
+agent supervisor. The response lists any verified running attempts that could
+not be interrupted so operators can reconcile them explicitly. Reusing the
+same idempotency key is safe; a different key conflicts with existing terminal
+ownership. Veritas stores and returns only the key's SHA-256 identity.
+
+Once the root control is recorded, late resume, retry, fallback, workflow-step,
+and child-agent launches fail closed before provider dispatch. The durable
+control survives restart and is visible through the tree summary and
+`vk admission tree`.
 
 Direct `POST /api/v1/agents/:taskId/start` callers may send an opaque
 `X-Idempotency-Key` header (8-240 characters). The header takes precedence

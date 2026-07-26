@@ -2,7 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import type {
   AdmissionCapacityRequest,
+  AdmissionCancellationInput,
   AdmissionDecision,
+  AdmissionExecutionTreeCancellationResult,
   AdmissionLaunchSource,
   AdmissionLimitPolicy,
   AdmissionProvider,
@@ -17,6 +19,7 @@ import type {
   AdmissionQueuePriority,
   AdmissionQueueSelectionEvidence,
   AdmissionQueueTarget,
+  AdmissionQueuedCancellationResult,
   AdmissionReservation,
   AdmissionReservationClaimOrQueueResult,
   AdmissionReservationListQuery,
@@ -27,6 +30,7 @@ import type {
   ExecutionTreeBudgetSummary,
   ExecutionTreeBudgetUsageEvent,
   ExecutionTreeIdentity,
+  ExecutionTreeControl,
   AgentType,
 } from '@veritas-kanban/shared';
 import {
@@ -38,6 +42,8 @@ import {
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   DEFAULT_FEATURE_SETTINGS,
+  EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION,
+  EXECUTION_TREE_CONTROL_SCHEMA_VERSION,
   ZERO_AGENT_BUDGET_USAGE,
 } from '@veritas-kanban/shared';
 import {
@@ -218,6 +224,65 @@ export class AdmissionControlService {
     return this.admitInternal(input, queue);
   }
 
+  private async executionTreeRootReservation(
+    rootObjectiveId: string
+  ): Promise<AdmissionReservation | null> {
+    const records = await this.repository.list({
+      rootObjectiveId,
+      limit: 10_000,
+    });
+    return (
+      records.find(
+        (record) =>
+          record.request.executionTree?.rootObjectiveId === rootObjectiveId &&
+          record.request.executionTree.edge === 'root'
+      ) ?? null
+    );
+  }
+
+  async getExecutionTreeControl(rootObjectiveId: string): Promise<ExecutionTreeControl | null> {
+    return (await this.executionTreeRootReservation(rootObjectiveId))?.executionTreeControl ?? null;
+  }
+
+  async assertExecutionTreeLaunchAllowed(rootObjectiveId: string): Promise<void> {
+    const control = await this.getExecutionTreeControl(rootObjectiveId);
+    if (!control) return;
+    throw new ConflictError(
+      control.state === 'cancelled'
+        ? 'Execution tree was cancelled before provider dispatch.'
+        : 'Execution tree expansion is paused by its fan-out circuit breaker.',
+      {
+        code:
+          control.state === 'cancelled'
+            ? 'EXECUTION_TREE_CANCELLED'
+            : 'EXECUTION_TREE_EXPANSION_PAUSED',
+        executionTreeControl: control,
+      }
+    );
+  }
+
+  private blockedTreeDecision(
+    request: AdmissionDecision['request'],
+    control: ExecutionTreeControl,
+    settings: AdmissionSettings,
+    now: Date
+  ): AdmissionDecision {
+    return this.decision(
+      control.state === 'cancelled' ? 'terminal-policy-denial' : 'retryable-overload',
+      request,
+      [],
+      control.state === 'cancelled'
+        ? 'The root execution tree was cancelled before this launch.'
+        : 'The root execution tree is paused by its fan-out circuit breaker.',
+      now,
+      control.state === 'paused' ? settings.retryAfterMs : undefined,
+      undefined,
+      undefined,
+      undefined,
+      control
+    );
+  }
+
   private async admitInternal(
     input: AdmissionRequestInput,
     queue?: AdmissionQueueInput
@@ -259,6 +324,12 @@ export class AdmissionControlService {
       },
       requestedAt: now.toISOString(),
     } as const;
+    const initialTreeControl = request.executionTree
+      ? await this.getExecutionTreeControl(request.executionTree.rootObjectiveId)
+      : null;
+    if (initialTreeControl) {
+      return this.blockedTreeDecision(request, initialTreeControl, settings, now);
+    }
     const policies = this.policiesFor(request, settings);
     const impossible = requestExceedsPolicies(request.requested, policies);
     if (impossible.length > 0) {
@@ -334,6 +405,37 @@ export class AdmissionControlService {
           workspaceQueueLimit: settings.queue.workspaceLimit,
         })
       : await this.repository.claim({ record, now: now.toISOString() });
+    const currentTreeControl = request.executionTree
+      ? await this.getExecutionTreeControl(request.executionTree.rootObjectiveId)
+      : null;
+    if (currentTreeControl) {
+      if (claimed.queueEntry && claimed.queueEntry.state !== 'terminal') {
+        const reservationId = claimed.queueEntry.reservationId;
+        await this.terminateQueueEntry(
+          claimed.queueEntry.id,
+          currentTreeControl.state === 'cancelled'
+            ? 'EXECUTION_TREE_CANCELLED'
+            : 'EXECUTION_TREE_EXPANSION_PAUSED',
+          currentTreeControl.reason,
+          currentTreeControl.idempotencyKey
+        );
+        if (reservationId) {
+          await this.release(
+            reservationId,
+            currentTreeControl.state === 'cancelled' ? 'cancelled' : 'reconciled',
+            `tree-control:${currentTreeControl.idempotencyKey}:${reservationId}`
+          );
+        }
+      }
+      if (claimed.record?.state === 'active') {
+        await this.release(
+          claimed.record.id,
+          currentTreeControl.state === 'cancelled' ? 'cancelled' : 'reconciled',
+          `tree-control:${currentTreeControl.idempotencyKey}:${claimed.record.id}`
+        );
+      }
+      return this.blockedTreeDecision(request, currentTreeControl, settings, now);
+    }
     if (claimed.queueConflict) {
       return this.decision(
         'terminal-policy-denial',
@@ -913,7 +1015,8 @@ export class AdmissionControlService {
   async terminateQueueEntry(
     id: string,
     code: string,
-    reason: string
+    reason: string,
+    idempotencyKey?: string
   ): Promise<AdmissionQueueEntry> {
     this.stopQueueHeartbeat(id);
     return this.mutateQueue(id, (current, now) => {
@@ -932,11 +1035,183 @@ export class AdmissionControlService {
         terminal: {
           code: code.trim().slice(0, 160) || 'QUEUE_TERMINAL',
           reason: reason.trim().slice(0, 1_000) || 'Queued launch terminated.',
+          ...(idempotencyKey ? { idempotencyKey } : {}),
           recordedAt: now.toISOString(),
         },
         updatedAt: now.toISOString(),
       };
     });
+  }
+
+  async cancelQueuedLaunch(
+    id: string,
+    input: AdmissionCancellationInput
+  ): Promise<AdmissionQueuedCancellationResult> {
+    const idempotencyKey = idempotencyIdentity(input.idempotencyKey.trim());
+    const current = await this.getQueueEntry(id);
+    if (current.state === 'terminal') {
+      if (
+        current.terminal?.code !== 'QUEUE_CANCELLED' ||
+        current.terminal.idempotencyKey !== idempotencyKey
+      ) {
+        throw new ConflictError('Queue entry already has different terminal ownership.', {
+          queueId: id,
+          terminal: current.terminal,
+        });
+      }
+      return {
+        schemaVersion: EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION,
+        scope: 'queued-launch',
+        idempotencyKey,
+        queueEntry: current,
+        reservationReleased: false,
+      };
+    }
+    if (current.state === 'dispatched') {
+      throw new ConflictError('Dispatched work must be interrupted through its verified run.', {
+        queueId: id,
+        dispatchedAttemptId: current.dispatchedAttemptId,
+      });
+    }
+
+    const reservationId = current.reservationId;
+    const queueEntry = await this.terminateQueueEntry(
+      id,
+      'QUEUE_CANCELLED',
+      input.reason,
+      idempotencyKey
+    );
+    let reservationReleased = false;
+    if (reservationId) {
+      const reservation = await this.repository.get(reservationId);
+      if (reservation?.state === 'active') {
+        await this.release(
+          reservationId,
+          'cancelled',
+          `queue-cancel:${idempotencyKey}:${reservationId}`
+        );
+        reservationReleased = true;
+      }
+    }
+    return {
+      schemaVersion: EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION,
+      scope: 'queued-launch',
+      idempotencyKey,
+      queueEntry,
+      reservationReleased,
+    };
+  }
+
+  async cancelExecutionTree(
+    rootObjectiveId: string,
+    input: AdmissionCancellationInput
+  ): Promise<AdmissionExecutionTreeCancellationResult> {
+    const idempotencyKey = idempotencyIdentity(input.idempotencyKey.trim());
+    const root = await this.executionTreeRootReservation(rootObjectiveId);
+    if (!root) throw new NotFoundError('Execution tree root reservation not found.');
+    const existing = root.executionTreeControl;
+    if (existing?.state === 'cancelled' && existing.idempotencyKey !== idempotencyKey) {
+      throw new ConflictError('Execution tree cancellation already has different ownership.', {
+        rootObjectiveId,
+        executionTreeControl: existing,
+      });
+    }
+
+    const control =
+      existing?.state === 'cancelled'
+        ? existing
+        : (
+            await this.mutate(root.id, (current, now) => {
+              const currentControl = current.executionTreeControl;
+              if (currentControl?.state === 'cancelled') {
+                if (currentControl.idempotencyKey !== idempotencyKey) {
+                  throw new ConflictError(
+                    'Execution tree cancellation already has different ownership.',
+                    {
+                      rootObjectiveId,
+                      executionTreeControl: currentControl,
+                    }
+                  );
+                }
+                return current;
+              }
+              return {
+                ...current,
+                executionTreeControl: {
+                  schemaVersion: EXECUTION_TREE_CONTROL_SCHEMA_VERSION,
+                  rootObjectiveId,
+                  state: 'cancelled',
+                  trigger: 'operator',
+                  reason: input.reason.trim().slice(0, 1_000),
+                  idempotencyKey,
+                  recordedAt: now.toISOString(),
+                },
+                updatedAt: now.toISOString(),
+              };
+            })
+          ).executionTreeControl;
+    if (!control) throw new Error('Execution tree cancellation was not persisted.');
+
+    const queued = await this.repository.listQueue({
+      states: [...ACTIVE_QUEUE_STATES],
+      limit: ACTIVE_INSPECTION_SNAPSHOT_LIMIT,
+    });
+    let queueEntriesCancelled = 0;
+    for (const entry of queued) {
+      if (
+        entry.request.executionTree?.rootObjectiveId !== rootObjectiveId ||
+        entry.state === 'dispatched'
+      ) {
+        continue;
+      }
+      try {
+        await this.cancelQueuedLaunch(entry.id, {
+          idempotencyKey: input.idempotencyKey,
+          reason: input.reason,
+        });
+        queueEntriesCancelled += 1;
+      } catch (error) {
+        const latest =
+          error instanceof ConflictError ? await this.repository.getQueueEntry(entry.id) : null;
+        if (latest?.state !== 'dispatched') throw error;
+      }
+    }
+
+    const reservations = await this.repository.list({
+      rootObjectiveId,
+      states: ['active'],
+      limit: 10_000,
+    });
+    const runningAttempts: AdmissionExecutionTreeCancellationResult['runningAttempts'] = [];
+    let reservationsReleased = 0;
+    for (const reservation of reservations) {
+      if (reservation.attemptId) {
+        runningAttempts.push({
+          taskId: reservation.request.taskId,
+          attemptId: reservation.attemptId,
+          reservationId: reservation.id,
+        });
+        continue;
+      }
+      await this.release(
+        reservation.id,
+        'cancelled',
+        `tree-cancel:${idempotencyKey}:${reservation.id}`
+      );
+      reservationsReleased += 1;
+    }
+
+    return {
+      schemaVersion: EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION,
+      scope: 'execution-tree',
+      idempotencyKey,
+      rootObjectiveId,
+      control,
+      queueEntriesCancelled,
+      reservationsReleased,
+      interruptedAttempts: 0,
+      runningAttempts,
+    };
   }
 
   async bindAttempt(id: string, attemptId: string): Promise<AdmissionReservation> {
@@ -1171,12 +1446,18 @@ export class AdmissionControlService {
       rootObjectiveId,
       limit: 10_000,
     });
-    return summarizeExecutionTreeBudget(
+    const summary = summarizeExecutionTreeBudget(
       rootObjectiveId,
       records,
       Math.min(Math.max(1, limit), 1_000),
       this.now().toISOString()
     );
+    const control = records.find(
+      (record) =>
+        record.request.executionTree?.rootObjectiveId === rootObjectiveId &&
+        record.request.executionTree.edge === 'root'
+    )?.executionTreeControl;
+    return control ? { ...summary, control } : summary;
   }
 
   async findByAttempt(
@@ -1260,7 +1541,8 @@ export class AdmissionControlService {
     retryAfterMs?: number,
     reservation?: AdmissionReservation,
     limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[],
-    queueEntry?: AdmissionQueueEntry
+    queueEntry?: AdmissionQueueEntry,
+    executionTreeControl?: ExecutionTreeControl
   ): AdmissionDecision {
     return AdmissionDecisionSchema.parse({
       schemaVersion: ADMISSION_DECISION_SCHEMA_VERSION,
@@ -1268,6 +1550,7 @@ export class AdmissionControlService {
       request,
       reservation,
       queueEntry,
+      executionTreeControl,
       limitingPolicies,
       limitingBudgetPolicies,
       retryAfterMs,

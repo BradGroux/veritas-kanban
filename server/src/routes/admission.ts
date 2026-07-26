@@ -9,9 +9,17 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { AdmissionReservationListQuerySchema } from '../schemas/admission-control-schemas.js';
 import { getAdmissionControlService } from '../services/admission-control-service.js';
+import { clawdbotAgentService } from '../services/clawdbot-agent-service.js';
 
 const router: RouterType = Router();
 const admission = getAdmissionControlService();
+
+const cancellationSchema = z
+  .object({
+    idempotencyKey: z.string().trim().min(8).max(240),
+    reason: z.string().trim().min(8).max(1_000),
+  })
+  .strict();
 
 const listQuerySchema = z
   .object({
@@ -120,6 +128,38 @@ router.get(
     try {
       const id = z.string().trim().min(1).max(240).parse(req.params.id);
       res.json(await admission.inspectQueueEntry(id));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+  })
+);
+
+router.post(
+  '/queue/:id/cancel',
+  asyncHandler(async (req, res) => {
+    try {
+      const id = z.string().trim().min(1).max(240).parse(req.params.id);
+      const input = cancellationSchema.parse(req.body);
+      res.json(await admission.cancelQueuedLaunch(id, input));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+  })
+);
+
+router.post(
+  '/tree/:rootObjectiveId/cancel',
+  asyncHandler(async (req, res) => {
+    try {
+      const rootObjectiveId = z.string().trim().min(1).max(240).parse(req.params.rootObjectiveId);
+      const input = cancellationSchema.parse(req.body);
+      res.json(await clawdbotAgentService.cancelExecutionTree(rootObjectiveId, input));
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);
