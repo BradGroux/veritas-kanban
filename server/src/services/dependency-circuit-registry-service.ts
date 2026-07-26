@@ -111,7 +111,11 @@ export class DependencyCircuitRegistryService {
   ): DependencyCircuitBreaker {
     const key = dependencyCircuitKey(dependency);
     const existing = this.breakers.get(key);
-    if (existing) return existing;
+    if (existing && JSON.stringify(existing.policy) === JSON.stringify(policy)) return existing;
+    if (existing) {
+      this.breakers.delete(key);
+      this.persisted.delete(key);
+    }
     const state = this.persisted.get(key);
     const matchingState =
       state && JSON.stringify(state.snapshot.policy) === JSON.stringify(policy)
