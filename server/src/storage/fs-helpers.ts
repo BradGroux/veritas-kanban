@@ -14,6 +14,7 @@ import type { FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import {
   access,
+  lstat as lstatAsync,
   mkdir as mkdirAsync,
   readFile as readFileAsync,
   readdir as readdirAsync,
@@ -69,6 +70,7 @@ export const createWriteStream = fs.createWriteStream;
 // ---------------------------------------------------------------------------
 
 export const mkdir = mkdirAsync;
+export const lstat = lstatAsync;
 export const readFile = readFileAsync;
 export const readdir = readdirAsync;
 export const realpath = fs.promises.realpath;
