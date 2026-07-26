@@ -204,7 +204,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     ],
   },
   { prefix: '/api/admission', read: 'agent:read', write: 'admin:manage' },
-  { prefix: '/api/knowledge', read: 'work_product:read', write: 'work_product:write' },
+  {
+    prefix: '/api/knowledge/collections',
+    read: 'work_product:read',
+    write: 'work_product:write',
+  },
   {
     prefix: '/api/diff',
     read: 'task:read',

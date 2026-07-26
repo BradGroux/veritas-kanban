@@ -146,6 +146,9 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - All routes go through centralized middleware in `server/src/middleware/`.
 - Auth: JWT + API keys. Dev bypass: `VERITAS_AUTH_LOCALHOST_BYPASS=true`.
 - Storage: always go through `storage/interfaces.ts`. Never import `fs` directly in service files.
+- Append-only durable records must complete the entire serialized write before
+  sync. Never assume one `FileHandle.write()` call wrote every byte or ignore
+  `bytesWritten`.
 - Error classes: `UnauthorizedError`, `ForbiddenError`, `BadRequestError`, `InternalError`.
 - Pagination: `sendPaginated(res, items, { page, limit, total })`.
 - Path traversal: always call `validatePathSegment()` on any user-supplied path component,
