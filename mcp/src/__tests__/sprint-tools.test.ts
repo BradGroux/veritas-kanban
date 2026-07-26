@@ -9,6 +9,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { handleSprintTool, sprintTools } from '../tools/sprints.js';
 
+const describeLive = process.env.VK_MCP_INTEGRATION_TEST === '1' ? describe : describe.skip;
+
 // Helper: parse JSON from tool response content
 function parseToolResponse(result: any): any {
   const text = result.content[0].text;
@@ -77,7 +79,7 @@ describe('Sprint MCP Tools', () => {
     });
   });
 
-  describe('list_sprints', () => {
+  describeLive('list_sprints', () => {
     it('should return an array of sprints', async () => {
       const result = await handleSprintTool('list_sprints', {});
       const sprints = parseToolResponse(result);
@@ -90,7 +92,7 @@ describe('Sprint MCP Tools', () => {
     });
   });
 
-  describe('create_sprint + get_sprint + delete_sprint lifecycle', () => {
+  describeLive('create_sprint + get_sprint + delete_sprint lifecycle', () => {
     let createdId: string;
 
     it('should create a sprint', async () => {
@@ -141,7 +143,7 @@ describe('Sprint MCP Tools', () => {
     });
   });
 
-  describe('can_delete_sprint', () => {
+  describeLive('can_delete_sprint', () => {
     let sprintId: string;
 
     beforeAll(async () => {
@@ -163,7 +165,7 @@ describe('Sprint MCP Tools', () => {
     });
   });
 
-  describe('force delete behavior', () => {
+  describeLive('force delete behavior', () => {
     it('should accept force=true flag', async () => {
       // Create a sprint we can force-delete
       const createResult = await handleSprintTool('create_sprint', {
@@ -184,7 +186,7 @@ describe('Sprint MCP Tools', () => {
     });
   });
 
-  describe('get_archive_suggestions', () => {
+  describeLive('get_archive_suggestions', () => {
     it('should return an array', async () => {
       const result = await handleSprintTool('get_archive_suggestions', {});
       const text = result.content[0].text;
