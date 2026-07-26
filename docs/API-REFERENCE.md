@@ -4711,6 +4711,7 @@ Knowledge collections establish a workspace-scoped, immutable source catalog for
 | `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata               |
 | `GET`  | `/api/knowledge/collections/:collectionId/pages`                                   | List derived pages                 |
 | `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                           | Read one cited derived page        |
+| `POST` | `/api/knowledge/collections/:collectionId/search`                                  | Search raw and derived knowledge   |
 | `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | List ingestion dry runs            |
 | `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | Create an ingestion dry run        |
 | `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read one dry run                   |
@@ -4761,7 +4762,7 @@ Register an inline snapshot by sending `storage: "content-addressed-blob"` and b
 }
 ```
 
-Repeated source keys create a revision chain rather than replacing prior evidence. REST returns metadata only and does not expose stored source content. Citation-aware search, promotion, and export remain later slices documented in [Knowledge Collections v1](architecture/KNOWLEDGE-COLLECTIONS-V1.md).
+Repeated source keys create a revision chain rather than replacing prior evidence. Source list and detail responses return metadata only and do not expose stored source content.
 
 Derived pages include Markdown, typed metadata, review state, confidence, stable keys and aliases, outgoing links, computed backlinks, bounded revision history, and claim-level citations to immutable source revision IDs. Page list and detail routes are read-only; reviewed ingestion proposals own mutation so generated synthesis cannot bypass the atomic review workflow.
 
@@ -4817,6 +4818,17 @@ Only administrators can apply or reverse. Send the exact current proposal digest
 ```
 
 Apply atomically updates every affected page, proposal state, and append-only activity entry. Reverse requires the applied digest, restores complete prior page records, removes proposal-created pages, and appends reversal activity. Exact retries return the committed state. Blocking contradictions, stale page digests, later conflicting edits, and unsafe graph changes return `409` without partial mutation.
+
+Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind and preserve source citations; derived results carry the citations from their material claims. `backend: "auto"` or `"qmd"` currently returns keyword results with `degraded: true` and an explicit reason because collection data is not yet part of the QMD index.
+
+```json
+{
+  "query": "reviewed dispatch",
+  "limit": 10,
+  "scope": "all",
+  "backend": "auto"
+}
+```
 
 ---
 

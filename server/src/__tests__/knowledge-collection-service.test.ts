@@ -284,6 +284,80 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
   });
 
+  it('searches raw sources and derived pages with citations and explicit QMD degradation', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);
+    const source = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({
+        operationId: 'search-source',
+        title: 'Architecture specification',
+        content: 'The gateway uses reviewed dispatch controls. token=private-search-secret',
+      })
+    );
+    await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'search-derived-page',
+      pages: [
+        pageCandidate('gateway-architecture', source.id, {
+          title: 'Gateway architecture',
+          markdown: '# Gateway architecture\n\nReviewed dispatch is required.',
+        }),
+      ],
+    });
+
+    const response = await service.searchCollection(WORKSPACE_ID, collection.id, AGENT, {
+      query: 'reviewed dispatch',
+      backend: 'auto',
+    });
+
+    expect(response).toMatchObject({
+      query: 'reviewed dispatch',
+      backend: 'keyword',
+      degraded: true,
+    });
+    expect(response.reason).toContain('not yet indexed by QMD');
+    expect(response.results.map((result) => result.snippet).join(' ')).not.toContain(
+      'private-search-secret'
+    );
+    expect(response.results.map((result) => result.kind)).toEqual(['derived-page', 'raw-source']);
+    expect(response.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'raw-source',
+          sourceId: source.id,
+          citations: [{ sourceId: source.id }],
+        }),
+        expect.objectContaining({
+          kind: 'derived-page',
+          stableKey: 'gateway-architecture',
+          citations: [
+            expect.objectContaining({
+              sourceId: source.id,
+              locator: { kind: 'line-range', startLine: 1, endLine: 1 },
+            }),
+          ],
+        }),
+      ])
+    );
+    await expect(
+      service.searchCollection(WORKSPACE_ID, collection.id, READER, {
+        query: 'dispatch',
+      })
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+    expect(
+      await service.searchCollection(WORKSPACE_ID, collection.id, AGENT, {
+        query: 'gateway',
+        scope: 'derived-pages',
+        backend: 'keyword',
+      })
+    ).toMatchObject({
+      degraded: false,
+      results: [expect.objectContaining({ kind: 'derived-page' })],
+    });
+  });
+
   it('fails closed on unknown citations, links, and unauthorized review decisions', async () => {
     const service = await createService(storageType);
     const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);

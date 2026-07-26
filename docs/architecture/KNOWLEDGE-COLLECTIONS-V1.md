@@ -54,32 +54,39 @@ The file backend keeps collection metadata, source revisions, derived pages, ing
 
 The initial REST surface is mounted at both `/api/v1/knowledge/collections` and `/api/knowledge/collections`:
 
-| Method | Path                                                                           | Purpose                    |
-| ------ | ------------------------------------------------------------------------------ | -------------------------- |
-| `GET`  | `/knowledge/collections`                                                       | List readable collections  |
-| `POST` | `/knowledge/collections`                                                       | Create a collection        |
-| `GET`  | `/knowledge/collections/:collectionId`                                         | Read collection metadata   |
-| `GET`  | `/knowledge/collections/:collectionId/sources`                                 | List source revisions      |
-| `POST` | `/knowledge/collections/:collectionId/sources`                                 | Register a source revision |
-| `GET`  | `/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata       |
-| `GET`  | `/knowledge/collections/:collectionId/pages`                                   | List derived pages         |
-| `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                           | Read a derived page        |
-| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals`                     | List dry runs              |
-| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals`                     | Create a dry run           |
-| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read a dry run             |
-| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`   | Apply atomically           |
-| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse` | Reverse atomically         |
-| `GET`  | `/knowledge/collections/:collectionId/activity`                                | List append-only activity  |
+| Method | Path                                                                           | Purpose                     |
+| ------ | ------------------------------------------------------------------------------ | --------------------------- |
+| `GET`  | `/knowledge/collections`                                                       | List readable collections   |
+| `POST` | `/knowledge/collections`                                                       | Create a collection         |
+| `GET`  | `/knowledge/collections/:collectionId`                                         | Read collection metadata    |
+| `GET`  | `/knowledge/collections/:collectionId/sources`                                 | List source revisions       |
+| `POST` | `/knowledge/collections/:collectionId/sources`                                 | Register a source revision  |
+| `GET`  | `/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata        |
+| `GET`  | `/knowledge/collections/:collectionId/pages`                                   | List derived pages          |
+| `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                           | Read a derived page         |
+| `POST` | `/knowledge/collections/:collectionId/search`                                  | Search raw and derived data |
+| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals`                     | List dry runs               |
+| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals`                     | Create a dry run            |
+| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read a dry run              |
+| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`   | Apply atomically            |
+| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse` | Reverse atomically          |
+| `GET`  | `/knowledge/collections/:collectionId/activity`                                | List append-only activity   |
 
-The REST API deliberately returns source metadata, not stored source content. Later ingestion and query services will read snapshots through the repository after applying launch-manifest, redaction, and classification policy.
+The REST API deliberately returns source metadata, not stored source content. Collection-scoped search reads snapshots internally through the repository, distinguishes `raw-source` from `derived-page` results, and returns source IDs and claim locators instead of uncited synthesis. Collection and workspace RBAC apply before any search data is read.
+
+## Cited search
+
+Bounded keyword search spans immutable raw snapshots and current derived pages. Callers can search both layers or restrict the request to one. Raw hits cite their immutable source revision. Derived hits retain the deduplicated claim citations stored on the page, so consumers can distinguish evidence from synthesis and follow each material claim back to its registered source.
+
+The response follows the existing search degradation contract. Keyword requests return `backend: "keyword"` and `degraded: false`. `auto` or `qmd` requests currently return the same cited keyword results with `degraded: true` and an explicit reason; collection data is not silently presented as semantic/QMD output before a collection index exists.
 
 ## Current delivery boundary
 
-This foundation does not yet claim search indexing, query promotion, cited work-product export, redaction-aware query projections, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, and proposal transaction and must not add an alternate source or page store.
+This foundation does not yet claim QMD collection indexing, query promotion, cited work-product export, redaction-aware query projections, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited keyword search, and proposal transaction and must not add an alternate source or page store.
 
 The next implementation slices are:
 
-1. raw-versus-derived search with keyword and optional semantic fallback; and
+1. QMD indexing with keyword fallback for derived pages; and
 2. cited query promotion, redaction, launch-manifest restrictions, and export enforcement through the same proposal workflow.
 
 ## Code
