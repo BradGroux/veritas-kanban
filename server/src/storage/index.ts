@@ -54,6 +54,11 @@ export {
   type DependencyCircuitStateRepository,
 } from './dependency-circuit-state-repository.js';
 export {
+  FileDependencyCircuitOverrideRepository,
+  InMemoryDependencyCircuitOverrideRepository,
+  type DependencyCircuitOverrideRepository,
+} from './dependency-circuit-override-repository.js';
+export {
   FileStorageProvider,
   FileTaskRepository,
   FileSettingsRepository,

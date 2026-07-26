@@ -121,9 +121,12 @@ export class DependencyCircuitBreaker {
     if (options.state) this.restore(options.state);
   }
 
-  acquire(): DependencyCircuitAdmission {
+  acquire(overrideId?: string): DependencyCircuitAdmission {
     const now = this.now();
     this.prune(now);
+    if (overrideId) {
+      return this.admit(now, false, overrideId);
+    }
     if (
       this.stateValue === 'open' &&
       this.nextProbeAt !== undefined &&
@@ -152,19 +155,7 @@ export class DependencyCircuitBreaker {
         snapshot: this.snapshot(now),
       };
     }
-    const lease: DependencyCircuitLease = {
-      id: `cirlease_${nanoid(18)}`,
-      circuitKey: this.key,
-      probe,
-      acquiredAt: new Date(now).toISOString(),
-    };
-    this.leases.set(lease.id, { lease, settled: false });
-    return {
-      allowed: true,
-      decision: probe ? 'probe' : 'allow',
-      lease,
-      snapshot: this.snapshot(now),
-    };
+    return this.admit(now, probe);
   }
 
   record(lease: DependencyCircuitLease, outcome: DependencyOutcome, durationMs: number): void {
@@ -314,6 +305,27 @@ export class DependencyCircuitBreaker {
 
   private activeProbeCount(): number {
     return [...this.leases.values()].filter((lease) => lease.lease.probe && !lease.settled).length;
+  }
+
+  private admit(
+    now: number,
+    probe: boolean,
+    overrideId?: string
+  ): Extract<DependencyCircuitAdmission, { allowed: true }> {
+    const lease: DependencyCircuitLease = {
+      id: `cirlease_${nanoid(18)}`,
+      circuitKey: this.key,
+      probe,
+      ...(overrideId ? { overrideId } : {}),
+      acquiredAt: new Date(now).toISOString(),
+    };
+    this.leases.set(lease.id, { lease, settled: false });
+    return {
+      allowed: true,
+      decision: probe ? 'probe' : 'allow',
+      lease,
+      snapshot: this.snapshot(now),
+    };
   }
 
   private metrics() {

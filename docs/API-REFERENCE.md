@@ -1165,6 +1165,16 @@ Three-tier health check system for container orchestration.
 | `GET /api/health`      | None  | Lightweight API liveness signal                        |
 | `GET /api/health/deep` | Admin | Same as `/health/deep`, under `/api`                   |
 
+Authenticated deep-health responses include `dependencyCircuits.summary`, redacted durable circuit snapshots, and active expiring overrides for provider/model calls, MCP servers and tools, outbound integrations, and storage operations. Dependency IDs are opaque, and secret-bearing request and response data is never returned.
+
+| Endpoint                                            | Auth  | Purpose                                                            |
+| --------------------------------------------------- | ----- | ------------------------------------------------------------------ |
+| `POST /health/dependency-circuits/:key/reset`       | Admin | Reset one known circuit with an audited operator reason            |
+| `POST /health/dependency-circuits/:key/override`    | Admin | Create an audited expiring `allow` or `block` override              |
+| `DELETE /health/dependency-circuits/:key/override`  | Admin | Clear the active override for one circuit                           |
+
+Reset accepts `{ "reason": "at least 8 characters" }`. Override accepts `{ "mode": "allow" | "block", "reason": "at least 8 characters", "durationSeconds": 60..3600 }`; `allow` bypasses admission without erasing unhealthy circuit evidence, while `block` rejects new work. Unknown reset targets and missing overrides return `404`.
+
 **Readiness Response**:
 
 ```json

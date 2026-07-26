@@ -9,9 +9,16 @@
 import { Router } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { z } from 'zod';
 import { createLogger } from '../lib/logger.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import {
+  authenticate,
+  authorize,
+  type AuthenticatedRequest,
+} from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/async-handler.js';
 import { getAllStatus as getCircuitBreakerStatus } from '../services/circuit-registry.js';
+import { getDependencyCircuitControlService } from '../services/dependency-circuit-control-service.js';
 import {
   getDependencyCircuitExecutionService,
   getDependencyCircuitRegistryService,
@@ -21,6 +28,17 @@ import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import type { WebSocketServer } from 'ws';
 
 const log = createLogger('health');
+const dependencyCircuitKeySchema = z.string().trim().min(1).max(2_000);
+const dependencyCircuitResetSchema = z
+  .object({ reason: z.string().trim().min(8).max(1_000) })
+  .strict();
+const dependencyCircuitOverrideInputSchema = z
+  .object({
+    mode: z.enum(['allow', 'block']),
+    reason: z.string().trim().min(8).max(1_000),
+    durationSeconds: z.number().int().min(60).max(3_600),
+  })
+  .strict();
 
 // ============================================
 // WebSocket Server Reference
@@ -290,8 +308,14 @@ async function buildDeepHealthPayload() {
     ReturnType<ReturnType<typeof getDependencyCircuitRegistryService>['listSnapshots']>
   > = [];
   let dependencyCircuitError: string | undefined;
+  let dependencyCircuitOverrides: Awaited<
+    ReturnType<ReturnType<typeof getDependencyCircuitRegistryService>['listOverrides']>
+  > = [];
   try {
-    dependencyCircuits = await getDependencyCircuitRegistryService().listSnapshots();
+    [dependencyCircuits, dependencyCircuitOverrides] = await Promise.all([
+      getDependencyCircuitRegistryService().listSnapshots(),
+      getDependencyCircuitRegistryService().listOverrides(),
+    ]);
   } catch (error) {
     dependencyCircuitError = error instanceof Error ? error.message : 'Unknown persistence error';
     log.warn({ err: error }, 'Dependency circuit diagnostics failed');
@@ -331,6 +355,7 @@ async function buildDeepHealthPayload() {
     dependencyCircuits: {
       summary: dependencyCircuitSummary,
       circuits: dependencyCircuits,
+      overrides: dependencyCircuitOverrides,
       error: dependencyCircuitError,
     },
     sqlite,
@@ -350,6 +375,64 @@ healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) =>
   const payload = await buildDeepHealthPayload();
   res.json(payload);
 });
+
+healthRouter.post(
+  '/dependency-circuits/:key/reset',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const key = dependencyCircuitKeySchema.parse(req.params.key);
+    const input = dependencyCircuitResetSchema.parse(req.body);
+    const reset = await getDependencyCircuitControlService().reset(
+      key,
+      dependencyCircuitActor(req),
+      input.reason
+    );
+    if (!reset) {
+      res.status(404).json({ error: 'Dependency circuit not found.' });
+      return;
+    }
+    res.json({ reset: true, circuit: await getDependencyCircuitRegistryService().getSnapshot(key) });
+  })
+);
+
+healthRouter.post(
+  '/dependency-circuits/:key/override',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const key = dependencyCircuitKeySchema.parse(req.params.key);
+    const input = dependencyCircuitOverrideInputSchema.parse(req.body);
+    const override = await getDependencyCircuitControlService().override({
+      circuitKey: key,
+      actorId: dependencyCircuitActor(req),
+      ...input,
+    });
+    res.status(201).json(override);
+  })
+);
+
+healthRouter.delete(
+  '/dependency-circuits/:key/override',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const key = dependencyCircuitKeySchema.parse(req.params.key);
+    const cleared = await getDependencyCircuitControlService().clearOverride(
+      key,
+      dependencyCircuitActor(req)
+    );
+    if (!cleared) {
+      res.status(404).json({ error: 'Active dependency circuit override not found.' });
+      return;
+    }
+    res.json({ cleared: true });
+  })
+);
+
+function dependencyCircuitActor(req: AuthenticatedRequest): string {
+  return req.auth?.userId ?? req.auth?.keyName ?? req.auth?.role ?? 'admin';
+}
 
 /**
  * GET /health — Alias for /health/live (backwards compatibility)
