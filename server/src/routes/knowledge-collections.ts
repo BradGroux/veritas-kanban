@@ -124,6 +124,41 @@ router.get(
   })
 );
 
+router.get(
+  '/:collectionId/pages',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const pagination = parseQuery(paginationSchema, req.query);
+    const context = requestContext(req);
+    const pages = await getKnowledgeCollectionService().listPages(
+      context.workspaceId,
+      collectionId,
+      context.actor
+    );
+    sendPaginated(res, paginate(pages, pagination), {
+      ...pagination,
+      total: pages.length,
+    });
+  })
+);
+
+router.get(
+  '/:collectionId/pages/:pageId',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const pageId = parseIdentifier(req.params.pageId);
+    const context = requestContext(req);
+    const page = await getKnowledgeCollectionService().getPage(
+      context.workspaceId,
+      collectionId,
+      pageId,
+      context.actor
+    );
+    if (!page) throw new NotFoundError('Knowledge page not found.');
+    res.json(page);
+  })
+);
+
 function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;

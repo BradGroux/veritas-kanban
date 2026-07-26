@@ -2,6 +2,8 @@ export const KNOWLEDGE_COLLECTION_SCHEMA_VERSION = 'knowledge-collection/v1' as 
 export const KNOWLEDGE_COLLECTION_DEFINITION_SCHEMA_VERSION =
   'knowledge-collection-definition/v1' as const;
 export const KNOWLEDGE_SOURCE_SCHEMA_VERSION = 'knowledge-source/v1' as const;
+export const KNOWLEDGE_PAGE_SCHEMA_VERSION = 'knowledge-page/v1' as const;
+export const KNOWLEDGE_PAGE_REVISION_SCHEMA_VERSION = 'knowledge-page-revision/v1' as const;
 
 export const KNOWLEDGE_CLASSIFICATIONS = [
   'public',
@@ -109,3 +111,105 @@ export interface RegisterReferencedKnowledgeSourceInput extends RegisterKnowledg
 
 export type RegisterKnowledgeSourceInput =
   RegisterInlineKnowledgeSourceInput | RegisterReferencedKnowledgeSourceInput;
+
+export type KnowledgePageReviewState = 'draft' | 'review-required' | 'approved' | 'rejected';
+
+export type KnowledgeCitationLocator =
+  | {
+      kind: 'line-range';
+      startLine: number;
+      endLine: number;
+    }
+  | {
+      kind: 'heading';
+      heading: string;
+      occurrence?: number;
+    }
+  | {
+      kind: 'json-pointer';
+      pointer: string;
+    }
+  | {
+      kind: 'excerpt-hash';
+      excerptHash: string;
+    }
+  | {
+      kind: 'time-range';
+      startMs: number;
+      endMs: number;
+    };
+
+export interface KnowledgeClaimCitation {
+  sourceId: string;
+  locator?: KnowledgeCitationLocator;
+  excerptHash?: string;
+}
+
+export interface KnowledgePageClaim {
+  id: string;
+  claimKey: string;
+  text: string;
+  citations: KnowledgeClaimCitation[];
+  confidence: number;
+}
+
+export interface KnowledgePageRevision {
+  schemaVersion: typeof KNOWLEDGE_PAGE_REVISION_SCHEMA_VERSION;
+  version: number;
+  title: string;
+  pageKind: string;
+  aliases: string[];
+  tags: string[];
+  metadata: Record<string, string>;
+  markdown: string;
+  contentHash: string;
+  claims: KnowledgePageClaim[];
+  outgoingPageIds: string[];
+  backlinkPageIds: string[];
+  reviewState: KnowledgePageReviewState;
+  confidence: number;
+  operationIdDigest: string;
+  requestDigest: string;
+  updatedBy: string;
+  updatedAt: string;
+  digest: string;
+}
+
+export interface KnowledgePage {
+  schemaVersion: typeof KNOWLEDGE_PAGE_SCHEMA_VERSION;
+  id: string;
+  workspaceId: string;
+  collectionId: string;
+  stableKey: string;
+  current: KnowledgePageRevision;
+  history: KnowledgePageRevision[];
+  createdBy: string;
+  createdAt: string;
+  digest: string;
+}
+
+export interface KnowledgePageClaimInput {
+  claimKey: string;
+  text: string;
+  citations: KnowledgeClaimCitation[];
+  confidence: number;
+}
+
+export interface UpsertKnowledgePageCandidate {
+  stableKey: string;
+  title: string;
+  pageKind: string;
+  aliases?: string[];
+  tags?: string[];
+  metadata: Record<string, string>;
+  markdown: string;
+  claims: KnowledgePageClaimInput[];
+  links?: string[];
+  reviewState: KnowledgePageReviewState;
+  confidence: number;
+}
+
+export interface UpsertKnowledgePagesInput {
+  operationId: string;
+  pages: UpsertKnowledgePageCandidate[];
+}

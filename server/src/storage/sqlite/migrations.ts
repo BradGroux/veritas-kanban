@@ -1517,6 +1517,28 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON knowledge_sources(workspace_id, captured_at DESC, id);
     `,
   },
+  {
+    version: 31,
+    name: '0031_knowledge_pages',
+    up: `
+      CREATE TABLE knowledge_pages (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL
+          REFERENCES knowledge_collections(id) ON DELETE CASCADE,
+        stable_key TEXT NOT NULL,
+        page_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (collection_id, stable_key)
+      );
+
+      CREATE INDEX idx_knowledge_pages_collection_key
+        ON knowledge_pages(collection_id, stable_key, id);
+
+      CREATE INDEX idx_knowledge_pages_workspace_updated
+        ON knowledge_pages(workspace_id, updated_at DESC, id);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

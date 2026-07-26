@@ -1,10 +1,17 @@
 import { createHash } from 'node:crypto';
-import type { KnowledgeCollection, KnowledgeSource } from '@veritas-kanban/shared';
+import type { KnowledgeCollection, KnowledgePage, KnowledgeSource } from '@veritas-kanban/shared';
 import { ConflictError } from '../../middleware/error-handler.js';
 import {
+  MAX_KNOWLEDGE_PAGE_BATCH,
   assertKnowledgeCollectionIntegrity,
+  assertKnowledgePageIntegrity,
   assertKnowledgeSourceIntegrity,
+  assertExpectedPages,
+  assertPageBatchShape,
+  validateKnowledgePageGraph,
+  validateKnowledgePageReferences,
   type KnowledgeCollectionRepository,
+  type KnowledgePageExpectedState,
 } from '../knowledge-collection-repository.js';
 import type { SqliteDatabase } from './database.js';
 
@@ -19,6 +26,15 @@ interface SourceRow {
 interface ContentRow {
   source_json: string;
   content: Uint8Array | null;
+}
+
+interface PageRow {
+  page_json: string;
+}
+
+interface PageScopeRow {
+  workspace_id: string;
+  collection_id: string;
 }
 
 export class SqliteKnowledgeCollectionRepository implements KnowledgeCollectionRepository {
@@ -238,6 +254,112 @@ export class SqliteKnowledgeCollectionRepository implements KnowledgeCollectionR
     validateSourceContent(source, content);
     return content;
   }
+
+  async getPage(
+    workspaceId: string,
+    collectionId: string,
+    pageId: string
+  ): Promise<KnowledgePage | null> {
+    const row = this.database
+      .getConnection()
+      .prepare(
+        `
+          SELECT page_json
+          FROM knowledge_pages
+          WHERE workspace_id = ? AND collection_id = ? AND id = ?
+        `
+      )
+      .get(workspaceId, collectionId, pageId) as unknown as PageRow | undefined;
+    if (!row) return null;
+    const page = assertKnowledgePageIntegrity(JSON.parse(row.page_json));
+    assertPageScope(page, workspaceId, collectionId, pageId);
+    return page;
+  }
+
+  async listPages(workspaceId: string, collectionId: string): Promise<KnowledgePage[]> {
+    const rows = this.database
+      .getConnection()
+      .prepare(
+        `
+          SELECT page_json
+          FROM knowledge_pages
+          WHERE workspace_id = ? AND collection_id = ?
+          ORDER BY stable_key ASC, id ASC
+        `
+      )
+      .all(workspaceId, collectionId) as unknown as PageRow[];
+    const pages = rows.map((row) => {
+      const page = assertKnowledgePageIntegrity(JSON.parse(row.page_json));
+      assertPageScope(page, workspaceId, collectionId);
+      return page;
+    });
+    validateKnowledgePageGraph(pages);
+    return pages;
+  }
+
+  async applyPageBatch(
+    workspaceId: string,
+    collectionId: string,
+    candidates: KnowledgePage[],
+    expected: KnowledgePageExpectedState[]
+  ): Promise<KnowledgePage[]> {
+    if (candidates.length === 0 || candidates.length > MAX_KNOWLEDGE_PAGE_BATCH) {
+      throw new ConflictError('Knowledge page batch is empty or exceeds its bounded size.');
+    }
+    const pages = candidates.map(assertKnowledgePageIntegrity);
+    assertPageBatchShape(workspaceId, collectionId, pages, expected);
+    const db = this.database.getConnection();
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+      const collection = await this.getCollection(workspaceId, collectionId);
+      if (!collection) throw new ConflictError('Knowledge collection does not exist.');
+      const current = await this.listPages(workspaceId, collectionId);
+      assertExpectedPages(current, expected);
+      const scopeStatement = db.prepare(
+        'SELECT workspace_id, collection_id FROM knowledge_pages WHERE id = ?'
+      );
+      for (const page of pages) {
+        const scope = scopeStatement.get(page.id) as unknown as PageScopeRow | undefined;
+        if (scope && (scope.workspace_id !== workspaceId || scope.collection_id !== collectionId)) {
+          throw new ConflictError('Knowledge page identity already exists in another scope.');
+        }
+      }
+      const candidateIds = new Set(pages.map((page) => page.id));
+      const resultingPages = [...current.filter((page) => !candidateIds.has(page.id)), ...pages];
+      validateKnowledgePageReferences(
+        collection,
+        await this.listSources(workspaceId, collectionId),
+        resultingPages
+      );
+      const statement = db.prepare(
+        `
+          INSERT INTO knowledge_pages (
+            id, workspace_id, collection_id, stable_key, page_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            stable_key = excluded.stable_key,
+            page_json = excluded.page_json,
+            updated_at = excluded.updated_at
+        `
+      );
+      for (const page of pages) {
+        statement.run(
+          page.id,
+          page.workspaceId,
+          page.collectionId,
+          page.stableKey,
+          JSON.stringify(page),
+          page.current.updatedAt
+        );
+      }
+      db.exec('COMMIT;');
+      return pages;
+    } catch (error) {
+      db.exec('ROLLBACK;');
+      if (error instanceof ConflictError) throw error;
+      throw new ConflictError('Knowledge page batch could not be applied atomically.');
+    }
+  }
 }
 
 function validateSourceContent(source: KnowledgeSource, content: Buffer | null): void {
@@ -266,5 +388,20 @@ function assertSourceScope(
     (sourceId !== undefined && source.id !== sourceId)
   ) {
     throw new ConflictError('Knowledge source row scope does not match its metadata.');
+  }
+}
+
+function assertPageScope(
+  page: KnowledgePage,
+  workspaceId: string,
+  collectionId: string,
+  pageId?: string
+): void {
+  if (
+    page.workspaceId !== workspaceId ||
+    page.collectionId !== collectionId ||
+    (pageId !== undefined && page.id !== pageId)
+  ) {
+    throw new ConflictError('Knowledge page row scope does not match its metadata.');
   }
 }

@@ -98,7 +98,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [v6 Agent Runtime Control Plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md) — authority, adapter, lifecycle, approval, tool, credential, Buzz, and certification boundaries.
 - [Phase Capability Profiles](docs/architecture/PHASE-CAPABILITY-PROFILES.md) — versioned execution-phase authority contracts, deterministic intersections, exact-path plan artifacts, and current delivery boundaries.
 - [Phase Transition Journal](docs/architecture/PHASE-TRANSITION-JOURNAL.md) — durable compare-and-set transitions, approval and override controls, restart recovery, REST, and CLI operations.
-- [Knowledge Collections v1](docs/architecture/KNOWLEDGE-COLLECTIONS-V1.md) — workspace collection schemas, immutable content-addressed source revisions, RBAC, and file/SQLite storage parity.
+- [Knowledge Collections v1](docs/architecture/KNOWLEDGE-COLLECTIONS-V1.md) — immutable source revisions, cited derived pages, stable identity, bidirectional links, RBAC, and file/SQLite storage parity.
 - [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
