@@ -16,6 +16,7 @@ import {
   getFilesystemSandboxService,
   type FilesystemSandboxService,
 } from './filesystem-sandbox-service.js';
+import { getEgressPolicyService } from './egress-policy-service.js';
 
 const BUILT_IN_TIMESTAMP = '2026-06-18T00:00:00.000Z';
 
@@ -345,6 +346,7 @@ export class SandboxPolicyService {
         envPassthrough: preset.environment.passthrough.slice().sort(),
         credentialRefs: redactBrokerRefs(preset.credentials.brokerRefs),
         filesystemBackend: effectiveFilesystemBackend,
+        networkPolicy: getEgressPolicyService().compile(preset.network),
       },
       evaluations,
       unsupportedRules,
@@ -417,6 +419,7 @@ export class SandboxPolicyService {
       createdAt: input.createdAt ?? now,
       updatedAt: input.updatedAt ?? now,
     }) as SandboxPolicyPreset;
+    getEgressPolicyService().compile(parsed.network);
     return {
       ...parsed,
       filesystem: {
@@ -428,6 +431,9 @@ export class SandboxPolicyService {
       network: {
         ...parsed.network,
         allowedHosts: uniqueSorted(parsed.network.allowedHosts.map((host) => host.toLowerCase())),
+        deniedHosts: uniqueSorted(
+          (parsed.network.deniedHosts ?? []).map((host) => host.toLowerCase())
+        ),
         allowedMethods: uniqueSorted(
           parsed.network.allowedMethods.map((method) => method.toUpperCase())
         ),

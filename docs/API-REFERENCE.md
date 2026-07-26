@@ -3017,11 +3017,14 @@ POST /api/sandbox-policies
   "network": {
     "defaultEgress": "deny",
     "allowedHosts": [],
+    "deniedHosts": ["metadata.example.internal"],
     "allowedMethods": [],
     "allowedPathPrefixes": [],
     "blockPrivateNetwork": true,
     "blockMetadataEndpoints": true,
-    "blockLoopback": false
+    "blockLoopback": false,
+    "allowApprovals": false,
+    "dangerouslyAllowGlobalWildcard": false
   },
   "environment": {
     "passthrough": ["CODEX_HOME", "OPENAI_API_KEY"],
@@ -3069,7 +3072,26 @@ the immutable manifest already selected and persisted for the attempt.
     "sandboxMode": "workspace-write",
     "networkAccessEnabled": false,
     "envPassthrough": ["CODEX_HOME", "OPENAI_API_KEY"],
-    "credentialRefs": ["openai-api-key"]
+    "credentialRefs": ["openai-api-key"],
+    "networkPolicy": {
+      "schemaVersion": "run-egress-policy/v1",
+      "policyHash": "sha256:<64 lowercase hex characters>",
+      "defaultEgress": "deny",
+      "allowedHosts": [],
+      "deniedHosts": [
+        {
+          "kind": "exact",
+          "value": "metadata.example.internal"
+        }
+      ],
+      "allowedMethods": [],
+      "allowedPathPrefixes": [],
+      "blockPrivateNetwork": true,
+      "blockMetadataEndpoints": true,
+      "blockLoopback": false,
+      "allowApprovals": false,
+      "tlsInspection": "disabled"
+    }
   },
   "unsupportedRules": [],
   "warnings": [],
@@ -3081,6 +3103,13 @@ the immutable manifest already selected and persisted for the attempt.
 launches before execution. Advisory unsupported controls continue with warnings.
 Credential references and environment-style `name=value` values are redacted in
 responses and governance traces.
+
+Network host rules are normalized to exact or scoped `*.example.com` entries.
+Explicit deny rules take precedence. A global allow wildcard is rejected unless
+`dangerouslyAllowGlobalWildcard` is set on the preset. The compiled policy has a
+stable digest and is the input to the run-scoped gateway; it does not by itself
+prove that a provider launch is using that gateway. Until gateway launch
+evidence is present, required fine-grained egress rules continue to fail closed.
 
 ---
 

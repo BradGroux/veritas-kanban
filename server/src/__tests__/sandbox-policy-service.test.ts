@@ -109,6 +109,12 @@ describe('SandboxPolicyService', () => {
     expect(sdkResult.effective).toMatchObject({
       sandboxMode: 'workspace-write',
       networkAccessEnabled: false,
+      networkPolicy: {
+        schemaVersion: 'run-egress-policy/v1',
+        policyHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        defaultEgress: 'deny',
+        allowedHosts: [],
+      },
     });
 
     const cliResult = await service.dryRun({
