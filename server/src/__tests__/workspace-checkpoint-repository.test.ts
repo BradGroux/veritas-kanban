@@ -308,4 +308,66 @@ describe('FileWorkspaceCheckpointRepository', () => {
       })
     ).rejects.toThrow('inspection path is invalid');
   });
+
+  it('prunes bounded metadata while preserving the newest active-run checkpoint', async () => {
+    const { worktreePath, storePath } = await fixture();
+    let now = new Date('2026-07-26T06:00:00.000Z');
+    const repository = new FileWorkspaceCheckpointRepository({
+      baseDir: storePath,
+      now: () => now,
+    });
+    const scope = {
+      workspaceId: 'workspace-retention',
+      taskId: 'task-retention',
+      attemptId: 'attempt-retention',
+      boundary: 'manual' as const,
+      worktreePath,
+    };
+    const first = await repository.capture({ ...scope, operationId: 'capture-1' });
+    now = new Date('2026-07-26T06:01:00.000Z');
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'second checkpoint\n');
+    const second = await repository.capture({
+      ...scope,
+      operationId: 'capture-2',
+      parentCheckpointId: first.id,
+    });
+    now = new Date('2026-07-26T06:02:00.000Z');
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'third checkpoint\n');
+    const third = await repository.capture({
+      ...scope,
+      operationId: 'capture-3',
+      parentCheckpointId: second.id,
+    });
+    now = new Date('2026-07-26T06:03:00.000Z');
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'branch checkpoint\n');
+    const branch = await repository.capture({
+      ...scope,
+      operationId: 'capture-branch',
+      parentCheckpointId: first.id,
+    });
+
+    const result = await repository.prune({
+      ...scope,
+      activeRun: true,
+      maxCheckpoints: 0,
+      maxLogicalBytes: 0,
+      maxAgeSeconds: 1,
+    });
+
+    expect(result).toMatchObject({
+      schemaVersion: 'workspace-checkpoint-retention-result/v1',
+      activeRun: true,
+      preservedCheckpointIds: [branch.id, third.id],
+      removedCheckpointIds: [second.id, first.id],
+      reclaimedMetadataBytes: expect.any(Number),
+      logicalContentBytesDereferenced: first.storedBytes + second.storedBytes,
+      contentBlobGcDeferred: true,
+    });
+    expect(result.reclaimedMetadataBytes).toBeGreaterThan(0);
+    await expect(repository.list(scope)).resolves.toEqual([branch, third]);
+    const firstTracked = first.files.find((file) => file.path === 'tracked.txt');
+    await expect(repository.readBlob(firstTracked?.blobDigest ?? '')).resolves.toEqual(
+      Buffer.from('tracked worktree\n')
+    );
+  });
 });

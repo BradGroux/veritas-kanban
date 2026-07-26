@@ -39,7 +39,9 @@ Provider event mappers normalize bounded relative file paths and tool names into
 
 Rewind preview revalidates the durable worktree lease before and after a no-follow current-state inspection. It compares the current worktree root, HEAD, branch, index, status, affected file hashes, modes, exclusions, and attribution against the expected descendant checkpoint. The result lists reverse file actions, Git and conversation-cursor changes, estimated discarded bytes, and explicit blockers. Automatic rewind is safe only when every current-state and ownership check matches and every changed file is exclusively supported by high-confidence agent evidence.
 
-This foundation does not yet claim exact overlapping-hunk attribution, selective conflict resolution, restore, recoverable transaction execution, or retention cleanup. Those layers must consume the immutable repository and remain preview-first. A later rewind write must revalidate the same evidence plus exact approval immediately before mutation.
+Retention pruning accepts explicit checkpoint-count, logical-byte, age, and protected-checkpoint limits. An active run always preserves every discovered complete chain tip even when configured limits are zero, including conservative preservation of concurrent branches. Cleanup reports the exact metadata bytes removed and logical content bytes dereferenced. Content-addressed blob garbage collection is deliberately deferred until it can coordinate safely with concurrent captures, so retention never claims those shared blob bytes as reclaimed.
+
+This foundation does not yet claim exact overlapping-hunk attribution, selective conflict resolution, restore, recoverable transaction execution, or shared blob garbage collection. Those layers must consume the immutable repository and remain preview-first. A later rewind write must revalidate the same evidence plus exact approval immediately before mutation.
 
 ## Code
 

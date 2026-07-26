@@ -60,6 +60,7 @@ export {
   type WorkspaceCheckpointListQuery,
   type WorkspaceCheckpointLookup,
   type WorkspaceCheckpointOperationLookup,
+  type WorkspaceCheckpointRetentionInput,
   type WorkspaceCheckpointRepository,
 } from './workspace-checkpoint-repository.js';
 export {
