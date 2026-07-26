@@ -76,6 +76,46 @@ describe('ReflectionService', () => {
     expect(updateTask).not.toHaveBeenCalled();
   });
 
+  it('redacts extracted scope metadata before durable persistence', async () => {
+    const { service } = createHarness();
+
+    const candidate = await service.create(
+      createInput({
+        source: {
+          kind: 'error',
+          taskId: 'task_20260626_reflect',
+          runId: 'attempt_1',
+          eventIds: ['event_1'],
+        },
+        proposedScope: 'workspace',
+        rationale: 'Observed token=secret123 in /Users/bradgroux/Projects/private.',
+        applicability: 'Use when api_key=topsecret is present.',
+        contradictionIds: ['reflection_previous'],
+      })
+    );
+
+    expect(candidate).toMatchObject({
+      proposedScope: 'workspace',
+      source: { runId: 'attempt_1', eventIds: ['event_1'] },
+      contradictionIds: ['reflection_previous'],
+    });
+    expect(candidate.rationale).toContain('token=[REDACTED]');
+    expect(candidate.rationale).toContain('[REDACTED_PATH]');
+    expect(candidate.applicability).toContain('api_key=[REDACTED]');
+    expect(candidate.redaction.redacted).toBe(true);
+  });
+
+  it('returns the original candidate when an extraction retry reuses its idempotency key', async () => {
+    const { service, audit } = createHarness();
+    const input = createInput({ idempotencyKey: 'reflection_job_1:candidate:0' });
+
+    const first = await service.create(input);
+    const retried = await service.create(input);
+
+    expect(retried.id).toBe(first.id);
+    expect(audit).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts a reviewed task-linked candidate into task lessons', async () => {
     const task = createTask({ lessonsLearned: 'Existing lesson', lessonTags: ['existing'] });
     const { service, updateTask } = createHarness(task);

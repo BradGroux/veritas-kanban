@@ -31,6 +31,7 @@ const sourceSchema = z
     kind: sourceKindSchema,
     taskId: z.string().min(1).optional(),
     runId: z.string().min(1).optional(),
+    eventIds: z.array(z.string().min(1).max(160)).min(1).max(20).optional(),
     messageId: z.string().min(1).optional(),
     errorId: z.string().min(1).optional(),
     observationId: z.string().min(1).optional(),
@@ -49,6 +50,7 @@ const evidenceSchema = z.object({
 });
 
 const createReflectionSchema = z.object({
+  idempotencyKey: z.string().min(1).max(240).optional(),
   category: categorySchema,
   promotionTarget: promotionTargetSchema.optional(),
   confidence: z.number().min(0).max(1).optional(),
@@ -57,6 +59,10 @@ const createReflectionSchema = z.object({
   previousApproach: z.string().min(1).max(4000),
   correction: z.string().min(1).max(4000),
   nextAttempt: z.string().min(1).max(4000),
+  proposedScope: z.enum(['task', 'workspace', 'team', 'global']).optional(),
+  rationale: z.string().min(1).max(4000).optional(),
+  applicability: z.string().min(1).max(4000).optional(),
+  contradictionIds: z.array(z.string().min(1).max(160)).max(20).optional(),
   evidence: z.array(evidenceSchema).max(10).optional(),
   tags: z.array(z.string().min(1).max(80)).max(20).optional(),
   duplicateKey: z.string().min(1).max(240).optional(),

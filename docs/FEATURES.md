@@ -604,6 +604,9 @@ Reviewed promotion queue for agent corrections, repeated mistakes, and durable l
 - **Redaction at ingestion** — Tokens, credentials, and local private paths are redacted before candidates are stored
 - **Durable extraction jobs** — `reflection-extraction-job/v1` persists only source task, attempt, completion, digest, and event identities; raw conversations and unrestricted transcripts are not copied into the queue
 - **Lease-safe worker foundation** — File and SQLite repositories atomically enforce global and per-workspace concurrency, stable idempotent enqueue, lease ownership and renewal, deterministic retry backoff, restart recovery, and bounded dead-lettering
+- **Non-blocking completion intake** — Eligible terminal completions schedule extraction after the authoritative task update; interrupted or empty completions are skipped
+- **Bounded extraction worker** — The background worker reloads the identified durable completion, verifies its identity and digest, and exposes only bounded summaries, blockers, verified evidence, and verification results to a typed extractor
+- **Safe pending output** — Extracted candidates include run/event attribution, proposed scope, confidence, rationale, applicability, and contradiction links; deterministic candidate idempotency prevents duplicates after retries
 - **Settings UI** — Review, accept, reject, delete, and merge candidates from Settings → Reflections
 - **Audit trail** — Create, accept, reject, merge, and delete actions write metadata-only audit events
 

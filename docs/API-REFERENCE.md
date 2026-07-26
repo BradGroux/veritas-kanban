@@ -3737,12 +3737,17 @@ POST /api/reflections
   "source": {
     "kind": "user-correction",
     "taskId": "task_20260626_reflect",
-    "messageId": "msg_123"
+    "messageId": "msg_123",
+    "eventIds": ["run_event_456"]
   },
   "summary": "The agent guessed a config field instead of reading the schema.",
   "previousApproach": "Used a remembered field name.",
   "correction": "Read the live schema and nearby route tests first.",
   "nextAttempt": "Inspect the current schema before changing config behavior.",
+  "proposedScope": "workspace",
+  "rationale": "The correction applies to schema-backed configuration work.",
+  "applicability": "Use for future configuration changes in this workspace.",
+  "contradictionIds": ["reflection_older_guess"],
   "evidence": [
     {
       "kind": "note",
@@ -3754,7 +3759,11 @@ POST /api/reflections
 }
 ```
 
-**Response** `201`: Created pending candidate. Tokens, credential-looking values, and `/Users/...` private paths are redacted before storage.
+**Response** `201`: Created pending candidate. `idempotencyKey` can be supplied by
+automated extractors to make candidate creation retry-safe. Tokens,
+credential-looking values, and `/Users/...` private paths are redacted before
+storage. Extracted candidates remain pending and cannot affect task lessons or
+agent context until accepted.
 
 ### Accept Candidate
 

@@ -83,6 +83,7 @@ import { getCommunicationAdapterService } from './services/communication-adapter
 import { getRunEventJournalService } from './services/run-event-journal-service.js';
 import { getToolControlPlaneService } from './services/tool-control-plane-service.js';
 import { runToolBridgeRoutes } from './routes/run-tool-bridge.js';
+import { getReflectionExtractionWorkerService } from './services/reflection-extraction-worker-service.js';
 
 const log = createLogger('server');
 
@@ -591,6 +592,8 @@ async function initializeServices(): Promise<void> {
   }
   await getCommunicationAdapterService().start();
   log.info('Communication adapter workers initialized');
+  getReflectionExtractionWorkerService().start();
+  log.info('Reflection extraction worker initialized');
 
   // 4. Reconcile any agent attempts that were left in `running` state from
   //    a previous server crash/restart (issue #781).
@@ -1234,6 +1237,8 @@ async function gracefulShutdown(signal: string) {
 
     stopScheduledDeliverablesRunner();
     log.info('Scheduled deliverables runner stopped');
+    getReflectionExtractionWorkerService().stop();
+    log.info('Reflection extraction worker stopped');
 
     await getCommunicationAdapterService().shutdown();
     log.info('Communication adapter workers stopped');
