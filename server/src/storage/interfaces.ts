@@ -48,6 +48,13 @@ import type {
   DurableGoalCompareAndSetResult,
   DurableGoalListQuery,
   DurableGoalRecord,
+  ReflectionExtractionJob,
+  ReflectionExtractionJobClaimInput,
+  ReflectionExtractionJobClaimResult,
+  ReflectionExtractionJobCompareAndSetInput,
+  ReflectionExtractionJobCompareAndSetResult,
+  ReflectionExtractionJobEnqueueResult,
+  ReflectionExtractionJobListQuery,
   AdmissionReservation,
   AdmissionReservationClaimInput,
   AdmissionReservationClaimResult,
@@ -458,6 +465,29 @@ export interface DurableGoalRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Reflection Extraction Job Repository
+// ---------------------------------------------------------------------------
+
+export interface ReflectionExtractionJobRepository {
+  /** Atomically create one job or return the existing idempotent job. */
+  enqueue(job: ReflectionExtractionJob): Promise<ReflectionExtractionJobEnqueueResult>;
+
+  /** Return one materialized extraction job. */
+  get(id: string): Promise<ReflectionExtractionJob | null>;
+
+  /** Query bounded materialized extraction jobs. */
+  list(query: ReflectionExtractionJobListQuery): Promise<ReflectionExtractionJob[]>;
+
+  /** Atomically expire stale leases, enforce concurrency limits, and claim one eligible job. */
+  claim(input: ReflectionExtractionJobClaimInput): Promise<ReflectionExtractionJobClaimResult>;
+
+  /** Replace one job with a revision-guarded compare-and-set operation. */
+  compareAndSet(
+    input: ReflectionExtractionJobCompareAndSetInput
+  ): Promise<ReflectionExtractionJobCompareAndSetResult>;
+}
+
+// ---------------------------------------------------------------------------
 // Durable Admission Reservation Repository
 // ---------------------------------------------------------------------------
 
@@ -517,6 +547,7 @@ export interface StorageProvider {
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
   readonly durableGoals: DurableGoalRepository;
+  readonly reflectionExtractionJobs: ReflectionExtractionJobRepository;
   readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
   readonly setupContext?: SetupContextRepository;
