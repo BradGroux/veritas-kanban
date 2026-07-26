@@ -22,13 +22,22 @@ import {
   TASK_VERIFICATION_STATUSES,
 } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import { hasPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
 import { TaskCommitPolicySchema } from '../schemas/task-envelope-schemas.js';
 import { RunEventQuerySchema } from '../schemas/run-event-schemas.js';
+import {
+  RunOutputArtifactDownloadQuerySchema,
+  RunOutputArtifactHttpQuerySchema,
+} from '../schemas/run-output-artifact-schemas.js';
+import { RunOutputArtifactService } from '../services/run-output-artifact-service.js';
 import {
   workspaceExecutionTrustDecisionInputSchema,
   workspaceExecutionTrustRevokeInputSchema,
@@ -46,6 +55,12 @@ import { getRunPhaseAuthorityService } from '../services/run-phase-authority-ser
 
 const router: RouterType = Router();
 const workspaceExecutionTrust = getWorkspaceExecutionTrustService();
+let runOutputArtifactService: RunOutputArtifactService | undefined;
+
+function getRunOutputArtifactService(): RunOutputArtifactService {
+  runOutputArtifactService ??= new RunOutputArtifactService();
+  return runOutputArtifactService;
+}
 
 // Validation schemas
 const AgentTypeSchema = z.string().min(1).max(50);
@@ -453,6 +468,89 @@ router.get(
       current: phase?.current ?? null,
       history: phase?.history ?? [],
     });
+  })
+);
+
+// GET /api/agents/:taskId/output-artifacts/:artifactId - Query governed run output.
+router.get(
+  '/:taskId/output-artifacts/:artifactId',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = RunOutputArtifactHttpQuerySchema.parse({
+      ...req.query,
+      operation: req.query.operation ?? 'metadata',
+    });
+    const lookup = {
+      workspaceId: req.auth?.workspaceId || 'local',
+      taskId: req.params.taskId as string,
+      runId: input.runId,
+      attemptId: input.attemptId,
+      turnId: input.turnId,
+      artifactId: req.params.artifactId as string,
+    };
+    const query =
+      input.operation === 'json-path'
+        ? { operation: input.operation, path: input.jsonPath }
+        : input.operation === 'metadata'
+          ? { operation: input.operation }
+          : input.operation === 'byte-range'
+            ? { operation: input.operation, offset: input.offset, length: input.length }
+            : {
+                operation: input.operation,
+                startLine: input.startLine,
+                lineCount: input.lineCount,
+              };
+    const result = await getRunOutputArtifactService().query({
+      lookup,
+      query,
+      requesterId: requestActor(req),
+    });
+    if (!result) throw new NotFoundError('Run output artifact not found.');
+    res.json(result);
+  })
+);
+
+// GET /api/agents/:taskId/output-artifacts/:artifactId/download - Stream one bounded range.
+router.get(
+  '/:taskId/output-artifacts/:artifactId/download',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = RunOutputArtifactDownloadQuerySchema.parse(req.query);
+    const lookup = {
+      workspaceId: req.auth?.workspaceId || 'local',
+      taskId: req.params.taskId as string,
+      runId: input.runId,
+      attemptId: input.attemptId,
+      turnId: input.turnId,
+      artifactId: req.params.artifactId as string,
+    };
+    const metadata = await getRunOutputArtifactService().query({
+      lookup,
+      query: { operation: 'metadata' },
+      requesterId: requestActor(req),
+    });
+    if (!metadata) throw new NotFoundError('Run output artifact not found.');
+    if (metadata.metadata.state !== 'available') {
+      throw new ConflictError(`Run output artifact is ${metadata.metadata.state}.`);
+    }
+    const range = await getRunOutputArtifactService().readDownloadRange(
+      lookup,
+      requestActor(req),
+      input.offset,
+      input.length
+    );
+    if (!range) throw new ConflictError('Run output artifact body is unavailable.');
+    res.status(206);
+    res.setHeader('Content-Type', range.metadata.mediaType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${range.metadata.id}.bin"`
+    );
+    res.setHeader(
+      'Content-Range',
+      `bytes ${range.offset}-${Math.max(range.offset, range.offset + range.length - 1)}/${range.metadata.storedBytes}`
+    );
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', String(range.length));
+    res.end(Buffer.from(range.content));
   })
 );
 

@@ -45,6 +45,7 @@ export interface PrepareRunOutputInput {
   content: string | Uint8Array;
   mediaType?: string;
   truncationReason?: RunOutputTruncationReason;
+  artifactId?: string;
   now?: Date;
 }
 
@@ -246,7 +247,7 @@ export class RunOutputSpillService {
       : (input.truncationReason ?? 'inline-limit');
     const state = unsafeByPolicy ? 'quarantined' : 'available';
     const operations = unsafeByPolicy ? ['metadata'] : operationsFor(classified.contentClass);
-    const artifactId = `spill_${nanoid(24)}`;
+    const artifactId = input.artifactId ?? `spill_${nanoid(24)}`;
     const createdAt = now.toISOString();
     const metadata = RunOutputArtifactMetadataSchema.parse({
       schemaVersion: RUN_OUTPUT_ARTIFACT_SCHEMA_VERSION,

@@ -6,8 +6,10 @@ import {
   type RunEventAppendResult,
   type RunEventEnvelope,
   type RunEventJsonValue,
+  type RunEventKind,
   type RunEventPage,
   type RunEventQuery,
+  type RunOutputSourceKind,
 } from '@veritas-kanban/shared';
 import type { RunEventRepository } from '../storage/interfaces.js';
 import { FileRunEventRepository } from '../storage/run-event-repository.js';
@@ -16,6 +18,7 @@ import { RunEventEnvelopeSchema } from '../schemas/run-event-schemas.js';
 import { redactString } from '../lib/redact.js';
 import { createLogger } from '../lib/logger.js';
 import { validatePathSegment } from '../utils/sanitize.js';
+import { RunOutputArtifactService } from './run-output-artifact-service.js';
 
 const MAX_PAYLOAD_BYTES = 32 * 1024;
 const MAX_STRING_BYTES = 8 * 1024;
@@ -162,6 +165,46 @@ function sanitizePayload(payload: Record<string, unknown>): {
   };
 }
 
+function serializeForSpill(payload: Record<string, unknown>): string | undefined {
+  try {
+    const serialized = JSON.stringify(payload);
+    return typeof serialized === 'string' ? serialized : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function spillSourceKind(kind: RunEventKind): RunOutputSourceKind {
+  if (kind === 'tool.completed') return 'tool-result';
+  if (kind.startsWith('command.') || kind.startsWith('stream.')) return 'command-output';
+  if (kind.startsWith('mcp.')) return 'mcp-result';
+  if (kind.startsWith('provider.') || kind.startsWith('message.')) return 'provider-payload';
+  return 'run-event';
+}
+
+function spillSourceName(payload: Record<string, unknown>): string | undefined {
+  const candidate =
+    typeof payload.toolName === 'string'
+      ? payload.toolName
+      : typeof payload.name === 'string'
+        ? payload.name
+        : undefined;
+  return candidate ? redactString(candidate).slice(0, 240) : undefined;
+}
+
+function deterministicArtifactId(input: RunEventAppendInput, eventId: string): string {
+  const identity =
+    input.dedupeKey ??
+    (input.providerEventId ? `${input.source.provider}:${input.providerEventId}` : eventId);
+  const digest = createHash('sha256')
+    .update(
+      `${input.workspaceId ?? 'local'}:${input.taskId}:${input.attemptId}:${input.kind}:${identity}`
+    )
+    .digest('base64url')
+    .slice(0, 24);
+  return `spill_${digest}`;
+}
+
 let fileRepository: FileRunEventRepository | undefined;
 
 function defaultRepository(): RunEventRepository {
@@ -172,17 +215,58 @@ function defaultRepository(): RunEventRepository {
 
 export class RunEventJournalService {
   private readonly listeners = new Set<RunEventListener>();
+  private resolvedArtifactService?: Pick<RunOutputArtifactService, 'spill'>;
 
-  constructor(private readonly repository?: RunEventRepository) {}
+  constructor(
+    private readonly repository?: RunEventRepository,
+    private readonly artifactService?: Pick<RunOutputArtifactService, 'spill'>
+  ) {}
 
   async append(input: RunEventAppendInput): Promise<RunEventAppendResult> {
     validatePathSegment(input.taskId);
     validatePathSegment(input.attemptId);
+    const eventId = `runevt_${nanoid(18)}`;
     const sanitized = sanitizePayload(input.payload);
-    const payloadJson = JSON.stringify(sanitized.payload);
+    const serialized = serializeForSpill(input.payload);
+    const spillPreview =
+      serialized && countBytes(serialized) > MAX_STRING_BYTES
+        ? await this.getArtifactService().spill({
+            scope: {
+              workspaceId: input.workspaceId ?? 'local',
+              taskId: input.taskId,
+              runId: input.attemptId,
+              attemptId: input.attemptId,
+              turnId: input.turnId,
+            },
+            source: {
+              kind: spillSourceKind(input.kind),
+              name: spillSourceName(input.payload),
+              eventId,
+              toolCallId:
+                typeof input.payload.toolCallId === 'string'
+                  ? input.payload.toolCallId
+                  : input.itemId,
+              commandId:
+                typeof input.payload.commandId === 'string' ? input.payload.commandId : undefined,
+            },
+            content: serialized,
+            mediaType: 'application/json',
+            truncationReason: 'event-limit',
+            artifactId: deterministicArtifactId(input, eventId),
+          })
+        : undefined;
+    const eventPayload = spillPreview
+      ? {
+          spilled: true,
+          originalPayloadBytes: countBytes(serialized ?? ''),
+          outputArtifact: spillPreview,
+        }
+      : sanitized.payload;
+    const boundedEventPayload = sanitizePayload(eventPayload);
+    const payloadJson = JSON.stringify(boundedEventPayload.payload);
     const event = RunEventEnvelopeSchema.parse({
       schemaVersion: RUN_EVENT_SCHEMA_VERSION,
-      eventId: `runevt_${nanoid(18)}`,
+      eventId,
       taskId: input.taskId,
       runId: input.attemptId,
       attemptId: input.attemptId,
@@ -198,12 +282,15 @@ export class RunEventJournalService {
       kind: input.kind,
       source: input.source,
       redaction: {
-        status: sanitized.status,
-        fields: sanitized.fields,
-        originalBytes: sanitized.originalBytes,
-        persistedBytes: sanitized.persistedBytes,
+        status: spillPreview ? 'redacted' : boundedEventPayload.status,
+        fields: spillPreview ? ['$'] : boundedEventPayload.fields,
+        originalBytes: Math.max(
+          sanitized.originalBytes,
+          serialized ? countBytes(serialized) : sanitized.originalBytes
+        ),
+        persistedBytes: boundedEventPayload.persistedBytes,
       },
-      payload: sanitized.payload,
+      payload: boundedEventPayload.payload,
       payloadHash: sha256(payloadJson),
       dedupeKey:
         input.dedupeKey ??
@@ -224,6 +311,11 @@ export class RunEventJournalService {
       }
     }
     return result;
+  }
+
+  private getArtifactService(): Pick<RunOutputArtifactService, 'spill'> {
+    this.resolvedArtifactService ??= this.artifactService ?? new RunOutputArtifactService();
+    return this.resolvedArtifactService;
   }
 
   async list(query: RunEventQuery): Promise<RunEventPage> {

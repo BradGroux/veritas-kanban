@@ -8368,6 +8368,7 @@ export class ClawdbotAgentService {
     const pending = pendingAgents.get(taskId);
     const provider = options.provider ?? pending?.provider ?? 'system';
     const result = await this.runEvents.append({
+      workspaceId: pending?.taskEnvelope?.workspace.workspaceId ?? 'local',
       taskId,
       attemptId,
       kind,
@@ -8417,11 +8418,19 @@ export class ClawdbotAgentService {
   private emitJournalOutput(event: RunEventEnvelope): void {
     const pending = pendingAgents.get(event.taskId);
     if (!pending || pending.attemptId !== event.attemptId) return;
+    const outputArtifact =
+      event.payload.outputArtifact &&
+      typeof event.payload.outputArtifact === 'object' &&
+      !Array.isArray(event.payload.outputArtifact)
+        ? event.payload.outputArtifact
+        : undefined;
     const content =
       typeof event.payload.content === 'string'
         ? event.payload.content
         : typeof event.payload.summary === 'string'
           ? event.payload.summary
+          : outputArtifact && typeof outputArtifact.content === 'string'
+            ? outputArtifact.content
           : undefined;
     if (!content?.trim()) return;
     const type: AgentOutput['type'] =

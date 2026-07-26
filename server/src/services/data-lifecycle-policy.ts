@@ -6,6 +6,7 @@ export type DataLifecycleClassId =
   | 'workProducts'
   | 'telemetry'
   | 'workflowRuns'
+  | 'runOutputArtifacts'
   | 'notifications'
   | 'chat'
   | 'audit'
@@ -219,6 +220,33 @@ export const DATA_LIFECYCLE_POLICIES: readonly DataLifecyclePolicy[] = [
     workspaceScoped: true,
     previewSafety:
       'Show status, workflow, task link, run age, snapshot count, and active/blocked state.',
+  },
+  {
+    id: 'runOutputArtifacts',
+    label: 'Governed run output artifacts',
+    description:
+      'Redacted oversized tool, command, MCP, provider, and run-event bodies plus scoped metadata tombstones.',
+    tables: ['run_output_artifacts'],
+    defaultRetention:
+      'Bodies expire after the configured spill retention window; active-run leases defer cleanup and metadata tombstones remain.',
+    userControls: ['Query or download bounded ranges when workspace and run permissions allow.'],
+    adminControls: [
+      'Review storage usage, retention, quarantine state, cleanup results, and workspace export/delete posture.',
+    ],
+    exportBehavior:
+      'Workspace exports include scoped metadata; body export requires explicit authorized retrieval and export-time integrity/secret validation.',
+    deleteBehavior:
+      'Retention cleanup removes eligible bodies but preserves metadata tombstones so causal event references remain explainable.',
+    auditBehavior:
+      'Creation, quarantine reason, expiry state, validation time, and reclaimed bytes remain attributable in artifact metadata and cleanup results.',
+    redaction:
+      'Bodies are redacted before persistence and excluded from support bundles; support data includes bounded metadata only.',
+    containsSecrets: false,
+    containsPrivatePaths: true,
+    containsGeneratedContent: true,
+    workspaceScoped: true,
+    previewSafety:
+      'Show opaque ID, causal scope, source kind, sizes, hash, redaction state, retention, and quarantine reason without body content or host paths.',
   },
   {
     id: 'notifications',
