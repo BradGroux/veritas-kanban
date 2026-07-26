@@ -93,6 +93,27 @@ export interface WorkspaceCheckpoint {
 
 export type WorkspaceCheckpointDiffLineKind = 'context' | 'addition' | 'deletion';
 export type WorkspaceCheckpointFileChangeKind = 'added' | 'modified' | 'deleted' | 'mode-changed';
+export type WorkspaceCheckpointAttributionSource =
+  'agent-tool' | 'operator' | 'external' | 'unknown';
+export type WorkspaceCheckpointAttributionConfidence = 'high' | 'ambiguous' | 'none';
+export type WorkspaceCheckpointAttributionBasis =
+  | 'provider-file-event'
+  | 'write-tool-event'
+  | 'operator-file-event'
+  | 'filesystem-file-event'
+  | 'mixed-file-evidence'
+  | 'no-file-evidence';
+
+export interface WorkspaceCheckpointHunkAttribution {
+  source: WorkspaceCheckpointAttributionSource;
+  confidence: WorkspaceCheckpointAttributionConfidence;
+  basis: WorkspaceCheckpointAttributionBasis;
+  scope: 'checkpoint-file-window';
+  evidenceEventIds: string[];
+  provider?: string;
+  agent?: string;
+  tool?: string;
+}
 
 export interface WorkspaceCheckpointDiffLine {
   kind: WorkspaceCheckpointDiffLineKind;
@@ -108,6 +129,7 @@ export interface WorkspaceCheckpointDiffHunk {
   newStart: number;
   newLines: number;
   lines: WorkspaceCheckpointDiffLine[];
+  attribution?: WorkspaceCheckpointHunkAttribution;
 }
 
 export interface WorkspaceCheckpointFileDiff {
@@ -123,6 +145,7 @@ export interface WorkspaceCheckpointFileDiff {
   additions: number;
   deletions: number;
   hunks: WorkspaceCheckpointDiffHunk[];
+  attribution?: WorkspaceCheckpointHunkAttribution;
 }
 
 export interface WorkspaceCheckpointDiff {
@@ -143,6 +166,12 @@ export interface WorkspaceCheckpointDiff {
     filesChanged: number;
     additions: number;
     deletions: number;
+  };
+  attribution?: {
+    evidenceComplete: boolean;
+    fromEventSequence?: number;
+    toEventSequence?: number;
+    eventsConsidered: number;
   };
   files: WorkspaceCheckpointFileDiff[];
 }
