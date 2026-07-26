@@ -2,7 +2,8 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
-import { ValidationError } from '../middleware/error-handler.js';
+import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { getReflectionConsolidationService } from '../services/reflection-consolidation-service.js';
 import { getReflectionService } from '../services/reflection-service.js';
 
 const router: RouterType = Router();
@@ -25,6 +26,19 @@ const promotionTargetSchema = z.enum([
   'template',
   'policy',
 ]);
+const memoryDomainKindSchema = z.enum([
+  'workspace-memory',
+  'team',
+  'profile',
+  'template',
+  'decision',
+  'policy',
+]);
+const memoryDomainSchema = z.object({
+  kind: memoryDomainKindSchema,
+  id: z.string().trim().min(1).max(160),
+  workspaceId: z.string().trim().min(1).max(160),
+});
 
 const sourceSchema = z
   .object({
@@ -96,6 +110,30 @@ const deleteReflectionSchema = z.object({
 const mergeReflectionSchema = z.object({
   mergedBy: z.string().min(1).max(120).optional(),
 });
+const createConsolidationProposalSchema = z.object({
+  domain: memoryDomainSchema,
+  candidateIds: z.array(z.string().trim().min(1).max(160)).min(1).max(2000),
+  policy: z
+    .object({
+      staleAfterDays: z.number().int().min(1).max(3650).optional(),
+      unusedAfterDays: z.number().int().min(1).max(3650).optional(),
+      minimumConfidence: z.number().min(0).max(1).optional(),
+      maxCandidates: z.number().int().min(1).max(2000).optional(),
+    })
+    .optional(),
+});
+const listConsolidationProposalSchema = z
+  .object({
+    kind: memoryDomainKindSchema.optional(),
+    id: z.string().trim().min(1).max(160).optional(),
+    workspaceId: z.string().trim().min(1).max(160).optional(),
+  })
+  .refine(
+    (value) =>
+      (!value.kind && !value.id && !value.workspaceId) ||
+      (!!value.kind && !!value.id && !!value.workspaceId),
+    { message: 'kind, id, and workspaceId must be supplied together' }
+  );
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
   try {
@@ -125,6 +163,36 @@ router.get(
   asyncHandler(async (req, res) => {
     const query = parseOrThrow(listQuerySchema, req.query);
     res.json(await getReflectionService().list(query));
+  })
+);
+
+router.get(
+  '/consolidation/proposals',
+  asyncHandler(async (req, res) => {
+    const query = parseOrThrow(listConsolidationProposalSchema, req.query);
+    const domain =
+      query.kind && query.id && query.workspaceId
+        ? { kind: query.kind, id: query.id, workspaceId: query.workspaceId }
+        : undefined;
+    res.json({ proposals: await getReflectionConsolidationService().list(domain) });
+  })
+);
+
+router.get(
+  '/consolidation/proposals/:proposalId',
+  asyncHandler(async (req, res) => {
+    const proposal = await getReflectionConsolidationService().get(String(req.params.proposalId));
+    if (!proposal) throw new NotFoundError('Reflection consolidation proposal not found');
+    res.json(proposal);
+  })
+);
+
+router.post(
+  '/consolidation/proposals',
+  asyncHandler(async (req, res) => {
+    const body = parseOrThrow(createConsolidationProposalSchema, req.body);
+    const proposal = await getReflectionConsolidationService().propose(body);
+    res.status(201).json(proposal);
   })
 );
 
