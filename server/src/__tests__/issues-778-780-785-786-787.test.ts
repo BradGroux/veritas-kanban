@@ -23,12 +23,21 @@ import { workflowAdmissionStub } from './helpers/workflow-admission-stub.js';
 // Using module-level fns so vi.mock factory can close over them.
 // ─────────────────────────────────────────────────────────────
 
-const mockLoadWorkflow = vi.fn();
-const mockPrepareStep = vi.fn(async (step: unknown) => ({ kind: 'non-agent', step }));
-const mockApplyPreparation = vi.fn();
-const mockExecuteStep = vi.fn();
-const mockBroadcastWorkflowStatus = vi.fn();
-const mockGetTask = vi.fn();
+const {
+  mockLoadWorkflow,
+  mockPrepareStep,
+  mockApplyPreparation,
+  mockExecuteStep,
+  mockBroadcastWorkflowStatus,
+  mockGetTask,
+} = vi.hoisted(() => ({
+  mockLoadWorkflow: vi.fn(),
+  mockPrepareStep: vi.fn(async (step: unknown) => ({ kind: 'non-agent', step })),
+  mockApplyPreparation: vi.fn(),
+  mockExecuteStep: vi.fn(),
+  mockBroadcastWorkflowStatus: vi.fn(),
+  mockGetTask: vi.fn(),
+}));
 
 vi.mock('../services/workflow-service.js', () => ({
   getWorkflowService: () => ({
