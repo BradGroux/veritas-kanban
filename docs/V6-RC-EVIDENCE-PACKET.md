@@ -1,14 +1,43 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet retains the historical evidence for the quarantined Veritas Kanban
-6.0.0 prerelease and the 6.0.1 stabilization release, then records the 6.0.2
-desktop recovery hotfix. It separates merged implementation, deterministic
-conformance, local runtime proof, signed publication, and Homebrew availability.
+This packet records the active Veritas Kanban 6.1.0 release candidate and
+retains historical evidence for the quarantined 6.0.0 prerelease, the 6.0.1
+stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
+merged implementation, deterministic conformance, local runtime proof, signed
+publication, and Homebrew availability.
 
-Veritas Kanban 6.0.2 supersedes 6.0.1 as the supported stable v6 release. Do
-not use 6.0.0 for installation or upgrade validation.
+Veritas Kanban 6.0.2 remains the supported stable v6 release until every active
+6.1.0 gate is complete. Do not use 6.0.0 for installation or upgrade
+validation.
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
+Documentation freshness: 2026-07-26 for the Veritas Kanban 6.1.0 candidate.
+
+## 6.1.0 Roadmap Candidate
+
+| Field               | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version     | 6.1.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Source branch       | `release/v6.1.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Source baseline     | `0a19b9050da8915042860f55ef9ca009d164e816`, the release integration of `main` after #1142 cleared the milestone blockers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Included issues     | [#855](https://github.com/BradGroux/veritas-kanban/issues/855), [#864](https://github.com/BradGroux/veritas-kanban/issues/864), [#865](https://github.com/BradGroux/veritas-kanban/issues/865), [#866](https://github.com/BradGroux/veritas-kanban/issues/866), [#867](https://github.com/BradGroux/veritas-kanban/issues/867), [#868](https://github.com/BradGroux/veritas-kanban/issues/868), [#871](https://github.com/BradGroux/veritas-kanban/issues/871), [#872](https://github.com/BradGroux/veritas-kanban/issues/872), [#873](https://github.com/BradGroux/veritas-kanban/issues/873), [#876](https://github.com/BradGroux/veritas-kanban/issues/876), and [#879](https://github.com/BradGroux/veritas-kanban/issues/879) |
+| Source verification | Focused verification passed per merged roadmap slice. PR #1142 completed append-only admission writes, restored the complete filesystem test-double surface, and mapped the exact knowledge-collection permission prefix. The consolidated candidate then passed `pnpm test:unit` across every workspace; server reported 3,234 passing and 5 skipped tests, web reported 469 passing tests, and desktop reported 67 passing tests.                                                                                                                                                                                                                                                                                                |
+| Publication state   | Pending release-PR CI, signed/notarized assets, independent downloaded-app proof, post-publication release validation, and Homebrew cask verification.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### 6.1.0 issue traceability
+
+| Issue                                                          | Outcome                                                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [#855](https://github.com/BradGroux/veritas-kanban/issues/855) | Run-scoped egress gateway and enforceable network policy                                           |
+| [#864](https://github.com/BradGroux/veritas-kanban/issues/864) | Durable admission, aggregate budgets, fairness, cancellation, and circuit breaking                 |
+| [#865](https://github.com/BradGroux/veritas-kanban/issues/865) | Durable goal supervision across turns, restarts, and continuations                                 |
+| [#866](https://github.com/BradGroux/veritas-kanban/issues/866) | Reviewed, attributable memory extraction and consolidation                                         |
+| [#867](https://github.com/BradGroux/veritas-kanban/issues/867) | Source-grounded workspace knowledge collections                                                    |
+| [#868](https://github.com/BradGroux/veritas-kanban/issues/868) | Knowledge integrity linting, material-claim lifecycle, scheduling, semantic candidates, and health |
+| [#871](https://github.com/BradGroux/veritas-kanban/issues/871) | Run-scoped background-command and monitor supervision                                              |
+| [#872](https://github.com/BradGroux/veritas-kanban/issues/872) | Preview-first turn-boundary checkpoints and attributable rewind                                    |
+| [#873](https://github.com/BradGroux/veritas-kanban/issues/873) | Stalled and repetitive run detection with bounded recovery                                         |
+| [#876](https://github.com/BradGroux/veritas-kanban/issues/876) | Governed artifact spill for oversized run output                                                   |
+| [#879](https://github.com/BradGroux/veritas-kanban/issues/879) | Agent-dependency load shedding integrated with circuit breakers                                    |
 
 ## 6.0.2 Desktop Recovery Candidate
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-07-26
+
 ### Added
 
 - Added complete workspace knowledge collections: immutable classified sources, cited and versioned derived pages, reviewed ingestion dry runs, atomic apply and reversal, cited keyword/QMD search, query promotion, and cited work-product export. Run launch evidence now restricts every agent read and mutation to the exact shared source and page resources in the persisted manifest, isolates QMD projections by manifest digest, and binds promoted or exported search evidence to the same run. Confidential and restricted previews withhold content and force redacted exports even when the collection otherwise allows full output. File and SQLite storage preserve the same workspace, digest, attribution, idempotency, contradiction, graph, and activity contracts (#867).
@@ -181,6 +183,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mapped the exact knowledge-collection router prefix to shared work-product
   read/write permissions, restoring fail-closed client/server permission
   coverage parity (#1141).
+- Updated the CLI native-fork regression coverage to validate the required
+  generated idempotency key before comparing the stable request payload,
+  clearing the release-branch related-test gate (#1143).
+- Separated live MCP-to-HTTP task and sprint integration groups from the
+  server-independent unit suite so focused CI no longer attempts localhost API
+  calls without a running server (#1144).
 
 ## [6.0.2] - 2026-07-24
 
@@ -2424,7 +2432,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.2...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.0...HEAD
+[6.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.2...v6.1.0
 [6.0.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.1...v6.0.2
 [6.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/BradGroux/veritas-kanban/compare/v5.2.5...v6.0.0

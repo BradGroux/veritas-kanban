@@ -6,7 +6,7 @@
 > Harness-specific supplements (for example `CLAUDE.md`) extend, never duplicate or contradict,
 > these rules. See `docs/AGENTS-TEMPLATE.md` for the managed-run and external-agent protocols.
 >
-> **Version:** 6.0.2
+> **Version:** 6.1.0
 > **Freshness policy:** update within two working days of any toolchain or architecture change.
 > Stale fields (package manager, Node version, provider list, test commands) are caught by
 > `pnpm check:pnpm-settings` and the smoke-test CI job.
@@ -434,6 +434,9 @@ src/scripts/run-harness-conformance.ts -- --suite <suite.json>
 - Use `vi.mock()`/`vi.fn()` to isolate external processes and HTTP calls; no live credentials
   in unit tests.
 - Credential-gated smoke tests document the tested provider version in a `@smoke` describe block.
+- Live MCP-to-HTTP integration groups require a running API and explicit
+  `VK_MCP_INTEGRATION_TEST=1`; the default MCP test suite must remain
+  server-independent.
 - Match actual runtime schema in test fixtures — wrong field names (`status: "success"` vs
   `success: true`) are a common source of false-passing tests.
 

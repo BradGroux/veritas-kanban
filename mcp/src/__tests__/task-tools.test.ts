@@ -7,6 +7,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { handleTaskTool, taskTools } from '../tools/tasks.js';
 
+const describeLive = process.env.VK_MCP_INTEGRATION_TEST === '1' ? describe : describe.skip;
+
 function parseToolResponse(result: any): any {
   const text = result.content[0].text;
   const jsonStart = text.indexOf('{');
@@ -74,7 +76,7 @@ describe('Task MCP Tools', () => {
     });
   });
 
-  describe('list_tasks', () => {
+  describeLive('list_tasks', () => {
     it('should return an array', async () => {
       const result = await handleTaskTool('list_tasks', {});
       const tasks = parseToolResponse(result);
@@ -105,7 +107,7 @@ describe('Task MCP Tools', () => {
     });
   });
 
-  describe('create + get + update + delete lifecycle', () => {
+  describeLive('create + get + update + delete lifecycle', () => {
     let taskId: string;
 
     it('should create a task', async () => {
@@ -154,18 +156,20 @@ describe('Task MCP Tools', () => {
   });
 
   describe('error handling', () => {
-    it('should return isError for nonexistent task', async () => {
-      const result = await handleTaskTool('get_task', { id: 'nonexistent_id_12345' });
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('not found');
-    });
-
     it('should throw for unknown tool', async () => {
       await expect(handleTaskTool('fake_tool', {})).rejects.toThrow('Unknown task tool');
     });
 
     it('should throw for create_task with missing title', async () => {
       await expect(handleTaskTool('create_task', {})).rejects.toThrow();
+    });
+  });
+
+  describeLive('live error handling', () => {
+    it('should return isError for nonexistent task', async () => {
+      const result = await handleTaskTool('get_task', { id: 'nonexistent_id_12345' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('not found');
     });
   });
 });

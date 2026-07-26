@@ -1,6 +1,6 @@
 # Veritas Kanban v6 Agent Runtime Control Plane
 
-This document defines the supported v6.0.2 architecture for executable agent
+This document defines the supported v6.1.0 architecture for executable agent
 harnesses and Buzz integration. It is the version-level composition of the
 individual contract documents for
 [ACP](ACP-PROVIDER-V1.md),
@@ -9,7 +9,7 @@ individual contract documents for
 [tool control](TOOL-CONTROL-PLANE-V1.md), and
 [runtime hooks](RUNTIME-HOOK-V1.md).
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
+Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
 
 ## Authority Model
 
@@ -129,6 +129,7 @@ evidence and never hides a failure.
   artifacts are bounded.
 - Required unsupported filesystem, network, environment, credential, MCP,
   tool, approval, lifecycle, and budget controls block before attempt mutation.
-- Fine-grained HTTP method/path/domain proxy enforcement remains deferred to
-  issue 855. v6.0.2 claims only the network controls proven in current provider
-  runtime evidence.
+- Required network policy resolves and pins destinations, routes governed
+  traffic through the run-scoped egress gateway, enforces protocol, host, port,
+  HTTP method, and normalized path rules, and rejects direct or unverifiable
+  bypass paths.
