@@ -1475,6 +1475,48 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON run_output_artifacts(state, expires_at, active_lease_until);
     `,
   },
+  {
+    version: 30,
+    name: '0030_knowledge_collection_sources',
+    up: `
+      CREATE TABLE knowledge_collections (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        operation_id_digest TEXT NOT NULL,
+        collection_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (workspace_id, slug),
+        UNIQUE (workspace_id, operation_id_digest)
+      );
+
+      CREATE INDEX idx_knowledge_collections_workspace_updated
+        ON knowledge_collections(workspace_id, updated_at DESC, id);
+
+      CREATE TABLE knowledge_sources (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL
+          REFERENCES knowledge_collections(id) ON DELETE CASCADE,
+        source_key TEXT NOT NULL,
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        operation_id_digest TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        source_json TEXT NOT NULL,
+        content BLOB,
+        captured_at TEXT NOT NULL,
+        UNIQUE (collection_id, source_key, revision),
+        UNIQUE (collection_id, operation_id_digest)
+      );
+
+      CREATE INDEX idx_knowledge_sources_collection_key_revision
+        ON knowledge_sources(collection_id, source_key, revision DESC);
+
+      CREATE INDEX idx_knowledge_sources_workspace_captured
+        ON knowledge_sources(workspace_id, captured_at DESC, id);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

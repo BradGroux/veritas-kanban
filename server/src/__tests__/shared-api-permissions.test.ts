@@ -83,6 +83,15 @@ describe('shared API permission metadata', () => {
     ).toEqual(['agent:write']);
   });
 
+  it('keeps knowledge collection reads and writes under work-product permissions', () => {
+    expect(getApiPermissionRequirement('/api/knowledge/collections').permissions).toEqual([
+      'work_product:read',
+    ]);
+    expect(
+      getApiPermissionRequirement('/api/v1/knowledge/collections', { method: 'POST' }).permissions
+    ).toEqual(['work_product:write']);
+  });
+
   it('requires workflow execution for Codex review diff posts', () => {
     expect(
       getApiPermissionRequirement('/api/diff/task_1/codex-review', { method: 'POST' }).permissions
