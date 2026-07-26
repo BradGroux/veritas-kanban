@@ -83,6 +83,19 @@ const RunStartedEventSchema = BaseEventSchema.extend({
   agent: z.string().min(1, 'agent is required'),
   model: z.string().optional(),
   sessionKey: z.string().optional(),
+  admissionSource: z
+    .enum([
+      'direct',
+      'conversation',
+      'recovery',
+      'fallback',
+      'scheduled',
+      'watcher',
+      'workflow',
+      'child-agent',
+    ])
+    .optional(),
+  admissionOutcome: z.enum(['admitted', 'queued-dispatch']).optional(),
 });
 
 /** run.completed event payload */

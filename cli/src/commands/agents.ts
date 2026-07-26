@@ -147,6 +147,7 @@ function registerConversationTurnCommand(
           phase: options.phase,
           requiredRuntimeCapabilities: options.requireCapability,
           commitPolicy: options.commitPolicy,
+          idempotencyKey: `vk-cli:${taskId}:conversation:${action}:${randomUUID()}`,
         }),
       });
       printConversationResult(action, result, options.json);

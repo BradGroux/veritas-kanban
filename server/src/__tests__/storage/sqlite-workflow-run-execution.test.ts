@@ -249,13 +249,15 @@ describe('SQLite workflow run execution', () => {
     ]);
 
     expect(executeFirst.mock.calls.length + executeSecond.mock.calls.length).toBe(1);
+    // Universal admission owns the launch boundary, so the recovery remains
+    // scheduled until the mocked executeRun reaches the agent launch itself.
     expect(await first.getRun(run.id)).toMatchObject({
       revision: 3,
       status: 'pending',
       steps: [
         expect.objectContaining({
           runRetry: expect.objectContaining({
-            state: 'launching',
+            state: 'scheduled',
             parentRunId: recovery.parentRunId,
             sequence: recovery.sequence,
           }),

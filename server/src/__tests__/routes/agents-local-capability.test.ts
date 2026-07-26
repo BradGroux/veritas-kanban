@@ -472,18 +472,26 @@ describe('agent local capability enforcement', () => {
       })
     );
 
-    const resume = await request(app).post('/api/agents/task_1/conversation/resume').send({
-      sourceAttemptId: 'attempt_parent',
-      message: 'Continue from the durable provider history',
-      commitPolicy: 'forbidden',
-      phase: 'verify',
-    });
+    const resume = await request(app)
+      .post('/api/agents/task_1/conversation/resume')
+      .set('X-Idempotency-Key', 'conversation-resume-123')
+      .send({
+        sourceAttemptId: 'attempt_parent',
+        message: 'Continue from the durable provider history',
+        commitPolicy: 'forbidden',
+        phase: 'verify',
+        idempotencyKey: 'body-conversation-resume-456',
+      });
     expect(resume.status).toBe(201);
     expect(mockResumeConversation).toHaveBeenCalledWith(
       'task_1',
       'attempt_parent',
       'Continue from the durable provider history',
-      expect.objectContaining({ commitPolicy: 'forbidden', phase: 'verify' })
+      expect.objectContaining({
+        commitPolicy: 'forbidden',
+        phase: 'verify',
+        admissionIdempotencyKey: 'conversation-resume-123',
+      })
     );
 
     const fork = await request(app).post('/api/agents/task_1/conversation/fork').send({
@@ -500,6 +508,16 @@ describe('agent local capability enforcement', () => {
       'turn_7',
       expect.objectContaining({ phase: 'explore' })
     );
+
+    const invalidIdempotency = await request(app)
+      .post('/api/agents/task_1/conversation/follow-up')
+      .set('X-Idempotency-Key', 'short')
+      .send({
+        sourceAttemptId: 'attempt_parent',
+        message: 'Retry this turn',
+      });
+    expect(invalidIdempotency.status).toBe(400);
+    expect(mockFollowUpConversation).not.toHaveBeenCalled();
 
     const spoofedSteer = await request(app).post('/api/agents/task_1/conversation/steer').send({
       attemptId: 'attempt_1',
@@ -540,11 +558,14 @@ describe('agent local capability enforcement', () => {
       })
     );
 
-    const response = await request(app).post('/api/agents/task_1/conversation/fresh').send({
-      agent: 'codex',
-      message: 'Start this task through ACP',
-      phase: 'plan',
-    });
+    const response = await request(app)
+      .post('/api/agents/task_1/conversation/fresh')
+      .set('X-Idempotency-Key', 'conversation-fresh-123')
+      .send({
+        agent: 'codex',
+        message: 'Start this task through ACP',
+        phase: 'plan',
+      });
 
     expect(response.status).toBe(201);
     expect(mockStartAgent).toHaveBeenCalledWith(
@@ -552,6 +573,7 @@ describe('agent local capability enforcement', () => {
       'codex',
       expect.objectContaining({
         phase: 'plan',
+        admissionIdempotencyKey: 'conversation-fresh-123',
         conversation: {
           mode: 'fresh',
           intent: 'fresh',

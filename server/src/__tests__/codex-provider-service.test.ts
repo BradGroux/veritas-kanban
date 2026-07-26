@@ -171,6 +171,7 @@ vi.mock('../services/circuit-registry.js', () => ({
 import {
   AgentReadinessError,
   ClawdbotAgentService,
+  type AgentProviderAdmissionEvidence,
   type AgentStatus,
   type CredentialLeaseLifecycle,
 } from '../services/clawdbot-agent-service.js';
@@ -184,6 +185,7 @@ import type {
   TaskAttempt,
   ExecutionTreeIdentity,
   AdmissionQueueClaim,
+  RunRecoveryRecord,
 } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import {
@@ -771,18 +773,88 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
   });
 
-  it('queues a reconstructable direct launch and dispatches its claim exactly once', async () => {
+  it('classifies every agent execution edge through one admission source contract', () => {
+    const service = testableService(tmpDir);
+    const classify = (
+      service as unknown as {
+        agentAdmissionSource(
+          executionTree: ExecutionTreeIdentity,
+          recovery?: RunRecoveryRecord
+        ): string;
+      }
+    ).agentAdmissionSource.bind(service);
+    const identity = (edge: ExecutionTreeIdentity['edge']): ExecutionTreeIdentity => ({
+      schemaVersion: 'execution-tree-identity/v1',
+      rootObjectiveId: 'objective-source-contract',
+      nodeId: `node-${edge}`,
+      ...(edge === 'root' ? {} : { parentNodeId: 'node-parent' }),
+      edge,
+      depth: edge === 'root' ? 0 : 1,
+    });
+
+    expect(classify(identity('root'))).toBe('direct');
+    expect(classify(identity('resume'))).toBe('conversation');
+    expect(classify(identity('follow-up'))).toBe('conversation');
+    expect(classify(identity('fork'))).toBe('conversation');
+    expect(classify(identity('provider-handoff'))).toBe('conversation');
+    expect(classify(identity('child-agent'))).toBe('child-agent');
+    expect(classify(identity('retry'), { action: 'retry' } as RunRecoveryRecord)).toBe('recovery');
+    expect(classify(identity('fallback'), { action: 'fallback' } as RunRecoveryRecord)).toBe(
+      'fallback'
+    );
+  });
+
+  it('rejects provider dispatch when durable admission evidence is missing', () => {
+    const service = testableService(tmpDir);
+    const executionTree: ExecutionTreeIdentity = {
+      schemaVersion: 'execution-tree-identity/v1',
+      rootObjectiveId: 'objective-admission-guard',
+      nodeId: 'attempt-admission-guard',
+      edge: 'root',
+      depth: 0,
+    };
+    const evidence: AgentProviderAdmissionEvidence = {
+      schemaVersion: 'provider-admission-evidence/v1',
+      source: 'direct',
+      outcome: 'admitted',
+      reservationId: 'admission-expected',
+      executionTree,
+    };
+    const assertEvidence = (
+      service as unknown as {
+        assertProviderAdmissionEvidence(
+          input: AgentProviderAdmissionEvidence,
+          attempt: TaskAttempt
+        ): void;
+      }
+    ).assertProviderAdmissionEvidence.bind(service);
+
+    expect(() =>
+      assertEvidence(evidence, {
+        id: executionTree.nodeId,
+        agent: 'codex',
+        status: 'running',
+        admissionReservationId: 'admission-other',
+        executionTree,
+      } as TaskAttempt)
+    ).toThrow('Provider launch is missing required admission evidence.');
+  });
+
+  it('queues a versioned agent launch and replays its exact options exactly once', async () => {
     const fixture = await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf-8');
     mockSpawn.mockReturnValue(createFakeChild(fixture));
     const admission = testAdmissionControl();
     let claim: AdmissionQueueClaim | undefined;
     let currentEntry: AdmissionQueueClaim['entry'] | undefined;
     vi.mocked(admission.admitOrQueue).mockImplementation(async (input, queue) => {
+      if (!('target' in queue) || queue.target.kind !== 'agent-launch') {
+        throw new Error('Expected a versioned agent launch target');
+      }
       const now = '2026-07-25T12:00:00.000Z';
       const request = {
         schemaVersion: 'admission-request/v1',
         idempotencyKey: `sha256:${'a'.repeat(64)}`,
-        source: 'direct',
+        source: input.source ?? 'direct',
         taskId: input.taskId,
         rootTaskId: input.rootTaskId ?? input.taskId,
         workspaceId: input.workspaceId,
@@ -800,7 +872,7 @@ describe('ClawdbotAgentService Codex providers', () => {
         revision: 1,
         state: 'queued',
         enqueueSequence: 1,
-        agent: queue.agent,
+        target: queue.target,
         attemptId: queue.attemptId,
         request,
         policies: [],
@@ -882,7 +954,9 @@ describe('ClawdbotAgentService Codex providers', () => {
       admission
     );
 
-    const queued = await service.startAgent(task.id, 'codex');
+    const queued = await service.startAgent(task.id, 'codex', {
+      commitPolicy: 'forbidden',
+    });
     expect(queued).toMatchObject({
       taskId: task.id,
       status: 'queued',
@@ -892,6 +966,17 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
     expect(admission.bindAttempt).not.toHaveBeenCalled();
     expect(task.attempt).toBeUndefined();
+    expect(admission.admitOrQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'direct' }),
+      expect.objectContaining({
+        target: expect.objectContaining({
+          kind: 'agent-launch',
+          agent: 'codex',
+          source: 'direct',
+          options: { commitPolicy: 'forbidden' },
+        }),
+      })
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     vi.mocked(admission.claimNextQueued).mockReset();
@@ -904,7 +989,15 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(admission.markQueueDispatched).toHaveBeenCalledTimes(1);
     expect(mockSpawn).toHaveBeenCalledTimes(1);
     expect(task.attempt?.id).toBe(claim?.entry.attemptId);
+    expect(task.attempt?.taskEnvelope?.commitPolicy).toBe('forbidden');
     await waitFor(() => expect(task.attempt?.status).toBe('complete'));
+    expect(mockTelemetryEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'run.started',
+        admissionSource: 'direct',
+        admissionOutcome: 'queued-dispatch',
+      })
+    );
   });
 
   it(
@@ -931,8 +1024,13 @@ describe('ClawdbotAgentService Codex providers', () => {
           budgetRequest: expect.objectContaining({ fanOut: 1, retries: 0 }),
         }),
         expect.objectContaining({
-          agent: 'codex',
           attemptId: status.attemptId,
+          target: expect.objectContaining({
+            kind: 'agent-launch',
+            agent: 'codex',
+            source: 'direct',
+            options: {},
+          }),
         })
       );
       expect(status.runLaunchManifest).toMatchObject({
@@ -1034,6 +1132,8 @@ describe('ClawdbotAgentService Codex providers', () => {
       expect(mockTelemetryEmit).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'run.started',
+          admissionSource: 'direct',
+          admissionOutcome: 'admitted',
           harnessSupport: expect.objectContaining({
             profileId: 'openai-codex-cli',
             adapterId: 'codex-cli',
@@ -3679,7 +3779,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('blocks a non-reconstructable launch before attempt persistence when admission is overloaded', async () => {
+  it('fails closed before attempt persistence when universal admission returns overload', async () => {
     const admit = vi.fn().mockResolvedValue({
       schemaVersion: 'admission-decision/v1',
       outcome: 'retryable-overload',
@@ -3707,7 +3807,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       reason: 'Active reservations currently consume the configured capacity.',
       decidedAt: '2026-07-25T10:00:00.000Z',
     });
-    const admission = { admit } as unknown as AdmissionControlService;
+    const admission = { admitOrQueue: admit } as unknown as AdmissionControlService;
     const service = testableService(
       tmpDir,
       undefined,

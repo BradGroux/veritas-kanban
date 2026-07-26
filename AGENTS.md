@@ -193,6 +193,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   whose built-in type and command both identify `codex` or `hermes` may infer a
   provider during migration; provider-less or profile/adapter-mismatched records
   fail closed before an attempt is created.
+- Route direct, profile, conversation, provider-handoff, child-agent, retry,
+  fallback, scheduled, watcher, and workflow launches through the shared
+  admission controller. A `queued` response means Veritas durably accepted
+  ownership; harnesses must not submit a duplicate or create a hidden
+  provider-side queue. Provider adapters require
+  `provider-admission-evidence/v1` before dispatch.
 - Phase authority uses the versioned contracts in
   `shared/src/types/phase-capability.types.ts`. Compile parent, phase, agent
   profile, sandbox, tool-catalog, and launch-policy authority only through

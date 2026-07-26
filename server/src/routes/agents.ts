@@ -179,6 +179,7 @@ const conversationTurnSchema = z
     sourceAttemptId: z.string().trim().min(1).max(120),
     message: z.string().trim().min(1).max(20_000),
     forkTurnId: z.string().trim().min(1).max(240).optional(),
+    idempotencyKey: z.string().trim().min(8).max(240).optional(),
     profileId: AgentTypeSchema.optional(),
     overrideReason: z.string().trim().min(8).max(1000).optional(),
     sandboxPresetId: z.string().trim().min(1).max(80).optional(),
@@ -534,7 +535,7 @@ router.post(
   asyncHandler(async (req, res) => {
     let body: z.infer<typeof conversationFreshSchema>;
     try {
-      body = conversationFreshSchema.parse(req.body);
+      body = conversationFreshSchema.parse(withRequestIdempotencyKey(req, req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);
@@ -558,7 +559,7 @@ router.post(
   '/:taskId/conversation/resume',
   requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
-    const body = parseConversationTurn(req.body);
+    const body = parseConversationTurn(withRequestIdempotencyKey(req, req.body));
     if (body.forkTurnId) {
       throw new ValidationError('Resume cannot specify forkTurnId');
     }
@@ -577,7 +578,7 @@ router.post(
   '/:taskId/conversation/follow-up',
   requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
-    const body = parseConversationTurn(req.body);
+    const body = parseConversationTurn(withRequestIdempotencyKey(req, req.body));
     if (body.forkTurnId) {
       throw new ValidationError('Follow-up cannot specify forkTurnId');
     }
@@ -596,7 +597,7 @@ router.post(
   '/:taskId/conversation/fork',
   requireLocalAgentCapability,
   asyncHandler(async (req, res) => {
-    const body = parseConversationTurn(req.body);
+    const body = parseConversationTurn(withRequestIdempotencyKey(req, req.body));
     const status = await clawdbotAgentService.forkConversation(
       req.params.taskId as string,
       body.sourceAttemptId,
@@ -857,6 +858,16 @@ function conversationStartOptions(
       ProviderRuntimeCapabilityId[] | undefined,
     commitPolicy: body.commitPolicy as TaskCommitPolicy | undefined,
     phase: body.phase,
+    admissionIdempotencyKey: body.idempotencyKey,
+  };
+}
+
+function withRequestIdempotencyKey(req: AuthenticatedRequest, input: unknown): unknown {
+  const headerIdempotencyKey = req.get('x-idempotency-key')?.trim();
+  if (!headerIdempotencyKey) return input;
+  return {
+    ...(typeof input === 'object' && input !== null ? input : {}),
+    idempotencyKey: headerIdempotencyKey,
   };
 }
 

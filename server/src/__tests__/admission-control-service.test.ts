@@ -162,6 +162,74 @@ describe('AdmissionControlService', () => {
     });
   });
 
+  it('queues every provider-neutral agent launch source through one target contract', async () => {
+    const repository = await repositoryFor('file');
+    const service = createService(
+      repository,
+      configuredSettings({ global: { concurrentRuns: 1 } })
+    );
+    const active = await service.admit(request('task-source-blocker'));
+    expect(active.outcome).toBe('admitted');
+
+    const sources = ['direct', 'conversation', 'recovery', 'fallback', 'child-agent'] as const;
+    for (const source of sources) {
+      const options =
+        source === 'conversation'
+          ? {
+              overrideReason: 'Private operator justification',
+              conversation: {
+                mode: 'resume' as const,
+                intent: 'follow-up' as const,
+                sourceAttemptId: 'attempt-private-parent',
+                message: 'Private queued conversation message',
+              },
+            }
+          : {};
+      const decision = await service.admitOrQueue(
+        {
+          ...request(`task-source-${source}`),
+          source,
+        },
+        {
+          attemptId: `attempt-source-${source}`,
+          target: {
+            kind: 'agent-launch',
+            agent: 'codex',
+            source,
+            options,
+          },
+        }
+      );
+      expect(decision).toMatchObject({
+        outcome: 'queued',
+        request: { source },
+        queueEntry: {
+          target: {
+            kind: 'agent-launch',
+            agent: 'codex',
+            source,
+          },
+        },
+      });
+    }
+
+    const inspection = await service.inspectQueue({ limit: 10 });
+    expect(inspection.entries).toHaveLength(sources.length);
+    expect(inspection.entries).toEqual(
+      expect.arrayContaining(
+        sources.map((source) =>
+          expect.objectContaining({
+            launch: expect.objectContaining({ source, target: 'agent-launch' }),
+          })
+        )
+      )
+    );
+    const serialized = JSON.stringify(inspection);
+    expect(serialized).not.toContain('Private operator justification');
+    expect(serialized).not.toContain('Private queued conversation message');
+    expect(serialized).not.toContain('attempt-private-parent');
+  });
+
   it('admits maximum-length scope identifiers without overflowing generated policy IDs', async () => {
     const repository = await repositoryFor('file');
     const service = createService(repository, configuredSettings());

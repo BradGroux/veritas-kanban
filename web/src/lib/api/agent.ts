@@ -37,6 +37,7 @@ export interface StartAgentRequest {
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
   parentAttemptId?: string;
+  idempotencyKey?: string;
 }
 
 export interface ConversationTurnRequest {
@@ -49,6 +50,7 @@ export interface ConversationTurnRequest {
   budget?: AgentBudgetPolicy;
   requiredRuntimeCapabilities?: ProviderRuntimeCapabilityId[];
   commitPolicy?: TaskCommitPolicy;
+  idempotencyKey?: string;
 }
 
 export const worktreeApi = {

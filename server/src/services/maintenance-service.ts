@@ -2,6 +2,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import {
   PHASE_AUTHORITY_DIMENSIONS,
+  type AdmissionQueueDepth,
+  type AdmissionQueueInspectionEntry,
   type PhaseCapabilityEvidence,
   type MaintenanceCleanupPreviewItem,
   type MaintenanceDebugBundle,
@@ -30,6 +32,7 @@ import { redactString } from '../lib/redact.js';
 import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import { getStorage } from '../storage/index.js';
 import { getRunPhaseAuthorityService } from './run-phase-authority-service.js';
+import { getAdmissionControlService } from './admission-control-service.js';
 
 interface DirectoryStats {
   bytes: number;
@@ -45,6 +48,7 @@ interface LogSourceDefinition {
 
 const MAX_TAIL_LINES = 500;
 const MAX_PHASE_DIAGNOSTIC_RUNS = 200;
+const MAX_ADMISSION_QUEUE_DIAGNOSTICS = 200;
 
 interface PhaseAuthorityDiagnosticExport {
   generatedAt: string;
@@ -54,6 +58,16 @@ interface PhaseAuthorityDiagnosticExport {
 }
 
 type PhaseAuthorityDiagnosticCollector = () => Promise<PhaseAuthorityDiagnosticExport>;
+
+interface AdmissionQueueDiagnosticExport {
+  generatedAt: string;
+  status: 'ok' | 'unavailable';
+  truncated: boolean;
+  depth?: AdmissionQueueDepth;
+  entries: AdmissionQueueInspectionEntry[];
+}
+
+type AdmissionQueueDiagnosticCollector = () => Promise<AdmissionQueueDiagnosticExport>;
 
 const MAINTENANCE_CONTENT_REDACTIONS: [RegExp, string][] = [
   [
@@ -76,7 +90,8 @@ const MAINTENANCE_CONTENT_REDACTIONS: [RegExp, string][] = [
 
 export class MaintenanceService {
   constructor(
-    private readonly collectPhaseAuthority: PhaseAuthorityDiagnosticCollector = collectPhaseAuthorityDiagnostics
+    private readonly collectPhaseAuthority: PhaseAuthorityDiagnosticCollector = collectPhaseAuthorityDiagnostics,
+    private readonly collectAdmissionQueue: AdmissionQueueDiagnosticCollector = collectAdmissionQueueDiagnostics
   ) {}
 
   async buildSummary(): Promise<MaintenanceSummary> {
@@ -261,6 +276,7 @@ export class MaintenanceService {
 
     const summary = await this.buildSummary();
     const phaseAuthority = await this.collectPhaseAuthority();
+    const admissionQueue = await this.collectAdmissionQueue();
     const logTails: MaintenanceLogTail[] = [];
     for (const source of summary.logs.filter((entry) => entry.exists)) {
       const tail = await this.tailLog(source.id, 200);
@@ -279,6 +295,7 @@ export class MaintenanceService {
         'lifecycle',
         'work-products',
         'phase-authority',
+        'admission-queue',
         'redacted-log-tails',
       ],
       excludedCategories: [
@@ -294,6 +311,7 @@ export class MaintenanceService {
         'Bearer tokens, API keys, JWTs, opaque tokens, and long hashes are replaced.',
         'Local home, project, storage, runtime, and log paths are replaced with redacted path labels.',
         'Log files are included as redacted tails only, capped at 200 lines per source.',
+        'Admission queue diagnostics use the bounded inspection projection and never include durable replay targets.',
       ],
       files: summary.logs.map((source) => this.redactLogSource(source)),
     };
@@ -306,6 +324,11 @@ export class MaintenanceService {
     await fs.writeFile(
       path.join(bundleDir, 'phase-authority.json'),
       JSON.stringify(this.redactMaintenanceValue(phaseAuthority), null, 2),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(bundleDir, 'admission-queue.json'),
+      JSON.stringify(this.redactMaintenanceValue(admissionQueue), null, 2),
       'utf-8'
     );
     await fs.writeFile(
@@ -655,6 +678,28 @@ export class MaintenanceService {
     return redacted
       .replace(/\/Users\/[^/\s]+\/[^\s)]+/g, '[redacted-local-path]')
       .replace(/[A-Z]:\\Users\\[^\\\s]+\\[^\s)]+/g, '[redacted-local-path]');
+  }
+}
+
+async function collectAdmissionQueueDiagnostics(): Promise<AdmissionQueueDiagnosticExport> {
+  try {
+    const queue = await getAdmissionControlService().inspectQueue({
+      limit: MAX_ADMISSION_QUEUE_DIAGNOSTICS,
+    });
+    return {
+      generatedAt: queue.generatedAt,
+      status: 'ok',
+      truncated: queue.pagination.hasMore || queue.pagination.snapshotTruncated,
+      depth: queue.depth,
+      entries: queue.entries,
+    };
+  } catch {
+    return {
+      generatedAt: new Date().toISOString(),
+      status: 'unavailable',
+      truncated: false,
+      entries: [],
+    };
   }
 }
 

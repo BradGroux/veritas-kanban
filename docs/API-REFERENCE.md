@@ -2516,7 +2516,8 @@ provider identity:
   "message": "Continue from the verified history",
   "forkTurnId": "turn_7",
   "phase": "verify",
-  "commitPolicy": "allowed"
+  "commitPolicy": "allowed",
+  "idempotencyKey": "operator-generated-key"
 }
 ```
 
@@ -2527,6 +2528,12 @@ operation. Unsupported steering fails with an explicit capability error, and
 any recorded-only fallback returns `delivered: false` with a reason. Veritas
 does not claim that recording a message or writing process stdin reached the
 provider.
+
+Fresh, resume, follow-up, and fork launches accept `idempotencyKey` in the JSON
+body or `X-Idempotency-Key` in the request headers; the header takes precedence.
+Veritas hashes the value before persistence. Repeating an admitted or queued
+request with the same key returns the same durable admission outcome instead of
+launching duplicate work.
 
 Resume, follow-up, and fork bind the exact source attempt as the phase parent.
 An optional `phase` may narrow that authority but cannot widen it. Omitting the
@@ -4225,8 +4232,9 @@ over the equivalent JSON `idempotencyKey` field and lets a retry reuse the same
 reservation without launching a second attempt. Veritas persists only its
 SHA-256 identity, never the supplied value.
 
-When capacity is temporarily exhausted, a reconstructable fresh direct start
-returns `201` with `status: "queued"` instead of `ADMISSION_OVERLOAD`:
+When capacity is temporarily exhausted, every provider-neutral agent launch
+returns `201` with `status: "queued"` instead of creating a provider-specific
+queue or a partial attempt:
 
 ```json
 {
@@ -4242,31 +4250,43 @@ returns `201` with `status: "queued"` instead of `ADMISSION_OVERLOAD`:
 ```
 
 The response means Veritas durably accepted ownership. Clients and harnesses
-must not create a second launch. Starts containing a conversation message,
-profile, readiness override, sandbox or budget override, explicit runtime
-capability, commit policy, phase, recovery, or parent attempt are not
-reconstructable from durable task configuration and continue to fail closed
-with `ADMISSION_OVERLOAD`. Queue bounds and retry behavior are configured under
-`features.admission.queue`. Queue inspection is available through
-`GET /api/v1/admission/queue` and `GET /api/v1/admission/queue/:id`;
-reservation inspection remains unchanged.
+must not create a second launch. The versioned `agent-launch` target preserves
+the bounded provider-neutral options required to reconstruct profiles,
+readiness overrides, sandbox and budget overrides, runtime capability
+requirements, commit policy, phase, conversation resume/follow-up/fork,
+provider handoff, child-agent, retry, and fallback launches. It never stores
+credentials, process handles, leases, or raw idempotency keys. Queue
+inspection, telemetry, Operations, and support bundles expose only redacted
+launch-source and admission evidence; prompts, messages, override text, tool
+arguments, and the full durable target remain internal. Queue inspection is
+available through `GET /api/v1/admission/queue` and
+`GET /api/v1/admission/queue/:id`; reservation inspection remains unchanged.
 
-Workflow roots and provider-backed steps use the same durable queue internally.
-Their queue targets preserve the workflow version, run revision, task and step
-identity, retry or fallback sequence, execution-tree edge, selected provider
-and host, and immutable runtime and phase digests. Queue records never copy
-workflow context, prompts, tool arguments, or credentials. Before dispatch,
-Veritas revalidates the persisted run, workflow version, step state, provider
-runtime, host, phase authority, budgets, and reservation evidence. Drift
-terminalizes the queue entry and run without calling the provider.
+Scheduled workflows retain `source: "scheduled"` from the root reservation
+through normal provider steps. Queue-monitor continuations retain
+`source: "watcher"`. Retry and fallback steps use their specific replacement
+source while preserving the same root objective and causal parent edge. Queue
+bounds and retry behavior are configured under `features.admission.queue`.
 
-A single versioned scheduler orders direct, workflow-root, and workflow-step
-entries using explicit task priority, bounded age promotion, workspace turns,
-and stable enqueue identity. Capacity-blocked entries remain queued while the
-next compatible entry is evaluated. The selected entry persists redacted
-priority, fairness, readiness, limiting-scope, and conditional-start evidence;
-provider or host metadata cannot override this ordering. Scheduler bounds live
-under `features.admission.queue.scheduler`.
+Workflow roots, provider-backed steps, and all agent launches use the same
+durable queue internally. Workflow queue targets preserve the workflow version,
+run revision, task and step identity, retry or fallback sequence,
+execution-tree edge, selected provider and host, and immutable runtime and
+phase digests. They never copy workflow context, prompts, tool arguments, or
+credentials. Agent-launch targets may retain the bounded operator input needed
+for exact replay, but public diagnostics always omit it. Before dispatch,
+Veritas revalidates provider, host, phase authority, budgets, root objective,
+parent edge, and reservation evidence. Drift terminalizes the queue entry
+without calling the provider.
+
+A single versioned scheduler orders agent-launch, legacy direct,
+workflow-root, and workflow-step entries using explicit task priority, bounded
+age promotion, workspace turns, and stable enqueue identity. Capacity-blocked
+entries remain queued while the next compatible entry is evaluated. The
+selected entry persists redacted priority, fairness, readiness,
+limiting-scope, and conditional-start evidence; provider or host metadata
+cannot override this ordering. Scheduler bounds live under
+`features.admission.queue.scheduler`.
 
 A pre-dispatch failure releases capacity and may requeue with bounded backoff.
 Once the queue entry is durably `dispatched`, workflow recovery owns the run.
@@ -5477,7 +5497,12 @@ sensitive categories, redaction rules, and redacted file metadata. The
 `phase-authority.json` member includes at most 200 phase-bound runs with phase
 identity, authority scope counts, source kinds, transition expansion counts,
 and completion bindings. Exact authority scopes, paths, credential
-references, and full digests are not exported.
+references, and full digests are not exported. The `admission-queue.json`
+member includes at most 200 entries from the same bounded inspection projection
+used by the API, CLI, and Operations UI. It identifies launch source, queue
+state, readiness, retry posture, and redacted navigation keys without exporting
+the durable replay target, prompts, messages, override text, credentials, or
+raw idempotency keys.
 
 #### SQLite Export and Import
 
