@@ -80,7 +80,7 @@ describe('ACP v1 stdio provider adapter', () => {
       protocolVersion: 'acp/v1',
       providerVersion: 'VK ACP fixture 1.3.0',
       providerBuild: expect.stringMatching(/^acp-v1:sha256:[a-f0-9]{64}$/),
-      probeRevision: 15,
+      probeRevision: 16,
     });
     expect(manifest.capabilities.find((capability) => capability.id === 'run.resume')?.state).toBe(
       'supported'
@@ -133,7 +133,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'buzz-agent 0.1.0',
       providerBuild: expect.stringMatching(/profile:buzz-agent@1:sha256:/),
-      probeRevision: 15,
+      probeRevision: 16,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(BUZZ_AGENT_TESTED_RELEASE),
@@ -356,7 +356,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: 'Copilot 1.0.74',
       providerBuild: expect.stringMatching(/profile:github-copilot-cli@1:sha256:/),
-      probeRevision: 15,
+      probeRevision: 16,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(COPILOT_ACP_TESTED_RELEASE),
@@ -515,7 +515,7 @@ describe('ACP v1 stdio provider adapter', () => {
       adapter: 'acp-stdio',
       providerVersion: `Grok Build ${GROK_BUILD_ACP_VERSION}`,
       providerBuild: expect.stringMatching(/profile:grok-build@1:sha256:/),
-      probeRevision: 15,
+      probeRevision: 16,
       probe: {
         diagnostics: expect.arrayContaining([
           expect.stringContaining(GROK_BUILD_TESTED_RELEASE),

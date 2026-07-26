@@ -19,11 +19,13 @@ const LOOPBACK_HOST = '127.0.0.1';
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_CONNECTIONS = 64;
-const PROXY_ENVIRONMENT_KEYS = [
+export const RUN_EGRESS_PROXY_ENVIRONMENT_KEYS = [
   'HTTP_PROXY',
   'HTTPS_PROXY',
+  'ALL_PROXY',
   'http_proxy',
   'https_proxy',
+  'all_proxy',
   'NO_PROXY',
   'no_proxy',
 ] as const;
@@ -57,7 +59,7 @@ export interface StartRunEgressGatewayInput {
 
 export interface RunEgressGatewayHandle {
   gatewayId: string;
-  environment: Record<(typeof PROXY_ENVIRONMENT_KEYS)[number], string>;
+  environment: Record<(typeof RUN_EGRESS_PROXY_ENVIRONMENT_KEYS)[number], string>;
   evidence: RunEgressGatewayEvidence;
   stop(): Promise<RunEgressGatewayEvidence>;
 }
@@ -177,8 +179,10 @@ export class RunEgressGatewayService {
     const environment: ActiveGateway['environment'] = {
       HTTP_PROXY: proxyUrl,
       HTTPS_PROXY: proxyUrl,
+      ALL_PROXY: proxyUrl,
       http_proxy: proxyUrl,
       https_proxy: proxyUrl,
+      all_proxy: proxyUrl,
       NO_PROXY: '',
       no_proxy: '',
     };
@@ -190,7 +194,7 @@ export class RunEgressGatewayService {
       policyHash: input.policy.policyHash,
       state: 'enforced',
       protocols: ['http', 'connect', 'ws'],
-      proxyEnvironmentKeys: [...PROXY_ENVIRONMENT_KEYS],
+      proxyEnvironmentKeys: [...RUN_EGRESS_PROXY_ENVIRONMENT_KEYS],
       startedAt: this.now().toISOString(),
     };
     let stopPromise: Promise<RunEgressGatewayEvidence> | undefined;
@@ -244,8 +248,10 @@ export class RunEgressGatewayService {
     active.environment = {
       HTTP_PROXY: '',
       HTTPS_PROXY: '',
+      ALL_PROXY: '',
       http_proxy: '',
       https_proxy: '',
+      all_proxy: '',
       NO_PROXY: '',
       no_proxy: '',
     };
@@ -569,4 +575,26 @@ let service: RunEgressGatewayService | undefined;
 export function getRunEgressGatewayService(): RunEgressGatewayService {
   service ??= new RunEgressGatewayService();
   return service;
+}
+
+export function runEgressPolicyRequiresGateway(policy: RunEgressPolicy): boolean {
+  if (
+    policy.defaultEgress === 'deny' &&
+    policy.allowedHosts.length === 0 &&
+    !policy.allowApprovals
+  ) {
+    return false;
+  }
+  if (
+    policy.defaultEgress === 'allow' &&
+    policy.deniedHosts.length === 0 &&
+    policy.allowedMethods.length === 0 &&
+    policy.allowedPathPrefixes.length === 0 &&
+    !policy.blockPrivateNetwork &&
+    !policy.blockMetadataEndpoints &&
+    !policy.blockLoopback
+  ) {
+    return false;
+  }
+  return true;
 }

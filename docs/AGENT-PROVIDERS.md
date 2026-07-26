@@ -65,7 +65,7 @@ Readiness runs bounded `claude --version`, `claude auth status`, and
 `claude agents --json` probes without a shell. The auth status probe is useful
 diagnostic evidence, but only the explicit bare-mode environment satisfies
 launch authentication. The runtime profile requires an exact
-`2.1.218 (Claude Code)` version match and probe revision 15; version or build
+`2.1.218 (Claude Code)` version match and probe revision 16; version or build
 drift invalidates conformance evidence.
 
 Claude's stream is consumed as bounded JSONL. Partial text/thinking, tool
@@ -192,7 +192,7 @@ starts it without a shell in the assigned task worktree.
 Before changing attempt state, Veritas starts a bounded probe process and sends
 ACP `initialize` with protocol version `1`. The returned agent name, version,
 capabilities, and a deterministic capability digest become
-`provider-runtime-manifest/v1` evidence at probe revision 15. Launch starts a
+`provider-runtime-manifest/v1` evidence at probe revision 16. Launch starts a
 fresh process and rejects capability drift before opening or prompting a
 session.
 
@@ -813,6 +813,14 @@ host cannot support them. Advisory controls continue with warnings and a
 governance trace. Settings also includes a dry-run panel that shows effective
 sandbox mode, network access, environment allowlist, unsupported controls, and
 the trace ID.
+
+Selective network policies for local task and workflow providers start an
+authenticated, run-scoped loopback gateway before dispatch. Durable launch and
+gateway evidence records only the injected proxy key names and policy digest;
+tokens and proxy URLs are never persisted. HTTP, HTTPS CONNECT, and plaintext WebSocket
+transports use the evaluated DNS address, and the gateway is stopped during
+terminal cleanup. OpenClaw is provider-managed and cannot receive this local
+boundary, so a required fine-grained policy blocks its launch.
 
 Local ACP, Claude Code, Codex app-server, Codex CLI, and Hermes processes use a
 version-bound `codex sandbox` wrapper when its credential-free conformance

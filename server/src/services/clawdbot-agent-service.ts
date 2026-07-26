@@ -22,6 +22,13 @@ import { getTelemetryService } from './telemetry-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
 import { getSandboxPolicyService, type SandboxPolicyService } from './sandbox-policy-service.js';
+import {
+  getRunEgressGatewayService,
+  RUN_EGRESS_PROXY_ENVIRONMENT_KEYS,
+  runEgressPolicyRequiresGateway,
+  type RunEgressGatewayHandle,
+  type RunEgressGatewayService,
+} from './run-egress-gateway-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import {
   AgentHealthService,
@@ -462,6 +469,7 @@ interface PendingAgent {
   acpControl?: AcpStdioControl;
   runToolBridge?: RunToolBridgeLaunch;
   filesystemSandboxPlan?: FilesystemSandboxLaunchPlan;
+  egressGateway?: RunEgressGatewayHandle;
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
   openclawSessionKey?: string;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
@@ -565,6 +573,7 @@ export class ClawdbotAgentService {
     'compile' | 'activate' | 'cleanup' | 'wrap'
   >;
   private sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'>;
+  private runEgressGateway: Pick<RunEgressGatewayService, 'start' | 'stopRun'>;
   private workspaceExecutionTrust: Pick<
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
@@ -602,7 +611,11 @@ export class ClawdbotAgentService {
     phaseAuthority = new PhaseLaunchAuthorityService(),
     phaseTransitions?: Pick<PhaseTransitionService, 'getCurrent'> &
       Partial<Pick<PhaseTransitionService, 'list'>>,
-    admission: AdmissionControlService = getAdmissionControlService()
+    admission: AdmissionControlService = getAdmissionControlService(),
+    runEgressGateway: Pick<
+      RunEgressGatewayService,
+      'start' | 'stopRun'
+    > = getRunEgressGatewayService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -629,6 +642,7 @@ export class ClawdbotAgentService {
     this.runRecoveryPolicy = runRecoveryPolicy;
     this.filesystemSandbox = filesystemSandbox;
     this.sandboxPolicies = sandboxPolicies;
+    this.runEgressGateway = runEgressGateway;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -2920,6 +2934,62 @@ export class ClawdbotAgentService {
         runLaunchManifest.workspaceTrust
       );
       await this.filesystemSandbox.activate(filesystemSandboxPlan);
+      const egressPolicy = trustSandbox.policy.effective.networkPolicy;
+      if (egressPolicy && runEgressPolicyRequiresGateway(egressPolicy)) {
+        if (provider === 'openclaw' && trustSandbox.policy.preset.enforcement === 'required') {
+          throw new ConflictError(
+            'OpenClaw cannot enforce a Veritas run-scoped egress gateway for this preset.',
+            {
+              provider,
+              presetId: trustSandbox.policy.preset.id,
+              policyHash: egressPolicy.policyHash,
+              remediation:
+                'Use a local provider adapter with gateway enforcement or select a preset that does not require fine-grained egress controls.',
+            }
+          );
+        }
+        if (provider === 'openclaw') {
+          this.recordTraceStep(attemptId, 'execute', {
+            eventType: 'network.egress.gateway-bypass-advisory',
+            policyHash: egressPolicy.policyHash,
+            provider,
+            presetId: trustSandbox.policy.preset.id,
+          });
+        } else {
+          const pending = pendingAgents.get(taskId);
+          if (!pending || pending.attemptId !== attemptId) {
+            throw new ConflictError('Run egress gateway no longer matches the pending launch.', {
+              taskId,
+              attemptId,
+            });
+          }
+          pending.egressGateway = await this.runEgressGateway.start({
+            runId: attemptId,
+            policy: egressPolicy,
+            onDecision: (event) => {
+              this.recordTraceStep(attemptId, 'execute', {
+                eventType: 'network.egress.decision',
+                gatewayId: event.gatewayId,
+                runKey: event.runKey,
+                occurredAt: event.occurredAt,
+                policyHash: event.decision.policyHash,
+                protocol: event.decision.protocol,
+                hostKey: event.decision.hostKey,
+                port: event.decision.port,
+                method: event.decision.method,
+                decision: event.decision.decision,
+                reason: event.decision.reason,
+                blockedAddressClass: event.decision.blockedAddressClass,
+                approvalEligible: event.decision.approvalEligible,
+              });
+            },
+          });
+          this.recordTraceStep(attemptId, 'execute', {
+            eventType: 'network.egress.gateway-started',
+            evidence: pending.egressGateway.evidence,
+          });
+        }
+      }
       const providerAdmission: AgentProviderAdmissionEvidence = {
         schemaVersion: 'provider-admission-evidence/v1',
         source: admissionSource,
@@ -2939,7 +3009,7 @@ export class ClawdbotAgentService {
         startedAt,
         emitter,
         attempt,
-        sandboxPolicy: sandboxPolicy.result,
+        sandboxPolicy: trustSandbox.policy,
         runLaunchManifest,
         conversation,
         admission: providerAdmission,
@@ -4093,6 +4163,7 @@ export class ClawdbotAgentService {
       });
     } finally {
       this.runToolBridge.revokeRun(taskId, attemptId);
+      await this.runEgressGateway.stopRun(attemptId);
     }
   }
 
@@ -5653,13 +5724,17 @@ export class ClawdbotAgentService {
       command: launch.command,
       args: launch.args,
       cwd: launch.cwd,
-      environment: { ...process.env, ...launch.environment },
+      environment: this.withRunEgressEnvironment(pending, {
+        ...process.env,
+        ...launch.environment,
+      }),
       environmentKeys: [
         ...(sandboxPolicy?.effective.envPassthrough ?? []),
         ...toolEnvironmentKeys,
         ...supportProfile.launch.environmentAllowlist,
         ...supportProfile.launch.credentialAllowlist,
         ...Object.keys(launch.environment),
+        ...Object.keys(pending.egressGateway?.environment ?? {}),
       ],
       runtimeProfileId: supportProfile.id,
       onSpawn: async (child) => {
@@ -5979,7 +6054,10 @@ export class ClawdbotAgentService {
     );
     const child = spawn(launch.command, launch.args, {
       cwd: launch.cwd,
-      env: { ...launchEnvironment, ...launch.environment },
+      env: this.withRunEgressEnvironment(pending, {
+        ...launchEnvironment,
+        ...launch.environment,
+      }),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -6838,13 +6916,13 @@ export class ClawdbotAgentService {
     const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
     const child = spawn(launch.command, launch.args, {
       cwd: launch.cwd,
-      env: {
+      env: this.withRunEgressEnvironment(pending, {
         ...buildSafeClaudeCodeEnv(process.env, [
           ...(sandboxPolicy?.effective.envPassthrough ?? []),
           ...toolEnvironmentKeys,
         ]),
         ...launch.environment,
-      },
+      }),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -7261,10 +7339,10 @@ export class ClawdbotAgentService {
     const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
     const child = spawn(launch.command, launch.args, {
       cwd: launch.cwd,
-      env: {
+      env: this.withRunEgressEnvironment(pending, {
         ...buildSafeHermesEnv(process.env, sandboxPolicy?.effective.envPassthrough),
         ...launch.environment,
-      },
+      }),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -7449,7 +7527,10 @@ export class ClawdbotAgentService {
     );
     const child = spawn(launch.command, launch.args, {
       cwd: launch.cwd,
-      env: { ...launchEnvironment, ...launch.environment },
+      env: this.withRunEgressEnvironment(pending, {
+        ...launchEnvironment,
+        ...launch.environment,
+      }),
       shell: false,
       detached: process.platform !== 'win32',
     });
@@ -7708,13 +7789,13 @@ export class ClawdbotAgentService {
     const { Codex } = await import('@openai/codex-sdk');
     const codex = new Codex({
       codexPathOverride: sdkExecutable.codexPathOverride,
-      env: {
+      env: this.withRunEgressEnvironment(pending, {
         ...this.runToolBridge.launchEnvironment(
           buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
           pending.runToolBridge
         ),
         ...pending.filesystemSandboxPlan?.environment,
-      },
+      }),
       ...(pending.runToolBridge
         ? {
             config: this.runToolBridge.codexConfig(pending.runToolBridge) as NonNullable<
@@ -9972,17 +10053,38 @@ export class ClawdbotAgentService {
     };
   }
 
+  private withRunEgressEnvironment(
+    pending: PendingAgent,
+    environment: NodeJS.ProcessEnv
+  ): Record<string, string> {
+    return Object.fromEntries(
+      Object.entries({
+        ...environment,
+        ...pending.egressGateway?.environment,
+      }).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    );
+  }
+
   private buildRunLaunchEnvironment(
     provider: ExecutableAgentProvider,
     sandboxPolicy: SandboxPolicyDryRunResult,
     agentConfig?: AgentConfig
   ): Pick<RunLaunchRuntime, 'environmentKeys' | 'credentialReferences'> {
+    const egressEnvironmentKeys =
+      provider !== 'openclaw' &&
+      sandboxPolicy.effective.networkPolicy &&
+      runEgressPolicyRequiresGateway(sandboxPolicy.effective.networkPolicy)
+        ? [...RUN_EGRESS_PROXY_ENVIRONMENT_KEYS]
+        : [];
     if (provider === 'codex-cli' || provider === 'codex-sdk' || provider === 'codex-app-server') {
-      const environmentKeys = Object.keys(
-        provider === 'codex-app-server'
-          ? buildSafeCodexAppServerEnv(process.env, sandboxPolicy.effective.envPassthrough)
-          : buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough)
-      );
+      const environmentKeys = [
+        ...Object.keys(
+          provider === 'codex-app-server'
+            ? buildSafeCodexAppServerEnv(process.env, sandboxPolicy.effective.envPassthrough)
+            : buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough)
+        ),
+        ...egressEnvironmentKeys,
+      ];
       return {
         environmentKeys,
         credentialReferences: [
@@ -9994,9 +10096,10 @@ export class ClawdbotAgentService {
       };
     }
     if (provider === 'hermes-cli') {
-      const environmentKeys = Object.keys(
-        buildSafeHermesEnv(process.env, sandboxPolicy.effective.envPassthrough)
-      );
+      const environmentKeys = [
+        ...Object.keys(buildSafeHermesEnv(process.env, sandboxPolicy.effective.envPassthrough)),
+        ...egressEnvironmentKeys,
+      ];
       return {
         environmentKeys,
         credentialReferences: [
@@ -10008,9 +10111,10 @@ export class ClawdbotAgentService {
       };
     }
     if (provider === 'claude-code') {
-      const environmentKeys = Object.keys(
-        buildSafeClaudeCodeEnv(process.env, sandboxPolicy.effective.envPassthrough)
-      );
+      const environmentKeys = [
+        ...Object.keys(buildSafeClaudeCodeEnv(process.env, sandboxPolicy.effective.envPassthrough)),
+        ...egressEnvironmentKeys,
+      ];
       const credentialKeys = new Set<string>(CLAUDE_CODE_CREDENTIAL_ENV_KEYS);
       return {
         environmentKeys,
@@ -10026,12 +10130,15 @@ export class ClawdbotAgentService {
         ...(supportProfile?.launch.environmentAllowlist ?? []),
         ...(supportProfile?.launch.credentialAllowlist ?? []),
       ];
-      const environmentKeys = Object.keys(
-        buildSafeAcpEnv(process.env, [
-          ...sandboxPolicy.effective.envPassthrough,
-          ...profileEnvironmentKeys,
-        ])
-      );
+      const environmentKeys = [
+        ...Object.keys(
+          buildSafeAcpEnv(process.env, [
+            ...sandboxPolicy.effective.envPassthrough,
+            ...profileEnvironmentKeys,
+          ])
+        ),
+        ...egressEnvironmentKeys,
+      ];
       const credentialKeys = new Set(supportProfile?.launch.credentialAllowlist ?? []);
       return {
         environmentKeys,
