@@ -408,6 +408,236 @@ describe('AdmissionControlService', () => {
 });
 
 describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (backend) => {
+  it('cancels a leased queue entry and releases its reservation idempotently', async () => {
+    const repository = await repositoryFor(backend);
+    const service = createService(
+      repository,
+      configuredSettings({ global: { concurrentRuns: 1 } })
+    );
+    const root = await service.admit(treeRequest('task-cancel-queue-root', 'node-cancel-root'));
+    await service.bindAttempt(root.reservation?.id as string, 'attempt-cancel-root');
+    const queued = await service.admitOrQueue(
+      {
+        ...treeRequest('task-cancel-queue-child', 'node-cancel-child', 'node-cancel-root'),
+        source: 'child-agent',
+      },
+      {
+        attemptId: 'attempt-cancel-child',
+        target: {
+          kind: 'agent-launch',
+          agent: 'codex',
+          source: 'child-agent',
+          options: {},
+        },
+      }
+    );
+    await service.release(root.reservation?.id as string, 'completed', 'release-cancel-queue-root');
+    const claim = await service.claimNextQueued();
+    expect(claim?.entry.id).toBe(queued.queueEntry?.id);
+
+    const cancelled = await service.cancelQueuedLaunch(claim?.entry.id as string, {
+      idempotencyKey: 'cancel-queue-entry-123',
+      reason: 'Operator cancelled this queued descendant.',
+    });
+    expect(cancelled).toMatchObject({
+      scope: 'queued-launch',
+      reservationReleased: true,
+      queueEntry: {
+        state: 'terminal',
+        terminal: {
+          code: 'QUEUE_CANCELLED',
+          idempotencyKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        },
+      },
+    });
+    expect(JSON.stringify(cancelled)).not.toContain('cancel-queue-entry-123');
+    await expect(
+      service.cancelQueuedLaunch(claim?.entry.id as string, {
+        idempotencyKey: 'cancel-queue-entry-123',
+        reason: 'Operator cancelled this queued descendant.',
+      })
+    ).resolves.toMatchObject({ queueEntry: { state: 'terminal' } });
+    await expect(
+      service.cancelQueuedLaunch(claim?.entry.id as string, {
+        idempotencyKey: 'different-cancel-queue-entry',
+        reason: 'A conflicting cancellation identity.',
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await expect(service.get(claim?.reservation.id as string)).resolves.toMatchObject({
+      state: 'released',
+      release: { reason: 'cancelled' },
+    });
+  });
+
+  it('marks a tree cancelled before draining descendants and rejects late expansion', async () => {
+    const repository = await repositoryFor(backend);
+    const service = createService(
+      repository,
+      configuredSettings({ global: { concurrentRuns: 2 } })
+    );
+    const root = await service.admit(treeRequest('task-tree-cancel-root', 'node-tree-root'));
+    await service.bindAttempt(root.reservation?.id as string, 'attempt-tree-root');
+    const child = await service.admit(
+      treeRequest('task-tree-cancel-child', 'node-tree-child', 'node-tree-root')
+    );
+    await service.bindAttempt(child.reservation?.id as string, 'attempt-tree-child');
+    const queued = await service.admitOrQueue(
+      {
+        ...treeRequest('task-tree-cancel-queued', 'node-tree-queued', 'node-tree-root'),
+        source: 'child-agent',
+      },
+      {
+        attemptId: 'attempt-tree-queued',
+        target: {
+          kind: 'agent-launch',
+          agent: 'codex',
+          source: 'child-agent',
+          options: {},
+        },
+      }
+    );
+
+    const cancelled = await service.cancelExecutionTree('objective-a', {
+      idempotencyKey: 'cancel-execution-tree-123',
+      reason: 'Operator stopped runaway expansion.',
+    });
+    expect(cancelled).toMatchObject({
+      scope: 'execution-tree',
+      rootObjectiveId: 'objective-a',
+      control: {
+        state: 'cancelled',
+        trigger: 'operator',
+        idempotencyKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      },
+      queueEntriesCancelled: 1,
+      runningAttempts: expect.arrayContaining([
+        expect.objectContaining({ attemptId: 'attempt-tree-root' }),
+        expect.objectContaining({ attemptId: 'attempt-tree-child' }),
+      ]),
+    });
+    await expect(service.getQueueEntry(queued.queueEntry?.id as string)).resolves.toMatchObject({
+      state: 'terminal',
+      terminal: { code: 'QUEUE_CANCELLED' },
+    });
+    await expect(service.getExecutionTreeControl('objective-a')).resolves.toMatchObject({
+      state: 'cancelled',
+    });
+    await expect(service.getExecutionTreeSummary('objective-a')).resolves.toMatchObject({
+      control: {
+        state: 'cancelled',
+        trigger: 'operator',
+        idempotencyKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      },
+    });
+    await expect(
+      service.admit(
+        treeRequest('task-tree-cancel-late', 'node-tree-late', 'node-tree-child', undefined, {
+          depth: 2,
+        })
+      )
+    ).resolves.toMatchObject({
+      outcome: 'terminal-policy-denial',
+      executionTreeControl: { state: 'cancelled' },
+      reservation: undefined,
+    });
+    await expect(
+      service.cancelExecutionTree('objective-a', {
+        idempotencyKey: 'different-tree-cancellation',
+        reason: 'Conflicting operator identity.',
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('serializes competing execution-tree cancellation ownership', async () => {
+    const repository = await repositoryFor(backend);
+    const settings = configuredSettings();
+    const left = createService(repository, settings, { ownerId: 'owner-cancel-left' });
+    const right = createService(repository, settings, { ownerId: 'owner-cancel-right' });
+    await left.admit(treeRequest('task-tree-cancel-race-root', 'node-tree-cancel-race-root'));
+
+    const results = await Promise.allSettled([
+      left.cancelExecutionTree('objective-a', {
+        idempotencyKey: 'cancel-tree-race-left',
+        reason: 'Left operator cancellation request.',
+      }),
+      right.cancelExecutionTree('objective-a', {
+        idempotencyKey: 'cancel-tree-race-right',
+        reason: 'Right operator cancellation request.',
+      }),
+    ]);
+
+    const fulfilled = results.filter(
+      (
+        result
+      ): result is PromiseFulfilledResult<Awaited<ReturnType<typeof left.cancelExecutionTree>>> =>
+        result.status === 'fulfilled'
+    );
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({ reason: { statusCode: 409 } });
+    await expect(right.getExecutionTreeControl('objective-a')).resolves.toMatchObject({
+      state: 'cancelled',
+      idempotencyKey: fulfilled[0]?.value.idempotencyKey,
+    });
+  });
+
+  it('continues tree cancellation when queue dispatch wins the drain race', async () => {
+    const repository = await repositoryFor(backend);
+    const service = createService(
+      repository,
+      configuredSettings({ global: { concurrentRuns: 1 } })
+    );
+    const root = await service.admit(treeRequest('task-tree-drain-root', 'node-tree-drain-root'));
+    await service.bindAttempt(root.reservation?.id as string, 'attempt-tree-drain-root');
+    const queued = await service.admitOrQueue(
+      {
+        ...treeRequest('task-tree-drain-child', 'node-tree-drain-child', 'node-tree-drain-root'),
+        source: 'child-agent',
+      },
+      {
+        attemptId: 'attempt-tree-drain-child',
+        target: {
+          kind: 'agent-launch',
+          agent: 'codex',
+          source: 'child-agent',
+          options: {},
+        },
+      }
+    );
+    await service.release(root.reservation?.id as string, 'completed', 'release-tree-drain-root');
+    const claim = await service.claimNextQueued();
+    await service.bindQueuedAttempt(
+      claim?.entry.id as string,
+      claim?.reservation.id as string,
+      claim?.entry.attemptId as string
+    );
+    const cancelQueuedLaunch = service.cancelQueuedLaunch.bind(service);
+    vi.spyOn(service, 'cancelQueuedLaunch').mockImplementationOnce(async (id, input) => {
+      await service.markQueueDispatched(id, claim?.entry.attemptId as string);
+      return cancelQueuedLaunch(id, input);
+    });
+
+    await expect(
+      service.cancelExecutionTree('objective-a', {
+        idempotencyKey: 'cancel-tree-drain-race',
+        reason: 'Operator cancelled during queue dispatch.',
+      })
+    ).resolves.toMatchObject({
+      queueEntriesCancelled: 0,
+      runningAttempts: [
+        expect.objectContaining({
+          attemptId: 'attempt-tree-drain-child',
+          reservationId: claim?.reservation.id,
+        }),
+      ],
+    });
+    await expect(service.getQueueEntry(queued.queueEntry?.id as string)).resolves.toMatchObject({
+      state: 'dispatched',
+      dispatchedAttemptId: 'attempt-tree-drain-child',
+    });
+  });
+
   it('durably queues and atomically claims a saturated direct launch', async () => {
     const repository = await repositoryFor(backend);
     const settings = configuredSettings({ global: { concurrentRuns: 1 } });

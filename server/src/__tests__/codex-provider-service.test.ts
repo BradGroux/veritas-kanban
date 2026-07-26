@@ -305,6 +305,8 @@ function testAdmissionControl(): AdmissionControlService {
     expireAbandoned: vi.fn(async () => []),
     recoverVerifiedRun: vi.fn(async () => null),
     claimNextQueued: vi.fn(async () => null),
+    assertExecutionTreeLaunchAllowed: vi.fn(async () => undefined),
+    cancelExecutionTree: vi.fn(),
   } as unknown as AdmissionControlService;
 }
 
@@ -838,6 +840,66 @@ describe('ClawdbotAgentService Codex providers', () => {
         executionTree,
       } as TaskAttempt)
     ).toThrow('Provider launch is missing required admission evidence.');
+  });
+
+  it('marks tree cancellation before interrupting each verified running attempt', async () => {
+    const admission = testAdmissionControl();
+    vi.mocked(admission.cancelExecutionTree).mockResolvedValue({
+      schemaVersion: 'execution-tree-cancellation/v1',
+      scope: 'execution-tree',
+      idempotencyKey: `sha256:${'a'.repeat(64)}`,
+      rootObjectiveId: 'objective-cancel',
+      control: {
+        schemaVersion: 'execution-tree-control/v1',
+        rootObjectiveId: 'objective-cancel',
+        state: 'cancelled',
+        trigger: 'operator',
+        reason: 'Stop runaway expansion.',
+        idempotencyKey: `sha256:${'a'.repeat(64)}`,
+        recordedAt: '2026-07-25T12:00:00.000Z',
+      },
+      queueEntriesCancelled: 2,
+      reservationsReleased: 1,
+      interruptedAttempts: 0,
+      runningAttempts: [
+        {
+          taskId: 'task-running',
+          attemptId: 'attempt-running',
+          reservationId: 'reservation-running',
+        },
+        {
+          taskId: 'task-detached',
+          attemptId: 'attempt-detached',
+          reservationId: 'reservation-detached',
+        },
+      ],
+    });
+    const service = testableService(
+      tmpDir,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      testWorkspaceExecutionTrust(),
+      admission
+    );
+    const stop = vi.spyOn(service, 'stopAgent').mockImplementation(async (taskId) => {
+      if (taskId === 'task-detached') throw new Error('Verified control unavailable');
+    });
+
+    const result = await service.cancelExecutionTree('objective-cancel', {
+      idempotencyKey: 'cancel-execution-tree-123',
+      reason: 'Stop runaway expansion.',
+    });
+
+    expect(admission.cancelExecutionTree).toHaveBeenCalledBefore(stop);
+    expect(stop).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      interruptedAttempts: 1,
+      reservationsReleased: 2,
+      runningAttempts: [{ taskId: 'task-detached', attemptId: 'attempt-detached' }],
+    });
   });
 
   it('queues a versioned agent launch and replays its exact options exactly once', async () => {
@@ -3807,7 +3869,10 @@ describe('ClawdbotAgentService Codex providers', () => {
       reason: 'Active reservations currently consume the configured capacity.',
       decidedAt: '2026-07-25T10:00:00.000Z',
     });
-    const admission = { admitOrQueue: admit } as unknown as AdmissionControlService;
+    const admission = {
+      admitOrQueue: admit,
+      assertExecutionTreeLaunchAllowed: vi.fn(async () => undefined),
+    } as unknown as AdmissionControlService;
     const service = testableService(
       tmpDir,
       undefined,

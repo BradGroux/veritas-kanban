@@ -16,6 +16,7 @@ import {
   EXECUTION_TREE_BUDGET_EVENT_SCHEMA_VERSION,
   EXECUTION_TREE_EDGE_KINDS,
   EXECUTION_TREE_IDENTITY_SCHEMA_VERSION,
+  EXECUTION_TREE_CONTROL_SCHEMA_VERSION,
   EXECUTABLE_AGENT_PROVIDERS,
   PHASE_NAMES,
   RUN_FAILURE_CLASSES,
@@ -67,6 +68,18 @@ export const ExecutionTreeIdentitySchema = z
       });
     }
   });
+
+export const ExecutionTreeControlSchema = z
+  .object({
+    schemaVersion: z.literal(EXECUTION_TREE_CONTROL_SCHEMA_VERSION),
+    rootObjectiveId: identifier,
+    state: z.enum(['paused', 'cancelled']),
+    trigger: z.enum(['operator', 'fan-out-breaker']),
+    reason: z.string().trim().min(1).max(1_000),
+    idempotencyKey: digest,
+    recordedAt: z.string().datetime(),
+  })
+  .strict();
 
 export const ExecutionTreeBudgetPolicySchema = z
   .object({
@@ -201,6 +214,7 @@ export const AdmissionReservationSchema = z
       .strict()
       .optional(),
     executionBudget: ExecutionTreeBudgetStateSchema.optional(),
+    executionTreeControl: ExecutionTreeControlSchema.optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -225,6 +239,18 @@ export const AdmissionReservationSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Execution-tree reservations require durable budget state.',
         path: ['executionBudget'],
+      });
+    }
+    if (
+      record.executionTreeControl &&
+      (record.request.executionTree?.edge !== 'root' ||
+        record.request.executionTree.rootObjectiveId !==
+          record.executionTreeControl.rootObjectiveId)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Execution-tree control must be stored on its matching root reservation.',
+        path: ['executionTreeControl'],
       });
     }
   });
@@ -429,6 +455,7 @@ export const AdmissionQueueEntrySchema = z
       .object({
         code: z.string().trim().min(1).max(160),
         reason: z.string().trim().min(1).max(1_000),
+        idempotencyKey: digest.optional(),
         recordedAt: z.string().datetime(),
       })
       .strict()
@@ -542,6 +569,7 @@ export const AdmissionDecisionSchema = z
     request: AdmissionRequestSchema,
     reservation: AdmissionReservationSchema.optional(),
     queueEntry: AdmissionQueueEntrySchema.optional(),
+    executionTreeControl: ExecutionTreeControlSchema.optional(),
     limitingPolicies: z.array(AdmissionLimitPolicySchema).max(6),
     limitingBudgetPolicies: z.array(ExecutionTreeBudgetPolicySchema).max(16).optional(),
     retryAfterMs: z.number().int().min(250).max(60_000).optional(),

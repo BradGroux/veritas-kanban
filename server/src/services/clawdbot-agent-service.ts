@@ -129,6 +129,8 @@ import type {
   WorkspaceExecutionTrustEvaluation,
   WorkspaceExecutionTrustScanResult,
   AdmissionReservationRelease,
+  AdmissionCancellationInput,
+  AdmissionExecutionTreeCancellationResult,
   AdmissionAgentLaunchOptions,
   AdmissionLaunchSource,
   AdmissionQueueClaim,
@@ -2401,6 +2403,7 @@ export class ClawdbotAgentService {
         recoveryAction: options.recovery?.action,
         rootIdempotencyKey: options.admissionIdempotencyKey,
       });
+    await this.admission.assertExecutionTreeLaunchAllowed(executionTree.rootObjectiveId);
     const inheritedBudgetPolicies = parentAttempt?.admissionReservationId
       ? ((await this.admission.get(parentAttempt.admissionReservationId)).request.budgetPolicies ??
         [])
@@ -2925,6 +2928,7 @@ export class ClawdbotAgentService {
         ...(queuedClaim ? { queueEntryId: queuedClaim.entry.id } : {}),
         executionTree,
       };
+      await this.admission.assertExecutionTreeLaunchAllowed(executionTree.rootObjectiveId);
       this.assertProviderAdmissionEvidence(providerAdmission, attempt);
       await adapter.start({
         task,
@@ -4221,6 +4225,29 @@ export class ClawdbotAgentService {
         error: 'Stopped by user',
       };
     });
+  }
+
+  async cancelExecutionTree(
+    rootObjectiveId: string,
+    input: AdmissionCancellationInput
+  ): Promise<AdmissionExecutionTreeCancellationResult> {
+    const cancellation = await this.admission.cancelExecutionTree(rootObjectiveId, input);
+    const runningAttempts: AdmissionExecutionTreeCancellationResult['runningAttempts'] = [];
+    let interruptedAttempts = 0;
+    for (const attempt of cancellation.runningAttempts) {
+      try {
+        await this.stopAgent(attempt.taskId, attempt.attemptId);
+        interruptedAttempts += 1;
+      } catch {
+        runningAttempts.push(attempt);
+      }
+    }
+    return {
+      ...cancellation,
+      interruptedAttempts,
+      reservationsReleased: cancellation.reservationsReleased + interruptedAttempts,
+      runningAttempts,
+    };
   }
 
   private async stopPendingProvider(pending: PendingAgent): Promise<void> {

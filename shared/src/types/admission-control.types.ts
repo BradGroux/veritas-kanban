@@ -11,6 +11,7 @@ import type {
   ExecutionTreeBudgetState,
   ExecutionTreeBudgetSummary,
   ExecutionTreeBudgetUsageEvent,
+  ExecutionTreeControl,
   ExecutionTreeIdentity,
 } from './execution-tree-budget.types.js';
 import type { AgentBudgetUsage } from './agent-budget.types.js';
@@ -23,6 +24,7 @@ export const ADMISSION_QUEUE_SELECTION_SCHEMA_VERSION = 'admission-queue-selecti
 export const ADMISSION_QUEUE_SCHEDULER_POLICY_VERSION = 'admission-queue-scheduler/v1' as const;
 export const ADMISSION_QUEUE_INSPECTION_SCHEMA_VERSION = 'admission-queue-inspection/v1' as const;
 export const ADMISSION_QUEUE_LIST_SCHEMA_VERSION = 'admission-queue-list/v1' as const;
+export const EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION = 'execution-tree-cancellation/v1' as const;
 export const ADMISSION_CONTROL_PROVIDER = 'workflow-control' as const;
 export type AdmissionProvider = ExecutableAgentProvider | typeof ADMISSION_CONTROL_PROVIDER;
 
@@ -135,6 +137,8 @@ export interface AdmissionReservation {
   lease: AdmissionReservationLease;
   release?: AdmissionReservationRelease;
   executionBudget?: ExecutionTreeBudgetState;
+  /** Root-reservation authority that blocks later descendant admission. */
+  executionTreeControl?: ExecutionTreeControl;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +146,7 @@ export interface AdmissionReservation {
 export interface AdmissionQueueTerminalEvidence {
   code: string;
   reason: string;
+  idempotencyKey?: string;
   recordedAt: string;
 }
 
@@ -286,11 +291,41 @@ export interface AdmissionDecision {
   request: AdmissionRequest;
   reservation?: AdmissionReservation;
   queueEntry?: AdmissionQueueEntry;
+  executionTreeControl?: ExecutionTreeControl;
   limitingPolicies: AdmissionLimitPolicy[];
   limitingBudgetPolicies?: ExecutionTreeBudgetPolicy[];
   retryAfterMs?: number;
   reason: string;
   decidedAt: string;
+}
+
+export interface AdmissionCancellationInput {
+  idempotencyKey: string;
+  reason: string;
+}
+
+export interface AdmissionQueuedCancellationResult {
+  schemaVersion: typeof EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION;
+  scope: 'queued-launch';
+  idempotencyKey: string;
+  queueEntry: AdmissionQueueEntry;
+  reservationReleased: boolean;
+}
+
+export interface AdmissionExecutionTreeCancellationResult {
+  schemaVersion: typeof EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION;
+  scope: 'execution-tree';
+  idempotencyKey: string;
+  rootObjectiveId: string;
+  control: ExecutionTreeControl;
+  queueEntriesCancelled: number;
+  reservationsReleased: number;
+  interruptedAttempts: number;
+  runningAttempts: Array<{
+    taskId: string;
+    attemptId: string;
+    reservationId: string;
+  }>;
 }
 
 export interface AdmissionQueueListQuery {

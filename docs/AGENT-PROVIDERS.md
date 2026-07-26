@@ -1054,13 +1054,24 @@ Inspect reservations with `vk admission list`, `vk admission get <id>`, or the
 matching read-only REST endpoints. Use `--workflow-run`, `--workflow-step`,
 `--root-reservation`, or `--root-objective` to follow a tree. Use
 `vk admission tree <root-objective-id>` for aggregate totals, remaining policy
-capacity, blocking policies, and bounded contributors. Machine consumers
-should use `--json`. Inspect the conditional, redacted queue view with
+capacity, blocking policies, bounded contributors, and durable cancellation
+or circuit-breaker control. Machine consumers should use `--json`. Inspect the
+conditional, redacted queue view with
 `vk admission queue list`, `vk admission queue get <queue-id>`, or the matching
 `/api/v1/admission/queue` endpoints. Queue position is evidence at the response
 generation time, never an exact start-time promise. Machine consumers may use
 the safe `navigation` identifiers to open related task, attempt, workflow, and
 execution-tree views without accessing the redacted launch payload.
+
+Operators can stop a queued launch with `vk admission queue cancel <queue-id>
+--reason <text>` or cancel an entire execution tree with `vk admission
+cancel-tree <root-objective-id> --reason <text>`. Supply
+`--idempotency-key <key>` when an automation may retry the request. Tree
+cancellation is recorded on the root reservation before descendants are
+drained, so harness-driven resume, retry, fallback, workflow-step, and
+child-agent launches fail closed before any provider adapter runs. The command
+reports verified running attempts that the local supervisor could not
+interrupt; those require explicit operator reconciliation.
 
 ## Local And Cloud Profiles
 

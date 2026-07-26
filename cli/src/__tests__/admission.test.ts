@@ -103,6 +103,141 @@ describe('vk admission commands', () => {
     output.mockRestore();
   });
 
+  it('shows durable execution-tree control in human output', async () => {
+    api.mockResolvedValue({
+      schemaVersion: 'execution-tree-budget-summary/v1',
+      rootObjectiveId: 'objective-a',
+      control: {
+        schemaVersion: 'execution-tree-control/v1',
+        rootObjectiveId: 'objective-a',
+        state: 'cancelled',
+        trigger: 'operator',
+        reason: 'Operator stopped runaway expansion.',
+        idempotencyKey: 'sha256:cancelled',
+        recordedAt: '2026-07-25T12:00:00.000Z',
+      },
+      committed: {
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        toolCalls: 0,
+        runtimeSeconds: 0,
+        idleRuntimeSeconds: 0,
+        costUsd: 0,
+        retries: 0,
+        fanOut: 0,
+      },
+      reserved: {
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        toolCalls: 0,
+        runtimeSeconds: 0,
+        idleRuntimeSeconds: 0,
+        costUsd: 0,
+        retries: 0,
+        fanOut: 0,
+      },
+      policies: [],
+      contributors: [],
+      contributorCount: 0,
+      truncated: false,
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const program = new Command().exitOverride();
+    registerAdmissionCommands(program);
+
+    await program.parseAsync(['node', 'vk', 'admission', 'tree', 'objective-a']);
+
+    expect(output.mock.calls.map(([line]) => String(line)).join('\n')).toContain(
+      'control=cancelled trigger=operator'
+    );
+    expect(output.mock.calls.map(([line]) => String(line)).join('\n')).toContain(
+      'Operator stopped runaway expansion.'
+    );
+    output.mockRestore();
+  });
+
+  it('cancels one queued launch with a stable idempotency identity', async () => {
+    api.mockResolvedValue({
+      schemaVersion: 'execution-tree-cancellation/v1',
+      scope: 'queued-launch',
+      queueEntry: { id: 'admission_queue_1', state: 'terminal' },
+      reservationReleased: true,
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const program = new Command().exitOverride();
+    registerAdmissionCommands(program);
+
+    await program.parseAsync([
+      'node',
+      'vk',
+      'admission',
+      'queue',
+      'cancel',
+      'admission_queue_1',
+      '--reason',
+      'Operator cancelled the queued launch.',
+      '--idempotency-key',
+      'cancel-queue-entry-123',
+      '--json',
+    ]);
+
+    expect(api).toHaveBeenCalledWith('/api/admission/queue/admission_queue_1/cancel', {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: 'Operator cancelled the queued launch.',
+        idempotencyKey: 'cancel-queue-entry-123',
+      }),
+    });
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toMatchObject({
+      scope: 'queued-launch',
+      queueEntry: { state: 'terminal' },
+    });
+    output.mockRestore();
+  });
+
+  it('cancels an execution tree and reports remaining verified runs', async () => {
+    api.mockResolvedValue({
+      schemaVersion: 'execution-tree-cancellation/v1',
+      scope: 'execution-tree',
+      rootObjectiveId: 'objective-a',
+      queueEntriesCancelled: 2,
+      interruptedAttempts: 1,
+      runningAttempts: [],
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const program = new Command().exitOverride();
+    registerAdmissionCommands(program);
+
+    await program.parseAsync([
+      'node',
+      'vk',
+      'admission',
+      'cancel-tree',
+      'objective-a',
+      '--reason',
+      'Operator cancelled runaway expansion.',
+      '--idempotency-key',
+      'cancel-execution-tree-123',
+      '--json',
+    ]);
+
+    expect(api).toHaveBeenCalledWith('/api/admission/tree/objective-a/cancel', {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: 'Operator cancelled runaway expansion.',
+        idempotencyKey: 'cancel-execution-tree-123',
+      }),
+    });
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toMatchObject({
+      scope: 'execution-tree',
+      queueEntriesCancelled: 2,
+      interruptedAttempts: 1,
+    });
+    output.mockRestore();
+  });
+
   it('lists the admission queue as JSON with all operator filters preserved', async () => {
     api.mockResolvedValue({
       schemaVersion: 'admission-queue-list/v1',
@@ -253,15 +388,7 @@ describe('vk admission commands', () => {
     const program = new Command().exitOverride();
     registerAdmissionCommands(program);
 
-    await program.parseAsync([
-      'node',
-      'vk',
-      'admission',
-      'queue',
-      'list',
-      '--limit',
-      '1',
-    ]);
+    await program.parseAsync(['node', 'vk', 'admission', 'queue', 'list', '--limit', '1']);
 
     const rendered = output.mock.calls.map(([line]) => String(line)).join('\n');
     expect(rendered).toContain('priority=1->2 readiness=conditional');
