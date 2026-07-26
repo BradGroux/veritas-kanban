@@ -43,6 +43,14 @@ export interface ReflectionRedactionSummary {
   notes: string[];
 }
 
+export interface ReflectionRetrievalAttribution {
+  taskId: string;
+  attemptId: string;
+  workspaceId: string;
+  relevanceScore: number;
+  retrievedAt: string;
+}
+
 export interface ReflectionCandidate {
   id: string;
   idempotencyKey?: string;
@@ -77,6 +85,9 @@ export interface ReflectionCandidate {
   deletedBy?: string;
   deleteReason?: string;
   mergedInto?: string;
+  retrievalCount?: number;
+  lastRetrievedAt?: string;
+  retrievals?: ReflectionRetrievalAttribution[];
 }
 
 export interface ReflectionDuplicateGroup {

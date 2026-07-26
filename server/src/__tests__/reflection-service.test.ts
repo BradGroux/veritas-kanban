@@ -138,6 +138,101 @@ describe('ReflectionService', () => {
     );
   });
 
+  it('ranks accepted lessons and records immutable run attribution', async () => {
+    const task = createTask({
+      title: 'Repair the current route schema',
+      description: 'Inspect route contracts before editing.',
+    });
+    const { service, audit } = createHarness(task);
+    const exact = await service.create(
+      createInput({
+        confidence: 0.9,
+        source: {
+          kind: 'user-correction',
+          taskId: task.id,
+          runId: 'attempt_source',
+          eventIds: ['event_source'],
+        },
+      })
+    );
+    await service.accept(exact.id, { reviewedBy: 'brad' });
+    const lowerRelevance = await service.create(
+      createInput({
+        confidence: 0.55,
+        summary: 'Tune image rendering for a later pass.',
+        correction: 'Inspect the image pipeline.',
+        nextAttempt: 'Run image snapshots.',
+        source: { kind: 'task-run', taskId: task.id, runId: 'attempt_image' },
+      })
+    );
+    await service.accept(lowerRelevance.id, { reviewedBy: 'brad' });
+    const unrelated = await service.create(
+      createInput({
+        summary: 'Tune unrelated image rendering.',
+        correction: 'Inspect the image pipeline.',
+        nextAttempt: 'Run image snapshots.',
+        source: { kind: 'task-run', taskId: 'task_other', runId: 'attempt_other' },
+      })
+    );
+    await service.accept(unrelated.id, { reviewedBy: 'brad' });
+
+    const selected = await service.retrieveForTask({
+      task,
+      workspaceId: 'veritas-kanban',
+      attemptId: 'attempt_next',
+      retrievedAt: '2026-07-25T20:00:00.000Z',
+      recordAttribution: true,
+    });
+
+    expect(selected[0]).toMatchObject({
+      reflectionId: exact.id,
+      sourceTaskId: task.id,
+      sourceRunId: 'attempt_source',
+      sourceEventIds: ['event_source'],
+      retrievalCount: 1,
+    });
+    expect(selected.map((item) => item.reflectionId)).toEqual([exact.id, lowerRelevance.id]);
+    expect(selected.some((item) => item.reflectionId === unrelated.id)).toBe(false);
+    const listed = await service.list({ status: 'accepted' });
+    expect(listed.candidates.find((candidate) => candidate.id === exact.id)).toMatchObject({
+      retrievalCount: 1,
+      lastRetrievedAt: '2026-07-25T20:00:00.000Z',
+      retrievals: [
+        {
+          taskId: task.id,
+          attemptId: 'attempt_next',
+          workspaceId: 'veritas-kanban',
+        },
+      ],
+    });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'reflection.retrieved',
+        resource: exact.id,
+        details: expect.objectContaining({ attemptId: 'attempt_next' }),
+      })
+    );
+  });
+
+  it('previews accepted memory without incrementing observed use', async () => {
+    const task = createTask();
+    const { service } = createHarness(task);
+    const candidate = await service.create(createInput());
+    await service.accept(candidate.id, { reviewedBy: 'brad' });
+
+    const preview = await service.retrieveForTask({
+      task,
+      workspaceId: 'veritas-kanban',
+      attemptId: 'preview_1',
+      retrievedAt: '2026-07-25T20:00:00.000Z',
+      recordAttribution: false,
+    });
+
+    expect(preview[0].retrievalCount).toBe(0);
+    const listed = await service.list({ status: 'accepted' });
+    expect(listed.candidates[0].retrievalCount).toBeUndefined();
+  });
+
   it('keeps rejected candidates auditable without applying lessons', async () => {
     const { service, updateTask } = createHarness();
     const candidate = await service.create(createInput());

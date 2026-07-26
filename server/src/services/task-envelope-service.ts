@@ -19,6 +19,7 @@ import {
   type TaskExpectedOutput,
   type TaskLaunchBaseline,
   type TaskLaunchBaselineFile,
+  type TaskEnvelopeMemoryReference,
 } from '@veritas-kanban/shared';
 import { parseTaskEnvelope } from '../schemas/task-envelope-schemas.js';
 import {
@@ -26,7 +27,10 @@ import {
   type TaskEnvelopePayload,
 } from '../utils/task-envelope-digest.js';
 import { sha256WorktreeEntry } from '../utils/worktree-fingerprint.js';
+import { createLogger } from '../lib/logger.js';
+import { getReflectionService, type ReflectionRetrievalInput } from './reflection-service.js';
 
+const log = createLogger('task-envelope');
 const MAX_BASELINE_FILES = 1000;
 const BASELINE_GIT_TIMEOUT_MS = 10_000;
 const MAX_BASELINE_CAPTURE_ATTEMPTS = 3;
@@ -250,9 +254,14 @@ export interface BuildTaskEnvelopeInput {
   executionPolicy?: TaskExecutionPolicy;
 }
 
+export interface TaskMemoryRetriever {
+  retrieveForTask(input: ReflectionRetrievalInput): Promise<TaskEnvelopeMemoryReference[]>;
+}
+
 export class TaskEnvelopeService {
   constructor(
-    private readonly evidenceSource: CompletionEvidenceSource = new GitCompletionEvidenceSource()
+    private readonly evidenceSource: CompletionEvidenceSource = new GitCompletionEvidenceSource(),
+    private readonly memoryRetriever: TaskMemoryRetriever = getReflectionService()
   ) {}
 
   async build(input: BuildTaskEnvelopeInput): Promise<TaskEnvelope> {
@@ -260,6 +269,25 @@ export class TaskEnvelopeService {
       input.worktreePath,
       input.createdAt
     );
+    const workspaceId = normalizeWorkspaceId(
+      input.task.project?.trim() || input.task.git?.repo || input.task.id
+    );
+    let memory: TaskEnvelopeMemoryReference[] = [];
+    try {
+      memory = await this.memoryRetriever.retrieveForTask({
+        task: input.task,
+        workspaceId,
+        attemptId: input.attemptId,
+        retrievedAt: input.createdAt,
+        recordAttribution: !input.attemptId.startsWith('preview_'),
+        limit: 8,
+      });
+    } catch (error) {
+      log.warn(
+        { err: error, taskId: input.task.id, attemptId: input.attemptId },
+        'Accepted reflection retrieval failed; continuing without memory context'
+      );
+    }
     const payload: TaskEnvelopePayload = {
       schemaVersion: TASK_ENVELOPE_SCHEMA_VERSION,
       subject: {
@@ -281,15 +309,14 @@ export class TaskEnvelopeService {
         acceptanceCriteria: compactTaskEnvelopeStrings(
           (input.task.subtasks ?? []).flatMap((subtask) => subtask.acceptanceCriteria ?? [])
         ).slice(0, 256),
+        ...(memory.length > 0 ? { memory } : {}),
       },
       attempt: {
         id: input.attemptId,
         createdAt: input.createdAt,
       },
       workspace: {
-        workspaceId: normalizeWorkspaceId(
-          input.task.project?.trim() || input.task.git?.repo || input.task.id
-        ),
+        workspaceId,
         worktreeId: input.task.id,
         ...(input.task.git?.worktreeManifestId
           ? { worktreeManifestId: input.task.git.worktreeManifestId }

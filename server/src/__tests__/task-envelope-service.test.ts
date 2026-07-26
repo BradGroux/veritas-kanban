@@ -215,6 +215,67 @@ describe('TaskEnvelopeService', () => {
     expect(TaskEnvelopeSchema.safeParse(tampered).success).toBe(false);
   });
 
+  it('binds ranked accepted memory and retrieval attribution into the envelope', async () => {
+    const retrieveForTask = vi.fn().mockResolvedValue([
+      {
+        reflectionId: 'reflection_route_schema',
+        sourceTaskId: 'task_source',
+        sourceRunId: 'attempt_source',
+        sourceEventIds: ['event_source'],
+        category: 'team',
+        summary: 'Read the current route schema before editing.',
+        guidance: 'Inspect the schema and nearby tests first.',
+        confidence: 0.91,
+        relevanceScore: 0.84,
+        retrievalCount: 3,
+        retrievedAt: createdAt,
+      },
+    ]);
+    const result = await new TaskEnvelopeService(evidenceSource, { retrieveForTask }).build({
+      task: task(),
+      attemptId: 'attempt_memory',
+      createdAt,
+      worktreePath: '/tmp/veritas-kanban-task',
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      commitPolicy: 'allowed',
+    });
+
+    expect(retrieveForTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: expect.objectContaining({ id: 'task_20260716_contract' }),
+        workspaceId: 'veritas-kanban',
+        attemptId: 'attempt_memory',
+        recordAttribution: true,
+        limit: 8,
+      })
+    );
+    expect(result.subject.memory).toEqual([
+      expect.objectContaining({
+        reflectionId: 'reflection_route_schema',
+        sourceEventIds: ['event_source'],
+        relevanceScore: 0.84,
+      }),
+    ]);
+    expect(TaskEnvelopeSchema.safeParse(result).success).toBe(true);
+    expect(verifyTaskEnvelopeDigest(result)).toBe(true);
+  });
+
+  it('does not record observed use while building a preview envelope', async () => {
+    const retrieveForTask = vi.fn().mockResolvedValue([]);
+    await new TaskEnvelopeService(evidenceSource, { retrieveForTask }).build({
+      task: task(),
+      attemptId: 'preview_memory',
+      createdAt,
+      worktreePath: '/tmp/veritas-kanban-task',
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      commitPolicy: 'allowed',
+    });
+
+    expect(retrieveForTask).toHaveBeenCalledWith(
+      expect.objectContaining({ recordAttribution: false })
+    );
+  });
+
   it('resolves run, task, legacy, and compatible default commit policy precedence', () => {
     expect(TaskExecutionPolicySchema.safeParse({ commitPolicy: 'sometimes' }).success).toBe(false);
     expect(
