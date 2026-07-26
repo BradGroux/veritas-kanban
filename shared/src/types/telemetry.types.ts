@@ -6,6 +6,7 @@ import type { AdmissionLaunchSource } from './admission-control.types.js';
 import type { ExecutionTreeBreakerEvidence } from './execution-tree-budget.types.js';
 import type { ExecutableAgentProvider } from './config.types.js';
 import type { RunEgressDecisionReason, RunEgressProtocol } from './sandbox-policy.types.js';
+import type { DependencyCircuitState } from './dependency-circuit.types.js';
 
 export type TelemetryEventType =
   | 'task.created'
@@ -47,6 +48,7 @@ export interface RunStartedEvent extends TelemetryEvent {
   admissionSource?: AdmissionLaunchSource;
   admissionOutcome?: 'admitted' | 'queued-dispatch';
   harnessSupport?: HarnessSupportTelemetry;
+  dependencyCircuits?: DependencyCircuitTelemetry;
 }
 
 /** Agent run completed event */
@@ -60,6 +62,14 @@ export interface RunCompletedEvent extends TelemetryEvent {
   exitCode?: number;
   attemptId?: string;
   harnessSupport?: HarnessSupportTelemetry;
+  dependencyCircuits?: DependencyCircuitTelemetry;
+}
+
+export interface DependencyCircuitTelemetry {
+  provider: DependencyCircuitState;
+  agentHost: DependencyCircuitState;
+  openCount: number;
+  halfOpenCount: number;
 }
 
 /** Agent run error event */
@@ -71,6 +81,7 @@ export interface RunErrorEvent extends TelemetryEvent {
   stackTrace?: string;
   attemptId?: string;
   harnessSupport?: HarnessSupportTelemetry;
+  dependencyCircuits?: DependencyCircuitTelemetry;
 }
 
 export interface HarnessSupportTelemetry {
@@ -100,6 +111,7 @@ export interface RunTelemetryEvent extends TelemetryEvent {
   admissionSource?: AdmissionLaunchSource;
   admissionOutcome?: 'admitted' | 'queued-dispatch';
   harnessSupport?: HarnessSupportTelemetry;
+  dependencyCircuits?: DependencyCircuitTelemetry;
 }
 
 /** Token usage events */

@@ -1165,7 +1165,7 @@ Three-tier health check system for container orchestration.
 | `GET /api/health`      | None  | Lightweight API liveness signal                        |
 | `GET /api/health/deep` | Admin | Same as `/health/deep`, under `/api`                   |
 
-Authenticated deep-health responses include `dependencyCircuits.summary`, redacted durable circuit snapshots, and active expiring overrides for provider/model calls, MCP servers and tools, outbound integrations, and storage operations. Dependency IDs are opaque, and secret-bearing request and response data is never returned.
+Authenticated deep-health responses include `dependencyCircuits.summary`, redacted durable circuit snapshots, and active expiring overrides for provider/model calls, selected agent hosts, MCP servers and tools, outbound integrations, and storage operations. Dependency IDs are opaque, and secret-bearing request and response data is never returned.
 
 | Endpoint                                            | Auth  | Purpose                                                            |
 | --------------------------------------------------- | ----- | ------------------------------------------------------------------ |
@@ -2403,8 +2403,7 @@ capabilities plus caller, profile, sandbox, and budget requirements must be
 mutated. Failure returns `409 Conflict` with `requiredCapabilities`, reasons,
 manifest identity, and remediation.
 
-The preview response contains `manifest`, plus optional `parentAttemptId` and
-`drift`. The manifest contains redacted effective runtime inputs, instruction
+The preview response contains `manifest`, current redacted provider and selected-host posture under `dependencyCircuits`, plus optional `parentAttemptId` and `drift`. The manifest contains redacted effective runtime inputs, instruction
 fingerprints, compiled phase evidence and source references, per-field origins,
 and an `enforcement` object. Prompt content, readiness override text,
 credential values, and raw local output paths are excluded. Preview and start

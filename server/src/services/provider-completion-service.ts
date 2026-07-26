@@ -32,6 +32,7 @@ import { redactString } from '../lib/redact.js';
 const MAX_TEXT_LENGTH = 20_000;
 const MAX_SHORT_TEXT_LENGTH = 500;
 const MAX_PROVIDER_EVIDENCE = 128;
+const MAX_HARNESS_EVIDENCE = 128;
 const MAX_PROVIDER_ARTIFACTS = 64;
 
 const SECRET_PATTERNS: Array<[RegExp, string]> = [
@@ -86,6 +87,7 @@ export interface CompleteProviderRunInput {
   task: Task;
   taskEnvelope: TaskEnvelope;
   claim: ProviderTerminalClaim;
+  harnessEvidence?: TaskCompletionEvidence[];
   phase?: CompletionPhaseAuthorityEvidence;
 }
 
@@ -152,7 +154,10 @@ export class ProviderCompletionService {
 
     const policy = evaluateCompletionPolicy(taskEnvelope, claim.status, snapshot);
     const status = policy.status;
-    const evidence = buildCompletionEvidence(taskEnvelope, claim, snapshot);
+    const evidence = [
+      ...buildCompletionEvidence(taskEnvelope, claim, snapshot),
+      ...sanitizeHarnessEvidence(input.harnessEvidence),
+    ].slice(0, 512);
     const verification = mergeVerification(taskEnvelope, claim.verification, snapshot.verification);
     const error =
       status === 'success'
@@ -210,6 +215,22 @@ export class ProviderCompletionService {
     );
     return deepFreeze(structuredClone(result));
   }
+}
+
+function sanitizeHarnessEvidence(
+  evidence: TaskCompletionEvidence[] | undefined
+): TaskCompletionEvidence[] {
+  return (evidence ?? []).slice(0, MAX_HARNESS_EVIDENCE).map((entry) => ({
+    id: sanitizeIdentifier(entry.id),
+    kind: entry.kind,
+    source: 'harness',
+    summary: sanitizeText(entry.summary),
+    reference: entry.reference ? sanitizeText(entry.reference, 4096) : null,
+    requirementIds: entry.requirementIds
+      .slice(0, 64)
+      .map((id) => sanitizeIdentifier(id)),
+    verified: true,
+  }));
 }
 
 function sanitizeClaim(claim: ProviderTerminalClaim): Required<ProviderTerminalClaim> {

@@ -44,6 +44,13 @@ const fallback: DependencyIdentity = {
   model: 'claude-opus-4-5',
 };
 
+const agentHost: DependencyIdentity = {
+  kind: 'agent-host',
+  id: 'host-local-process',
+  workspaceId: 'workspace_1',
+  hostId: 'local-process',
+};
+
 function candidates(): DependencyRouteCandidate[] {
   return [
     { id: 'primary', label: 'Primary model', dependency: primary, priority: 0, policy: circuitPolicy },
@@ -223,6 +230,54 @@ describe('DependencyCircuitExecutionService', () => {
       state: 'open',
       slowCallCount: 1,
       reason: { code: 'slow-call-rate' },
+    });
+  });
+
+  it('records one operation against provider and agent-host circuits', async () => {
+    const registry = new DependencyCircuitRegistryService({
+      repository: new InMemoryDependencyCircuitStateRepository(),
+    });
+    const execution = new DependencyCircuitExecutionService(registry);
+
+    await expect(
+      execution.executeAll([primary, agentHost], async () => 'started', {
+        policy: circuitPolicy,
+      })
+    ).resolves.toBe('started');
+
+    expect(await registry.listSnapshots()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependency: expect.objectContaining({ kind: 'model-endpoint' }),
+          sampleCount: 1,
+          lastOutcome: 'success',
+        }),
+        expect.objectContaining({
+          dependency: expect.objectContaining({ kind: 'agent-host' }),
+          sampleCount: 1,
+          lastOutcome: 'success',
+        }),
+      ])
+    );
+  });
+
+  it('settles earlier leases as policy blocks when a later dependency rejects', async () => {
+    const registry = new DependencyCircuitRegistryService({
+      repository: new InMemoryDependencyCircuitStateRepository(),
+    });
+    await open(registry, agentHost);
+    const execution = new DependencyCircuitExecutionService(registry);
+
+    await expect(
+      execution.executeAll([primary, agentHost], async () => 'unreachable', {
+        policy: circuitPolicy,
+      })
+    ).rejects.toBeInstanceOf(DependencyRouteUnavailableError);
+
+    expect(await registry.inspect(primary, circuitPolicy)).toMatchObject({
+      state: 'closed',
+      sampleCount: 0,
+      lastOutcome: 'policy-block',
     });
   });
 });

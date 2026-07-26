@@ -103,24 +103,47 @@ export class DependencyCircuitExecutionService {
     operation: () => Promise<T>,
     options: DependencyCircuitExecutionOptions = {}
   ): Promise<T> {
-    const admission = await this.registry.acquire(dependency, options.policy);
-    if (!admission.allowed) {
-      throw new DependencyRouteUnavailableError({
-        selected: false,
-        action: 'reject',
-        reason: `Dependency circuit rejected ${admission.snapshot.key}.`,
-        exclusions: [
-          {
-            candidateId: admission.snapshot.key,
-            dependencyKey: admission.snapshot.key,
-            reason: admission.reason,
-            retryAt: admission.retryAt,
-            snapshot: admission.snapshot,
-          },
-        ],
-      });
+    return this.executeAll([dependency], operation, options);
+  }
+
+  async executeAll<T>(
+    dependencies: DependencyIdentity[],
+    operation: () => Promise<T>,
+    options: DependencyCircuitExecutionOptions = {}
+  ): Promise<T> {
+    if (dependencies.length === 0) return operation();
+    const startedAt = this.now();
+    const admissions: Array<Extract<DependencyCircuitAdmission, { allowed: true }>> = [];
+    for (const dependency of dependencies) {
+      const admission = await this.registry.acquire(dependency, options.policy);
+      if (!admission.allowed) {
+        await Promise.all(
+          admissions.map(({ lease }) =>
+            this.registry.record(lease, 'policy-block', this.elapsed(startedAt))
+          )
+        );
+        throw dependencyRejection(admission);
+      }
+      admissions.push(admission);
     }
-    return this.executeAdmission(admission, operation, options);
+    try {
+      const result = await operation();
+      await Promise.all(
+        admissions.map(({ lease }) =>
+          this.registry.record(lease, 'success', this.elapsed(startedAt))
+        )
+      );
+      return result;
+    } catch (error) {
+      const signals = options.signalsForError?.(error) ?? defaultSignals(error, options.signal);
+      const outcome = classifyDependencyOutcome(signals);
+      await Promise.all(
+        admissions.map(({ lease }) =>
+          this.registry.record(lease, outcome, this.elapsed(startedAt))
+        )
+      );
+      throw error;
+    }
   }
 
   async executeAdmission<T>(
@@ -152,9 +175,35 @@ export class DependencyCircuitExecutionService {
     return this.registry.getSnapshot(key);
   }
 
+  async inspect(
+    dependency: DependencyIdentity,
+    policy?: DependencyCircuitPolicy
+  ): Promise<DependencyCircuitSnapshot> {
+    return this.registry.inspect(dependency, policy);
+  }
+
   private elapsed(startedAt: number): number {
     return Math.max(0, this.now() - startedAt);
   }
+}
+
+function dependencyRejection(
+  admission: Extract<DependencyCircuitAdmission, { allowed: false }>
+): DependencyRouteUnavailableError {
+  return new DependencyRouteUnavailableError({
+    selected: false,
+    action: 'reject',
+    reason: `Dependency circuit rejected ${admission.snapshot.key}.`,
+    exclusions: [
+      {
+        candidateId: admission.snapshot.key,
+        dependencyKey: admission.snapshot.key,
+        reason: admission.reason,
+        retryAt: admission.retryAt,
+        snapshot: admission.snapshot,
+      },
+    ],
+  });
 }
 
 function defaultSignals(error: unknown, signal?: AbortSignal): DependencyOutcomeSignals {

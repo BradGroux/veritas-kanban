@@ -354,6 +354,8 @@ export interface RunLaunchManifestDriftResult {
 
 export interface RunLaunchManifestPreview {
   manifest: RunLaunchManifest;
+  /** Current redacted provider and selected-host circuit posture for launch explain surfaces. */
+  dependencyCircuits?: import('./dependency-circuit.types.js').RunDependencyCircuitEvidence;
   parentAttemptId?: string;
   drift?: RunLaunchManifestDriftResult;
 }

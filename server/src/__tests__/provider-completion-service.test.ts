@@ -202,6 +202,38 @@ describe('ProviderCompletionService', () => {
     expect(parseCompletionResultForEnvelope(result, taskEnvelope)).toEqual(result);
   });
 
+  it('records caller-supplied harness evidence as verified completion evidence', async () => {
+    const taskEnvelope = await envelope();
+    const result = await completionService().complete({
+      task: task(),
+      taskEnvelope,
+      claim: {
+        terminalSource: 'process',
+        status: 'success',
+        summary: 'Run completed with dependency evidence.',
+      },
+      harnessEvidence: [
+        {
+          id: 'dependency-circuit-provider',
+          kind: 'other',
+          source: 'provider',
+          summary: 'Provider circuit was closed at completion.',
+          reference: 'dep_safe',
+          requirementIds: [],
+          verified: false,
+        },
+      ],
+    });
+
+    expect(
+      result.evidence.find((entry) => entry.id === 'dependency-circuit-provider')
+    ).toMatchObject({
+      source: 'harness',
+      verified: true,
+      reference: 'dep_safe',
+    });
+  });
+
   it.each([
     ['callback', 'success', 'success'],
     ['remote-session', 'blocked', 'blocked'],
