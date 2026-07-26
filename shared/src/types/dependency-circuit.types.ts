@@ -1,6 +1,8 @@
 export const DEPENDENCY_CIRCUIT_SCHEMA_VERSION = 'dependency-circuit/v1' as const;
 export const DEPENDENCY_CIRCUIT_POLICY_SCHEMA_VERSION =
   'dependency-circuit-policy/v1' as const;
+export const DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION =
+  'dependency-circuit-state/v1' as const;
 
 export const DEPENDENCY_KINDS = [
   'provider',
@@ -87,6 +89,19 @@ export interface DependencyCircuitSnapshot {
   lastOutcome?: DependencyOutcome;
   lastOutcomeAt?: string;
   updatedAt: string;
+}
+
+export interface DependencyCircuitSample {
+  occurredAt: string;
+  outcome: DependencyOutcome;
+  durationMs: number;
+}
+
+export interface DependencyCircuitPersistedState {
+  schemaVersion: typeof DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION;
+  snapshot: DependencyCircuitSnapshot;
+  samples: DependencyCircuitSample[];
+  capturedAt: string;
 }
 
 export interface DependencyCircuitLease {

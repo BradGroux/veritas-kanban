@@ -3,9 +3,11 @@ import { nanoid } from 'nanoid';
 import {
   DEPENDENCY_CIRCUIT_POLICY_SCHEMA_VERSION,
   DEPENDENCY_CIRCUIT_SCHEMA_VERSION,
+  DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION,
   type DependencyCircuitAdmission,
   type DependencyCircuitLease,
   type DependencyCircuitPolicy,
+  type DependencyCircuitPersistedState,
   type DependencyCircuitReason,
   type DependencyCircuitSnapshot,
   type DependencyIdentity,
@@ -13,6 +15,7 @@ import {
   type DependencyOutcomeSignals,
 } from '@veritas-kanban/shared';
 import {
+  DependencyCircuitPersistedStateSchema,
   DependencyCircuitPolicySchema,
   DependencyIdentitySchema,
 } from '../schemas/dependency-circuit-schemas.js';
@@ -44,6 +47,7 @@ interface ActiveLease {
 export interface DependencyCircuitBreakerOptions {
   dependency: DependencyIdentity;
   policy?: DependencyCircuitPolicy;
+  state?: DependencyCircuitPersistedState;
   now?: () => number;
   jitter?: () => number;
 }
@@ -114,6 +118,7 @@ export class DependencyCircuitBreaker {
     this.key = dependencyCircuitKey(this.dependency);
     this.now = options.now ?? Date.now;
     this.jitter = options.jitter ?? Math.random;
+    if (options.state) this.restore(options.state);
   }
 
   acquire(): DependencyCircuitAdmission {
@@ -220,6 +225,48 @@ export class DependencyCircuitBreaker {
     const now = this.now();
     this.prune(now);
     return this.snapshot(now);
+  }
+
+  exportState(): DependencyCircuitPersistedState {
+    const now = this.now();
+    this.prune(now);
+    return DependencyCircuitPersistedStateSchema.parse({
+      schemaVersion: DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION,
+      snapshot: this.snapshot(now),
+      samples: this.samples.map((sample) => ({
+        occurredAt: new Date(sample.occurredAt).toISOString(),
+        outcome: sample.outcome,
+        durationMs: sample.durationMs,
+      })),
+      capturedAt: new Date(now).toISOString(),
+    });
+  }
+
+  private restore(input: DependencyCircuitPersistedState): void {
+    const state = DependencyCircuitPersistedStateSchema.parse(input);
+    if (state.snapshot.key !== this.key) {
+      throw new Error('Persisted dependency circuit state belongs to another circuit.');
+    }
+    if (JSON.stringify(state.snapshot.policy) !== JSON.stringify(this.policy)) {
+      throw new Error('Persisted dependency circuit policy does not match the configured policy.');
+    }
+    this.stateValue = state.snapshot.state;
+    this.samples = state.samples.map((sample) => ({
+      occurredAt: Date.parse(sample.occurredAt),
+      outcome: sample.outcome,
+      durationMs: sample.durationMs,
+    }));
+    this.reason = state.snapshot.reason;
+    this.openedAt = state.snapshot.openedAt ? Date.parse(state.snapshot.openedAt) : undefined;
+    this.nextProbeAt = state.snapshot.nextProbeAt
+      ? Date.parse(state.snapshot.nextProbeAt)
+      : undefined;
+    this.halfOpenSuccesses = state.snapshot.halfOpenSuccesses;
+    this.lastOutcome = state.snapshot.lastOutcome;
+    this.lastOutcomeAt = state.snapshot.lastOutcomeAt
+      ? Date.parse(state.snapshot.lastOutcomeAt)
+      : undefined;
+    this.prune(this.now());
   }
 
   private evaluateClosed(now: number): void {
