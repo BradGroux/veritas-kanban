@@ -368,15 +368,20 @@ describe('vk agent runtime capability controls', () => {
       { from: 'user' }
     );
 
-    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/conversation/fork', {
-      method: 'POST',
-      body: JSON.stringify({
-        sourceAttemptId: 'attempt_parent',
-        message: 'Explore the alternate fix',
-        forkTurnId: 'turn_7',
-        phase: 'explore',
-        requiredRuntimeCapabilities: ['tool.mcp'],
-      }),
+    const [url, request] = mockApi.mock.calls.at(-1) as [string, { method: string; body: string }];
+    const { idempotencyKey, ...body } = JSON.parse(request.body) as Record<string, unknown>;
+
+    expect(url).toBe('/api/agents/task_1/conversation/fork');
+    expect(request.method).toBe('POST');
+    expect(idempotencyKey).toMatch(
+      /^vk-cli:task_1:conversation:fork:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    expect(body).toEqual({
+      sourceAttemptId: 'attempt_parent',
+      message: 'Explore the alternate fix',
+      forkTurnId: 'turn_7',
+      phase: 'explore',
+      requiredRuntimeCapabilities: ['tool.mcp'],
     });
   });
 

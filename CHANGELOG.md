@@ -183,6 +183,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mapped the exact knowledge-collection router prefix to shared work-product
   read/write permissions, restoring fail-closed client/server permission
   coverage parity (#1141).
+- Updated the CLI native-fork regression coverage to validate the required
+  generated idempotency key before comparing the stable request payload,
+  clearing the release-branch related-test gate (#1143).
 
 ## [6.0.2] - 2026-07-24
 
