@@ -20,6 +20,7 @@ function event(
     taskId?: string;
     attemptId?: string;
     turnId?: string;
+    provider?: RunEventEnvelope['source']['provider'];
   } = {}
 ): RunEventEnvelope {
   return {
@@ -34,7 +35,7 @@ function event(
       options.receivedAt ??
       new Date(Date.parse('2026-07-25T12:00:00.000Z') + sequence * 1_000).toISOString(),
     kind,
-    source: { provider: 'system', adapter: 'test' },
+    source: { provider: options.provider ?? 'system', adapter: 'test' },
     redaction: {
       status: 'none',
       fields: [],
@@ -143,6 +144,17 @@ describe('ProgressWatchdogService', () => {
 
     expect(finding?.evidenceEventIds).toEqual(['event_1', 'event_2', 'event_3']);
     expect(JSON.stringify(finding)).not.toContain('private diagnostic');
+  });
+
+  it('does not classify retries after changed error evidence as repetition', () => {
+    const service = new ProgressWatchdogService();
+    const events = [1, 2, 3].map((sequence) =>
+      event(sequence, 'run.error', {
+        errorClass: `transport-${sequence}`,
+      })
+    );
+
+    expect(service.evaluate({ events }).findings).toEqual([]);
   });
 
   it('fingerprints assistant tails without persisting assistant text', () => {
@@ -272,6 +284,30 @@ describe('ProgressWatchdogService', () => {
         },
         { hash: 'a'.repeat(64) }
       )
+    );
+
+    const result = service.evaluate({
+      events,
+      evaluatedAt: '2026-07-25T12:03:00.000Z',
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(result.suppressedEventIds).toEqual(['event_1', 'event_2', 'event_3']);
+  });
+
+  it('allows a declared long-running build monitor within its bounded lease', () => {
+    const service = new ProgressWatchdogService();
+    const events = [1, 2, 3].map((sequence) =>
+      event(sequence, 'command.started', {
+        command: 'pnpm build',
+        expectedRepetition: {
+          leaseId: 'build-monitor',
+          startsAt: '2026-07-25T12:00:00.000Z',
+          expiresAt: '2026-07-25T12:10:00.000Z',
+          maxEventsPerMinute: 3,
+          allowedKinds: ['command.started'],
+        },
+      })
     );
 
     const result = service.evaluate({
@@ -432,6 +468,54 @@ describe('ProgressWatchdogService', () => {
     }).findings[0];
 
     expect(repeated.id).toBe(first.id);
+  });
+
+  it('produces equivalent decisions from normalized events across providers', () => {
+    const service = new ProgressWatchdogService();
+    const providers: RunEventEnvelope['source']['provider'][] = [
+      'codex-cli',
+      'claude-code',
+      'openclaw',
+    ];
+    const decisions = providers.map(
+      (provider) =>
+        service.evaluate({
+          events: [1, 2, 3].map((sequence) =>
+            event(
+              sequence,
+              'tool.started',
+              { toolName: 'read_file', arguments: { path: '/workspace/source.ts' } },
+              { hash: 'a'.repeat(64), provider }
+            )
+          ),
+        }).findings[0]
+    );
+
+    expect(
+      decisions.map(({ detector, confidence, action, fingerprintHashes }) => ({
+        detector,
+        confidence,
+        action,
+        fingerprintHashes,
+      }))
+    ).toEqual([
+      expect.objectContaining({
+        detector: 'identical-repetition',
+        confidence: 'medium',
+        action: 'require-observation',
+      }),
+      expect.objectContaining({
+        detector: 'identical-repetition',
+        confidence: 'medium',
+        action: 'require-observation',
+      }),
+      expect.objectContaining({
+        detector: 'identical-repetition',
+        confidence: 'medium',
+        action: 'require-observation',
+      }),
+    ]);
+    expect(new Set(decisions.map((finding) => finding.fingerprintHashes[0])).size).toBe(1);
   });
 
   it('rejects mixed task attempts', () => {

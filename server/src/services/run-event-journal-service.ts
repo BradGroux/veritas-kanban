@@ -74,7 +74,10 @@ function normalizeJson(
   if (typeof value === 'bigint') return value.toString();
   if (typeof value === 'string') {
     addOriginalBytes(state, value);
-    const redacted = redactString(value);
+    const safeEvidenceValue =
+      /^sha256:[a-f0-9]{64}$/.test(value) ||
+      /^watchdog_[a-f0-9]{8}(?:-[a-f0-9]{8}){3}$/.test(value);
+    const redacted = safeEvidenceValue ? value : redactString(value);
     const bounded =
       countBytes(redacted) > MAX_STRING_BYTES
         ? `${Buffer.from(redacted, 'utf-8').subarray(0, MAX_STRING_BYTES).toString('utf-8')}[truncated]`
@@ -101,6 +104,7 @@ function normalizeJson(
   }
   const normalized: Record<string, RunEventJsonValue> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (entry === undefined) continue;
     state.objectKeys += 1;
     if (state.objectKeys > MAX_OBJECT_KEYS) {
       state.redactedFields.push(fieldPath);

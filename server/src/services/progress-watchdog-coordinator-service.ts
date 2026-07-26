@@ -7,6 +7,10 @@ import type {
 } from '@veritas-kanban/shared';
 import { PROGRESS_WATCHDOG_ACTION_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
+import {
+  ProgressWatchdogActionOutcomeSchema,
+  ProgressWatchdogFindingSchema,
+} from '../schemas/progress-watchdog-schemas.js';
 import { sanitizeProviderRuntimeDiagnostic } from '../utils/provider-runtime-manifest-sanitize.js';
 import {
   getRunEventJournalService,
@@ -152,6 +156,7 @@ export class ProgressWatchdogCoordinatorService {
     finding: ProgressWatchdogFinding,
     state: AttemptState
   ): Promise<void> {
+    const persistedFinding = ProgressWatchdogFindingSchema.parse(finding);
     const recorded = await this.journal.append({
       taskId: finding.taskId,
       attemptId: finding.attemptId,
@@ -159,12 +164,12 @@ export class ProgressWatchdogCoordinatorService {
       causalEventId: finding.evidenceEventIds.at(-1),
       kind: FINDING_EVENT_KIND,
       source: { provider: 'system', adapter: 'progress-watchdog' },
-      payload: { ...finding },
+      payload: { ...persistedFinding },
       dedupeKey: `progress-watchdog:finding:${finding.id}`,
     });
     if (!recorded.appended) return;
 
-    const outcome = await this.execute(finding);
+    const outcome = ProgressWatchdogActionOutcomeSchema.parse(await this.execute(finding));
     await this.journal.append({
       taskId: finding.taskId,
       attemptId: finding.attemptId,
@@ -297,7 +302,7 @@ function attemptKey(event: Pick<RunEventEnvelope, 'taskId' | 'attemptId'>): stri
 }
 
 function isWatchdogInternalEvent(event: RunEventEnvelope): boolean {
-  return event.kind === FINDING_EVENT_KIND || event.kind === ACTION_EVENT_KIND;
+  return event.kind.startsWith('progress.watchdog.');
 }
 
 function boundedDiagnostic(value: string): string {

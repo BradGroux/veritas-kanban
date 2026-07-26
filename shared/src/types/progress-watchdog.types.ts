@@ -1,6 +1,7 @@
 export const PROGRESS_WATCHDOG_POLICY_SCHEMA_VERSION = 'progress-watchdog-policy/v1' as const;
 export const PROGRESS_WATCHDOG_FINDING_SCHEMA_VERSION = 'progress-watchdog-finding/v1' as const;
 export const PROGRESS_WATCHDOG_ACTION_SCHEMA_VERSION = 'progress-watchdog-action/v1' as const;
+export const PROGRESS_WATCHDOG_OVERRIDE_SCHEMA_VERSION = 'progress-watchdog-override/v1' as const;
 
 export type ProgressWatchdogDetector =
   'identical-repetition' | 'multi-step-cycle' | 'failed-file-edit' | 'no-durable-progress';
@@ -101,4 +102,30 @@ export interface ProgressWatchdogActionOutcome {
   status: ProgressWatchdogActionStatus;
   diagnostic: string;
   recordedAt: string;
+}
+
+export type ProgressWatchdogOverrideResolution = 'acknowledge' | 'continue' | 'cancel';
+export type ProgressWatchdogOverrideStatus = 'requested' | 'completed' | 'failed';
+
+export interface ProgressWatchdogOverrideRecord {
+  schemaVersion: typeof PROGRESS_WATCHDOG_OVERRIDE_SCHEMA_VERSION;
+  findingId: string;
+  taskId: string;
+  attemptId: string;
+  resolution: ProgressWatchdogOverrideResolution;
+  status: ProgressWatchdogOverrideStatus;
+  actor: string;
+  reason: string;
+  requestedAt: string;
+  completedAt?: string;
+  launchedAttemptId?: string;
+  diagnostic?: string;
+}
+
+export interface ProgressWatchdogInspection {
+  taskId: string;
+  attemptId: string;
+  findings: ProgressWatchdogFinding[];
+  actions: ProgressWatchdogActionOutcome[];
+  overrides: ProgressWatchdogOverrideRecord[];
 }

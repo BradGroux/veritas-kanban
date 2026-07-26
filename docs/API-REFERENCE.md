@@ -2500,6 +2500,38 @@ Workflow cancellation requires the exact step and causal parent:
 
 The caller must have execute permission on the workflow.
 
+### Progress Watchdog
+
+```http
+GET  /api/agents/:taskId/watchdog?attemptId=attempt_123
+POST /api/agents/:taskId/watchdog/:findingId/override
+```
+
+The GET endpoint returns typed `progress-watchdog-finding/v1`,
+`progress-watchdog-action/v1`, and `progress-watchdog-override/v1` records
+rehydrated from the exact attempt's causal journal. Findings expose only
+redacted event IDs and fingerprint hashes, detector confidence, policy
+version, suppressed event IDs, chosen action, and remaining recovery budget.
+Reading requires `agent:read`.
+
+An `agent:write` principal with local run-control authority can resolve a
+paused, failed, or operator-required decision:
+
+```json
+{
+  "attemptId": "attempt_123",
+  "resolution": "acknowledge",
+  "reason": "Operator reviewed the evidence and accepts the current terminal state."
+}
+```
+
+`resolution` accepts `acknowledge`, `continue`, or `cancel`. Continue launches
+a provider-native resume from the exact terminal attempt with a stable
+idempotency key and an instruction to use materially different evidence.
+Cancel targets only the exact active attempt. Each request and result is
+append-only and actor-attributed; a conflicting second resolution returns
+`409 Conflict`.
+
 ### Conversation Lifecycle
 
 ```

@@ -421,6 +421,13 @@ export interface AgentMessageOptions {
   expectedAttemptId: string;
 }
 
+export interface AgentStopOptions {
+  actor?: 'operator' | 'system';
+  source?: string;
+  reason?: string;
+  terminalSource?: TaskTerminalSource;
+}
+
 export interface AgentCompletionProvenance {
   attemptId: string;
   providerRuntimeManifestDigest: string;
@@ -4381,7 +4388,11 @@ export class ClawdbotAgentService {
   /**
    * Stop a running agent
    */
-  async stopAgent(taskId: string, expectedAttemptId: string): Promise<void> {
+  async stopAgent(
+    taskId: string,
+    expectedAttemptId: string,
+    options: AgentStopOptions = {}
+  ): Promise<void> {
     const pending = pendingAgents.get(taskId);
     if (!pending || pending.attemptId !== expectedAttemptId) {
       throw new ConflictError('Stop request does not match the active run', {
@@ -4391,33 +4402,38 @@ export class ClawdbotAgentService {
     }
 
     await this.finalizePendingAgent(taskId, pending, async () => {
+      const reason = options.reason?.trim() || 'Stopped by user';
+      const actor = options.actor ?? 'operator';
       await this.assertPendingRunControl(taskId, pending, 'stop');
       await this.stopPendingProvider(pending);
       await this.appendRunEvent(
         taskId,
         pending.attemptId,
         'run.interrupted',
-        { summary: 'Stopped by user', phase: 'requested' },
+        { summary: reason, phase: 'requested', actor, source: options.source },
         {
-          provider: 'operator',
-          adapter: 'veritas-run-control',
+          provider: actor,
+          adapter: options.source ?? 'veritas-run-control',
           agent: pending.agent,
           model: pending.model,
-          dedupeKey: 'run.interruption-requested',
+          dedupeKey:
+            actor === 'operator'
+              ? 'run.interruption-requested'
+              : `run.interruption-requested:${options.source ?? actor}`,
         }
       );
       this.recordTraceStep(pending.attemptId, 'abort', {
         eventType: 'run.aborted',
-        summary: 'Stopped by user',
-        reason: 'Stopped by user',
+        summary: reason,
+        reason,
         agent: pending.agent,
         provider: pending.provider,
         model: pending.model,
       });
       return {
         status: 'interrupted',
-        terminalSource: 'operator-interruption',
-        error: 'Stopped by user',
+        terminalSource: options.terminalSource ?? 'operator-interruption',
+        error: reason,
       };
     });
   }
