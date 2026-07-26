@@ -28,6 +28,8 @@ export interface RunTerminalCapabilityPosture {
 }
 
 export interface RunTerminalExecuteRequest {
+  /** Stable caller identity used for exact approval binding and retry deduplication. */
+  requestId: string;
   command: string;
   args: string[];
   mode: RunTerminalMode;
@@ -55,6 +57,8 @@ export interface RunTerminalHandle {
   taskId: string;
   attemptId: string;
   launchManifestDigest: string;
+  requestId: string;
+  requestDigest: string;
   mode: RunTerminalMode;
   startMode: RunTerminalStartMode;
   state: RunTerminalState;

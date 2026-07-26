@@ -1624,24 +1624,41 @@ Subscribers to the `run-sessions` WebSocket channel receive
 
 ## Run Terminal Control
 
-Provider-neutral supervision for command handles already owned by an active run attempt. Mounted at `/api/v1/run-terminals` with the standard `/api/run-terminals` compatibility alias.
+Provider-neutral execution and supervision for commands owned by an active run attempt. Mounted at `/api/v1/run-terminals` with the standard `/api/run-terminals` compatibility alias.
 
-| Method | Path                                                                       | Description                                      | Permissions   |
-| ------ | -------------------------------------------------------------------------- | ------------------------------------------------ | ------------- |
-| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId`                            | List handles for the exact active attempt.       | `agent:read`  |
-| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId`          | Read one scoped handle.                          | `agent:read`  |
-| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/output`   | Read bounded output after a cursor.               | `agent:read`  |
-| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/wait`     | Wait up to 300 seconds for one handle.            | `agent:write` |
-| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/wait-any`                   | Wait for any of up to 64 unique handles.          | `agent:write` |
-| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/wait-all`                   | Wait for all of up to 64 unique handles.          | `agent:write` |
-| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/detach`   | Detach a foreground handle without disowning it.  | `agent:write` |
+| Method | Path                                                                        | Description                                       | Permissions   |
+| ------ | --------------------------------------------------------------------------- | ------------------------------------------------- | ------------- |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/execute`                     | Request approval or start one exact command.      | `agent:write` |
+| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId`                             | List handles for the exact active attempt.        | `agent:read`  |
+| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId`           | Read one scoped handle.                           | `agent:read`  |
+| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/output`    | Read bounded output after a cursor.               | `agent:read`  |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/wait`      | Wait up to 300 seconds for one handle.            | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/wait-any`                    | Wait for any of up to 64 unique handles.          | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/wait-all`                    | Wait for all of up to 64 unique handles.          | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/detach`    | Detach a foreground handle without disowning it.  | `agent:write` |
 | `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/terminate` | Gracefully terminate, then escalate if necessary. | `agent:write` |
 
 Output accepts `afterCursor` and `limit` query parameters. Single waits accept `{"timeoutMs": 25000}`. Multi-handle waits accept `{"handleIds": ["terminal_1", "terminal_2"], "timeoutMs": 25000}`.
 
 Every route resolves the current active attempt before checking the handle's workspace, task, and attempt identity. Stale attempts and cross-scope handles return `404`. Output and wait limits return `400` when invalid.
 
-This control surface cannot start commands. Externally initiated execution remains fail-closed until exact shell approval and the run's filesystem and network policy are applied to the terminal child.
+Execution accepts a stable caller-owned request ID, an executable plus argument array, explicit pipe or PTY posture, start mode, optional worktree-relative cwd, and environment names only:
+
+```json
+{
+  "requestId": "verify-build-1",
+  "command": "pnpm",
+  "args": ["build"],
+  "mode": "pipe",
+  "startMode": "background",
+  "cwd": ".",
+  "environmentKeys": ["PATH"]
+}
+```
+
+The first valid request returns `202` with `status: "approval-required"` and an exact-action run approval. Resolve that approval through `/api/v1/run-approvals/:approvalId/decision`, then retry the identical request. An approved retry returns `201` with `status: "started"` and the run-owned handle. Reusing `requestId` with a changed command returns `409`; retrying an already-started exact request returns the original handle.
+
+The server, not the caller, supplies environment values and applies the active run's filesystem wrapper and network-egress environment. Commands are launched without a shell. Missing process authority, stale manifest or phase evidence, unenforceable required sandbox posture, cwd escape, credential-shaped arguments, unapproved environment names, and unsupported PTY mode fail closed before spawn.
 
 ---
 

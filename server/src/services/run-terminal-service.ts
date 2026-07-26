@@ -63,6 +63,16 @@ export interface RunTerminalLaunchContext {
   worktreeRoot: string;
   environment: Record<string, string>;
   allowedCommands: string[];
+  wrap?: (
+    command: string,
+    args: string[],
+    cwd: string
+  ) => {
+    command: string;
+    args: string[];
+    cwd: string;
+    environment: Record<string, string>;
+  };
 }
 
 export interface RunTerminalServiceOptions {
@@ -105,6 +115,10 @@ export class RunTerminalService {
   private readonly terminationGraceMs: number;
   private readonly records = new Map<string, TerminalRecord>();
   private readonly recoveredHandleIds = new Set<string>();
+  private readonly pendingExecutions = new Map<
+    string,
+    { requestDigest: string; promise: Promise<RunTerminalHandle> }
+  >();
 
   constructor(options: RunTerminalServiceOptions = {}) {
     this.journal = options.journal ?? getRunEventJournalService();
@@ -147,6 +161,54 @@ export class RunTerminalService {
   ): Promise<RunTerminalHandle> {
     const context = normalizeContext(inputContext);
     const request = RunTerminalExecuteRequestSchema.parse(inputRequest);
+    const requestDigest = digestTerminalRequest(request);
+    const existing = [...this.records.values()].find(
+      (record) =>
+        record.handle.workspaceId === context.workspaceId &&
+        record.handle.taskId === context.taskId &&
+        record.handle.attemptId === context.attemptId &&
+        record.handle.requestId === request.requestId
+    );
+    if (existing) {
+      if (existing.handle.requestDigest !== requestDigest) {
+        throw new ConflictError('Terminal request identity was reused for a changed command.', {
+          requestId: request.requestId,
+          handleId: existing.handle.id,
+        });
+      }
+      return cloneHandle(existing.handle);
+    }
+    const executionKey = [
+      context.workspaceId,
+      context.taskId,
+      context.attemptId,
+      request.requestId,
+    ].join('\0');
+    const pending = this.pendingExecutions.get(executionKey);
+    if (pending) {
+      if (pending.requestDigest !== requestDigest) {
+        throw new ConflictError('Terminal request identity was reused for a changed command.', {
+          requestId: request.requestId,
+        });
+      }
+      return pending.promise.then(cloneHandle);
+    }
+    const promise = this.executeNew(context, request, requestDigest);
+    this.pendingExecutions.set(executionKey, { requestDigest, promise });
+    try {
+      return await promise;
+    } finally {
+      if (this.pendingExecutions.get(executionKey)?.promise === promise) {
+        this.pendingExecutions.delete(executionKey);
+      }
+    }
+  }
+
+  private async executeNew(
+    context: RunTerminalLaunchContext,
+    request: RunTerminalExecuteRequest,
+    requestDigest: string
+  ): Promise<RunTerminalHandle> {
     if (request.mode !== 'pipe') {
       throw new ConflictError('PTY mode is not supported by the current run terminal runtime.', {
         mode: request.mode,
@@ -159,11 +221,23 @@ export class RunTerminalService {
       });
     }
     assertNoCredentialArguments(request.command, request.args);
-    const cwd = await resolveCwd(context.worktreeRoot, request.cwd);
-    const environment = selectEnvironment(context.environment, request.environmentKeys);
+    const requestedCwd = await resolveCwd(context.worktreeRoot, request.cwd);
+    const launch = context.wrap
+      ? context.wrap(request.command, request.args, requestedCwd)
+      : {
+          command: request.command,
+          args: request.args,
+          cwd: requestedCwd,
+          environment: {},
+        };
+    const cwd = await resolveWrappedCwd(context.worktreeRoot, launch.cwd);
+    const environment = {
+      ...selectEnvironment(context.environment, request.environmentKeys),
+      ...launch.environment,
+    };
     const id = `terminal_${nanoid(18)}`;
     const startedAt = this.now().toISOString();
-    const child = spawn(request.command, request.args, {
+    const child = spawn(launch.command, launch.args, {
       cwd,
       env: environment,
       shell: false,
@@ -181,6 +255,8 @@ export class RunTerminalService {
       taskId: context.taskId,
       attemptId: context.attemptId,
       launchManifestDigest: context.launchManifestDigest,
+      requestId: request.requestId,
+      requestDigest,
       mode: request.mode,
       startMode: request.startMode,
       state: child.pid ? 'running' : 'starting',
@@ -879,12 +955,23 @@ function normalizeContext(input: RunTerminalLaunchContext): RunTerminalLaunchCon
     worktreeRoot,
     environment: { ...input.environment },
     allowedCommands,
+    ...(input.wrap ? { wrap: input.wrap } : {}),
   };
 }
 
 async function resolveCwd(worktreeRoot: string, requested: string | undefined): Promise<string> {
   const resolved = path.resolve(worktreeRoot, requested ?? '.');
   ensureWithinBase(worktreeRoot, resolved);
+  const [canonicalRoot, canonicalCwd] = await Promise.all([
+    realpath(worktreeRoot),
+    realpath(resolved),
+  ]);
+  ensureWithinBase(canonicalRoot, canonicalCwd);
+  return canonicalCwd;
+}
+
+async function resolveWrappedCwd(worktreeRoot: string, wrappedCwd: string): Promise<string> {
+  const resolved = path.resolve(wrappedCwd);
   const [canonicalRoot, canonicalCwd] = await Promise.all([
     realpath(worktreeRoot),
     realpath(resolved),
@@ -925,6 +1012,22 @@ function commandId(command: string, args: string[]): string {
     .slice(0, 24)}`;
 }
 
+function digestTerminalRequest(request: RunTerminalExecuteRequest): string {
+  return `sha256:${createHash('sha256')
+    .update(
+      JSON.stringify({
+        requestId: request.requestId,
+        command: request.command,
+        args: request.args,
+        mode: request.mode,
+        startMode: request.startMode,
+        cwd: request.cwd ?? '.',
+        environmentKeys: [...request.environmentKeys].sort(),
+      })
+    )
+    .digest('hex')}`;
+}
+
 function splitUtf8(value: string, maximumBytes: number): string[] {
   if (Buffer.byteLength(value, 'utf8') <= maximumBytes) return value ? [value] : [];
   const chunks: string[] = [];
@@ -960,7 +1063,22 @@ function cloneHandle(handle: RunTerminalHandle): RunTerminalHandle {
 
 function parsePersistedHandle(value: unknown): RunTerminalHandle | null {
   if (value === undefined) return null;
-  const parsed = RunTerminalHandleSchema.safeParse(value);
+  const legacy =
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).id === 'string' &&
+    typeof (value as Record<string, unknown>).requestId !== 'string' &&
+    typeof (value as Record<string, unknown>).requestDigest !== 'string'
+      ? {
+          ...(value as Record<string, unknown>),
+          requestId: `legacy:${(value as Record<string, unknown>).id as string}`,
+          requestDigest: `sha256:${createHash('sha256')
+            .update(`legacy-run-terminal:${(value as Record<string, unknown>).id as string}`)
+            .digest('hex')}`,
+        }
+      : value;
+  const parsed = RunTerminalHandleSchema.safeParse(legacy);
   if (!parsed.success) {
     throw new ConflictError('Persisted run terminal handle is invalid.');
   }
@@ -981,6 +1099,8 @@ function assertSamePersistedHandleIdentity(
     current.taskId,
     current.attemptId,
     current.launchManifestDigest,
+    current.requestId,
+    current.requestDigest,
     current.mode,
     current.commandId,
     current.processId,
@@ -994,6 +1114,8 @@ function assertSamePersistedHandleIdentity(
     next.taskId,
     next.attemptId,
     next.launchManifestDigest,
+    next.requestId,
+    next.requestDigest,
     next.mode,
     next.commandId,
     next.processId,

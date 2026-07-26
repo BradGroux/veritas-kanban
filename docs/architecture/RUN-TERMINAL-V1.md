@@ -7,6 +7,7 @@
 The first implementation supports background pipe-mode commands with:
 
 - one opaque handle bound to workspace, task, attempt, and launch-manifest digest;
+- one stable request identity and digest for exact approval binding and retry deduplication;
 - a manifest-approved executable, relative cwd, and environment-key subset;
 - immediate background return, bounded single/any/all waits, foreground detachment without changing ownership, status inspection, and attempt cleanup;
 - active run status includes only handles owned by that workspace, task, and attempt;
@@ -17,11 +18,13 @@ The first implementation supports background pipe-mode commands with:
 - causal `command.started`, `command.detached`, `stream.stdout`, `stream.stderr`, and `command.completed` journal events; and
 - bounded handle and retained-output reconstruction from the durable causal journal.
 
-PTY mode, interactive stdin, restart reattachment, and externally initiated execution are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
+Externally initiated pipe execution is available only through the active-run API and an exact high-risk shell approval. PTY mode, interactive stdin, and restart reattachment remain explicitly unsupported. Callers receive typed blockers instead of an implicit downgrade.
 
 ## Authority boundary
 
-The service accepts a server-owned launch context and an untrusted command request. The launch context contains the exact workspace, task, attempt, launch-manifest digest, worktree root, approved environment values, and approved executable list. The request may select only an approved command, arguments without credential material, a canonical cwd within the worktree, and environment keys already present in that context. Lexical traversal and symlink escapes fail closed before spawn.
+The service accepts a server-owned launch context and an untrusted command request. The launch context contains the exact workspace, task, attempt, launch-manifest digest, worktree root, approved environment values, approved executable list, and optional server-owned launch wrapper. The request may select only an approved command, arguments without credential material, a canonical cwd within the worktree, and environment keys already present in that context. Lexical traversal and symlink escapes fail closed before spawn.
+
+The active-run layer first reconciles durable handles, verifies the immutable task envelope still authorizes execution in the exact worktree, confirms the persisted launch manifest and phase authority, and rejects required filesystem posture that the terminal child cannot inherit. It then creates an exact-action `run-approval/v1` request. Only an approved identical retry reaches the terminal service. The server-owned wrapper applies filesystem enforcement and mandatory egress variables after caller-selectable environment values, so omitting a proxy name cannot bypass the run's network posture.
 
 The child is launched without a shell. On Unix-like systems it owns a detached process group; on Windows it remains an exact child until the platform-specific tree supervisor is added. The service never exposes a writable stdin stream.
 
@@ -31,9 +34,9 @@ When a provider completion arrives after a server restart, Veritas reconciles th
 
 ## Control API
 
-Authenticated clients with `agent:read` can list active attempt handles and retrieve cursor-addressed output. Clients with `agent:write` can perform bounded single/any/all waits, detach a foreground handle, and terminate a handle. Every operation resolves the active task attempt first and then verifies the opaque handle's workspace, task, and attempt identity. Scope mismatches return not found rather than leaking another run's handle.
+Authenticated clients with `agent:read` can list active attempt handles and retrieve cursor-addressed output. Clients with `agent:write` can request exact execution, perform bounded single/any/all waits, detach a foreground handle, and terminate a handle. Every operation resolves the active task attempt first and then verifies the opaque handle's workspace, task, and attempt identity. Scope mismatches return not found rather than leaking another run's handle.
 
-The canonical routes live under `/api/v1/run-terminals/runs/:taskId/:attemptId`. The `/api` compatibility mount exposes the same routes. Execution is intentionally absent from this public surface until exact command approval and the run's filesystem and network posture are applied to the terminal child.
+The canonical routes live under `/api/v1/run-terminals/runs/:taskId/:attemptId`. The `/api` compatibility mount exposes the same routes. `POST .../execute` returns `202 approval-required` until the exact request is approved, then returns `201 started` with the opaque handle. A stable `requestId` deduplicates concurrent and post-restart retries; changing any approved field under that identity returns conflict.
 
 ## Output and replay
 

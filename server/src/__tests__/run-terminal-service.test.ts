@@ -1,7 +1,7 @@
 import { mkdtemp, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   RunEventAppendInput,
   RunEventEnvelope,
@@ -13,6 +13,7 @@ import {
 } from '../services/run-terminal-service.js';
 
 const launchManifestDigest = `sha256:${'a'.repeat(64)}`;
+let requestSequence = 0;
 
 async function fixture(
   options: {
@@ -93,11 +94,12 @@ async function fixture(
     environment: {},
     allowedCommands: [process.execPath],
   };
-  return { service, context, events, journal };
+  return { service, context, events, persistedEvents, journal };
 }
 
 function request(script: string): RunTerminalExecuteRequest {
   return {
+    requestId: `terminal-request-${++requestSequence}`,
     command: process.execPath,
     args: ['-e', script],
     mode: 'pipe',
@@ -143,6 +145,42 @@ describe('RunTerminalService', () => {
       'stream.stdout',
       'command.completed',
     ]);
+  });
+
+  it('deduplicates approved request retries and applies the server-owned launch wrapper', async () => {
+    const { service, context, events } = await fixture();
+    const wrap = vi.fn((command: string, args: string[], cwd: string) => ({
+      command,
+      args,
+      cwd,
+      environment: { WRAPPED_FLAG: 'enforced' },
+    }));
+    const approvedRequest = request(
+      'setTimeout(() => process.stdout.write(process.env.WRAPPED_FLAG || "missing"), 25)'
+    );
+
+    const [first, retried] = await Promise.all([
+      service.execute({ ...context, wrap }, approvedRequest),
+      service.execute({ ...context, wrap }, approvedRequest),
+    ]);
+
+    expect(retried.id).toBe(first.id);
+    expect(first).toMatchObject({
+      requestId: approvedRequest.requestId,
+      requestDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+    await service.wait(first.id, 5_000);
+    expect(
+      service
+        .output(first.id)
+        .chunks.map((chunk) => chunk.content)
+        .join('')
+    ).toBe('enforced');
+    expect(wrap).toHaveBeenCalledTimes(1);
+    expect(events.filter((event) => event.kind === 'command.started')).toHaveLength(1);
+    await expect(
+      service.execute({ ...context, wrap }, { ...approvedRequest, args: ['-e', 'process.exit(1)'] })
+    ).rejects.toThrow('reused for a changed command');
   });
 
   it('fails closed when ownership cannot be persisted before handle return', async () => {
@@ -400,6 +438,33 @@ describe('RunTerminalService', () => {
         .chunks.map((chunk) => chunk.content)
         .join('')
     ).toBe('durable output');
+  });
+
+  it('migrates pre-request-identity v1 handles during durable replay', async () => {
+    const { service, context, persistedEvents, journal } = await fixture();
+    const started = await service.execute(context, request('process.stdout.write("legacy")'));
+    await service.wait(started.id, 5_000);
+    for (const event of persistedEvents) {
+      const handle = event.payload.handle;
+      if (!handle || typeof handle !== 'object' || Array.isArray(handle)) continue;
+      delete (handle as Record<string, unknown>).requestId;
+      delete (handle as Record<string, unknown>).requestDigest;
+    }
+
+    const restarted = new RunTerminalService({ journal });
+    const reconciliation = await restarted.reconcileAttempt(
+      context.workspaceId,
+      context.taskId,
+      context.attemptId
+    );
+
+    expect(reconciliation.handles).toContainEqual(
+      expect.objectContaining({
+        id: started.id,
+        requestId: `legacy:${started.id}`,
+        requestDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      })
+    );
   });
 
   it('fails closed by interrupting a dangling handle after restart', async () => {

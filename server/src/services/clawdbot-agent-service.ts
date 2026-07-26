@@ -150,6 +150,7 @@ import type {
   AcpStopReason,
   ProviderRuntimeCapabilityEvidence,
   RunApprovalActionClass,
+  RunApprovalRequest,
   RunApprovalRiskClass,
   WorkspaceExecutionTrustEvaluation,
   WorkspaceExecutionTrustScanResult,
@@ -162,10 +163,17 @@ import type {
   ExecutionTreeBudgetPolicy,
   ExecutionTreeEdgeKind,
   ExecutionTreeIdentity,
+  RunTerminalExecuteRequest,
   RunTerminalHandle,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
-import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
+import { redactString } from '../lib/redact.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../middleware/error-handler.js';
 import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
 import {
@@ -198,6 +206,7 @@ import {
   parseTaskEnvelope,
 } from '../schemas/task-envelope-schemas.js';
 import { parseRunLaunchManifest } from '../schemas/run-launch-manifest-schemas.js';
+import { RunTerminalExecuteRequestSchema } from '../schemas/run-terminal-schemas.js';
 import {
   ProviderCompletionService,
   type ProviderCompletionArtifactClaim,
@@ -408,6 +417,17 @@ export interface AgentStatus {
   terminals: RunTerminalHandle[];
 }
 
+export type RunTerminalExecutionResult =
+  | {
+      status: 'approval-required';
+      approval: RunApprovalRequest;
+    }
+  | {
+      status: 'started';
+      approval: RunApprovalRequest;
+      handle: RunTerminalHandle;
+    };
+
 export interface AgentQueueStatus {
   taskId: string;
   attemptId: string;
@@ -566,6 +586,7 @@ interface AgentTerminalResult {
 const pendingAgents = new Map<string, PendingAgent>();
 const startingAgents = new Set<string>();
 const finalizingAgents = new Map<PendingAgent, Promise<void>>();
+const pendingRunTerminalLaunches = new Map<PendingAgent, Set<Promise<RunTerminalHandle>>>();
 const budgetEvaluations = new Map<PendingAgent, Promise<void>>();
 const recoveredProcessMonitors = new Map<string, NodeJS.Timeout>();
 const scheduledRecoveries = new Map<
@@ -647,7 +668,7 @@ export class ClawdbotAgentService {
   private dependencyExecution: DependencyCircuitExecutionService;
   private runTerminals: Pick<
     RunTerminalService,
-    'list' | 'cleanupAttempt' | 'reconcileAttempt'
+    'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
   >;
   private logsDir: string;
 
@@ -697,7 +718,7 @@ export class ClawdbotAgentService {
     dependencyExecution: DependencyCircuitExecutionService = defaultDependencyCircuitExecutionService(),
     runTerminals: Pick<
       RunTerminalService,
-      'list' | 'cleanupAttempt' | 'reconcileAttempt'
+      'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
     > = getRunTerminalService()
   ) {
     this.configService = new ConfigService();
@@ -4182,6 +4203,10 @@ export class ClawdbotAgentService {
       })());
     const { status, taskBeforeCompletion, completionResult, dependencyCircuits } =
       preparedCompletion;
+    const terminalLaunches = [...(pendingRunTerminalLaunches.get(pending) ?? [])];
+    if (terminalLaunches.length > 0) {
+      await Promise.allSettled(terminalLaunches);
+    }
     await this.runTerminals.cleanupAttempt(
       pending.taskEnvelope.workspace.workspaceId,
       taskId,
@@ -9345,6 +9370,181 @@ export class ClawdbotAgentService {
         pending.attemptId
       ),
     };
+  }
+
+  async executeRunTerminal(
+    taskId: string,
+    attemptId: string,
+    inputRequest: RunTerminalExecuteRequest
+  ): Promise<RunTerminalExecutionResult> {
+    const request = RunTerminalExecuteRequestSchema.parse(inputRequest);
+    const pending = pendingAgents.get(taskId);
+    if (!pending || pending.attemptId !== attemptId) {
+      throw new NotFoundError('Active run terminal scope not found.');
+    }
+    await this.assertPendingManifestSnapshotForAttempt(taskId, attemptId);
+    const worktreeRoot = this.expandPath(pending.taskEnvelope.workspace.worktreePath);
+    const executeScope = pending.taskEnvelope.allowedSideEffects.find(
+      (sideEffect) =>
+        sideEffect.kind === 'process-execute' &&
+        path.resolve(this.expandPath(sideEffect.scope)) === path.resolve(worktreeRoot)
+    );
+    if (!executeScope) {
+      throw new ForbiddenError('The immutable task envelope does not allow process execution.', {
+        taskId,
+        attemptId,
+      });
+    }
+    const filesystemPlan = pending.filesystemSandboxPlan;
+    if (!filesystemPlan || !pending.runLaunchManifest.sandbox.filesystem) {
+      throw new ConflictError('Run terminal execution has no compiled filesystem posture.', {
+        taskId,
+        attemptId,
+      });
+    }
+    if (pending.runLaunchManifest.sandbox.enforcement === 'required' && !filesystemPlan.wrapper) {
+      throw new ConflictError(
+        'Run terminal execution cannot inherit the provider-native filesystem sandbox.',
+        {
+          taskId,
+          attemptId,
+          filesystemState: filesystemPlan.evidence.state,
+          remediation:
+            'Use a run with a host-wrappable filesystem posture or keep terminal execution disabled.',
+        }
+      );
+    }
+    for (const value of [request.command, ...request.args]) {
+      if (redactString(value) !== value) {
+        throw new ValidationError(
+          'Credential-shaped values are not allowed in terminal command arguments.'
+        );
+      }
+    }
+    await this.runTerminals.reconcileAttempt(
+      pending.taskEnvelope.workspace.workspaceId,
+      taskId,
+      attemptId
+    );
+
+    const commandClass = classifyPhaseCommand([request.command, ...request.args]);
+    const credentialScopes = request.environmentKeys
+      .map((key) => `env:${key}`)
+      .filter((reference) =>
+        pending.runLaunchManifest.runtime.credentialReferences.includes(reference)
+      );
+    const phase = await this.bindPhaseApproval(taskId, attemptId, pending.runLaunchManifest, [
+      { dimension: 'filesystem.read', requestedScopes: ['<workspace>'] },
+      { dimension: 'command.execute', requestedScopes: [commandClass] },
+      ...(commandClass === 'inspect'
+        ? []
+        : [
+            {
+              dimension: 'filesystem.write' as const,
+              requestedScopes: ['<workspace>'],
+            },
+          ]),
+      ...(credentialScopes.length > 0
+        ? [
+            {
+              dimension: 'credential.access' as const,
+              requestedScopes: credentialScopes,
+            },
+          ]
+        : []),
+      ...(commandClass === 'publish'
+        ? [
+            {
+              dimension: 'external.action' as const,
+              requestedScopes: ['mutate'],
+            },
+          ]
+        : []),
+    ]);
+    const requestedApproval = await this.approvalBroker.request({
+      workspaceId: pending.taskEnvelope.workspace.workspaceId,
+      taskId,
+      attemptId,
+      provider: pending.provider,
+      agentId: pending.agent,
+      providerRequestId: request.requestId,
+      requestKind: 'approval',
+      actionClass: 'shell',
+      action: `Execute ${request.command}`,
+      details: this.redactTraceText(JSON.stringify(request.args)).slice(0, 4_000),
+      resourceScope: [
+        `command:${commandClass}`,
+        `cwd:${request.cwd ?? '.'}`,
+        ...request.environmentKeys.map((key) => `env:${key}`),
+      ],
+      workingDirectory: request.cwd ?? '.',
+      riskClass: 'high',
+      policyReason:
+        'A provider-neutral terminal child requires exact operator approval before launch.',
+      evidenceRevision: pending.runLaunchManifest.digest,
+      mobileSafe: false,
+      exactAction: request,
+      ...(phase ? { phase } : {}),
+    });
+    const approval = await this.approvalBroker.get(
+      requestedApproval.id,
+      pending.taskEnvelope.workspace.workspaceId
+    );
+    if (approval.status === 'pending') {
+      return { status: 'approval-required', approval };
+    }
+    if (approval.status !== 'approved') {
+      throw new ForbiddenError('Run terminal execution was not approved.', {
+        approvalId: approval.id,
+        status: approval.status,
+      });
+    }
+    const approvedEnvironment = Object.fromEntries(
+      pending.runLaunchManifest.runtime.environmentKeys.flatMap((key) => {
+        const value = process.env[key];
+        return typeof value === 'string' ? [[key, value]] : [];
+      })
+    );
+    if (pendingAgents.get(taskId) !== pending || finalizingAgents.has(pending)) {
+      throw new ConflictError('Run terminal execution raced with run finalization.', {
+        taskId,
+        attemptId,
+      });
+    }
+    const launch = this.runTerminals.execute(
+      {
+        workspaceId: pending.taskEnvelope.workspace.workspaceId,
+        taskId,
+        attemptId,
+        launchManifestDigest: pending.runLaunchManifest.digest,
+        worktreeRoot,
+        environment: approvedEnvironment,
+        allowedCommands: [request.command],
+        wrap: (command, args, cwd) => {
+          const launch = this.filesystemSandboxLaunch(pending, command, args, cwd);
+          return {
+            ...launch,
+            environment: this.withRunEgressEnvironment(pending, launch.environment),
+          };
+        },
+      },
+      request
+    );
+    const launches = pendingRunTerminalLaunches.get(pending) ?? new Set();
+    launches.add(launch);
+    pendingRunTerminalLaunches.set(pending, launches);
+    void launch.then(
+      () => {
+        launches.delete(launch);
+        if (launches.size === 0) pendingRunTerminalLaunches.delete(pending);
+      },
+      () => {
+        launches.delete(launch);
+        if (launches.size === 0) pendingRunTerminalLaunches.delete(pending);
+      }
+    );
+    const handle = await launch;
+    return { status: 'started', approval, handle };
   }
 
   async assertRunControl(
