@@ -2733,6 +2733,13 @@ three times when HEAD, status, or fingerprints move, and fails closed if the
 worktree never stabilizes. Existing attempt records without an envelope remain
 readable.
 
+New envelopes may also include `subject.memory`, a maximum of eight ranked,
+human-accepted reflection lessons. Each item carries `reflectionId`, source
+task/run/event IDs, confidence, relevance, observed retrieval count, and the
+retrieval timestamp. The persisted envelope is the authoritative record of
+which reviewed memory influenced an attempt. Preview attempts select the same
+bounded context without incrementing observed use.
+
 Task create/update payloads may set reusable defaults under
 `executionPolicy`:
 

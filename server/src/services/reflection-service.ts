@@ -18,6 +18,7 @@ import type {
   ReflectionSourceKind,
   RejectReflectionCandidateInput,
   Task,
+  TaskEnvelopeMemoryReference,
 } from '@veritas-kanban/shared';
 import { auditLog, type AuditEvent } from './audit-service.js';
 import { withFileLock } from './file-lock.js';
@@ -25,13 +26,17 @@ import { getTaskService } from './task-service.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
 import { ensureWithinBase, stripHtml, validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { createLogger } from '../lib/logger.js';
 
+const log = createLogger('reflection');
 const MAX_CANDIDATES = 2000;
 const MAX_TEXT_LENGTH = 4000;
 const MAX_EVIDENCE_ITEMS = 10;
 const MAX_TAGS = 20;
 const MAX_CONTRADICTION_IDS = 20;
 const MAX_SOURCE_EVENT_IDS = 20;
+const MAX_RETRIEVALS_PER_CANDIDATE = 100;
+const DEFAULT_RETRIEVAL_LIMIT = 8;
 
 interface ReflectionState {
   version: 1;
@@ -45,6 +50,15 @@ export interface ReflectionListFilters {
   sourceKind?: ReflectionSourceKind;
   taskId?: string;
   limit?: number;
+}
+
+export interface ReflectionRetrievalInput {
+  task: Pick<Task, 'id' | 'title' | 'description' | 'project' | 'lessonTags'>;
+  workspaceId: string;
+  attemptId: string;
+  retrievedAt: string;
+  limit?: number;
+  recordAttribution?: boolean;
 }
 
 export interface ReflectionTaskService {
@@ -154,6 +168,105 @@ export class ReflectionService {
       duplicateGroups: this.duplicateGroups(filtered),
       total: filtered.length,
     };
+  }
+
+  async retrieveForTask(input: ReflectionRetrievalInput): Promise<TaskEnvelopeMemoryReference[]> {
+    await this.ensureLoaded();
+    const limit = Math.max(1, Math.min(Math.floor(input.limit ?? DEFAULT_RETRIEVAL_LIMIT), 20));
+    const queryTokens = tokenizeReflectionText(
+      [
+        input.task.title,
+        input.task.description,
+        input.task.project,
+        ...(input.task.lessonTags ?? []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+    const ranked = this.state.candidates
+      .filter(
+        (candidate) =>
+          candidate.status === 'accepted' &&
+          candidate.source.taskId === input.task.id &&
+          (candidate.appliedTargets ?? []).some((target) => target.kind === 'task-lesson')
+      )
+      .map((candidate) => ({
+        candidate,
+        score: reflectionRelevanceScore(candidate, input.task.id, queryTokens, input.retrievedAt),
+      }))
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          right.candidate.confidence - left.candidate.confidence ||
+          Date.parse(right.candidate.updatedAt) - Date.parse(left.candidate.updatedAt) ||
+          left.candidate.id.localeCompare(right.candidate.id)
+      )
+      .slice(0, limit);
+
+    const references = ranked.map(({ candidate, score }) => ({
+      reflectionId: candidate.id.slice(0, 160),
+      sourceTaskId: candidate.source.taskId?.slice(0, 160),
+      sourceRunId: candidate.source.runId?.slice(0, 160),
+      sourceEventIds:
+        candidate.source.eventIds
+          ?.slice(0, MAX_SOURCE_EVENT_IDS)
+          .map((eventId) => eventId.trim().slice(0, 160))
+          .filter(Boolean) ?? [],
+      category: candidate.category,
+      summary:
+        candidate.summary ||
+        candidate.correction ||
+        candidate.nextAttempt ||
+        'Reviewed reflection lesson.',
+      guidance:
+        candidate.nextAttempt ||
+        candidate.correction ||
+        candidate.summary ||
+        'Apply the reviewed lesson when relevant.',
+      confidence: candidate.confidence,
+      relevanceScore: score,
+      retrievalCount: (candidate.retrievalCount ?? 0) + (input.recordAttribution ? 1 : 0),
+      retrievedAt: input.retrievedAt,
+    }));
+
+    if (input.recordAttribution && ranked.length > 0) {
+      for (const { candidate, score } of ranked) {
+        candidate.retrievalCount = (candidate.retrievalCount ?? 0) + 1;
+        candidate.lastRetrievedAt = input.retrievedAt;
+        candidate.retrievals = [
+          ...(candidate.retrievals ?? []),
+          {
+            taskId: input.task.id,
+            attemptId: input.attemptId,
+            workspaceId: input.workspaceId,
+            relevanceScore: score,
+            retrievedAt: input.retrievedAt,
+          },
+        ].slice(-MAX_RETRIEVALS_PER_CANDIDATE);
+      }
+      await this.saveState();
+      for (const { candidate, score } of ranked) {
+        await this.audit({
+          action: 'reflection.retrieved',
+          actor: 'system',
+          resource: candidate.id,
+          details: {
+            taskId: input.task.id,
+            attemptId: input.attemptId,
+            workspaceId: input.workspaceId,
+            relevanceScore: score,
+            retrievalCount: candidate.retrievalCount,
+          },
+        }).catch((error) => {
+          log.warn(
+            { err: error, reflectionId: candidate.id, attemptId: input.attemptId },
+            'Failed to append reflection retrieval audit event'
+          );
+        });
+      }
+    }
+
+    return references;
   }
 
   async create(input: CreateReflectionCandidateInput): Promise<ReflectionCandidate> {
@@ -588,6 +701,55 @@ export class ReflectionService {
       },
     });
   }
+}
+
+function tokenizeReflectionText(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3)
+      .slice(0, 256)
+  );
+}
+
+function reflectionRelevanceScore(
+  candidate: ReflectionCandidate,
+  taskId: string,
+  queryTokens: Set<string>,
+  retrievedAt: string
+): number {
+  const candidateTokens = tokenizeReflectionText(
+    [
+      candidate.summary,
+      candidate.correction,
+      candidate.nextAttempt,
+      candidate.applicability,
+      ...(candidate.tags ?? []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+  );
+  const overlap = [...candidateTokens].filter((token) => queryTokens.has(token)).length;
+  const overlapRatio =
+    candidateTokens.size === 0 || queryTokens.size === 0
+      ? 0
+      : overlap / Math.min(candidateTokens.size, queryTokens.size);
+  const exactTaskBoost = candidate.source.taskId === taskId ? 0.5 : 0;
+  const relevance = Math.min(0.3, overlapRatio * 0.3);
+  const confidence = candidate.confidence * 0.12;
+  const observedUse = Math.min(0.06, Math.log1p(candidate.retrievalCount ?? 0) * 0.02);
+  const retrievedTime = Date.parse(retrievedAt);
+  const candidateTime = Date.parse(candidate.reviewedAt ?? candidate.updatedAt);
+  const ageDays =
+    Number.isFinite(retrievedTime) && Number.isFinite(candidateTime)
+      ? Math.max(0, (retrievedTime - candidateTime) / 86_400_000)
+      : 365;
+  const freshness = Math.max(0, 0.02 - Math.min(ageDays, 365) * (0.02 / 365));
+  return Number(
+    Math.min(1, exactTaskBoost + relevance + confidence + observedUse + freshness).toFixed(6)
+  );
 }
 
 let reflectionService: ReflectionService | null = null;

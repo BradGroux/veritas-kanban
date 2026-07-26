@@ -4,6 +4,7 @@ import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-mani
 import {
   TaskEnvelopeService,
   type CompletionEvidenceSource,
+  type TaskMemoryRetriever,
 } from '../services/task-envelope-service.js';
 import {
   renderAcpStdioTaskEnvelope,
@@ -73,9 +74,10 @@ function task(provider: string): Task {
 async function envelope(
   provider: string,
   commitPolicy: TaskCommitPolicy,
-  profileInstructions = 'Follow the release checklist.'
+  profileInstructions = 'Follow the release checklist.',
+  memoryRetriever?: TaskMemoryRetriever
 ) {
-  return new TaskEnvelopeService(evidenceSource).build({
+  return new TaskEnvelopeService(evidenceSource, memoryRetriever).build({
     task: task(provider),
     attemptId: 'attempt_transport',
     createdAt,
@@ -88,6 +90,35 @@ async function envelope(
 }
 
 describe('provider task-envelope renderers', () => {
+  it('renders accepted memory with durable reflection and source attribution', async () => {
+    const taskEnvelope = await envelope('codex-cli', 'allowed', 'Follow the release checklist.', {
+      retrieveForTask: async () => [
+        {
+          reflectionId: 'reflection_route_schema',
+          sourceTaskId: 'task_source',
+          sourceRunId: 'attempt_source',
+          sourceEventIds: ['event_source'],
+          category: 'team',
+          summary: 'Read the current route schema before editing.',
+          guidance: 'Inspect the schema and nearby tests first.',
+          confidence: 0.91,
+          relevanceScore: 0.84,
+          retrievalCount: 3,
+          retrievedAt: createdAt,
+        },
+      ],
+    });
+
+    const transport = renderCodexCliTaskEnvelope({ taskEnvelope });
+
+    expect(transport.content).toContain('## Accepted Memory');
+    expect(transport.content).toContain('### reflection_route_schema');
+    expect(transport.content).toContain(
+      'Source: task=task_source run=attempt_source events=event_source'
+    );
+    expect(transport.content).toContain('Guidance: Inspect the schema and nearby tests first.');
+  });
+
   it('renders an OpenClaw callback transport from a required-commit envelope', async () => {
     const taskEnvelope = await envelope('openclaw', 'required');
 

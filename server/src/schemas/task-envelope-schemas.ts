@@ -68,6 +68,26 @@ export const TaskEnvelopeSchema = z
         background: z.array(z.string().trim().min(1).max(4000)).max(64),
         constraints: z.array(z.string().trim().min(1).max(4000)).max(128),
         acceptanceCriteria: z.array(z.string().trim().min(1).max(4000)).max(256),
+        memory: z
+          .array(
+            z
+              .object({
+                reflectionId: idSchema,
+                sourceTaskId: idSchema.optional(),
+                sourceRunId: idSchema.optional(),
+                sourceEventIds: z.array(idSchema).max(20),
+                category: idSchema,
+                summary: textSchema,
+                guidance: textSchema,
+                confidence: z.number().min(0).max(1),
+                relevanceScore: z.number().min(0).max(1),
+                retrievalCount: z.number().int().min(0),
+                retrievedAt: isoDateSchema,
+              })
+              .strict()
+          )
+          .max(20)
+          .optional(),
       })
       .strict(),
     attempt: z

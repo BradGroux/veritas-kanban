@@ -634,6 +634,11 @@ CLI, Codex SDK, Codex app-server, Claude Code, and Hermes renderers all include
 the envelope digest, runtime identity, objective and bounded context, a bounded
 workspace-baseline summary, explicit commit policy, allowed side effects,
 expected outputs, verification gates, and completion evidence contract.
+When reviewed reflection lessons are relevant, every renderer also receives
+the same bounded **Accepted Memory** section. Each entry includes its stable
+reflection ID and source task, run, and event attribution. Harnesses should
+treat these as human-reviewed supporting guidance and preserve the identifiers
+when reporting whether a lesson helped or regressed the run.
 Profile instructions and saved task checkpoints are rendered as separate,
 attributed sections and are capped at 20,000 characters each. The persisted
 task envelope retains the complete baseline fingerprints used for later

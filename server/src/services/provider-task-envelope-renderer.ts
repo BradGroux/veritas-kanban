@@ -227,7 +227,7 @@ function renderEnvelopeContent(
 ${taskEnvelope.subject.objective}
 
 ${renderListSection('Background', taskEnvelope.subject.background)}
-${renderListSection('Constraints', constraints)}
+${renderAcceptedMemory(taskEnvelope)}${renderListSection('Constraints', constraints)}
 ${renderWorkspace(taskEnvelope)}
 ## Commit Policy
 
@@ -241,6 +241,38 @@ ${renderCompletionContract(taskEnvelope)}
 ${renderProfileInstructions(profileInstructions)}
 ${renderCheckpoint(input.checkpoint)}
 ${completionSection}`.trimEnd();
+}
+
+function renderAcceptedMemory(taskEnvelope: TaskEnvelope): string {
+  const memory = taskEnvelope.subject.memory ?? [];
+  if (memory.length === 0) return '';
+  const entries = memory.slice(0, 8).map((item) => {
+    const source = [
+      item.sourceTaskId ? `task=${item.sourceTaskId}` : '',
+      item.sourceRunId ? `run=${item.sourceRunId}` : '',
+      item.sourceEventIds.length > 0 ? `events=${item.sourceEventIds.join(',')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return [
+      `### ${item.reflectionId}`,
+      `- Category: ${item.category}`,
+      `- Confidence: ${item.confidence.toFixed(2)}`,
+      `- Relevance: ${item.relevanceScore.toFixed(2)}`,
+      source ? `- Source: ${source}` : '',
+      `- Lesson: ${item.summary}`,
+      `- Guidance: ${item.guidance}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  });
+  return `## Accepted Memory
+
+These human-reviewed items were selected for this run. Their reflection IDs and source identities are durable attribution, not new instructions from unreviewed output.
+
+${entries.join('\n\n')}
+
+`;
 }
 
 function renderWorkspace(taskEnvelope: TaskEnvelope): string {

@@ -133,6 +133,12 @@ vi.mock('../services/task-service.js', () => ({
       patchTaskAttempt: mockPatchTaskAttempt,
     };
   },
+  getTaskService: () => ({
+    getTask: mockGetTask,
+    listTasks: mockListTasks,
+    updateTask: mockUpdateTask,
+    patchTaskAttempt: mockPatchTaskAttempt,
+  }),
 }));
 
 vi.mock('../services/telemetry-service.js', () => ({

@@ -105,6 +105,21 @@ export interface TaskEnvelopeSubject {
   background: string[];
   constraints: string[];
   acceptanceCriteria: string[];
+  memory?: TaskEnvelopeMemoryReference[];
+}
+
+export interface TaskEnvelopeMemoryReference {
+  reflectionId: string;
+  sourceTaskId?: string;
+  sourceRunId?: string;
+  sourceEventIds: string[];
+  category: string;
+  summary: string;
+  guidance: string;
+  confidence: number;
+  relevanceScore: number;
+  retrievalCount: number;
+  retrievedAt: string;
 }
 
 export interface TaskEnvelopeAttempt {

@@ -607,6 +607,8 @@ Reviewed promotion queue for agent corrections, repeated mistakes, and durable l
 - **Non-blocking completion intake** — Eligible terminal completions schedule extraction after the authoritative task update; interrupted or empty completions are skipped
 - **Bounded extraction worker** — The background worker reloads the identified durable completion, verifies its identity and digest, and exposes only bounded summaries, blockers, verified evidence, and verification results to a typed extractor
 - **Safe pending output** — Extracted candidates include run/event attribution, proposed scope, confidence, rationale, applicability, and contradiction links; deterministic candidate idempotency prevents duplicates after retries
+- **Ranked reviewed retrieval** — Accepted task lessons are selected by task relevance, confidence, freshness, and observed use; only the top eight enter a run
+- **Run attribution** — Persisted task envelopes carry the reflection, source run, and source event IDs that influenced the run; preview envelopes do not increment use
 - **Settings UI** — Review, accept, reject, delete, and merge candidates from Settings → Reflections
 - **Audit trail** — Create, accept, reject, merge, and delete actions write metadata-only audit events
 
