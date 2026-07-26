@@ -90,8 +90,8 @@ veritas-kanban/
 
    Build `@veritas-kanban/shared` first and type-check its known consumers when
    a shared contract changes. Use `pnpm test` at an explicit integration,
-   critical-security, or release milestone, or when the deterministic CI
-   selector classifies the change as high risk.
+   critical-security, or release milestone, or when a maintainer explicitly
+   selects the `ci:full` gate.
 
 4. Commit using [conventional commits](#commit-conventions).
 
@@ -280,8 +280,8 @@ docs: update README with deployment instructions
 4. **Fill out the PR template** — describe changes, link related issues, include screenshots for UI changes.
 5. **Ensure the selected PR CI tier passes** — all checks started for the pull
    request must be green. The scope selector runs related tests for affected
-   workspaces, escalates high-risk paths to the complete suite, and records its
-   base/head evidence in the job summary. Use `ci:full` for release candidates
+   workspaces and records its base/head evidence in the job summary. Use
+   `ci:full` for release candidates, critical integration/security boundaries,
    or other changes that require an explicit complete-suite gate.
 6. **Request review** — a maintainer will review and may request changes.
 7. **Address feedback** — push additional commits as needed.
@@ -334,10 +334,10 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 | Documentation-only pull request or merge                                                                    | Static gates; unit-test jobs record skip decisions              | No workspace unit suite                                                                                 |
 | Ordinary code pull request                                                                                  | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Vitest `related` coverage for affected server, web, CLI, or MCP workspaces                              |
 | Ordinary code merge to `main`                                                                               | Default static gates plus `Changed Tests`                       | Related coverage limited to affected workspaces                                                         |
-| Pull request with `ci:full`, or a high-risk CI/manifest/shared/storage/desktop change                       | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and exact dual-storage parity                        |
+| Pull request with `ci:full`, or a CI selector/workflow control change                                      | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and exact dual-storage parity                        |
 | Merge whose reviewed head already passed `Workspace Unit Tests`                                             | Static gates; both unit-test tiers record skip decisions        | Reuses exact successful head evidence when that head is an ancestor of the merge commit                 |
 | Nightly 08:00 UTC or manual `CI` dispatch with `test_scope=full`                                            | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                                                  |
-| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha`                                      | Static gates plus the selected unit-test tier                   | Classifies `base_sha...HEAD` (or `HEAD^...HEAD`); high-risk paths still conservatively escalate to full |
+| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha`                                      | Static gates plus the selected unit-test tier                   | Classifies `base_sha...HEAD` (or `HEAD^...HEAD`) and stays focused unless CI controls changed            |
 | Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                                                |
 
 `Select Test Scope` is the decision record for each run. Its summary names the
@@ -347,12 +347,14 @@ The selector fails safe to the complete suite for unknown non-documentation
 paths and for changes to:
 
 - GitHub Actions workflows and the selector itself
-- package manifests, lockfiles, workspace configuration, and test configuration
-- the shared package
-- storage implementations and storage parity coverage
-- the desktop package and desktop readiness boundary
-- deletion of any non-documentation path, because related selection cannot
-  reconstruct the deleted dependency graph
+- full-suite evidence validation
+
+Shared contracts, package manifests, lockfiles, storage implementations,
+desktop source, and known-workspace deletions select focused affected
+workspaces. Build and typecheck remain whole-repository gates on every ordinary
+code pull request. The full workspace suite runs at scheduled, explicit
+`ci:full`, critical integration/security, and release milestones instead of
+being repeated for every source slice.
 
 Run the selector contract locally with:
 

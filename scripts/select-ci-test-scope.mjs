@@ -8,18 +8,18 @@ const WORKSPACE_NAMES = ['server', 'web', 'cli', 'mcp', 'desktop'];
 
 const FULL_SUITE_PATH_PATTERNS = [
   /^\.github\/workflows\//,
-  /^desktop\//,
-  /^shared\//,
-  /^server\/src\/storage\//,
-  /^server\/src\/__tests__\/storage\//,
   /^scripts\/select-ci-test-scope(?:\.test)?\.mjs$/,
   /^scripts\/verify-full-suite-job-evidence(?:\.test)?\.mjs$/,
-  /(^|\/)package\.json$/,
-  /(^|\/)(?:vitest|playwright|electron\.vite)\.config\.[cm]?[jt]s$/,
-  /(^|\/)tsconfig(?:\.[^/]+)?\.json$/,
-  /^eslint\.config\.[cm]?[jt]s$/,
+];
+
+const ALL_WORKSPACE_PATH_PATTERNS = [
+  /^shared\//,
+  /^package\.json$/,
   /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/,
+  /^eslint\.config\.[cm]?[jt]s$/,
+  /^(?:vitest|playwright|electron\.vite)\.config\.[cm]?[jt]s$/,
+  /^tsconfig(?:\.[^/]+)?\.json$/,
 ];
 
 const DOCUMENTATION_PATH_PATTERNS = [
@@ -63,6 +63,9 @@ export function affectedWorkspaces(files) {
   const selected = new Set();
 
   for (const file of files) {
+    if (ALL_WORKSPACE_PATH_PATTERNS.some((pattern) => pattern.test(file))) {
+      for (const workspace of WORKSPACE_NAMES) selected.add(workspace);
+    }
     const workspace = WORKSPACE_NAMES.find((name) => file.startsWith(`${name}/`));
     if (workspace) selected.add(workspace);
   }
@@ -82,7 +85,7 @@ export function classifyCiTestScope({
 }) {
   const files = normalizeFiles(changedFiles);
   const deleted = normalizeFiles(deletedFiles);
-  const packages = affectedWorkspaces(files);
+  const packages = affectedWorkspaces([...files, ...deleted]);
 
   if (eventName === 'schedule') {
     return {
@@ -125,14 +128,19 @@ export function classifyCiTestScope({
     };
   }
 
-  const deletedCodePaths = deleted.filter((file) => !isDocumentationPath(file));
-  if (deletedCodePaths.length > 0) {
+  const unclassifiedDeletedCodePaths = deleted.filter(
+    (file) =>
+      !isDocumentationPath(file) &&
+      !isDependencyFreeScopeControlPath(file) &&
+      affectedWorkspaces([file]).length === 0
+  );
+  if (unclassifiedDeletedCodePaths.length > 0) {
     return {
       scope: 'full',
       packages: WORKSPACE_NAMES,
       files,
-      reason: `Deleted non-documentation paths cannot use dependency-graph related selection and require the full suite: ${summarizePaths(
-        deletedCodePaths
+      reason: `Deleted non-documentation paths outside a known workspace fail safe to the full suite: ${summarizePaths(
+        unclassifiedDeletedCodePaths
       )}`,
     };
   }
@@ -143,7 +151,7 @@ export function classifyCiTestScope({
       scope: 'full',
       packages: WORKSPACE_NAMES,
       files,
-      reason: `High-risk CI, manifest, shared, storage, or desktop paths require the full suite: ${summarizePaths(
+      reason: `CI control paths require the full suite before the selector change can take effect: ${summarizePaths(
         fullSuitePaths
       )}`,
     };
@@ -177,7 +185,7 @@ export function classifyCiTestScope({
     (file) =>
       !isDocumentationPath(file) &&
       !isDependencyFreeScopeControlPath(file) &&
-      !WORKSPACE_NAMES.some((workspace) => file.startsWith(`${workspace}/`))
+      affectedWorkspaces([file]).length === 0
   );
   if (unclassifiedCodePaths.length > 0) {
     return {

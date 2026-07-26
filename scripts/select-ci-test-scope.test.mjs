@@ -68,13 +68,11 @@ test('ci:full overrides a documentation-only pull request', () => {
   assert.equal(result.scope, 'full');
 });
 
-test('selects the full suite for CI, manifest, shared, storage, and desktop paths', () => {
+test('selects the full suite only for CI control paths', () => {
   const paths = [
     '.github/workflows/ci.yml',
-    'package.json',
-    'shared/src/types/task.types.ts',
-    'server/src/storage/sqlite/repositories.ts',
-    'desktop/src/main/index.ts',
+    'scripts/select-ci-test-scope.mjs',
+    'scripts/verify-full-suite-job-evidence.mjs',
   ];
 
   for (const file of paths) {
@@ -84,6 +82,30 @@ test('selects the full suite for CI, manifest, shared, storage, and desktop path
     });
     assert.equal(result.scope, 'full', file);
     assert.equal(requiresFullSuite(file), true, file);
+  }
+});
+
+test('keeps shared, storage, desktop, and manifest changes focused by workspace', () => {
+  const cases = [
+    {
+      file: 'shared/src/types/task.types.ts',
+      packages: ['server', 'web', 'cli', 'mcp', 'desktop'],
+    },
+    { file: 'server/src/storage/sqlite/repositories.ts', packages: ['server'] },
+    { file: 'desktop/src/main/index.ts', packages: ['desktop'] },
+    { file: 'server/package.json', packages: ['server'] },
+    { file: 'package.json', packages: ['server', 'web', 'cli', 'mcp', 'desktop'] },
+    { file: 'pnpm-lock.yaml', packages: ['server', 'web', 'cli', 'mcp', 'desktop'] },
+  ];
+
+  for (const { file, packages } of cases) {
+    const result = classifyCiTestScope({
+      eventName: 'pull_request',
+      changedFiles: [file],
+    });
+    assert.equal(result.scope, 'focused', file);
+    assert.deepEqual(result.packages, packages, file);
+    assert.equal(requiresFullSuite(file), false, file);
   }
 });
 
@@ -114,7 +136,7 @@ test('focused manual runs still classify the selected range by risk', () => {
       manualScope: 'focused',
       changedFiles: ['pnpm-lock.yaml'],
     }).scope,
-    'full'
+    'focused'
   );
 });
 
@@ -164,12 +186,20 @@ test('unknown non-documentation paths fail safe to the full suite', () => {
   assert.equal(result.scope, 'full');
 });
 
-test('deleted source fails safe to full while deleted documentation stays lightweight', () => {
+test('deleted known-workspace source stays focused while unknown source fails safe', () => {
   assert.equal(
     classifyCiTestScope({
       eventName: 'pull_request',
       changedFiles: ['server/src/obsolete.ts'],
       deletedFiles: ['server/src/obsolete.ts'],
+    }).scope,
+    'focused'
+  );
+  assert.equal(
+    classifyCiTestScope({
+      eventName: 'pull_request',
+      changedFiles: ['site/src/obsolete.ts'],
+      deletedFiles: ['site/src/obsolete.ts'],
     }).scope,
     'full'
   );
