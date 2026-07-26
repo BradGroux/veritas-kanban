@@ -753,29 +753,40 @@ const KnowledgeSearchResultSchema = z
     }
   });
 
+export const KnowledgeSearchEvidenceSchema = z
+  .object({
+    query: z.string().trim().min(1).max(500),
+    backend: z.enum(['qmd', 'keyword']),
+    degraded: z.boolean(),
+    reason: z.string().trim().min(1).max(2_000).optional(),
+    results: z
+      .array(KnowledgeSearchResultSchema)
+      .min(1)
+      .max(50)
+      .refine(
+        (results) => uniqueStrings(results.map((result) => result.id)),
+        'Knowledge search result identities must be unique.'
+      ),
+    evidenceDigest: digestSchema,
+  })
+  .strict();
+
 export const CreateKnowledgeQueryPromotionBodySchema = z
   .object({
     operationId: opaqueTextSchema.max(240),
-    evidence: z
-      .object({
-        query: z.string().trim().min(1).max(500),
-        backend: z.enum(['qmd', 'keyword']),
-        degraded: z.boolean(),
-        reason: z.string().trim().min(1).max(2_000).optional(),
-        results: z
-          .array(KnowledgeSearchResultSchema)
-          .min(1)
-          .max(50)
-          .refine(
-            (results) => uniqueStrings(results.map((result) => result.id)),
-            'Knowledge search result identities must be unique.'
-          ),
-        evidenceDigest: digestSchema,
-      })
-      .strict(),
+    evidence: KnowledgeSearchEvidenceSchema,
     selectedResultIds: z.array(identifierSchema).min(1).max(50).refine(uniqueStrings),
     pages: pageCandidatesSchema,
     contradictions: z.array(z.object(contradictionShape).strict()).max(500).optional(),
+  })
+  .strict();
+
+export const CreateKnowledgeCitedExportBodySchema = z
+  .object({
+    title: z.string().trim().min(1).max(240),
+    evidence: KnowledgeSearchEvidenceSchema,
+    selectedResultIds: z.array(identifierSchema).min(1).max(50).refine(uniqueStrings),
+    redaction: z.enum(['none', 'standard', 'strict']).optional(),
   })
   .strict();
 

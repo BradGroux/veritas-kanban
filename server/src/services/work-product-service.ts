@@ -17,6 +17,7 @@ import type {
   TaskAttempt,
   WorkflowPipelineSummary,
 } from '@veritas-kanban/shared';
+import { ForbiddenError } from '../middleware/error-handler.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkProductRepository } from '../storage/sqlite/work-product-repository.js';
 
@@ -389,7 +390,13 @@ export class WorkProductService {
     product: WorkProduct,
     options: { format?: 'markdown' | 'json'; redacted?: boolean } = {}
   ): string {
-    const redacted = options.redacted ?? product.redaction?.exportDefault !== 'full';
+    const knowledgeExportPolicy = product.metadata?.knowledgeExportPolicy;
+    if (knowledgeExportPolicy === 'redacted-only' && options.redacted === false) {
+      throw new ForbiddenError('Knowledge collection policy requires redacted export.');
+    }
+    const redacted =
+      knowledgeExportPolicy === 'redacted-only' ||
+      (options.redacted ?? product.redaction?.exportDefault !== 'full');
     if (options.format === 'json') {
       const exported = redacted ? this.redactProduct(product) : product;
       return JSON.stringify(exported, null, 2);

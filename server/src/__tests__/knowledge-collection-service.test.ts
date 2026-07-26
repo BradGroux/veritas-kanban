@@ -11,8 +11,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   KnowledgeCollectionService,
   type KnowledgeCollectionActor,
+  type KnowledgeWorkProductWriter,
 } from '../services/knowledge-collection-service.js';
 import type { KnowledgeQmdSearchAdapter } from '../services/knowledge-qmd-search-service.js';
+import { WorkProductService } from '../services/work-product-service.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SQLITE_BASE_MIGRATIONS } from '../storage/sqlite/migrations.js';
 
@@ -396,6 +398,39 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
         pages: [pageCandidate('tampered-promotion', source.id)],
       })
     ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+    const exported = await service.createCitedExport(WORKSPACE_ID, collection.id, AGENT, {
+      title: 'Reviewed dispatch evidence',
+      evidence: response,
+      selectedResultIds: [derivedResult?.id ?? 'missing'],
+    });
+    expect(exported).toMatchObject({
+      kind: 'markdown',
+      workspaceId: WORKSPACE_ID,
+      redaction: { level: 'standard', exportDefault: 'redacted' },
+      metadata: {
+        knowledgeCollectionId: collection.id,
+        knowledgeEvidenceDigest: response.evidenceDigest,
+        knowledgeExportPolicy: 'redacted-only',
+      },
+    });
+    expect(exported.render).toMatchObject({
+      kind: 'markdown',
+      markdown: expect.stringContaining(`sourceId=${source.id}`),
+    });
+    expect(exported.render.kind === 'markdown' ? exported.render.markdown : '').toContain(
+      'locator={"kind":"line-range","startLine":1,"endLine":1}'
+    );
+    expect(() => new WorkProductService().exportProduct(exported, { redacted: false })).toThrow(
+      'Knowledge collection policy requires redacted export.'
+    );
+    await expect(
+      service.createCitedExport(WORKSPACE_ID, collection.id, AGENT, {
+        title: 'Unsafe full export',
+        evidence: response,
+        selectedResultIds: [derivedResult?.id ?? 'missing'],
+        redaction: 'none',
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
 
     const qmdService = await createService(storageType, {
       search: async ({ pages }) => [
@@ -770,6 +805,22 @@ async function createService(
     search: async () => {
       throw new Error('qmd unavailable');
     },
+  },
+  workProductWriter: KnowledgeWorkProductWriter = {
+    create: async (input) => ({
+      id: 'wp_knowledge_export',
+      workspaceId: input.workspaceId ?? 'local',
+      kind: input.kind,
+      title: input.title,
+      status: 'active',
+      render: input.render,
+      version: 1,
+      redaction: input.redaction,
+      sourceLinks: input.sourceLinks,
+      metadata: input.metadata,
+      createdAt: '2026-07-26T12:00:00.000Z',
+      updatedAt: '2026-07-26T12:00:00.000Z',
+    }),
   }
 ): Promise<KnowledgeCollectionService> {
   const root = await mkdtemp(path.join(tmpdir(), `veritas-knowledge-${storageType}-`));
@@ -781,12 +832,14 @@ async function createService(
           storageType,
           filePath: path.join(root, 'knowledge-collections.json'),
           qmdSearch,
+          workProductWriter,
           now,
         })
       : new KnowledgeCollectionService({
           storageType,
           sqliteConnectionOptions: { databasePath: path.join(root, 'knowledge.db') },
           qmdSearch,
+          workProductWriter,
           now,
         });
   cleanups.push(async () => {

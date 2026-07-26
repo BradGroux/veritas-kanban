@@ -66,6 +66,7 @@ The initial REST surface is mounted at both `/api/v1/knowledge/collections` and 
 | `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                           | Read a derived page         |
 | `POST` | `/knowledge/collections/:collectionId/search`                                  | Search raw and derived data |
 | `POST` | `/knowledge/collections/:collectionId/search/promotions`                       | Promote selected results    |
+| `POST` | `/knowledge/collections/:collectionId/exports`                                 | Create a cited work product |
 | `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals`                     | List dry runs               |
 | `POST` | `/knowledge/collections/:collectionId/ingestion/proposals`                     | Create a dry run            |
 | `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read a dry run              |
@@ -89,14 +90,20 @@ Search responses carry an evidence digest over the exact query and bounded resul
 
 The proposal persists the query, evidence digest, and sorted selected result IDs. Its candidate pages, source IDs, contradictions, review, atomic apply, reversal, attribution, and idempotency all use the same transaction contract as source ingestion. Promotion never adds a second mutation path.
 
+## Cited work-product export
+
+A validated search selection can also create a Markdown work product. The render preserves each selected result's raw-versus-derived kind, backend, score, redacted snippet, and exact source citations. Relative source links point back to immutable source metadata or the cited derived page. Work-product metadata retains the collection, query, evidence digest, export policy, selected-result count, and citation count so later Markdown or JSON export does not sever provenance.
+
+The collection export policy is enforced twice. `forbidden` blocks work-product creation. `redacted-only` prevents a `none` request, defaults the product to redacted export, and causes the general work-product exporter to reject an explicit full-export override. `allowed` collections can request full output but still default to standard redaction.
+
 ## Current delivery boundary
 
-This foundation does not yet claim cited work-product export, policy-aware content redaction beyond secret-shaped snippets, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited search, query promotion, and proposal transaction and must not add an alternate source or page store.
+This foundation does not yet claim policy-aware content redaction beyond secret-shaped snippets or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited search, query promotion, cited export, and proposal transaction and must not add an alternate source or page store.
 
 The next implementation slices are:
 
-1. policy-aware redaction and launch-manifest restrictions; and
-2. cited work-product export enforcement.
+1. launch-manifest source restrictions; and
+2. classification-aware redaction beyond secret-shaped content.
 
 ## Code
 

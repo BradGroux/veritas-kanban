@@ -7,6 +7,7 @@ import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sendPaginated } from '../middleware/response-envelope.js';
 import {
   CreateKnowledgeIngestionProposalBodySchema,
+  CreateKnowledgeCitedExportBodySchema,
   CreateKnowledgeQueryPromotionBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
@@ -192,6 +193,22 @@ router.post(
       input
     );
     res.status(201).json(proposal);
+  })
+);
+
+router.post(
+  '/:collectionId/exports',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const input = parseBody(CreateKnowledgeCitedExportBodySchema, req.body);
+    const context = requestContext(req);
+    const product = await getKnowledgeCollectionService().createCitedExport(
+      context.workspaceId,
+      collectionId,
+      context.actor,
+      input
+    );
+    res.status(201).json(product);
   })
 );
 
