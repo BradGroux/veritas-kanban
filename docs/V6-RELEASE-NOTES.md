@@ -2,7 +2,7 @@
 
 Veritas Kanban 6.1.0 completes the agentic-control roadmap that followed the first stable v6 release. The release gives Buzz, Grok Build, OpenAI Codex, Claude Code, GitHub Copilot CLI, Hermes, and OpenClaw one provider-neutral control plane while retaining explicit transport and capability differences. It also adds governed knowledge collections, durable execution supervision, run-scoped network enforcement, safe workspace rewind, and resilient output handling.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.0 supersedes 6.0.2 as the supported stable v6 release after signed assets and updater metadata are published.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.0 supersedes 6.0.2 as the supported stable v6 release; signed assets and updater metadata are published.
 
 ## Harness Support On Equal Footing
 
