@@ -4440,10 +4440,26 @@ authenticated context; these identities cannot be supplied by the caller.
 Stale revisions return `409 Conflict`, terminal states cannot reopen, and
 cross-workspace lookups return `404`.
 
-The `durable-goal/v1` record is currently the persistence and operator-control
-contract. Automatic continuation scheduling, usage-event aggregation, and
-conversation rollover build on this record; clients must not create their own
-hidden continuation loop in the meantime.
+The `durable-goal/v1` record also exposes `usageEvents` and
+`continuationAttempts`. Each completed provider run contributes one
+idempotency-keyed usage event, verified evidence, and run link. Aggregate goal
+usage is the sum of those deduplicated events.
+
+For an active automatic goal, the supervisor evaluates required evidence,
+blockers, turn limits, and aggregate budgets after the provider completion is
+durable. It persists a `planned` continuation with a stable admission
+idempotency key before calling the normal provider follow-up path. That path
+still enforces runtime capabilities, admission limits, sandbox and phase
+authority, approvals, immutable launch manifests, and the goal's remaining
+budget. The plan becomes `dispatched` only after an attempt or queue identity
+exists.
+
+Startup reconciliation closes the crash window in either direction. If the
+child attempt already exists, the planned continuation is linked without
+launching another provider. Otherwise the same admission idempotency key is
+reused. Failed admission blocks the goal with an actionable reason. Provider
+blockers, missing continuation handles, turn limits, budget limits, and manual
+continuation mode all fail closed instead of creating a hidden retry loop.
 
 ---
 

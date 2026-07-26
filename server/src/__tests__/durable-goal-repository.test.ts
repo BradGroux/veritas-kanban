@@ -66,14 +66,52 @@ async function exerciseRepository(
       },
     ],
   });
-  const paused = await service.transition(created.id, {
+  const withOutcome = await service.recordRunOutcome(created.id, {
     expectedRevision: created.revision,
+    run: { taskId: 'task-865', attemptId: 'attempt-1' },
+    usageEvent: {
+      id: 'completion-1',
+      taskId: 'task-865',
+      attemptId: 'attempt-1',
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        costUsd: 0.01,
+        toolCalls: 2,
+        runtimeSeconds: 3,
+        idleRuntimeSeconds: 0,
+        retries: 0,
+        fanOut: 1,
+      },
+    },
+  });
+  const withPlan = await service.planContinuation(created.id, {
+    expectedRevision: withOutcome.revision,
+    sourceTaskId: 'task-865',
+    sourceAttemptId: 'attempt-1',
+    message: 'Continue after restart.',
+  });
+  const paused = await service.transition(created.id, {
+    expectedRevision: withPlan.revision,
     to: 'paused',
     actorId: 'operator-brad',
     reason: 'Exercise durable compare-and-set state.',
   });
 
-  expect(paused).toMatchObject({ state: 'paused', revision: 2 });
+  expect(paused).toMatchObject({
+    state: 'paused',
+    revision: 4,
+    usage: { totalTokens: 15, costUsd: 0.01 },
+    usageEvents: [{ id: 'completion-1' }],
+    continuationAttempts: [
+      {
+        sourceAttemptId: 'attempt-1',
+        state: 'planned',
+        admissionIdempotencyKey: `durable-goal:${created.id}:attempt-1`,
+      },
+    ],
+  });
   expect(
     await repository.list({
       workspaceId: 'workspace-a',
@@ -96,7 +134,7 @@ async function exerciseRepository(
       actorId: 'operator-brad',
       reason: 'Resume after restart.',
     })
-  ).toMatchObject({ state: 'active', revision: 3 });
+  ).toMatchObject({ state: 'active', revision: 5 });
 }
 
 async function temporaryRoot(): Promise<string> {

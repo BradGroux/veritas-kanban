@@ -77,6 +77,32 @@ export interface DurableGoalRunLink {
   linkedAt: string;
 }
 
+export interface DurableGoalUsageEvent {
+  id: string;
+  taskId: string;
+  attemptId?: string;
+  usage: AgentBudgetUsage;
+  recordedAt: string;
+}
+
+export const DURABLE_GOAL_CONTINUATION_STATES = ['planned', 'dispatched', 'failed'] as const;
+export type DurableGoalContinuationState = (typeof DURABLE_GOAL_CONTINUATION_STATES)[number];
+
+export interface DurableGoalContinuationAttempt {
+  id: string;
+  sourceTaskId: string;
+  sourceAttemptId: string;
+  state: DurableGoalContinuationState;
+  admissionIdempotencyKey: string;
+  message: string;
+  resultAttemptId?: string;
+  queueId?: string;
+  errorCode?: string;
+  errorSummary?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DurableGoalTransition {
   revision: number;
   from: DurableGoalState;
@@ -99,8 +125,10 @@ export interface DurableGoalRecord {
   continuation: DurableGoalContinuationPolicy;
   budgets?: AgentBudgetLimits;
   usage: AgentBudgetUsage;
+  usageEvents: DurableGoalUsageEvent[];
   currentRun?: DurableGoalRunLink;
   continuationChain: DurableGoalRunLink[];
+  continuationAttempts: DurableGoalContinuationAttempt[];
   blockers: DurableGoalBlocker[];
   completionRequirements: DurableGoalCompletionRequirement[];
   completionEvidence: DurableGoalCompletionEvidence[];

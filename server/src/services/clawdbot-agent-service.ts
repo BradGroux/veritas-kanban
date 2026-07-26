@@ -34,6 +34,11 @@ import {
 } from './run-egress-gateway-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import {
+  getDurableGoalSupervisorService,
+  type DurableGoalContinuationDispatchRequest,
+  type DurableGoalSupervisorService,
+} from './durable-goal-supervisor-service.js';
+import {
   AgentHealthService,
   type AgentHealthChecker,
   type AgentHealthStatus,
@@ -579,6 +584,10 @@ export class ClawdbotAgentService {
   >;
   private sandboxPolicies: Pick<SandboxPolicyService, 'dryRunWithTrace'>;
   private runEgressGateway: Pick<RunEgressGatewayService, 'start' | 'stopRun'>;
+  private durableGoalSupervisor: Pick<
+    DurableGoalSupervisorService,
+    'handleRunCompletion' | 'reconcilePlannedForTask'
+  >;
   private workspaceExecutionTrust: Pick<
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
@@ -620,7 +629,11 @@ export class ClawdbotAgentService {
     runEgressGateway: Pick<
       RunEgressGatewayService,
       'start' | 'stopRun'
-    > = getRunEgressGatewayService()
+    > = getRunEgressGatewayService(),
+    durableGoalSupervisor: Pick<
+      DurableGoalSupervisorService,
+      'handleRunCompletion' | 'reconcilePlannedForTask'
+    > = getDurableGoalSupervisorService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -648,6 +661,7 @@ export class ClawdbotAgentService {
     this.filesystemSandbox = filesystemSandbox;
     this.sandboxPolicies = sandboxPolicies;
     this.runEgressGateway = runEgressGateway;
+    this.durableGoalSupervisor = durableGoalSupervisor;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -1100,6 +1114,7 @@ export class ClawdbotAgentService {
         '[ClawdbotAgent] Durable run supervisor startup reconciliation complete'
       );
     }
+    await this.reconcileDurableGoalContinuations(tasks);
   }
 
   /**
@@ -4061,6 +4076,7 @@ export class ClawdbotAgentService {
     const { durationMs } = timing;
     const completionStepType = successful ? 'complete' : 'error';
     const requestFile = path.join(getRuntimeDir(), 'agent-requests', `${taskId}.json`);
+    let durableGoalSupervised = false;
     const postCommitEffects: Array<[string, () => void | Promise<void>]> = [
       [
         'release worktree ownership',
@@ -4152,6 +4168,27 @@ export class ClawdbotAgentService {
           }
         },
       ],
+      [
+        'supervise durable goal completion',
+        async () => {
+          // Fail closed: if ownership lookup errors or is ambiguous, do not let
+          // the legacy recovery loop race a possible durable goal continuation.
+          durableGoalSupervised = true;
+          const result = await this.durableGoalSupervisor.handleRunCompletion(
+            {
+              workspaceId: pending.taskEnvelope.workspace.workspaceId,
+              taskId,
+              attemptId,
+              parentAttemptId: pending.runLaunchParentAttemptId,
+              conversationId: pending.conversation.conversationId,
+              completion: completionResult,
+              usage: pending.executionTreeUsage,
+            },
+            (request) => this.dispatchDurableGoalContinuation(request)
+          );
+          durableGoalSupervised = result.action !== 'not-found';
+        },
+      ],
     ];
     for (const [effect, run] of postCommitEffects) {
       try {
@@ -4164,7 +4201,7 @@ export class ClawdbotAgentService {
       }
     }
 
-    if (!successful) {
+    if (!successful && !durableGoalSupervised) {
       await this.planTaskRecovery(
         taskId,
         preparedCompletion.completedAttempt,
@@ -4518,6 +4555,61 @@ export class ClawdbotAgentService {
         message,
       },
     });
+  }
+
+  private async dispatchDurableGoalContinuation(
+    request: DurableGoalContinuationDispatchRequest
+  ): Promise<{ attemptId: string; queueId?: string }> {
+    const result = await this.followUpConversation(
+      request.sourceTaskId,
+      request.sourceAttemptId,
+      request.message,
+      {
+        admissionIdempotencyKey: request.admissionIdempotencyKey,
+        budget: request.remainingBudget
+          ? {
+              enabled: true,
+              name: `Durable goal ${request.goal.id} remaining budget`,
+              scope: 'run',
+              limits: request.remainingBudget,
+              hardAction: 'pause',
+            }
+          : undefined,
+        rootTaskId:
+          request.goal.root.kind === 'task'
+            ? request.goal.root.taskId
+            : (request.goal.root.taskId ?? request.sourceTaskId),
+      }
+    );
+    return {
+      attemptId: result.attemptId,
+      ...('queueId' in result ? { queueId: result.queueId } : {}),
+    };
+  }
+
+  private async reconcileDurableGoalContinuations(tasks: Task[]): Promise<void> {
+    for (const task of tasks) {
+      const attempt = task.attempt;
+      const workspaceId = attempt?.taskEnvelope?.workspace.workspaceId;
+      if (!attempt || !workspaceId) continue;
+      try {
+        await this.durableGoalSupervisor.reconcilePlannedForTask(
+          {
+            workspaceId,
+            taskId: task.id,
+            currentAttemptId: attempt.id,
+            parentAttemptId: attempt.runLaunchParentAttemptId,
+            currentAttemptRunning: attempt.status === 'running',
+          },
+          (request) => this.dispatchDurableGoalContinuation(request)
+        );
+      } catch (error) {
+        log.warn(
+          { err: error, taskId: task.id, attemptId: attempt.id },
+          '[ClawdbotAgent] Failed to reconcile a durable goal continuation'
+        );
+      }
+    }
   }
 
   async forkConversation(
