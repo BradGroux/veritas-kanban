@@ -5,6 +5,8 @@ export type SandboxNetworkDefault = 'allow' | 'deny';
 export type SandboxCredentialMode = 'none' | 'brokered' | 'env-passthrough';
 export type SandboxPolicyDecision = 'allow' | 'warn' | 'block';
 export type SandboxPolicyRuleStatus = 'supported' | 'unsupported' | 'advisory';
+export const RUN_EGRESS_POLICY_SCHEMA_VERSION = 'run-egress-policy/v1' as const;
+export const RUN_EGRESS_DECISION_SCHEMA_VERSION = 'run-egress-decision/v1' as const;
 export type FilesystemSandboxBackendId = 'codex-sandbox' | 'provider-native' | 'none';
 export type FilesystemSandboxBackendState = 'available' | 'native' | 'unavailable';
 export type SandboxProviderCapabilityId =
@@ -34,11 +36,78 @@ export interface SandboxFilesystemRules {
 export interface SandboxNetworkRules {
   defaultEgress: SandboxNetworkDefault;
   allowedHosts: string[];
+  /** Explicit deny rules take precedence over allow rules. Defaults to empty for legacy presets. */
+  deniedHosts?: string[];
   allowedMethods: string[];
   allowedPathPrefixes: string[];
   blockPrivateNetwork: boolean;
   blockMetadataEndpoints: boolean;
   blockLoopback: boolean;
+  /** Allows a blocked request to enter the scoped run-approval flow. */
+  allowApprovals?: boolean;
+  /** Dangerous compatibility override required before an allow rule may use `*`. */
+  dangerouslyAllowGlobalWildcard?: boolean;
+}
+
+export type RunEgressProtocol = 'http' | 'https' | 'ws' | 'wss' | 'socks';
+export type RunEgressHostRuleKind = 'any' | 'exact' | 'subdomain';
+
+export interface RunEgressHostRule {
+  kind: RunEgressHostRuleKind;
+  value: string;
+}
+
+export interface RunEgressPolicy {
+  schemaVersion: typeof RUN_EGRESS_POLICY_SCHEMA_VERSION;
+  policyHash: string;
+  defaultEgress: SandboxNetworkDefault;
+  allowedHosts: RunEgressHostRule[];
+  deniedHosts: RunEgressHostRule[];
+  allowedMethods: string[];
+  allowedPathPrefixes: string[];
+  blockPrivateNetwork: boolean;
+  blockMetadataEndpoints: boolean;
+  blockLoopback: boolean;
+  allowApprovals: boolean;
+  tlsInspection: 'disabled';
+}
+
+export interface RunEgressDecisionInput {
+  protocol: RunEgressProtocol;
+  host: string;
+  port: number;
+  method?: string;
+  /** Path only. Query strings and fragments must be removed before evaluation. */
+  path?: string;
+  resolvedAddresses?: string[];
+  tlsInspected?: boolean;
+}
+
+export type RunEgressDecisionReason =
+  | 'allowed-by-default'
+  | 'allowed-by-host-rule'
+  | 'default-deny'
+  | 'denied-host'
+  | 'method-not-allowed'
+  | 'path-not-allowed'
+  | 'tls-inspection-required'
+  | 'private-network-blocked'
+  | 'loopback-blocked'
+  | 'metadata-endpoint-blocked'
+  | 'invalid-destination';
+
+export interface RunEgressDecision {
+  schemaVersion: typeof RUN_EGRESS_DECISION_SCHEMA_VERSION;
+  decision: 'allow' | 'block';
+  reason: RunEgressDecisionReason;
+  policyHash: string;
+  protocol: RunEgressProtocol;
+  hostKey: string;
+  port: number;
+  method?: string;
+  matchedRule?: RunEgressHostRule;
+  blockedAddressClass?: 'private' | 'loopback' | 'link-local' | 'metadata';
+  approvalEligible: boolean;
 }
 
 export interface SandboxEnvironmentRules {
@@ -121,6 +190,8 @@ export interface SandboxPolicyDryRunResult {
     envPassthrough: string[];
     credentialRefs: string[];
     filesystemBackend: FilesystemSandboxBackendStatus;
+    /** Compiled harness-owned policy. Provider launch injection lands with the gateway runtime. */
+    networkPolicy?: RunEgressPolicy;
   };
   evaluations: SandboxPolicyRuleEvaluation[];
   unsupportedRules: SandboxPolicyRuleEvaluation[];

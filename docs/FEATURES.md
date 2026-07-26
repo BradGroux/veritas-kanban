@@ -1168,8 +1168,14 @@ Reusable launch-time sandbox presets for provider execution guardrails.
 
 - Create, edit, enable, disable, and delete custom presets in **Settings -> Agents -> Sandbox Policies**.
 - Assign presets to agent profiles or workflow agents; one-off agent starts can pass `sandboxPresetId` to override the profile default.
-- Presets declare filesystem read/write paths, denied paths, dotfile masking, network default egress, allowed hosts and paths, environment passthrough keys, credential mode, and broker references.
+- Presets declare filesystem read/write paths, denied paths, dotfile masking,
+  network default egress, allowed and denied hosts, methods and paths,
+  private/loopback/metadata protection, scoped approval eligibility, environment
+  passthrough keys, credential mode, and broker references.
 - Dry-runs compare a preset against provider capabilities before execution and show the effective sandbox mode, network state, environment allowlist, unsupported controls, and governance trace ID.
+- Dry-runs also compile `run-egress-policy/v1`: host rules are normalized, deny
+  rules take precedence, unsafe global allow wildcards fail validation, and a
+  deterministic policy digest binds later gateway launch evidence.
 
 **Enforcement:**
 

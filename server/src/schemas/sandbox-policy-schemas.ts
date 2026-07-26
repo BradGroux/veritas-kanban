@@ -49,6 +49,7 @@ export const sandboxPolicyPresetSchema = z.object({
   network: z.object({
     defaultEgress: sandboxNetworkDefaultSchema,
     allowedHosts: z.array(z.string().min(1).max(255)).max(100).default([]),
+    deniedHosts: z.array(z.string().min(1).max(255)).max(100).default([]),
     allowedMethods: z
       .array(
         z
@@ -63,6 +64,8 @@ export const sandboxPolicyPresetSchema = z.object({
     blockPrivateNetwork: z.boolean(),
     blockMetadataEndpoints: z.boolean(),
     blockLoopback: z.boolean(),
+    allowApprovals: z.boolean().default(false),
+    dangerouslyAllowGlobalWildcard: z.boolean().default(false),
   }),
   environment: z.object({
     passthrough: z.array(envKeySchema).max(120).default([]),
