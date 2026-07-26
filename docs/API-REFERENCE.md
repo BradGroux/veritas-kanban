@@ -63,6 +63,7 @@
 50. [Rate Limits](#rate-limits)
 51. [Additional Endpoint Groups](#additional-endpoint-groups)
 52. [Execution Admission](#execution-admission)
+53. [Durable Goals](#durable-goals)
 
 ---
 
@@ -4377,6 +4378,67 @@ Once the queue entry is durably `dispatched`, workflow recovery owns the run.
 Startup reconciliation resumes a root or step that stopped at that ownership
 boundary exactly once; already-running provider work continues to use the
 existing operator-reconciliation rules.
+
+## Durable Goals
+
+Durable goals persist an evidence-gated objective independently of any one
+provider run. Reads require `agent:read`; creation and mutation require
+`admin:manage`. Every endpoint is scoped to the authenticated workspace.
+
+| Method | Path                            | Description                                    |
+| ------ | ------------------------------- | ---------------------------------------------- |
+| `GET`  | `/api/goals`                    | List bounded goals with state and root filters |
+| `POST` | `/api/goals`                    | Create one evidence-gated goal at revision 1   |
+| `GET`  | `/api/goals/:goalId`            | Inspect one goal and its continuation chain    |
+| `POST` | `/api/goals/:goalId/transition` | Apply one compare-and-set state transition     |
+| `POST` | `/api/goals/:goalId/runs`       | Link one task, workflow, or conversation run   |
+
+List filters are repeatable `state`, `rootTaskId`, `rootWorkflowId`, and
+`limit` (1-1000). Goal states are `active`, `paused`, `blocked`,
+`awaiting-approval`, `usage-limited`, `budget-limited`, `complete`,
+`cancelled`, and `failed`. Complete, cancelled, and failed goals are terminal.
+
+Creation requires an objective, at least one acceptance criterion, exactly one
+task or workflow root, a manual or automatic continuation policy, and at least
+one required completion-evidence contract. Optional constraints and aggregate
+token, cost, time, tool, retry, and fan-out limits are bounded by the same
+budget metric names used elsewhere in the runtime.
+
+```json
+{
+  "objective": "Deliver the provider migration.",
+  "constraints": ["Do not broaden provider authority."],
+  "acceptanceCriteria": ["Focused provider fixtures pass."],
+  "root": { "kind": "task", "taskId": "task_0123456789abcdef" },
+  "continuation": {
+    "mode": "automatic",
+    "maxTurns": 20,
+    "maxRollovers": 2,
+    "requireApprovalForRollover": true
+  },
+  "completionRequirements": [
+    {
+      "id": "provider-tests",
+      "description": "Focused provider fixtures pass.",
+      "required": true,
+      "verificationKind": "test"
+    }
+  ]
+}
+```
+
+Transitions require `expectedRevision`, `state`, and an operator reason.
+Entering `blocked` also requires an actionable blocker. Completing a goal
+requires evidence for every required completion item. The server derives the
+workspace, actor, verification timestamp, and evidence verifier from
+authenticated context; these identities cannot be supplied by the caller.
+Stale revisions return `409 Conflict`, terminal states cannot reopen, and
+cross-workspace lookups return `404`.
+
+The `durable-goal/v1` record is currently the persistence and operator-control
+contract. Automatic continuation scheduling, usage-event aggregation, and
+conversation rollover build on this record; clients must not create their own
+hidden continuation loop in the meantime.
 
 ---
 
