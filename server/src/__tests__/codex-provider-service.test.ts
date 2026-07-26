@@ -219,6 +219,7 @@ import type { SandboxPolicyService } from '../services/sandbox-policy-service.js
 import type { WorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
 import type { AdmissionControlService } from '../services/admission-control-service.js';
 import type { RunTerminalService } from '../services/run-terminal-service.js';
+import type { WorkspaceCheckpointService } from '../services/workspace-checkpoint-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -271,7 +272,11 @@ function testableService(
   runTerminals: Pick<
     RunTerminalService,
     'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
-  > = testRunTerminals()
+  > = testRunTerminals(),
+  workspaceCheckpoints: Pick<
+    WorkspaceCheckpointService,
+    'captureBoundary'
+  > = testWorkspaceCheckpoints()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -303,10 +308,20 @@ function testableService(
     },
     undefined,
     undefined,
-    runTerminals
+    runTerminals,
+    workspaceCheckpoints
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testWorkspaceCheckpoints(): Pick<WorkspaceCheckpointService, 'captureBoundary'> {
+  return {
+    captureBoundary: vi.fn(async () => ({
+      status: 'skipped' as const,
+      reason: 'unmanaged-worktree' as const,
+    })),
+  };
 }
 
 function testRunTerminals(): Pick<
@@ -483,7 +498,7 @@ function createControllableChild() {
 
 function createFakeCodexAppServerChild(
   received: Array<Record<string, unknown>>,
-  options: { requestApproval?: boolean } = {}
+  options: { requestApproval?: boolean; holdTurnOpen?: boolean } = {}
 ) {
   const child = new EventEmitter() as EventEmitter & {
     stdin: PassThrough;
@@ -625,9 +640,18 @@ function createFakeCodexAppServerChild(
               },
             })}\n`
           );
-        } else {
+        } else if (!options.holdTurnOpen) {
           writeCompletion();
         }
+      } else if (request.method === 'turn/steer') {
+        child.stdout.write(
+          `${JSON.stringify({
+            id,
+            result: { turnId: 'turn-app-server-fixture' },
+          })}\n`
+        );
+      } else if (request.method === 'thread/compact/start' || request.method === 'turn/interrupt') {
+        child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`);
       }
     }
   });
@@ -1551,6 +1575,93 @@ describe('ClawdbotAgentService Codex providers', () => {
       );
     }
   );
+
+  it('captures workspace boundaries before launch, steering, and compaction', async () => {
+    const received: Array<Record<string, unknown>> = [];
+    const child = createFakeCodexAppServerChild(received, { holdTurnOpen: true });
+    mockSpawn.mockReturnValue(child);
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-app-server',
+          name: 'OpenAI Codex app-server',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-app-server',
+          model: 'gpt-5.6',
+        },
+      ],
+    });
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+      type: agent.type,
+      name: agent.name,
+      enabled: agent.enabled,
+      configured: true,
+      command: agent.command,
+      executableFound: true,
+      executablePath: '/opt/homebrew/bin/codex',
+      providerVersion: 'codex-cli 0.145.0',
+      providerVersionSource: 'codex --version',
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-07-23T00:00:00.000Z',
+    }));
+    const workspaceCheckpoints = testWorkspaceCheckpoints();
+    const captureBoundary = vi.mocked(workspaceCheckpoints.captureBoundary);
+    const service = testableService(
+      tmpDir,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      testWorkspaceExecutionTrust(),
+      testAdmissionControl(),
+      testRunTerminals(),
+      workspaceCheckpoints
+    );
+
+    const status = await service.startAgent(task.id, 'codex-app-server');
+    await waitFor(() => {
+      expect(received.some(({ method }) => method === 'turn/start')).toBe(true);
+    });
+    expect(captureBoundary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: task.id,
+        attemptId: status.attemptId,
+        boundary: 'before-user-turn',
+        operationId: `launch:${status.attemptId}:before-user-turn`,
+      })
+    );
+
+    captureBoundary.mockClear();
+    await service.sendMessage(task.id, 'Please check the focused regression.', {
+      expectedAttemptId: status.attemptId,
+      actor: 'operator',
+    });
+    expect(captureBoundary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundary: 'before-user-turn',
+        operationId: expect.stringMatching(/^operator-turn:/),
+        turnId: 'turn-app-server-fixture',
+      })
+    );
+    expect(received.some(({ method }) => method === 'turn/steer')).toBe(true);
+
+    captureBoundary.mockClear();
+    await service.compactConversation(task.id, status.attemptId);
+    expect(captureBoundary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundary: 'before-compaction',
+        operationId: expect.stringMatching(/^compact:/),
+        turnId: 'turn-app-server-fixture',
+      })
+    );
+    expect(received.some(({ method }) => method === 'thread/compact/start')).toBe(true);
+
+    await service.stopAgent(task.id, status.attemptId);
+  });
 
   it(
     'pauses a Codex app-server action until the correlated broker decision resumes it',

@@ -165,6 +165,8 @@ import type {
   ExecutionTreeIdentity,
   RunTerminalExecuteRequest,
   RunTerminalHandle,
+  WorkspaceCheckpoint,
+  WorkspaceCheckpointBoundary,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { redactString } from '../lib/redact.js';
@@ -263,6 +265,10 @@ import {
   ConversationLifecycleService,
   type ConversationSource,
 } from './conversation-lifecycle-service.js';
+import {
+  getWorkspaceCheckpointService,
+  type WorkspaceCheckpointService,
+} from './workspace-checkpoint-service.js';
 import {
   assertGrokBuildVersionEvidence,
   buildCopilotAcpArgs,
@@ -670,6 +676,7 @@ export class ClawdbotAgentService {
     RunTerminalService,
     'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
   >;
+  private workspaceCheckpoints: Pick<WorkspaceCheckpointService, 'captureBoundary'>;
   private logsDir: string;
 
   constructor(
@@ -719,7 +726,11 @@ export class ClawdbotAgentService {
     runTerminals: Pick<
       RunTerminalService,
       'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
-    > = getRunTerminalService()
+    > = getRunTerminalService(),
+    workspaceCheckpoints: Pick<
+      WorkspaceCheckpointService,
+      'captureBoundary'
+    > = getWorkspaceCheckpointService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -751,6 +762,7 @@ export class ClawdbotAgentService {
     this.reflectionExtractionJobs = reflectionExtractionJobs;
     this.dependencyExecution = dependencyExecution;
     this.runTerminals = runTerminals;
+    this.workspaceCheckpoints = workspaceCheckpoints;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -3169,6 +3181,25 @@ export class ClawdbotAgentService {
       };
       await this.admission.assertExecutionTreeLaunchAllowed(executionTree.rootObjectiveId);
       this.assertProviderAdmissionEvidence(providerAdmission, attempt);
+      const launchCheckpointBoundary: WorkspaceCheckpointBoundary = runRetry
+        ? 'before-retry'
+        : executionTree.edge === 'provider-handoff'
+          ? 'before-provider-handoff'
+          : 'before-user-turn';
+      const launchPending = pendingAgents.get(taskId);
+      if (!launchPending || launchPending.attemptId !== attemptId) {
+        throw new ConflictError('Workspace checkpoint no longer matches the pending launch.', {
+          taskId,
+          attemptId,
+        });
+      }
+      await this.capturePendingWorkspaceCheckpoint(
+        taskId,
+        launchPending,
+        launchCheckpointBoundary,
+        `launch:${attemptId}:${launchCheckpointBoundary}`,
+        startedEvent.eventId
+      );
       await this.dependencyExecution.executeAll(
         [
           providerDependencyIdentity(
@@ -4729,6 +4760,13 @@ export class ClawdbotAgentService {
     });
 
     if (pending.provider === 'codex-app-server' && pending.codexAppServerControl) {
+      await this.capturePendingWorkspaceCheckpoint(
+        taskId,
+        pending,
+        'before-user-turn',
+        `operator-turn:${journalEvent.eventId}`,
+        journalEvent.eventId
+      );
       const turnId = await pending.codexAppServerControl.steer(content);
       const conversation = await this.recordConversationIdentity(taskId, pending.attemptId, {
         turnId,
@@ -4941,6 +4979,12 @@ export class ClawdbotAgentService {
     if (!pending.codexAppServerControl) {
       throw new ConflictError('The active provider has no native compaction control.');
     }
+    await this.capturePendingWorkspaceCheckpoint(
+      taskId,
+      pending,
+      'before-compaction',
+      `compact:${pending.conversation.updatedAt}`
+    );
     await pending.codexAppServerControl.compact();
     const conversation = await this.transitionPendingConversation(taskId, pending, 'compacted');
     await this.recordConversationControlEvent(taskId, pending, 'compact', actor, conversation);
@@ -8620,6 +8664,68 @@ export class ClawdbotAgentService {
     traceService.endStep(attemptId, stepType);
   }
 
+  private async capturePendingWorkspaceCheckpoint(
+    taskId: string,
+    pending: PendingAgent,
+    boundary: WorkspaceCheckpointBoundary,
+    operationId: string,
+    causalEventId?: string
+  ): Promise<WorkspaceCheckpoint | null> {
+    if (pendingAgents.get(taskId) !== pending) {
+      throw new ConflictError('Workspace checkpoint no longer matches the active run.', {
+        taskId,
+        attemptId: pending.attemptId,
+      });
+    }
+    const result = await this.workspaceCheckpoints.captureBoundary({
+      taskEnvelope: pending.taskEnvelope,
+      taskId,
+      attemptId: pending.attemptId,
+      operationId,
+      boundary,
+      turnId: pending.conversation.currentTurnId,
+      conversationCursor: workspaceConversationCursor(pending.conversation),
+    });
+    if (result.status === 'skipped') return null;
+
+    const { checkpoint } = result;
+    const event = await this.appendRunEvent(
+      taskId,
+      pending.attemptId,
+      'workspace.checkpoint.created',
+      {
+        checkpointId: checkpoint.id,
+        boundary: checkpoint.boundary,
+        checkpointDigest: checkpoint.digest,
+        worktreeManifestId: checkpoint.worktreeManifestId,
+        fileCount: checkpoint.fileCount,
+        contentBytes: checkpoint.contentBytes,
+        excludedCount: checkpoint.excludedCount,
+        ...(checkpoint.conversationCursor
+          ? {
+              conversationCursorDigest: digestRunLaunchValue(checkpoint.conversationCursor),
+            }
+          : {}),
+      },
+      {
+        provider: 'system',
+        adapter: 'workspace-checkpoint',
+        agent: pending.agent,
+        model: pending.model,
+        causalEventId,
+        dedupeKey: `workspace.checkpoint.created:${checkpoint.id}`,
+      }
+    );
+    this.emitJournalOutput(event);
+    this.recordTraceStep(pending.attemptId, 'execute', {
+      eventType: 'workspace.checkpoint.created',
+      checkpointId: checkpoint.id,
+      boundary: checkpoint.boundary,
+      checkpointDigest: checkpoint.digest,
+    });
+    return checkpoint;
+  }
+
   private async appendRunEvent(
     taskId: string,
     attemptId: string,
@@ -11550,6 +11656,25 @@ function conversationLaunchCapabilities(
 ): ProviderRuntimeCapabilityId[] {
   if (mode === 'fresh') return [];
   return mode === 'resume' ? ['run.resume', 'run.follow-up'] : ['run.fork', 'run.follow-up'];
+}
+
+function workspaceConversationCursor(
+  conversation: ConversationLifecycleRecord
+): string | undefined {
+  const conversationId = conversation.conversationId ?? conversation.parentConversationId;
+  const turnId = conversation.currentTurnId ?? conversation.forkTurnId;
+  const itemId = conversation.lastItemId;
+  if (!conversationId && !turnId && !itemId) return undefined;
+  const cursor = JSON.stringify({
+    schemaVersion: 'provider-conversation-cursor/v1',
+    ...(conversationId ? { conversationId } : {}),
+    ...(turnId ? { turnId } : {}),
+    ...(itemId ? { itemId } : {}),
+  });
+  if (cursor.length > 2_048) {
+    throw new ConflictError('Provider conversation cursor exceeds the checkpoint integrity bound.');
+  }
+  return cursor;
 }
 
 function manifestConversation(

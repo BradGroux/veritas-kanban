@@ -58,6 +58,13 @@ export interface WorkspaceCheckpointLookup {
   checkpointId: string;
 }
 
+export interface WorkspaceCheckpointOperationLookup {
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  operationIdDigest: string;
+}
+
 export interface WorkspaceCheckpointListQuery {
   workspaceId: string;
   taskId: string;
@@ -149,12 +156,12 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
       conversationCursor: input.conversationCursor,
       policy: this.policy,
     });
-    const checkpointId = checkpointIdFor(
-      input.workspaceId,
-      input.taskId,
-      input.attemptId,
-      operationIdDigest
-    );
+    const checkpointId = getWorkspaceCheckpointIdForOperation({
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      attemptId: input.attemptId,
+      operationIdDigest,
+    });
     const lookup = {
       workspaceId: input.workspaceId,
       taskId: input.taskId,
@@ -709,17 +716,18 @@ function normalizePolicy(
   return policy;
 }
 
-function checkpointIdFor(
-  workspaceId: string,
-  taskId: string,
-  attemptId: string,
-  operationIdDigest: string
+export function getWorkspaceCheckpointIdForOperation(
+  lookup: WorkspaceCheckpointOperationLookup
 ): string {
+  validateScope(lookup);
+  if (!/^sha256:[a-f0-9]{64}$/.test(lookup.operationIdDigest)) {
+    throw new Error('Workspace checkpoint operation digest is invalid.');
+  }
   return `checkpoint_${digestRunLaunchValue({
-    workspaceId,
-    taskId,
-    attemptId,
-    operationIdDigest,
+    workspaceId: lookup.workspaceId,
+    taskId: lookup.taskId,
+    attemptId: lookup.attemptId,
+    operationIdDigest: lookup.operationIdDigest,
   })
     .slice('sha256:'.length)
     .slice(0, 24)}`;
