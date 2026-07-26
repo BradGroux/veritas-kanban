@@ -23,6 +23,7 @@ import {
 } from '../schemas/workspace-checkpoint-schemas.js';
 import { ConflictError } from '../middleware/error-handler.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import { digestWorkspaceCheckpointRewindEvidence } from '../utils/workspace-checkpoint-rewind-digest.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import {
@@ -119,6 +120,10 @@ export interface WorkspaceCheckpointRewindRecoveryInput extends WorkspaceCheckpo
   worktreePath: string;
 }
 
+export interface WorkspaceCheckpointRewindRollbackInput extends WorkspaceCheckpointRewindRecoveryInput {
+  expectedTransactionDigest: string;
+}
+
 export interface WorkspaceCheckpointRepository {
   capture(input: WorkspaceCheckpointCaptureInput): Promise<WorkspaceCheckpoint>;
   get(lookup: WorkspaceCheckpointLookup): Promise<WorkspaceCheckpoint | null>;
@@ -134,6 +139,9 @@ export interface WorkspaceCheckpointRepository {
   ): Promise<WorkspaceCheckpointRewindTransaction | null>;
   recoverRewind(
     input: WorkspaceCheckpointRewindRecoveryInput
+  ): Promise<WorkspaceCheckpointRewindTransaction>;
+  rollbackRewind(
+    input: WorkspaceCheckpointRewindRollbackInput
   ): Promise<WorkspaceCheckpointRewindTransaction>;
 }
 
@@ -697,6 +705,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     const { digest: previewDigest, ...previewPayload } = preview;
     if (
       previewDigest !== digestRunLaunchValue(previewPayload) ||
+      preview.evidenceDigest !== digestWorkspaceCheckpointRewindEvidence(preview) ||
       preview.workspaceId !== input.workspaceId ||
       preview.taskId !== input.taskId ||
       preview.attemptId !== input.attemptId ||
@@ -778,6 +787,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
       ...scope,
       operationIdDigest,
       previewDigest,
+      previewEvidenceDigest: preview.evidenceDigest,
       expectedCurrentDigest: preview.current.digest,
       targetCheckpointId: target.id,
       targetCheckpointDigest: target.digest,
@@ -831,6 +841,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
         operationIdDigest,
         requestDigest,
         previewDigest,
+        previewEvidenceDigest: preview.evidenceDigest,
         expectedCurrentDigest: preview.current.digest,
         targetCheckpointId: target.id,
         targetCheckpointDigest: target.digest,
@@ -987,17 +998,39 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
   ): Promise<WorkspaceCheckpointRewindTransaction> {
     validateScope(input);
     validateIdentifier(input.transactionId, 'transactionId');
-    return serializeRewindMutation(input, () => this.recoverRewindLocked(input));
+    return serializeRewindMutation(input, () => this.recoverRewindLocked(input, false));
+  }
+
+  async rollbackRewind(
+    input: WorkspaceCheckpointRewindRollbackInput
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    validateScope(input);
+    validateIdentifier(input.transactionId, 'transactionId');
+    if (!/^sha256:[a-f0-9]{64}$/.test(input.expectedTransactionDigest)) {
+      throw new Error('Workspace rewind transaction digest is invalid.');
+    }
+    return serializeRewindMutation(input, () =>
+      this.recoverRewindLocked(input, true, input.expectedTransactionDigest)
+    );
   }
 
   private async recoverRewindLocked(
-    input: WorkspaceCheckpointRewindRecoveryInput
+    input: WorkspaceCheckpointRewindRecoveryInput,
+    rollbackCommitted: boolean,
+    expectedTransactionDigest?: string
   ): Promise<WorkspaceCheckpointRewindTransaction> {
     const transaction = await this.getRewind(input);
     if (!transaction) {
       throw new ConflictError('Workspace rewind transaction was not found.');
     }
-    if (transaction.state === 'committed' || transaction.state === 'rolled-back') {
+    if (transaction.state === 'rolled-back') return transaction;
+    if (expectedTransactionDigest && transaction.digest !== expectedTransactionDigest) {
+      throw new ConflictError(
+        'Workspace rewind rollback does not match the committed transaction digest.',
+        { transactionId: transaction.id }
+      );
+    }
+    if (transaction.state === 'committed' && !rollbackCommitted) {
       return transaction;
     }
     const [target, descendant] = await Promise.all([
@@ -1052,6 +1085,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     let recovering = await this.bestEffortRewindState(transaction, {
       state: 'rolling-back',
       updatedAt: this.now().toISOString(),
+      completedAt: undefined,
     });
     await this.applyCheckpointFiles(
       canonicalRoot,

@@ -202,6 +202,7 @@ export const WorkspaceCheckpointRewindTransactionSchema = z
     operationIdDigest: digestSchema,
     requestDigest: digestSchema,
     previewDigest: digestSchema,
+    previewEvidenceDigest: digestSchema,
     expectedCurrentDigest: digestSchema,
     targetCheckpointId: identifierSchema,
     targetCheckpointDigest: digestSchema,
