@@ -44,6 +44,7 @@ import {
   promptRegistryAccess,
   reportAccess,
   reportRoutesAccess,
+  runTerminalAccess,
   sandboxPolicyAccess,
   schedulerAccess,
   scoringAccess,
@@ -144,6 +145,7 @@ import sandboxPolicyRoutes from '../sandbox-policies.js';
 import credentialBrokerRoutes from '../credential-broker.js';
 import { runSessionRoutes } from '../run-sessions.js';
 import { runApprovalRoutes } from '../run-approvals.js';
+import { runTerminalRoutes } from '../run-terminals.js';
 import { workspaceCapabilityRoutes } from '../workspace-capabilities.js';
 import { schedulerRoutes } from '../scheduler.js';
 import { queueMonitorRoutes } from '../queue-monitors.js';
@@ -265,6 +267,7 @@ v1Router.use('/workspace-capabilities', workspaceCapabilityAccess, workspaceCapa
 v1Router.use('/decisions', taskAccess, decisionRoutes);
 v1Router.use('/run-sessions', taskAccess, runSessionRoutes);
 v1Router.use('/run-approvals', taskAccess, runApprovalRoutes);
+v1Router.use('/run-terminals', runTerminalAccess, runTerminalRoutes);
 v1Router.use('/governance/traces', policyAccess, governanceTraceRoutes);
 v1Router.use('/feedback', feedbackAccess, feedbackRoutes);
 v1Router.use('/prompt-registry', promptRegistryAccess, promptRegistryRoutes);

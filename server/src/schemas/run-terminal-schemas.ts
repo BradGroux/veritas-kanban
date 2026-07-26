@@ -13,6 +13,13 @@ const environmentKeySchema = z
   .max(120)
   .regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 
+const terminalIdentifierSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(240)
+  .regex(/^[A-Za-z0-9._:-]+$/);
+
 export const RunTerminalExecuteRequestSchema = z
   .object({
     command: z
@@ -28,6 +35,43 @@ export const RunTerminalExecuteRequestSchema = z
     startMode: z.enum(RUN_TERMINAL_START_MODES),
     cwd: z.string().trim().min(1).max(1_000).optional(),
     environmentKeys: z.array(environmentKeySchema).max(128),
+  })
+  .strict();
+
+export const RunTerminalScopeParamsSchema = z
+  .object({
+    taskId: terminalIdentifierSchema,
+    attemptId: terminalIdentifierSchema,
+  })
+  .strict();
+
+export const RunTerminalHandleParamsSchema = RunTerminalScopeParamsSchema.extend({
+  handleId: terminalIdentifierSchema,
+}).strict();
+
+export const RunTerminalOutputQuerySchema = z
+  .object({
+    afterCursor: z.coerce.number().int().nonnegative().default(0),
+    limit: z.coerce.number().int().min(1).max(200).default(200),
+  })
+  .strict();
+
+export const RunTerminalWaitRequestSchema = z
+  .object({
+    timeoutMs: z.number().int().min(0).max(300_000),
+  })
+  .strict();
+
+export const RunTerminalWaitManyRequestSchema = z
+  .object({
+    handleIds: z
+      .array(terminalIdentifierSchema)
+      .min(1)
+      .max(64)
+      .refine((handleIds) => new Set(handleIds).size === handleIds.length, {
+        message: 'Terminal handle IDs must be unique.',
+      }),
+    timeoutMs: z.number().int().min(0).max(300_000),
   })
   .strict();
 

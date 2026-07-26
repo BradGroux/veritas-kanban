@@ -17,7 +17,7 @@ The first implementation supports background pipe-mode commands with:
 - causal `command.started`, `command.detached`, `stream.stdout`, `stream.stderr`, and `command.completed` journal events; and
 - bounded handle and retained-output reconstruction from the durable causal journal.
 
-PTY mode, interactive stdin, restart reattachment, and external API/CLI/MCP exposure are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
+PTY mode, interactive stdin, restart reattachment, and externally initiated execution are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
 
 ## Authority boundary
 
@@ -28,6 +28,12 @@ The child is launched without a shell. On Unix-like systems it owns a detached p
 Terminal children are subordinate to their owning run. Detaching changes foreground coordination only; it does not outlive the attempt. Attempt cleanup terminates matching live handles in parallel and verifies that already-terminal handles have complete journal evidence before allowing the run completion to commit.
 
 When a provider completion arrives after a server restart, Veritas reconciles the attempt's durable terminal journal before cleanup. Handles that cannot be safely reattached are recorded as interrupted before the provider's terminal result is committed.
+
+## Control API
+
+Authenticated clients with `agent:read` can list active attempt handles and retrieve cursor-addressed output. Clients with `agent:write` can perform bounded single/any/all waits, detach a foreground handle, and terminate a handle. Every operation resolves the active task attempt first and then verifies the opaque handle's workspace, task, and attempt identity. Scope mismatches return not found rather than leaking another run's handle.
+
+The canonical routes live under `/api/v1/run-terminals/runs/:taskId/:attemptId`. The `/api` compatibility mount exposes the same routes. Execution is intentionally absent from this public surface until exact command approval and the run's filesystem and network posture are applied to the terminal child.
 
 ## Output and replay
 

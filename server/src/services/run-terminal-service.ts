@@ -251,6 +251,23 @@ export class RunTerminalService {
     return cloneHandle(this.require(handleId).handle);
   }
 
+  assertScope(
+    handleId: string,
+    workspaceId: string,
+    taskId: string,
+    attemptId: string
+  ): RunTerminalHandle {
+    const handle = this.get(handleId);
+    if (
+      handle.workspaceId !== required(workspaceId, 'workspaceId') ||
+      handle.taskId !== required(taskId, 'taskId') ||
+      handle.attemptId !== required(attemptId, 'attemptId')
+    ) {
+      throw new NotFoundError('Run terminal handle not found.');
+    }
+    return handle;
+  }
+
   list(workspaceId: string, taskId: string, attemptId: string): RunTerminalHandle[] {
     const scope = {
       workspaceId: required(workspaceId, 'workspaceId'),

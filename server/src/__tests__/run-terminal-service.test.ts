@@ -121,6 +121,12 @@ describe('RunTerminalService', () => {
       mode: 'pipe',
       startMode: 'background',
     });
+    expect(
+      service.assertScope(started.id, context.workspaceId, context.taskId, context.attemptId)
+    ).toMatchObject({ id: started.id });
+    expect(() =>
+      service.assertScope(started.id, 'workspace_other', context.taskId, context.attemptId)
+    ).toThrow('not found');
     expect(await service.wait(started.id, 5_000)).toMatchObject({
       completed: true,
       timedOut: false,
