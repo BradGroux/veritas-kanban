@@ -271,12 +271,20 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   launch credential broker is active.
 - Run-owned commands use `run-terminal-handle/v1`, never a provider's generic
   stdin channel. The current runtime supports background pipe mode with
-  manifest-approved executable, cwd, and environment posture, bounded
+  exact-action approval, stable request IDs, manifest-approved executable,
+  cwd, and environment posture, bounded
   cursor-addressable redacted output, bounded single/any/all waits,
   foreground detachment, process-group termination, and durable journal
   reconstruction. A dangling handle becomes `interrupted` after restart
   because inherited pipes cannot be reattached safely. PTY, interactive stdin,
   and restart reattachment fail closed until their typed controls ship.
+- Harnesses start a run-owned command with
+  `POST /api/v1/run-terminals/runs/:taskId/:attemptId/execute`. Send one stable
+  `requestId`, a command plus argument array, `mode: "pipe"`, start mode,
+  optional worktree-relative cwd, and environment names only. A `202`
+  response requires an operator decision through `run-approvals`; retry the
+  identical request after approval to receive the `201` handle. Never place
+  credential values in arguments or environment fields.
 
 ---
 

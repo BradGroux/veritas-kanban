@@ -150,5 +150,10 @@ describe('shared API permission metadata', () => {
         method: 'POST',
       }).permissions
     ).toEqual(['agent:write']);
+    expect(
+      getApiPermissionRequirement('/api/v1/run-terminals/runs/task_1/attempt_1/execute', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['agent:write']);
   });
 });

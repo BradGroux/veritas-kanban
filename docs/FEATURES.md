@@ -2206,7 +2206,7 @@ RESTful API designed for both human and AI agent consumption.
 | `/api/v1/changes`                    | Efficient polling change feed                                 |
 | `/api/v1/agents/register`            | Agent registry (register, list, heartbeat, stats, deregister) |
 | `/api/v1/agents/permissions`         | Agent permission levels and approval workflows                |
-| `/api/v1/run-terminals`              | Active run terminal handles, output, waits, and control        |
+| `/api/v1/run-terminals`              | Approved run commands, handles, output, waits, and control    |
 | `/api/v1/hooks`                      | Task lifecycle hooks (list, create, update, delete, events)   |
 | `/api/v1/errors`                     | Error learning (record, search, stats)                        |
 | `/api/v1/docs`                       | Documentation freshness (list, staleness, verify)             |

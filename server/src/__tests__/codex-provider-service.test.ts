@@ -270,7 +270,7 @@ function testableService(
   admission: AdmissionControlService = testAdmissionControl(),
   runTerminals: Pick<
     RunTerminalService,
-    'list' | 'cleanupAttempt' | 'reconcileAttempt'
+    'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
   > = testRunTerminals()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
@@ -311,9 +311,10 @@ function testableService(
 
 function testRunTerminals(): Pick<
   RunTerminalService,
-  'list' | 'cleanupAttempt' | 'reconcileAttempt'
+  'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
 > {
   return {
+    execute: vi.fn(),
     list: vi.fn(() => []),
     cleanupAttempt: vi.fn(async () => []),
     reconcileAttempt: vi.fn(async (workspaceId, taskId, attemptId) => ({
@@ -3164,6 +3165,8 @@ describe('ClawdbotAgentService Codex providers', () => {
       taskId: task.id,
       attemptId: active.attemptId,
       launchManifestDigest: active.runLaunchManifest.digest,
+      requestId: 'terminal-status-request',
+      requestDigest: `sha256:${'b'.repeat(64)}`,
       mode: 'pipe' as const,
       startMode: 'background' as const,
       state: 'running' as const,
@@ -3218,6 +3221,194 @@ describe('ClawdbotAgentService Codex providers', () => {
     expect(vi.mocked(runTerminals.cleanupAttempt).mock.invocationCallOrder[0]).toBeLessThan(
       completionWrite as number
     );
+  });
+
+  it('requires exact approval before starting a sandbox-bound run terminal', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const runTerminals = testRunTerminals();
+    let approvalStatus: RunApprovalRequest['status'] = 'pending';
+    const approvalRequest = vi.fn(async (input: CreateRunApprovalRequestInput) => {
+      return {
+        schemaVersion: 'run-approval/v1' as const,
+        id: 'runapproval_terminal_execute',
+        workspaceId: input.workspaceId ?? 'local',
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        provider: input.provider,
+        agentId: input.agentId,
+        requestKind: input.requestKind,
+        actionClass: input.actionClass,
+        action: input.action,
+        actionHash: 'a'.repeat(64),
+        details: input.details,
+        resourceScope: input.resourceScope,
+        workingDirectory: input.workingDirectory,
+        riskClass: input.riskClass,
+        policyReason: input.policyReason,
+        evidenceRevision: input.evidenceRevision,
+        providerRequestId: input.providerRequestId,
+        mobileSafe: input.mobileSafe ?? false,
+        status: approvalStatus,
+        revision: approvalStatus === 'approved' ? 2 : 1,
+        createdAt: '2026-07-25T12:00:00.000Z',
+        updatedAt: '2026-07-25T12:00:00.000Z',
+        expiresAt: '2026-07-25T12:05:00.000Z',
+      } as RunApprovalRequest;
+    });
+    const approvalBroker = {
+      request: approvalRequest,
+      get: vi.fn(async () => {
+        const input = approvalRequest.mock.calls.at(-1)?.[0];
+        if (!input) throw new Error('Approval was not requested.');
+        return approvalRequest(input);
+      }),
+      cancelAttempt: vi.fn(async () => []),
+    } as unknown as RunApprovalBrokerService;
+    const service = testableService(
+      tmpDir,
+      undefined,
+      approvalBroker,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      runTerminals
+    );
+    const active = await service.startAgent(task.id, 'codex');
+    const request = {
+      requestId: 'terminal-execute-request',
+      command: process.execPath,
+      args: ['--version'],
+      mode: 'pipe' as const,
+      startMode: 'background' as const,
+      cwd: '.',
+      environmentKeys: [],
+    };
+    const handle = {
+      schemaVersion: 'run-terminal-handle/v1' as const,
+      id: 'terminal_execute_test',
+      workspaceId: active.taskEnvelope.workspace.workspaceId,
+      taskId: task.id,
+      attemptId: active.attemptId,
+      launchManifestDigest: active.runLaunchManifest.digest,
+      requestId: request.requestId,
+      requestDigest: `sha256:${'b'.repeat(64)}`,
+      mode: request.mode,
+      startMode: request.startMode,
+      state: 'running' as const,
+      commandId: `sha256:${'c'.repeat(64)}`,
+      startedAt: '2026-07-25T12:00:00.000Z',
+      output: {
+        nextCursor: 0,
+        retainedFromCursor: 1,
+        observedBytes: 0,
+        retainedBytes: 0,
+        droppedBytes: 0,
+        truncated: false,
+        volumeCircuitTripped: false,
+      },
+      capabilities: {
+        pipe: 'enforced' as const,
+        pty: 'unsupported' as const,
+        interactiveStdin: 'unsupported' as const,
+        restartReattachment: 'unsupported' as const,
+      },
+    };
+    vi.mocked(runTerminals.execute).mockResolvedValue(handle);
+
+    await expect(
+      service.executeRunTerminal(task.id, active.attemptId, {
+        ...request,
+        requestId: 'terminal-secret-request',
+        args: ['sk_test_secret_value'],
+      })
+    ).rejects.toThrow('Credential-shaped values are not allowed');
+    expect(approvalRequest).not.toHaveBeenCalled();
+
+    await expect(
+      service.executeRunTerminal(task.id, active.attemptId, request)
+    ).resolves.toMatchObject({
+      status: 'approval-required',
+      approval: { id: 'runapproval_terminal_execute', status: 'pending' },
+    });
+    expect(runTerminals.execute).not.toHaveBeenCalled();
+    expect(approvalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: task.id,
+        attemptId: active.attemptId,
+        providerRequestId: request.requestId,
+        riskClass: 'high',
+        exactAction: request,
+      })
+    );
+
+    approvalStatus = 'approved';
+    await expect(
+      service.executeRunTerminal(task.id, active.attemptId, request)
+    ).resolves.toMatchObject({
+      status: 'started',
+      approval: { status: 'approved' },
+      handle: { id: handle.id, requestId: request.requestId },
+    });
+    expect(runTerminals.reconcileAttempt).toHaveBeenCalledWith(
+      active.taskEnvelope.workspace.workspaceId,
+      task.id,
+      active.attemptId
+    );
+    expect(runTerminals.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: active.taskEnvelope.workspace.workspaceId,
+        taskId: task.id,
+        attemptId: active.attemptId,
+        launchManifestDigest: active.runLaunchManifest.digest,
+        worktreeRoot: tmpDir,
+        allowedCommands: [process.execPath],
+        wrap: expect.any(Function),
+      }),
+      request
+    );
+
+    let resolveLaunch: (() => void) | undefined;
+    let launchSettled = false;
+    const launchGate = new Promise<void>((resolve) => {
+      resolveLaunch = resolve;
+    });
+    vi.mocked(runTerminals.execute).mockImplementationOnce(async (_context, input) => {
+      await launchGate;
+      launchSettled = true;
+      return {
+        ...handle,
+        id: 'terminal_finalization_race',
+        requestId: input.requestId,
+      };
+    });
+    vi.mocked(runTerminals.cleanupAttempt).mockImplementationOnce(async () => {
+      expect(launchSettled).toBe(true);
+      return [];
+    });
+    const racingRequest = {
+      ...request,
+      requestId: 'terminal-finalization-race',
+    };
+    const racingExecution = service.executeRunTerminal(
+      task.id,
+      active.attemptId,
+      racingRequest
+    );
+    await waitFor(() => expect(runTerminals.execute).toHaveBeenCalledTimes(2));
+    const stopping = service.stopAgent(task.id, active.attemptId);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(runTerminals.cleanupAttempt).not.toHaveBeenCalled();
+
+    resolveLaunch?.();
+    await expect(racingExecution).resolves.toMatchObject({
+      status: 'started',
+      handle: { id: 'terminal_finalization_race' },
+    });
+    await stopping;
+    expect(runTerminals.cleanupAttempt).toHaveBeenCalledOnce();
   });
 
   it('does not let a competing terminal claim poison an in-flight finalizer', async () => {

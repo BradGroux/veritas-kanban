@@ -22,6 +22,7 @@ const terminalIdentifierSchema = z
 
 export const RunTerminalExecuteRequestSchema = z
   .object({
+    requestId: terminalIdentifierSchema,
     command: z
       .string()
       .trim()
@@ -34,7 +35,12 @@ export const RunTerminalExecuteRequestSchema = z
     mode: z.enum(RUN_TERMINAL_MODES),
     startMode: z.enum(RUN_TERMINAL_START_MODES),
     cwd: z.string().trim().min(1).max(1_000).optional(),
-    environmentKeys: z.array(environmentKeySchema).max(128),
+    environmentKeys: z
+      .array(environmentKeySchema)
+      .max(128)
+      .refine((keys) => new Set(keys).size === keys.length, {
+        message: 'Terminal environment keys must be unique.',
+      }),
   })
   .strict();
 
@@ -104,6 +110,8 @@ export const RunTerminalHandleSchema = z
     taskId: z.string().trim().min(1).max(200),
     attemptId: z.string().trim().min(1).max(200),
     launchManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    requestId: terminalIdentifierSchema,
+    requestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     mode: z.enum(RUN_TERMINAL_MODES),
     startMode: z.enum(RUN_TERMINAL_START_MODES),
     state: z.enum(RUN_TERMINAL_STATES),

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentStatus } from '../../services/clawdbot-agent-service.js';
 import { RunTerminalController } from '../../routes/run-terminals.js';
 import {
+  RunTerminalExecuteRequestSchema,
   RunTerminalOutputQuerySchema,
   RunTerminalWaitManyRequestSchema,
   RunTerminalWaitRequestSchema,
@@ -33,6 +34,10 @@ function createFixture() {
     terminate: vi.fn(async () => ({ handle: { id: handleId, state: 'terminated' } })),
   };
   const activeRuns = {
+    executeRunTerminal: vi.fn(async () => ({
+      status: 'approval-required' as const,
+      approval: { id: 'runapproval-terminal-871' },
+    })),
     getAgentStatus: vi.fn(async () => activeStatus()),
   };
   const controller = new RunTerminalController({
@@ -59,6 +64,25 @@ describe('run terminal routes', () => {
     expect(terminals.list).toHaveBeenCalledWith(workspaceId, taskId, attemptId);
     expect(terminals.assertScope).toHaveBeenCalledWith(handleId, workspaceId, taskId, attemptId);
     expect(terminals.output).toHaveBeenCalledWith(handleId, 4, 20);
+  });
+
+  it('submits an exact idempotent execution request through the active run service', async () => {
+    const { controller, activeRuns } = createFixture();
+    const request = RunTerminalExecuteRequestSchema.parse({
+      requestId: 'terminal-request-871',
+      command: 'pnpm',
+      args: ['test', '--runInBand'],
+      mode: 'pipe',
+      startMode: 'background',
+      cwd: '.',
+      environmentKeys: ['PATH'],
+    });
+
+    await expect(controller.execute(taskId, attemptId, request)).resolves.toMatchObject({
+      status: 'approval-required',
+      approval: { id: 'runapproval-terminal-871' },
+    });
+    expect(activeRuns.executeRunTerminal).toHaveBeenCalledWith(taskId, attemptId, request);
   });
 
   it('coordinates and controls scoped handles with bounded requests', async () => {
@@ -98,10 +122,19 @@ describe('run terminal routes', () => {
       timeoutMs: 10,
     });
     const unbounded = RunTerminalWaitRequestSchema.safeParse({ timeoutMs: 300_001 });
+    const duplicateEnvironment = RunTerminalExecuteRequestSchema.safeParse({
+      requestId: 'terminal-request-duplicate-env',
+      command: 'pnpm',
+      args: ['test'],
+      mode: 'pipe',
+      startMode: 'background',
+      environmentKeys: ['PATH', 'PATH'],
+    });
     const defaults = RunTerminalOutputQuerySchema.parse({});
 
     expect(duplicate.success).toBe(false);
     expect(unbounded.success).toBe(false);
+    expect(duplicateEnvironment.success).toBe(false);
     expect(defaults).toEqual({ afterCursor: 0, limit: 200 });
     expect(terminals.waitAny).not.toHaveBeenCalled();
     expect(terminals.wait).not.toHaveBeenCalled();

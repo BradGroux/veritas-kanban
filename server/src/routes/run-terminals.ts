@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import {
+  RunTerminalExecuteRequestSchema,
   RunTerminalHandleParamsSchema,
   RunTerminalOutputQuerySchema,
   RunTerminalScopeParamsSchema,
@@ -25,7 +26,7 @@ type RunTerminalApi = Pick<
 
 export interface RunTerminalRouteDependencies {
   terminals: RunTerminalApi;
-  activeRuns: Pick<ClawdbotAgentService, 'getAgentStatus'>;
+  activeRuns: Pick<ClawdbotAgentService, 'executeRunTerminal' | 'getAgentStatus'>;
 }
 
 interface ActiveTerminalScope {
@@ -71,6 +72,14 @@ function assertScopedHandle(
 
 export class RunTerminalController {
   constructor(private readonly dependencies: RunTerminalRouteDependencies) {}
+
+  async execute(
+    taskId: string,
+    attemptId: string,
+    request: z.infer<typeof RunTerminalExecuteRequestSchema>
+  ) {
+    return this.dependencies.activeRuns.executeRunTerminal(taskId, attemptId, request);
+  }
 
   async list(taskId: string, attemptId: string) {
     const scope = await requireActiveScope(this.dependencies, taskId, attemptId);
@@ -142,6 +151,16 @@ export function createRunTerminalRoutes(
 ): RouterType {
   const router: RouterType = Router();
   const controller = new RunTerminalController(dependencies);
+
+  router.post(
+    '/runs/:taskId/:attemptId/execute',
+    asyncHandler(async (req, res) => {
+      const params = parseOrThrow(RunTerminalScopeParamsSchema, req.params);
+      const body = parseOrThrow(RunTerminalExecuteRequestSchema, req.body);
+      const result = await controller.execute(params.taskId, params.attemptId, body);
+      res.status(result.status === 'started' ? 201 : 202).json(result);
+    })
+  );
 
   router.get(
     '/runs/:taskId/:attemptId',
