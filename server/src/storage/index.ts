@@ -32,6 +32,7 @@ export type {
   ReflectionExtractionJobRepository,
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
+  RunOutputArtifactRepository,
   SetupContextRepository,
   WorkspaceFileRepository,
   WorkspaceExecutionTrustRepository,
@@ -60,6 +61,10 @@ export {
   FileTelemetryRepository,
 } from './file-storage.js';
 export { FileRunEventRepository, getRunEventsDir } from './run-event-repository.js';
+export {
+  FileRunOutputArtifactRepository,
+  getRunOutputArtifactsDir,
+} from './run-output-artifact-repository.js';
 export { FileRunApprovalRepository, getRunApprovalsPath } from './run-approval-repository.js';
 export {
   FilePhaseTransitionRepository,
@@ -101,6 +106,7 @@ export { SqliteActivityRepository } from './sqlite/activity-repository.js';
 export { SqliteStatusHistoryRepository } from './sqlite/status-history-repository.js';
 export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
 export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
+export { SqliteRunOutputArtifactRepository } from './sqlite/run-output-artifact-repository.js';
 export { SqliteRunApprovalRepository } from './sqlite/run-approval-repository.js';
 export { SqlitePhaseTransitionRepository } from './sqlite/phase-transition-repository.js';
 export { SqliteDurableGoalRepository } from './sqlite/durable-goal-repository.js';

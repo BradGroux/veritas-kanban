@@ -89,9 +89,12 @@ function redactAssignments(value: string): string {
   return value.replace(SECRET_ASSIGNMENT, (_match, key: string) => `${key}=[REDACTED]`);
 }
 
+export function redactRunOutputText(value: string): string {
+  return redactString(redactAssignments(value));
+}
+
 function redactText(value: string): RedactedContent {
-  const assignmentRedacted = redactAssignments(value);
-  const redacted = redactString(assignmentRedacted);
+  const redacted = redactRunOutputText(value);
   return {
     content: Buffer.from(redacted, 'utf-8'),
     text: redacted,
@@ -113,7 +116,7 @@ function redactJson(value: string): RedactedContent {
       return '[depth limit]';
     }
     if (typeof candidate === 'string') {
-      const redacted = redactAssignments(redactString(candidate));
+      const redacted = redactRunOutputText(candidate);
       if (redacted !== candidate) fields.push(path);
       return redacted;
     }
@@ -266,12 +269,12 @@ export class RunOutputSpillService {
       retention: {
         createdAt,
         expiresAt: addSeconds(now, this.policy.retentionSeconds),
-        activeLeaseUntil:
-          this.policy.activeLeaseSeconds > 0
-            ? addSeconds(now, this.policy.activeLeaseSeconds)
-            : undefined,
+        ...(this.policy.activeLeaseSeconds > 0
+          ? { activeLeaseUntil: addSeconds(now, this.policy.activeLeaseSeconds) }
+          : {}),
       },
       state,
+      ...(unsafeByPolicy ? { quarantineReason: 'content-policy' } : {}),
     });
     const preview = RunOutputPreviewSchema.parse({
       schemaVersion: RUN_OUTPUT_PREVIEW_SCHEMA_VERSION,

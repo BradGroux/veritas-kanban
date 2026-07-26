@@ -41,11 +41,19 @@ export const RUN_OUTPUT_QUERY_OPERATIONS = [
   'download',
 ] as const;
 
+export const RUN_OUTPUT_QUARANTINE_REASONS = [
+  'content-policy',
+  'secret-validation',
+  'integrity-mismatch',
+  'unsupported-query',
+] as const;
+
 export type RunOutputSourceKind = (typeof RUN_OUTPUT_SOURCE_KINDS)[number];
 export type RunOutputContentClass = (typeof RUN_OUTPUT_CONTENT_CLASSES)[number];
 export type RunOutputTruncationReason = (typeof RUN_OUTPUT_TRUNCATION_REASONS)[number];
 export type RunOutputArtifactState = (typeof RUN_OUTPUT_ARTIFACT_STATES)[number];
 export type RunOutputQueryOperation = (typeof RUN_OUTPUT_QUERY_OPERATIONS)[number];
+export type RunOutputQuarantineReason = (typeof RUN_OUTPUT_QUARANTINE_REASONS)[number];
 export type RunOutputRedactionState = 'none' | 'redacted' | 'quarantined' | 'dropped';
 
 export interface RunOutputArtifactSource {
@@ -79,6 +87,7 @@ export interface RunOutputArtifactRetention {
 export interface RunOutputArtifactReference {
   artifactId: string;
   state: RunOutputArtifactState;
+  quarantineReason?: RunOutputQuarantineReason;
   operations: RunOutputQueryOperation[];
 }
 
@@ -129,4 +138,63 @@ export interface RunOutputSpillPolicy {
   activeLeaseSeconds: number;
   allowBinaryPersistence: boolean;
   allowCompressedPersistence: boolean;
+}
+
+export interface RunOutputArtifactLookup extends RunOutputArtifactScope {
+  artifactId: string;
+}
+
+export interface RunOutputArtifactListQuery {
+  workspaceId: string;
+  taskId?: string;
+  runId?: string;
+  attemptId?: string;
+  states?: RunOutputArtifactState[];
+  limit?: number;
+}
+
+export interface RunOutputArtifactRangeQuery extends RunOutputArtifactLookup {
+  offset: number;
+  length: number;
+}
+
+export interface RunOutputArtifactRange {
+  metadata: RunOutputArtifactMetadata;
+  offset: number;
+  length: number;
+  content: Uint8Array;
+}
+
+export interface RunOutputArtifactCreateResult {
+  metadata: RunOutputArtifactMetadata;
+  created: boolean;
+}
+
+export interface RunOutputArtifactCleanupInput {
+  now: string;
+  workspaceId?: string;
+  limit?: number;
+}
+
+export interface RunOutputArtifactCleanupResult {
+  expiredArtifactIds: string[];
+  reclaimedBytes: number;
+  retainedByLease: number;
+  hasMore: boolean;
+}
+
+export type RunOutputArtifactQuery =
+  | { operation: 'metadata' }
+  | { operation: 'byte-range'; offset: number; length: number }
+  | { operation: 'line-range'; startLine: number; lineCount: number }
+  | { operation: 'json-path'; path: string };
+
+export interface RunOutputArtifactQueryResult {
+  metadata: RunOutputArtifactMetadata;
+  operation: RunOutputArtifactQuery['operation'];
+  content?: string;
+  encoding?: 'utf-8' | 'base64' | 'json';
+  offset?: number;
+  length?: number;
+  truncated: boolean;
 }

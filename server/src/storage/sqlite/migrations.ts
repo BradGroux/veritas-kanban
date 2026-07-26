@@ -1447,6 +1447,34 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON reflection_extraction_jobs(state, lease_expires_at);
     `,
   },
+  {
+    version: 29,
+    name: '0029_run_output_artifacts',
+    up: `
+      CREATE TABLE run_output_artifacts (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        turn_id TEXT,
+        state TEXT NOT NULL
+          CHECK (state IN ('available', 'quarantined', 'expired', 'deleted')),
+        expires_at TEXT NOT NULL,
+        active_lease_until TEXT,
+        stored_bytes INTEGER NOT NULL CHECK (stored_bytes >= 0),
+        metadata_json TEXT NOT NULL,
+        content BLOB,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_run_output_artifacts_scope
+        ON run_output_artifacts(workspace_id, task_id, run_id, attempt_id, created_at DESC);
+
+      CREATE INDEX idx_run_output_artifacts_expiry
+        ON run_output_artifacts(state, expires_at, active_lease_until);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

@@ -19,6 +19,7 @@ import { SqliteDurableGoalRepository } from './durable-goal-repository.js';
 import { SqliteReflectionExtractionJobRepository } from './reflection-extraction-job-repository.js';
 import { SqliteAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { SqliteToolControlPlaneRepository } from './tool-control-plane-repository.js';
+import { SqliteRunOutputArtifactRepository } from './run-output-artifact-repository.js';
 import { createDefaultConfig, normalizeAppConfig } from '../../services/config-service.js';
 
 export interface SqliteStorageOptions {
@@ -45,6 +46,7 @@ export class SqliteStorageProvider implements StorageProvider {
   readonly reflectionExtractionJobs: SqliteReflectionExtractionJobRepository;
   readonly admissionReservations: SqliteAdmissionReservationRepository;
   readonly toolControlPlane: SqliteToolControlPlaneRepository;
+  readonly runOutputArtifacts: SqliteRunOutputArtifactRepository;
 
   private readonly sqlite: SqliteDatabase;
 
@@ -72,6 +74,7 @@ export class SqliteStorageProvider implements StorageProvider {
     this.reflectionExtractionJobs = new SqliteReflectionExtractionJobRepository(this.sqlite);
     this.admissionReservations = new SqliteAdmissionReservationRepository(this.sqlite);
     this.toolControlPlane = new SqliteToolControlPlaneRepository(this.sqlite);
+    this.runOutputArtifacts = new SqliteRunOutputArtifactRepository(this.sqlite);
   }
 
   getDatabase(): SqliteDatabase {
