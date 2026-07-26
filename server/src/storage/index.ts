@@ -29,6 +29,7 @@ export type {
   PhaseTransitionRepository,
   RunSupervisorRepository,
   DurableGoalRepository,
+  ReflectionExtractionJobRepository,
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
   SetupContextRepository,
@@ -67,6 +68,10 @@ export {
 } from './phase-transition-repository.js';
 export { FileDurableGoalRepository, getDurableGoalsPath } from './durable-goal-repository.js';
 export {
+  FileReflectionExtractionJobRepository,
+  getReflectionExtractionJobsPath,
+} from './reflection-extraction-job-repository.js';
+export {
   FileAdmissionReservationRepository,
   getAdmissionReservationsPath,
 } from './admission-reservation-repository.js';
@@ -99,6 +104,7 @@ export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
 export { SqliteRunApprovalRepository } from './sqlite/run-approval-repository.js';
 export { SqlitePhaseTransitionRepository } from './sqlite/phase-transition-repository.js';
 export { SqliteDurableGoalRepository } from './sqlite/durable-goal-repository.js';
+export { SqliteReflectionExtractionJobRepository } from './sqlite/reflection-extraction-job-repository.js';
 export { SqliteAdmissionReservationRepository } from './sqlite/admission-reservation-repository.js';
 export {
   FileToolControlPlaneRepository,

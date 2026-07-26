@@ -44,6 +44,7 @@ import type {
   PhaseTransitionRepository,
   RunSupervisorRepository,
   DurableGoalRepository,
+  ReflectionExtractionJobRepository,
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
 } from './interfaces.js';
@@ -74,6 +75,7 @@ import { FileRunApprovalRepository } from './run-approval-repository.js';
 import { FilePhaseTransitionRepository } from './phase-transition-repository.js';
 import { FileRunSupervisorRepository } from './run-supervisor-repository.js';
 import { FileDurableGoalRepository } from './durable-goal-repository.js';
+import { FileReflectionExtractionJobRepository } from './reflection-extraction-job-repository.js';
 import { FileAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
 
@@ -497,6 +499,7 @@ export interface FileStorageOptions {
   phaseTransitionsPath?: string;
   runSupervisorsPath?: string;
   durableGoalsPath?: string;
+  reflectionExtractionJobsPath?: string;
   admissionReservationsPath?: string;
   toolControlPlanePath?: string;
 }
@@ -515,6 +518,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
   readonly durableGoals: DurableGoalRepository;
+  readonly reflectionExtractionJobs: ReflectionExtractionJobRepository;
   readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
 
@@ -571,6 +575,9 @@ export class FileStorageProvider implements StorageProvider {
     this.phaseTransitions = new FilePhaseTransitionRepository(options.phaseTransitionsPath);
     this.runSupervisors = new FileRunSupervisorRepository(options.runSupervisorsPath);
     this.durableGoals = new FileDurableGoalRepository(options.durableGoalsPath);
+    this.reflectionExtractionJobs = new FileReflectionExtractionJobRepository(
+      options.reflectionExtractionJobsPath
+    );
     this.admissionReservations = new FileAdmissionReservationRepository(
       options.admissionReservationsPath
     );

@@ -602,6 +602,8 @@ Reviewed promotion queue for agent corrections, repeated mistakes, and durable l
 - **Task lesson promotion** — Accepted task-linked candidates append a reviewed reflection lesson to the task's lessons field
 - **Duplicate grouping and merge** — Similar candidates share a duplicate key and can be soft-merged into a representative while preserving audit history
 - **Redaction at ingestion** — Tokens, credentials, and local private paths are redacted before candidates are stored
+- **Durable extraction jobs** — `reflection-extraction-job/v1` persists only source task, attempt, completion, digest, and event identities; raw conversations and unrestricted transcripts are not copied into the queue
+- **Lease-safe worker foundation** — File and SQLite repositories atomically enforce global and per-workspace concurrency, stable idempotent enqueue, lease ownership and renewal, deterministic retry backoff, restart recovery, and bounded dead-lettering
 - **Settings UI** — Review, accept, reject, delete, and merge candidates from Settings → Reflections
 - **Audit trail** — Create, accept, reject, merge, and delete actions write metadata-only audit events
 

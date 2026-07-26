@@ -1417,6 +1417,36 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON durable_goals(root_workflow_id, updated_at DESC);
     `,
   },
+  {
+    version: 28,
+    name: '0028_reflection_extraction_jobs',
+    up: `
+      CREATE TABLE reflection_extraction_jobs (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (
+          state IN ('queued', 'leased', 'completed', 'dead-letter')
+        ),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        idempotency_key TEXT NOT NULL UNIQUE,
+        available_at TEXT NOT NULL,
+        lease_owner_id TEXT,
+        lease_expires_at TEXT,
+        job_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_reflection_extraction_jobs_available
+        ON reflection_extraction_jobs(state, available_at, created_at, id);
+
+      CREATE INDEX idx_reflection_extraction_jobs_workspace
+        ON reflection_extraction_jobs(workspace_id, state, available_at);
+
+      CREATE INDEX idx_reflection_extraction_jobs_lease
+        ON reflection_extraction_jobs(state, lease_expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {
