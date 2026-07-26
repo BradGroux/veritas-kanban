@@ -13,6 +13,7 @@ import {
   type RunTerminalOutputPage,
   type RunTerminalStream,
   type RunTerminalTerminationResult,
+  type RunTerminalWaitManyResult,
   type RunTerminalWaitResult,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
@@ -133,14 +134,6 @@ export class RunTerminalService {
         mode: request.mode,
         capability: CAPABILITIES.pty,
       });
-    }
-    if (request.startMode !== 'background') {
-      throw new ConflictError(
-        'Foreground-to-background handoff is not supported by the current run terminal runtime.',
-        {
-          startMode: request.startMode,
-        }
-      );
     }
     if (!context.allowedCommands.includes(request.command)) {
       throw new ConflictError('Terminal command is not approved by the run launch manifest.', {
@@ -268,9 +261,7 @@ export class RunTerminalService {
   }
 
   async wait(handleId: string, timeoutMs: number): Promise<RunTerminalWaitResult> {
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > MAX_WAIT_MS) {
-      throw new ValidationError(`Terminal wait timeout must be between 0 and ${MAX_WAIT_MS} ms.`);
-    }
+    assertWaitTimeout(timeoutMs);
     const record = this.require(handleId);
     if (terminal(record.handle.state)) {
       await record.journalQueue;
@@ -294,6 +285,71 @@ export class RunTerminalService {
       timedOut,
       handle: cloneHandle(record.handle),
     };
+  }
+
+  async waitAny(handleIds: string[], timeoutMs: number): Promise<RunTerminalWaitManyResult> {
+    assertWaitTimeout(timeoutMs);
+    const records = this.requireMany(handleIds);
+    const alreadyCompleted = records.find((record) => terminal(record.handle.state));
+    if (alreadyCompleted) {
+      await alreadyCompleted.journalQueue;
+      return this.waitManyResult('any', records, false, alreadyCompleted.handle.id);
+    }
+    if (timeoutMs === 0) return this.waitManyResult('any', records, true);
+    let timer: NodeJS.Timeout | undefined;
+    const selectedHandleId = await Promise.race([
+      ...records.map((record) => record.exit.then(() => record.handle.id)),
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), timeoutMs);
+        timer.unref();
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (selectedHandleId) {
+      await this.require(selectedHandleId).journalQueue;
+      return this.waitManyResult('any', records, false, selectedHandleId);
+    }
+    return this.waitManyResult('any', records, true);
+  }
+
+  async waitAll(handleIds: string[], timeoutMs: number): Promise<RunTerminalWaitManyResult> {
+    assertWaitTimeout(timeoutMs);
+    const records = this.requireMany(handleIds);
+    const pending = records.filter((record) => !terminal(record.handle.state));
+    if (pending.length === 0) {
+      await Promise.all(records.map((record) => record.journalQueue));
+      return this.waitManyResult('all', records, false);
+    }
+    if (timeoutMs === 0) return this.waitManyResult('all', records, true);
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = await Promise.race([
+      Promise.all(pending.map((record) => record.exit)).then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(true), timeoutMs);
+        timer.unref();
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (!timedOut) await Promise.all(records.map((record) => record.journalQueue));
+    return this.waitManyResult('all', records, timedOut);
+  }
+
+  detach(handleId: string): RunTerminalHandle {
+    const record = this.require(handleId);
+    if (record.handle.startMode === 'background') return cloneHandle(record.handle);
+    if (terminal(record.handle.state)) {
+      throw new ConflictError('A terminal command cannot be detached after it exits.');
+    }
+    record.handle.startMode = 'background';
+    this.appendEvent(record, {
+      kind: 'command.detached',
+      payload: {
+        handleId: record.handle.id,
+        commandId: record.handle.commandId,
+      },
+      dedupeKey: `run-terminal:${record.handle.id}:detached`,
+    });
+    return cloneHandle(record.handle);
   }
 
   async terminate(handleId: string): Promise<RunTerminalTerminationResult> {
@@ -477,6 +533,40 @@ export class RunTerminalService {
     return record;
   }
 
+  private requireMany(handleIds: string[]): RuntimeRecord[] {
+    const unique = [...new Set(handleIds)];
+    if (unique.length === 0 || unique.length > 64 || unique.length !== handleIds.length) {
+      throw new ValidationError(
+        'Terminal multi-wait requires between 1 and 64 unique handles.'
+      );
+    }
+    return unique.map((handleId) => this.require(handleId));
+  }
+
+  private waitManyResult(
+    mode: RunTerminalWaitManyResult['mode'],
+    records: RuntimeRecord[],
+    timedOut: boolean,
+    selectedHandleId?: string
+  ): RunTerminalWaitManyResult {
+    const handles = records.map((record) => cloneHandle(record.handle));
+    const completedHandleIds = handles
+      .filter((handle) => terminal(handle.state))
+      .map((handle) => handle.id);
+    const pendingHandleIds = handles
+      .filter((handle) => !terminal(handle.state))
+      .map((handle) => handle.id);
+    return {
+      mode,
+      completed: mode === 'any' ? completedHandleIds.length > 0 : pendingHandleIds.length === 0,
+      timedOut,
+      ...(selectedHandleId ? { selectedHandleId } : {}),
+      completedHandleIds,
+      pendingHandleIds,
+      handles,
+    };
+  }
+
   private terminationResult(record: RuntimeRecord): RunTerminalTerminationResult {
     return {
       handle: cloneHandle(record.handle),
@@ -626,6 +716,12 @@ function boundedPositive(
     throw new Error(`Run terminal bound must be an integer between ${minimum} and ${maximum}.`);
   }
   return resolved;
+}
+
+function assertWaitTimeout(timeoutMs: number): void {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > MAX_WAIT_MS) {
+    throw new ValidationError(`Terminal wait timeout must be between 0 and ${MAX_WAIT_MS} ms.`);
+  }
 }
 
 let singleton: RunTerminalService | undefined;

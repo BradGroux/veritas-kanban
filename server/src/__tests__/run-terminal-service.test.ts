@@ -148,6 +148,73 @@ describe('RunTerminalService', () => {
     });
   });
 
+  it('waits for any handle without blocking the remaining process', async () => {
+    const { service, context } = await fixture();
+    const fast = await service.execute(
+      context,
+      request('setTimeout(() => process.exit(0), 40)')
+    );
+    const slow = await service.execute(
+      context,
+      request('setTimeout(() => process.exit(0), 1000)')
+    );
+
+    expect(await service.waitAny([fast.id, slow.id], 5_000)).toMatchObject({
+      mode: 'any',
+      completed: true,
+      timedOut: false,
+      selectedHandleId: fast.id,
+      completedHandleIds: [fast.id],
+      pendingHandleIds: [slow.id],
+    });
+    await service.terminate(slow.id);
+  });
+
+  it('waits for all handles with a bounded timeout', async () => {
+    const { service, context } = await fixture();
+    const first = await service.execute(
+      context,
+      request('setTimeout(() => process.exit(0), 40)')
+    );
+    const second = await service.execute(
+      context,
+      request('setTimeout(() => process.exit(0), 100)')
+    );
+
+    expect(await service.waitAll([first.id, second.id], 0)).toMatchObject({
+      mode: 'all',
+      completed: false,
+      timedOut: true,
+    });
+    expect(await service.waitAll([first.id, second.id], 5_000)).toMatchObject({
+      mode: 'all',
+      completed: true,
+      timedOut: false,
+      completedHandleIds: expect.arrayContaining([first.id, second.id]),
+      pendingHandleIds: [],
+    });
+  });
+
+  it('detaches a foreground handle without losing output or ownership', async () => {
+    const { service, context, events } = await fixture();
+    const started = await service.execute(context, {
+      ...request('setTimeout(() => process.stdout.write("detached"), 40)'),
+      startMode: 'foreground',
+    });
+
+    expect(started.startMode).toBe('foreground');
+    expect(service.detach(started.id)).toMatchObject({
+      id: started.id,
+      attemptId: context.attemptId,
+      startMode: 'background',
+    });
+    await service.wait(started.id, 5_000);
+    expect(service.output(started.id).chunks.map((chunk) => chunk.content).join('')).toBe(
+      'detached'
+    );
+    expect(events.map((event) => event.kind)).toContain('command.detached');
+  });
+
   it('terminates the owned process group gracefully', async () => {
     const { service, context } = await fixture({ terminationGraceMs: 100 });
     const started = await service.execute(
@@ -164,15 +231,12 @@ describe('RunTerminalService', () => {
     expect(result.forceSignalAt).toBeUndefined();
   });
 
-  it('fails closed for PTY and foreground modes until their controls exist', async () => {
+  it('fails closed for PTY mode until its controls exist', async () => {
     const { service, context } = await fixture();
 
     await expect(
       service.execute(context, { ...request(''), mode: 'pty' })
     ).rejects.toThrow('PTY mode is not supported');
-    await expect(
-      service.execute(context, { ...request(''), startMode: 'foreground' })
-    ).rejects.toThrow('Foreground-to-background handoff is not supported');
   });
 
   it('rejects cwd traversal and unapproved environment keys before spawn', async () => {
