@@ -30,6 +30,8 @@ const MAX_CANDIDATES = 2000;
 const MAX_TEXT_LENGTH = 4000;
 const MAX_EVIDENCE_ITEMS = 10;
 const MAX_TAGS = 20;
+const MAX_CONTRADICTION_IDS = 20;
+const MAX_SOURCE_EVENT_IDS = 20;
 
 interface ReflectionState {
   version: 1;
@@ -158,24 +160,45 @@ export class ReflectionService {
     await this.ensureLoaded();
 
     const sanitized = this.sanitizeInput(input);
+    const idempotencyKey = input.idempotencyKey
+      ? this.sanitizeText(input.idempotencyKey).value.slice(0, 240)
+      : undefined;
+    if (idempotencyKey) {
+      const existing = this.state.candidates.find(
+        (candidate) => candidate.idempotencyKey === idempotencyKey
+      );
+      if (existing) return existing;
+    }
     const duplicateKey = deriveDuplicateKey({ ...input, ...sanitized.values });
     const duplicateOf = this.findDuplicateRepresentative(duplicateKey);
     const timestamp = nowIso();
 
     const candidate: ReflectionCandidate = {
       id: `reflection_${Date.now()}_${nanoid(6)}`,
+      idempotencyKey,
       status: 'pending',
       category: input.category,
       promotionTarget: defaultPromotionTarget(input),
       confidence: clampConfidence(input.confidence),
       source: {
         ...input.source,
+        eventIds: input.source.eventIds
+          ?.slice(0, MAX_SOURCE_EVENT_IDS)
+          .map((id) => this.sanitizeText(id).value)
+          .filter(Boolean),
         url: input.source.url ? this.sanitizeText(input.source.url).value : undefined,
       },
       summary: sanitized.values.summary,
       previousApproach: sanitized.values.previousApproach,
       correction: sanitized.values.correction,
       nextAttempt: sanitized.values.nextAttempt,
+      proposedScope: input.proposedScope,
+      rationale: sanitized.values.rationale,
+      applicability: sanitized.values.applicability,
+      contradictionIds: input.contradictionIds
+        ?.slice(0, MAX_CONTRADICTION_IDS)
+        .map((id) => this.sanitizeText(id).value)
+        .filter(Boolean),
       evidence: sanitized.evidence,
       tags: this.sanitizeTags(input.tags ?? []),
       duplicateKey,
@@ -418,7 +441,7 @@ export class ReflectionService {
   private sanitizeInput(input: CreateReflectionCandidateInput): {
     values: Pick<
       CreateReflectionCandidateInput,
-      'summary' | 'previousApproach' | 'correction' | 'nextAttempt'
+      'summary' | 'previousApproach' | 'correction' | 'nextAttempt' | 'rationale' | 'applicability'
     >;
     evidence: ReflectionEvidence[];
     redaction: ReflectionRedactionSummary;
@@ -445,6 +468,8 @@ export class ReflectionService {
         previousApproach: sanitizeField(input.previousApproach),
         correction: sanitizeField(input.correction),
         nextAttempt: sanitizeField(input.nextAttempt),
+        rationale: input.rationale ? sanitizeField(input.rationale) : undefined,
+        applicability: input.applicability ? sanitizeField(input.applicability) : undefined,
       },
       evidence,
       redaction: {
@@ -550,6 +575,7 @@ export class ReflectionService {
       resource: candidate.id,
       details: {
         status: candidate.status,
+        idempotencyKey: candidate.idempotencyKey,
         category: candidate.category,
         promotionTarget: candidate.promotionTarget,
         source: candidate.source,

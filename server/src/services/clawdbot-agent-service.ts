@@ -39,6 +39,11 @@ import {
   type DurableGoalSupervisorService,
 } from './durable-goal-supervisor-service.js';
 import {
+  getReflectionExtractionJobService,
+  type ReflectionExtractionJobService,
+} from './reflection-extraction-job-service.js';
+import { scheduleReflectionExtractionJob } from './reflection-extraction-worker-service.js';
+import {
   AgentHealthService,
   type AgentHealthChecker,
   type AgentHealthStatus,
@@ -589,6 +594,7 @@ export class ClawdbotAgentService {
     'handleRunCompletion' | 'reconcilePlannedForTask'
   > &
     Partial<Pick<DurableGoalSupervisorService, 'approveRollover'>>;
+  private reflectionExtractionJobs: Pick<ReflectionExtractionJobService, 'enqueue'>;
   private workspaceExecutionTrust: Pick<
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
@@ -637,7 +643,11 @@ export class ClawdbotAgentService {
     > &
       Partial<
         Pick<DurableGoalSupervisorService, 'approveRollover'>
-      > = getDurableGoalSupervisorService()
+      > = getDurableGoalSupervisorService(),
+    reflectionExtractionJobs: Pick<
+      ReflectionExtractionJobService,
+      'enqueue'
+    > = getReflectionExtractionJobService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -666,6 +676,7 @@ export class ClawdbotAgentService {
     this.sandboxPolicies = sandboxPolicies;
     this.runEgressGateway = runEgressGateway;
     this.durableGoalSupervisor = durableGoalSupervisor;
+    this.reflectionExtractionJobs = reflectionExtractionJobs;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -3594,6 +3605,7 @@ export class ClawdbotAgentService {
       }
     }
     if (lastError) throw lastError;
+    this.scheduleReflectionExtraction(attempt.taskEnvelope.workspace.workspaceId, completionResult);
     await this.admission.releaseByAttempt(
       attempt.taskEnvelope.workspace.workspaceId,
       task.id,
@@ -3688,7 +3700,7 @@ export class ClawdbotAgentService {
         dedupeKey: `run.recovery:${completionResult.idempotencyKey}`,
       }
     );
-    await this.appendRunEvent(
+    const terminalEvent = await this.appendRunEvent(
       task.id,
       attempt.id,
       completionResult.status === 'success'
@@ -3780,6 +3792,11 @@ export class ClawdbotAgentService {
       }
     }
     if (lastError) throw lastError;
+    this.scheduleReflectionExtraction(
+      attempt.taskEnvelope.workspace.workspaceId,
+      completionResult,
+      terminalEvent.eventId
+    );
 
     await this.admission.releaseByAttempt(
       attempt.taskEnvelope.workspace.workspaceId,
@@ -4031,7 +4048,7 @@ export class ClawdbotAgentService {
         : completionResult.status === 'interrupted'
           ? 'run.interrupted'
           : 'run.failed';
-    await this.appendRunEvent(
+    const terminalEvent = await this.appendRunEvent(
       taskId,
       attemptId,
       terminalKind,
@@ -4072,6 +4089,11 @@ export class ClawdbotAgentService {
       pending.admissionReservationId,
       admissionReleaseReason(completionResult.status),
       `completion:${completionResult.idempotencyKey}`
+    );
+    this.scheduleReflectionExtraction(
+      pending.taskEnvelope.workspace.workspaceId,
+      completionResult,
+      terminalEvent.eventId
     );
     if (!persistedHere) return;
 
@@ -4219,6 +4241,29 @@ export class ClawdbotAgentService {
     }
 
     log.info(`[ClawdbotAgent] Task ${taskId} completed with status: ${status}`);
+  }
+
+  private scheduleReflectionExtraction(
+    workspaceId: string,
+    completion: CompletionResult,
+    runEventId?: string
+  ): void {
+    scheduleReflectionExtractionJob({
+      jobs: this.reflectionExtractionJobs,
+      workspaceId,
+      completion,
+      runEventId,
+      onError: (error) => {
+        log.error(
+          {
+            err: error,
+            taskId: completion.taskId,
+            attemptId: completion.attemptId,
+          },
+          '[ClawdbotAgent] Reflection extraction enqueue failed'
+        );
+      },
+    });
   }
 
   private async revokeRunCredentialLeases(

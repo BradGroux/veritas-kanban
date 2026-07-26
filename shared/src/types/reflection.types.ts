@@ -8,17 +8,14 @@ export type ReflectionSourceKind =
   | 'review-feedback'
   | 'task-observation';
 export type ReflectionPromotionTarget =
-  | 'task-lesson'
-  | 'memory'
-  | 'decision'
-  | 'profile'
-  | 'template'
-  | 'policy';
+  'task-lesson' | 'memory' | 'decision' | 'profile' | 'template' | 'policy';
+export type ReflectionProposedScope = 'task' | 'workspace' | 'team' | 'global';
 
 export interface ReflectionSourceLink {
   kind: ReflectionSourceKind;
   taskId?: string;
   runId?: string;
+  eventIds?: string[];
   messageId?: string;
   errorId?: string;
   observationId?: string;
@@ -48,6 +45,7 @@ export interface ReflectionRedactionSummary {
 
 export interface ReflectionCandidate {
   id: string;
+  idempotencyKey?: string;
   status: ReflectionCandidateStatus;
   category: ReflectionCandidateCategory;
   promotionTarget: ReflectionPromotionTarget;
@@ -57,6 +55,10 @@ export interface ReflectionCandidate {
   previousApproach: string;
   correction: string;
   nextAttempt: string;
+  proposedScope?: ReflectionProposedScope;
+  rationale?: string;
+  applicability?: string;
+  contradictionIds?: string[];
   evidence: ReflectionEvidence[];
   tags: string[];
   duplicateKey: string;
@@ -91,6 +93,7 @@ export interface ReflectionListResponse {
 }
 
 export interface CreateReflectionCandidateInput {
+  idempotencyKey?: string;
   category: ReflectionCandidateCategory;
   promotionTarget?: ReflectionPromotionTarget;
   confidence?: number;
@@ -99,6 +102,10 @@ export interface CreateReflectionCandidateInput {
   previousApproach: string;
   correction: string;
   nextAttempt: string;
+  proposedScope?: ReflectionProposedScope;
+  rationale?: string;
+  applicability?: string;
+  contradictionIds?: string[];
   evidence?: ReflectionEvidence[];
   tags?: string[];
   duplicateKey?: string;
