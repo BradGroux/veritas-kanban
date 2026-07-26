@@ -170,6 +170,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nested headings, bold-led prose items, and consecutive sentence-sized blocks
   in v6.0.2 and later release bodies (#1025).
 
+### Fixed
+
+- Completed append-only admission snapshot writes before sync so a short
+  `FileHandle.write()` cannot leave a truncated JSONL record that makes durable
+  reservation state unreadable (#1139).
+- Restored the complete `node:fs/promises` surface in filesystem test doubles
+  after centralized storage added `lstat`, clearing collateral concurrent-suite
+  failures without weakening production path checks (#1136).
+- Mapped the exact knowledge-collection router prefix to shared work-product
+  read/write permissions, restoring fail-closed client/server permission
+  coverage parity (#1141).
+
 ## [6.0.2] - 2026-07-24
 
 Veritas Kanban 6.0.2 is a desktop recovery and supportability hotfix. It keeps
