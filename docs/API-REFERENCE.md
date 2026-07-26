@@ -3821,7 +3821,39 @@ POST /api/reflections/:id/accept
 }
 ```
 
-For `task-lesson`, the candidate must have a linked `source.taskId`; acceptance appends a reviewed reflection lesson to that task and adds `reflection` lesson tags. Other promotion targets are recorded as manual-review targets and do not mutate policy, profile, template, or memory stores automatically.
+For `task-lesson`, the candidate must have a linked `source.taskId`;
+acceptance appends a reviewed reflection lesson to that task and adds
+`reflection` lesson tags.
+
+Wider targets fail closed unless the request supplies a matching typed
+`promotion` object. The authenticated actor is the reviewer when `reviewedBy`
+is omitted. For example, a profile capability promotion is:
+
+```json
+{
+  "promotionTarget": "profile",
+  "promotion": {
+    "target": "profile",
+    "profileId": "backend-reviewer",
+    "capabilitiesToAdd": ["schema-review"]
+  },
+  "reviewerNote": "Approved for this profile."
+}
+```
+
+Typed inputs are available for:
+
+- `memory`: `workspaceId`
+- `team`: `rosterId`, `memberId`, and `capabilitiesToAdd`
+- `profile`: `profileId` and `capabilitiesToAdd`
+- `template`: `templateId`; the redacted candidate guidance is appended with a stable reflection marker
+- `decision`: `agentId`, `taskId`, `confidenceLevel`, `riskScore`, and optional `parentDecisionId`
+- `policy`: a complete validated `AgentPolicy`
+
+Each adapter writes through the existing target service, records the applied
+target on the reflection audit event, and is retry-safe for its target. A
+missing adapter, mismatched target, unknown target record, or incomplete typed
+payload rejects the acceptance without marking the candidate accepted.
 
 ### Reject or Merge
 

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CreateReflectionCandidateInput, Task } from '@veritas-kanban/shared';
-import { ReflectionService, type ReflectionTaskService } from '../services/reflection-service.js';
+import {
+  ReflectionService,
+  type ReflectionServiceOptions,
+  type ReflectionTaskService,
+} from '../services/reflection-service.js';
 
 function createInput(
   overrides: Partial<CreateReflectionCandidateInput> = {}
@@ -36,7 +40,10 @@ function createTask(overrides: Partial<Task> = {}): Task {
   } as Task;
 }
 
-function createHarness(task: Task = createTask()) {
+function createHarness(
+  task: Task = createTask(),
+  promotionAdapters?: ReflectionServiceOptions['promotionAdapters']
+) {
   const audit = vi.fn().mockResolvedValue(undefined);
   const updateTask = vi.fn().mockResolvedValue(task);
   const taskService: ReflectionTaskService = {
@@ -51,6 +58,7 @@ function createHarness(task: Task = createTask()) {
       persist: false,
       audit,
       taskService,
+      promotionAdapters,
     }),
   };
 }
@@ -134,6 +142,56 @@ describe('ReflectionService', () => {
       expect.objectContaining({
         lessonsLearned: expect.stringContaining('Reflection Lesson'),
         lessonTags: expect.arrayContaining(['reflection', 'reflection:team']),
+      })
+    );
+  });
+
+  it('fails closed when a wider promotion has no explicit typed target input', async () => {
+    const { service } = createHarness();
+    const candidate = await service.create(
+      createInput({
+        promotionTarget: 'profile',
+      })
+    );
+
+    await expect(
+      service.accept(candidate.id, {
+        reviewedBy: 'brad',
+        promotionTarget: 'profile',
+      })
+    ).rejects.toThrow('requires explicit typed target input');
+  });
+
+  it('records the target returned by the matching typed promotion adapter', async () => {
+    const promotionAdapters = {
+      apply: vi.fn(async () => ({
+        kind: 'profile' as const,
+        id: 'profile_1',
+        title: 'Backend reviewer',
+        appliedAt: '2026-07-25T12:00:00.000Z',
+        appliedBy: 'brad',
+      })),
+    };
+    const { service } = createHarness(createTask(), promotionAdapters);
+    const candidate = await service.create(createInput({ promotionTarget: 'profile' }));
+
+    const accepted = await service.accept(candidate.id, {
+      reviewedBy: 'brad',
+      promotion: {
+        target: 'profile',
+        profileId: 'profile_1',
+        capabilitiesToAdd: ['schema-review'],
+      },
+    });
+
+    expect(accepted).toMatchObject({
+      status: 'accepted',
+      appliedTargets: [{ kind: 'profile', id: 'profile_1', appliedBy: 'brad' }],
+    });
+    expect(promotionAdapters.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reviewedBy: 'brad',
+        promotion: expect.objectContaining({ target: 'profile', profileId: 'profile_1' }),
       })
     );
   });

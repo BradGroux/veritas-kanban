@@ -1,3 +1,5 @@
+import type { AgentPolicy } from './policy.types.js';
+
 export type ReflectionCandidateCategory = 'session' | 'agent' | 'team' | 'policy' | 'template';
 export type ReflectionCandidateStatus = 'pending' | 'accepted' | 'rejected' | 'deleted';
 export type ReflectionSourceKind =
@@ -8,7 +10,7 @@ export type ReflectionSourceKind =
   | 'review-feedback'
   | 'task-observation';
 export type ReflectionPromotionTarget =
-  'task-lesson' | 'memory' | 'decision' | 'profile' | 'template' | 'policy';
+  'task-lesson' | 'memory' | 'team' | 'decision' | 'profile' | 'template' | 'policy';
 export type ReflectionProposedScope = 'task' | 'workspace' | 'team' | 'global';
 
 export interface ReflectionSourceLink {
@@ -50,6 +52,39 @@ export interface ReflectionRetrievalAttribution {
   relevanceScore: number;
   retrievedAt: string;
 }
+
+export type ReflectionTypedPromotionInput =
+  | {
+      target: 'memory';
+      workspaceId: string;
+    }
+  | {
+      target: 'team';
+      rosterId: string;
+      memberId: string;
+      capabilitiesToAdd: string[];
+    }
+  | {
+      target: 'profile';
+      profileId: string;
+      capabilitiesToAdd: string[];
+    }
+  | {
+      target: 'template';
+      templateId: string;
+    }
+  | {
+      target: 'decision';
+      agentId: string;
+      taskId: string;
+      confidenceLevel: number;
+      riskScore: number;
+      parentDecisionId?: string;
+    }
+  | {
+      target: 'policy';
+      policy: AgentPolicy;
+    };
 
 export interface ReflectionCandidate {
   id: string;
@@ -126,6 +161,7 @@ export interface CreateReflectionCandidateInput {
 export interface AcceptReflectionCandidateInput {
   reviewedBy: string;
   promotionTarget?: ReflectionPromotionTarget;
+  promotion?: ReflectionTypedPromotionInput;
   reviewerNote?: string;
 }
 

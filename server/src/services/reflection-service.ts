@@ -14,6 +14,7 @@ import type {
   ReflectionListResponse,
   MergeReflectionCandidateInput,
   ReflectionPromotionTarget,
+  ReflectionTypedPromotionInput,
   ReflectionRedactionSummary,
   ReflectionSourceKind,
   RejectReflectionCandidateInput,
@@ -27,6 +28,10 @@ import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
 import { ensureWithinBase, stripHtml, validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
+import {
+  getReflectionPromotionAdapterRegistry,
+  type ReflectionPromotionAdapterRegistry,
+} from './reflection-promotion-adapters.js';
 
 const log = createLogger('reflection');
 const MAX_CANDIDATES = 2000;
@@ -74,6 +79,7 @@ export interface ReflectionServiceOptions {
   persist?: boolean;
   audit?: (event: AuditEvent) => Promise<void>;
   taskService?: ReflectionTaskService;
+  promotionAdapters?: Pick<ReflectionPromotionAdapterRegistry, 'apply'>;
 }
 
 interface SanitizedText {
@@ -141,6 +147,7 @@ export class ReflectionService {
   private readonly persist: boolean;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private readonly taskService: ReflectionTaskService;
+  private readonly promotionAdapters: Pick<ReflectionPromotionAdapterRegistry, 'apply'>;
   private loaded = false;
   private state: ReflectionState = this.emptyState();
 
@@ -149,6 +156,7 @@ export class ReflectionService {
     this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.audit = options.audit ?? auditLog;
     this.taskService = options.taskService ?? getTaskService();
+    this.promotionAdapters = options.promotionAdapters ?? getReflectionPromotionAdapterRegistry();
   }
 
   async list(filters: ReflectionListFilters = {}): Promise<ReflectionListResponse> {
@@ -340,7 +348,15 @@ export class ReflectionService {
     const candidate = this.findPendingCandidate(id);
     const timestamp = nowIso();
     const reviewedBy = this.sanitizeText(input.reviewedBy).value || 'operator';
-    const promotionTarget = input.promotionTarget ?? candidate.promotionTarget;
+    if (
+      input.promotion &&
+      input.promotionTarget &&
+      input.promotion.target !== input.promotionTarget
+    ) {
+      throw new ConflictError('Typed promotion input does not match the requested target.');
+    }
+    const promotionTarget =
+      input.promotion?.target ?? input.promotionTarget ?? candidate.promotionTarget;
     const reviewerNote = input.reviewerNote
       ? this.sanitizeText(input.reviewerNote).value
       : undefined;
@@ -352,6 +368,7 @@ export class ReflectionService {
     const appliedTargets = await this.applyPromotion(
       promotionCandidate,
       promotionTarget,
+      input.promotion,
       reviewedBy,
       timestamp
     );
@@ -447,19 +464,27 @@ export class ReflectionService {
   private async applyPromotion(
     candidate: ReflectionCandidate,
     target: ReflectionPromotionTarget,
+    promotion: ReflectionTypedPromotionInput | undefined,
     reviewedBy: string,
     timestamp: string
   ): Promise<ReflectionAppliedTarget[]> {
     if (target !== 'task-lesson') {
+      if (!promotion || promotion.target !== target) {
+        throw new ConflictError(
+          `${target} promotion requires explicit typed target input from the reviewer.`
+        );
+      }
       return [
-        {
-          kind: 'manual-review',
-          id: target,
-          title: `${target} promotion queued for manual application`,
-          appliedAt: timestamp,
-          appliedBy: reviewedBy,
-        },
+        await this.promotionAdapters.apply({
+          candidate,
+          promotion,
+          reviewedBy,
+          timestamp,
+        }),
       ];
+    }
+    if (promotion) {
+      throw new ConflictError('Task lesson promotion does not accept wider target input.');
     }
 
     const taskId = candidate.source.taskId;
