@@ -48,6 +48,24 @@ export interface RunEgressGatewayAuditEvent {
   decision: RunEgressDecision;
 }
 
+export interface RunEgressGatewayApprovalRequest {
+  gatewayId: string;
+  runKey: string;
+  protocol: RunEgressDecision['protocol'];
+  host: string;
+  port: number;
+  method?: string;
+  /** Path only. Query strings and fragments are never included. */
+  path?: string;
+  decision: RunEgressDecision;
+  signal: AbortSignal;
+}
+
+export interface RunEgressGatewayApprovalResult {
+  approvalId: string;
+  approved: boolean;
+}
+
 export interface StartRunEgressGatewayInput {
   runId: string;
   policy: RunEgressPolicy;
@@ -55,6 +73,9 @@ export interface StartRunEgressGatewayInput {
   idleTimeoutMs?: number;
   maxConnections?: number;
   onDecision?: (event: RunEgressGatewayAuditEvent) => Promise<void> | void;
+  onApprovalRequired?: (
+    request: RunEgressGatewayApprovalRequest
+  ) => Promise<RunEgressGatewayApprovalResult>;
 }
 
 export interface RunEgressGatewayHandle {
@@ -70,6 +91,7 @@ interface ActiveGateway {
   sockets: Set<Socket>;
   evidence: RunEgressGatewayEvidence;
   environment: RunEgressGatewayHandle['environment'];
+  abortController: AbortController;
   stop(): Promise<RunEgressGatewayEvidence>;
 }
 
@@ -117,6 +139,7 @@ export class RunEgressGatewayService {
     const maxConnections = boundedInteger(input.maxConnections, DEFAULT_MAX_CONNECTIONS, 1, 1_000);
     const sockets = new Set<Socket>();
     const clientSockets = new Set<Socket>();
+    const abortController = new AbortController();
     const server = http.createServer();
     server.requestTimeout = requestTimeoutMs;
     server.headersTimeout = requestTimeoutMs;
@@ -131,6 +154,8 @@ export class RunEgressGatewayService {
       idleTimeoutMs,
       policyService: this.policyService,
       onDecision: input.onDecision,
+      onApprovalRequired: input.onApprovalRequired,
+      signal: abortController.signal,
       now: this.now,
       sockets,
     };
@@ -204,6 +229,7 @@ export class RunEgressGatewayService {
       sockets,
       evidence,
       environment,
+      abortController,
       stop: () => {
         stopPromise ??= this.stopActive(active);
         return stopPromise;
@@ -235,6 +261,7 @@ export class RunEgressGatewayService {
   private async stopActive(active: ActiveGateway): Promise<RunEgressGatewayEvidence> {
     this.activeByRunId.delete(active.runId);
     this.activeByGatewayId.delete(active.evidence.gatewayId);
+    active.abortController.abort(new Error('Run egress gateway stopped.'));
     for (const socket of active.sockets) socket.destroy();
     await new Promise<void>((resolve) => {
       active.server.close(() => resolve());
@@ -268,6 +295,8 @@ interface GatewayRequestContext {
   idleTimeoutMs: number;
   policyService: EgressPolicyService;
   onDecision?: StartRunEgressGatewayInput['onDecision'];
+  onApprovalRequired?: StartRunEgressGatewayInput['onApprovalRequired'];
+  signal: AbortSignal;
   now: () => Date;
   sockets: Set<Socket>;
 }
@@ -293,9 +322,19 @@ async function handleHttpRequest(
     method: request.method,
     path: target.pathname,
   });
-  await audit(context, resolution.decision);
-  if (resolution.decision.decision === 'block') {
-    rejectHttp(response, 403, resolution.decision.reason);
+  const decision = await withApprovalIdlePause(request.socket, context.idleTimeoutMs, () =>
+    authorizeBlockedRequest(context, {
+      protocol: 'http',
+      host: target.hostname,
+      port: portFor(target, 80),
+      method: request.method,
+      path: target.pathname,
+      decision: resolution.decision,
+    })
+  );
+  await audit(context, decision);
+  if (decision.decision === 'block') {
+    rejectHttp(response, 403, decision.reason);
     return;
   }
   const address = resolution.resolvedAddresses[0];
@@ -352,9 +391,17 @@ async function handleConnect(
     host: authority.host,
     port: authority.port,
   });
-  await audit(context, resolution.decision);
-  if (resolution.decision.decision === 'block') {
-    rejectSocket(client, 403, resolution.decision.reason);
+  const decision = await withApprovalIdlePause(client, context.idleTimeoutMs, () =>
+    authorizeBlockedRequest(context, {
+      protocol: 'https',
+      host: authority.host,
+      port: authority.port,
+      decision: resolution.decision,
+    })
+  );
+  await audit(context, decision);
+  if (decision.decision === 'block') {
+    rejectSocket(client, 403, decision.reason);
     return;
   }
   const address = resolution.resolvedAddresses[0];
@@ -411,9 +458,19 @@ async function handleUpgrade(
     method: request.method ?? 'GET',
     path: target.pathname,
   });
-  await audit(context, resolution.decision);
-  if (resolution.decision.decision === 'block') {
-    rejectSocket(client, 403, resolution.decision.reason);
+  const decision = await withApprovalIdlePause(client, context.idleTimeoutMs, () =>
+    authorizeBlockedRequest(context, {
+      protocol: 'ws',
+      host: target.hostname,
+      port: portFor(target, 80),
+      method: request.method ?? 'GET',
+      path: target.pathname,
+      decision: resolution.decision,
+    })
+  );
+  await audit(context, decision);
+  if (decision.decision === 'block') {
+    rejectSocket(client, 403, decision.reason);
     return;
   }
   const address = resolution.resolvedAddresses[0];
@@ -464,6 +521,62 @@ async function audit(context: GatewayRequestContext, decision: RunEgressDecision
     });
   } catch {
     // The enforced transport decision remains authoritative if optional audit export is unavailable.
+  }
+}
+
+async function authorizeBlockedRequest(
+  context: GatewayRequestContext,
+  input: Omit<RunEgressGatewayApprovalRequest, 'gatewayId' | 'runKey' | 'signal'>
+): Promise<RunEgressDecision> {
+  if (
+    input.decision.decision !== 'block' ||
+    !input.decision.approvalEligible ||
+    !context.onApprovalRequired ||
+    context.signal.aborted
+  ) {
+    return input.decision;
+  }
+  const policyReason = input.decision.reason;
+  if (
+    policyReason === 'allowed-by-default' ||
+    policyReason === 'allowed-by-host-rule' ||
+    policyReason === 'allowed-by-approval'
+  ) {
+    return input.decision;
+  }
+  try {
+    const result = await context.onApprovalRequired({
+      gatewayId: context.gatewayId,
+      runKey: context.runKey,
+      ...input,
+      signal: context.signal,
+    });
+    if (!result.approved) {
+      return { ...input.decision, approvalId: result.approvalId };
+    }
+    return {
+      ...input.decision,
+      decision: 'allow',
+      reason: 'allowed-by-approval',
+      approvalEligible: false,
+      approvalId: result.approvalId,
+      policyReason,
+    };
+  } catch {
+    return input.decision;
+  }
+}
+
+async function withApprovalIdlePause<T>(
+  socket: Socket,
+  idleTimeoutMs: number,
+  action: () => Promise<T>
+): Promise<T> {
+  socket.setTimeout(0);
+  try {
+    return await action();
+  } finally {
+    if (!socket.destroyed) socket.setTimeout(idleTimeoutMs, () => socket.destroy());
   }
 }
 

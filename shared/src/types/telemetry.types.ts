@@ -4,6 +4,8 @@ import type { TaskStatus, AgentType } from './task.types.js';
 import type { HarnessSupportFailureClass, HarnessSupportTier } from './provider-runtime.types.js';
 import type { AdmissionLaunchSource } from './admission-control.types.js';
 import type { ExecutionTreeBreakerEvidence } from './execution-tree-budget.types.js';
+import type { ExecutableAgentProvider } from './config.types.js';
+import type { RunEgressDecisionReason, RunEgressProtocol } from './sandbox-policy.types.js';
 
 export type TelemetryEventType =
   | 'task.created'
@@ -14,6 +16,7 @@ export type TelemetryEventType =
   | 'run.completed'
   | 'run.error'
   | 'run.tokens'
+  | 'network.egress'
   | 'admission.tree_control';
 
 /** Base telemetry event - all events extend this */
@@ -125,6 +128,28 @@ export interface AdmissionTreeControlTelemetryEvent extends TelemetryEvent {
   unresolvedAttempts?: number;
 }
 
+/** Metadata-only run-scoped network policy decision. */
+export interface NetworkEgressTelemetryEvent extends TelemetryEvent {
+  type: 'network.egress';
+  taskId: string;
+  attemptId: string;
+  agent: string;
+  provider: ExecutableAgentProvider;
+  gatewayId: string;
+  runKey: string;
+  policyHash: string;
+  protocol: RunEgressProtocol;
+  hostKey: string;
+  port: number;
+  method?: string;
+  decision: 'allow' | 'block';
+  reason: RunEgressDecisionReason;
+  policyReason?: RunEgressDecisionReason;
+  blockedAddressClass?: 'private' | 'loopback' | 'link-local' | 'metadata';
+  approvalEligible: boolean;
+  approvalId?: string;
+}
+
 /** Union type for all telemetry events */
 export type AnyTelemetryEvent =
   | TaskTelemetryEvent
@@ -133,6 +158,7 @@ export type AnyTelemetryEvent =
   | RunCompletedEvent
   | RunErrorEvent
   | TokenTelemetryEvent
+  | NetworkEgressTelemetryEvent
   | AdmissionTreeControlTelemetryEvent;
 
 /** Telemetry configuration */

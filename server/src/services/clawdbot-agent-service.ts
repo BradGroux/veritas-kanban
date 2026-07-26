@@ -26,6 +26,8 @@ import {
   getRunEgressGatewayService,
   RUN_EGRESS_PROXY_ENVIRONMENT_KEYS,
   runEgressPolicyRequiresGateway,
+  type RunEgressGatewayApprovalRequest,
+  type RunEgressGatewayApprovalResult,
   type RunEgressGatewayHandle,
   type RunEgressGatewayService,
 } from './run-egress-gateway-service.js';
@@ -78,6 +80,7 @@ import type {
   RunStartedEvent,
   RunCompletedEvent,
   RunErrorEvent,
+  NetworkEgressTelemetryEvent,
   TokenTelemetryEvent,
   TaskReadinessSummary,
   SandboxPolicyDryRunResult,
@@ -258,6 +261,7 @@ import {
 } from './run-tool-bridge-service.js';
 import { getToolPolicyService } from './tool-policy-service.js';
 import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import {
   FilesystemSandboxService,
   getFilesystemSandboxService,
@@ -2966,7 +2970,16 @@ export class ClawdbotAgentService {
           pending.egressGateway = await this.runEgressGateway.start({
             runId: attemptId,
             policy: egressPolicy,
-            onDecision: (event) => {
+            onApprovalRequired: (request) =>
+              this.resolveRunEgressApproval(
+                task,
+                attemptId,
+                provider,
+                agent,
+                runLaunchManifest,
+                request
+              ),
+            onDecision: async (event) => {
               this.recordTraceStep(attemptId, 'execute', {
                 eventType: 'network.egress.decision',
                 gatewayId: event.gatewayId,
@@ -2981,6 +2994,29 @@ export class ClawdbotAgentService {
                 reason: event.decision.reason,
                 blockedAddressClass: event.decision.blockedAddressClass,
                 approvalEligible: event.decision.approvalEligible,
+                approvalId: event.decision.approvalId,
+                policyReason: event.decision.policyReason,
+              });
+              await telemetry.emit<NetworkEgressTelemetryEvent>({
+                type: 'network.egress',
+                taskId,
+                attemptId,
+                agent,
+                provider,
+                project: task.project,
+                gatewayId: event.gatewayId,
+                runKey: event.runKey,
+                policyHash: event.decision.policyHash,
+                protocol: event.decision.protocol,
+                hostKey: event.decision.hostKey,
+                port: event.decision.port,
+                method: event.decision.method,
+                decision: event.decision.decision,
+                reason: event.decision.reason,
+                policyReason: event.decision.policyReason,
+                blockedAddressClass: event.decision.blockedAddressClass,
+                approvalEligible: event.decision.approvalEligible,
+                approvalId: event.decision.approvalId,
               });
             },
           });
@@ -5882,6 +5918,88 @@ export class ClawdbotAgentService {
       summary,
     });
     return updateType === 'agent_message_chunk' ? summary : undefined;
+  }
+
+  private async resolveRunEgressApproval(
+    task: Task,
+    attemptId: string,
+    provider: ExecutableAgentProvider,
+    agentId: string,
+    runLaunchManifest: RunLaunchManifest,
+    request: RunEgressGatewayApprovalRequest
+  ): Promise<RunEgressGatewayApprovalResult> {
+    const phase = await this.bindPhaseApproval(task.id, attemptId, runLaunchManifest, [
+      {
+        dimension: 'network.egress',
+        requestedScopes: [request.host],
+      },
+    ]);
+    const providerRequestId = `egress:${digestRunLaunchValue({
+      gatewayId: request.gatewayId,
+      protocol: request.protocol,
+      host: request.host,
+      port: request.port,
+      method: request.method,
+      path: request.path,
+      policyHash: request.decision.policyHash,
+    }).slice('sha256:'.length, 'sha256:'.length + 32)}`;
+    const approval = await this.approvalBroker.request({
+      workspaceId: 'local',
+      taskId: task.id,
+      attemptId,
+      provider,
+      agentId,
+      providerRequestId,
+      requestKind: 'approval',
+      actionClass: 'network',
+      action: `Allow ${request.protocol} egress to ${request.host}:${request.port}`,
+      details: `Blocked by ${request.decision.reason}; method ${request.method ?? 'not available'}.`,
+      resourceScope: [request.host, `${request.protocol}:${request.port}`],
+      workingDirectory: task.git?.worktreePath,
+      riskClass: 'high',
+      policyReason: request.decision.reason,
+      evidenceRevision: runLaunchManifest.digest,
+      mobileSafe: false,
+      exactAction: {
+        protocol: request.protocol,
+        host: request.host,
+        port: request.port,
+        method: request.method,
+        path: request.path,
+        policyHash: request.decision.policyHash,
+        blockedReason: request.decision.reason,
+      },
+      ...(phase ? { phase } : {}),
+    });
+    if (request.signal.aborted) {
+      await this.approvalBroker.cancelAttempt(
+        'local',
+        task.id,
+        attemptId,
+        'Run egress gateway stopped.'
+      );
+      return { approvalId: approval.id, approved: false };
+    }
+    try {
+      const resolved = await this.approvalBroker.awaitDecision(approval.id, {
+        signal: request.signal,
+      });
+      return {
+        approvalId: approval.id,
+        approved: resolved.request.status === 'approved',
+      };
+    } catch (error) {
+      if (request.signal.aborted) {
+        await this.approvalBroker.cancelAttempt(
+          'local',
+          task.id,
+          attemptId,
+          'Run egress gateway stopped.'
+        );
+        return { approvalId: approval.id, approved: false };
+      }
+      throw error;
+    }
   }
 
   private async resolveAcpPermission(

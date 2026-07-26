@@ -1144,6 +1144,11 @@ GET /api/telemetry/count                   # Event counts
 GET /api/telemetry/export                  # Export events (CSV/JSON)
 ```
 
+The run-scoped gateway emits `network.egress` events internally. These records
+contain run and gateway keys, policy digest, hashed host key, protocol, port,
+decision, reason, and optional approval correlation. They never contain full
+URLs, query strings, headers, bodies, proxy credentials, or raw paths.
+
 ---
 
 ## Health

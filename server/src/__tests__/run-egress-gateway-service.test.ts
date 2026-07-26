@@ -5,6 +5,8 @@ import type { AddressInfo } from 'node:net';
 import { EgressPolicyService } from '../services/egress-policy-service.js';
 import {
   RunEgressGatewayService,
+  type RunEgressGatewayApprovalRequest,
+  type RunEgressGatewayApprovalResult,
   type RunEgressGatewayHandle,
 } from '../services/run-egress-gateway-service.js';
 
@@ -132,34 +134,110 @@ describe('RunEgressGatewayService', () => {
     );
     expect(response).toContain('101 Switching Protocols');
   });
+
+  it('pauses approval-eligible requests and never lets approval override an explicit deny', async () => {
+    const upstream = http.createServer((_request, response) => response.end('approved-egress'));
+    const upstreamPort = await listen(upstream);
+    const onApprovalRequired = vi.fn(async (): Promise<RunEgressGatewayApprovalResult> => ({
+      approvalId: 'runapproval_network',
+      approved: true,
+    }));
+    const audit = vi.fn();
+    const approvedGateway = await startGateway({
+      runId: 'run-egress-approved',
+      defaultEgress: 'deny',
+      allowedHosts: [],
+      allowApprovals: true,
+      onApprovalRequired,
+      onDecision: audit,
+    });
+
+    await expect(
+      proxyRequest(
+        approvedGateway,
+        `http://127.0.0.1:${upstreamPort}/approved?secret=not-audited`,
+        'GET'
+      )
+    ).resolves.toMatchObject({
+      statusCode: 200,
+      body: 'approved-egress',
+    });
+    expect(onApprovalRequired).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: '127.0.0.1',
+        port: upstreamPort,
+        path: '/approved',
+        decision: expect.objectContaining({
+          decision: 'block',
+          reason: 'default-deny',
+          approvalEligible: true,
+        }),
+      })
+    );
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decision: expect.objectContaining({
+          decision: 'allow',
+          reason: 'allowed-by-approval',
+          policyReason: 'default-deny',
+          approvalId: 'runapproval_network',
+        }),
+      })
+    );
+    expect(JSON.stringify(audit.mock.calls)).not.toContain('not-audited');
+
+    const deniedApproval = vi.fn();
+    const deniedGateway = await startGateway({
+      runId: 'run-egress-denied',
+      defaultEgress: 'allow',
+      deniedHosts: ['127.0.0.1'],
+      allowApprovals: true,
+      onApprovalRequired: deniedApproval,
+    });
+    await expect(
+      proxyRequest(deniedGateway, `http://127.0.0.1:${upstreamPort}/`, 'GET')
+    ).resolves.toMatchObject({
+      statusCode: 403,
+      body: expect.stringContaining('denied-host'),
+    });
+    expect(deniedApproval).not.toHaveBeenCalled();
+  });
 });
 
 async function startGateway(
   overrides: {
     runId?: string;
+    defaultEgress?: 'allow' | 'deny';
+    allowedHosts?: string[];
+    deniedHosts?: string[];
     allowedMethods?: string[];
     allowedPathPrefixes?: string[];
+    allowApprovals?: boolean;
     onDecision?: (event: unknown) => void;
+    onApprovalRequired?: (
+      request: RunEgressGatewayApprovalRequest
+    ) => Promise<RunEgressGatewayApprovalResult>;
   } = {}
 ): Promise<RunEgressGatewayHandle> {
   const service = new RunEgressGatewayService(policyService);
   const gateway = await service.start({
     runId: overrides.runId ?? `run-egress-${openGateways.length}`,
     policy: policyService.compile({
-      defaultEgress: 'deny',
-      allowedHosts: ['127.0.0.1'],
-      deniedHosts: [],
+      defaultEgress: overrides.defaultEgress ?? 'deny',
+      allowedHosts: overrides.allowedHosts ?? ['127.0.0.1'],
+      deniedHosts: overrides.deniedHosts ?? [],
       allowedMethods: overrides.allowedMethods ?? [],
       allowedPathPrefixes: overrides.allowedPathPrefixes ?? [],
       blockPrivateNetwork: false,
       blockMetadataEndpoints: false,
       blockLoopback: false,
-      allowApprovals: false,
+      allowApprovals: overrides.allowApprovals ?? false,
       dangerouslyAllowGlobalWildcard: false,
     }),
     requestTimeoutMs: 5_000,
     idleTimeoutMs: 5_000,
     onDecision: overrides.onDecision,
+    onApprovalRequired: overrides.onApprovalRequired,
   });
   openGateways.push(gateway);
   return gateway;

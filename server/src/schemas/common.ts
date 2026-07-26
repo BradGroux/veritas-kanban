@@ -81,6 +81,7 @@ export const TelemetryEventTypeSchema = z.enum([
   'run.completed',
   'run.error',
   'run.tokens',
+  'network.egress',
   'admission.tree_control',
 ]);
 
