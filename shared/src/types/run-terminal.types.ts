@@ -93,6 +93,16 @@ export interface RunTerminalWaitResult {
   handle: RunTerminalHandle;
 }
 
+export interface RunTerminalWaitManyResult {
+  mode: 'any' | 'all';
+  completed: boolean;
+  timedOut: boolean;
+  selectedHandleId?: string;
+  completedHandleIds: string[];
+  pendingHandleIds: string[];
+  handles: RunTerminalHandle[];
+}
+
 export interface RunTerminalTerminationResult {
   handle: RunTerminalHandle;
   gracefulSignalAt?: string;

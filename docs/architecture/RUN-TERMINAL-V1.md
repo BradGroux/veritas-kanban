@@ -8,12 +8,12 @@ The first implementation supports background pipe-mode commands with:
 
 - one opaque handle bound to workspace, task, attempt, and launch-manifest digest;
 - a manifest-approved executable, relative cwd, and environment-key subset;
-- immediate background return, bounded wait, status inspection, and attempt cleanup;
+- immediate background return, bounded single/any/all waits, foreground detachment without changing ownership, status inspection, and attempt cleanup;
 - redacted byte-bounded stdout/stderr chunks with monotonic cursors, explicit gap metadata, and a total-volume circuit that terminates noisy jobs before they flood the journal;
 - graceful process-group termination followed by bounded forced termination;
 - causal `command.started`, `stream.stdout`, `stream.stderr`, and `command.completed` journal events.
 
-PTY mode, foreground detachment, interactive stdin, restart reattachment, `wait_any`, `wait_all`, external API/CLI/MCP exposure, and persistent handles are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
+PTY mode, interactive stdin, restart reattachment, external API/CLI/MCP exposure, and persistent handles are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
 
 ## Authority boundary
 

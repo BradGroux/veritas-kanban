@@ -272,9 +272,9 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - Run-owned commands use `run-terminal-handle/v1`, never a provider's generic
   stdin channel. The current runtime supports background pipe mode with
   manifest-approved executable, cwd, and environment posture, bounded
-  cursor-addressable redacted output, and process-group termination. PTY,
-  foreground detachment, interactive stdin, restart reattachment, and
-  multi-handle waits fail closed until their typed controls ship.
+  cursor-addressable redacted output, bounded single/any/all waits,
+  foreground detachment, and process-group termination. PTY, interactive
+  stdin, and restart reattachment fail closed until their typed controls ship.
 
 ---
 
