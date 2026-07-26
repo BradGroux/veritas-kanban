@@ -25,6 +25,7 @@ export const RUN_EVENT_KINDS = [
   'stream.stdout',
   'stream.stderr',
   'command.started',
+  'command.detached',
   'command.completed',
   'file.changed',
   'tool.started',

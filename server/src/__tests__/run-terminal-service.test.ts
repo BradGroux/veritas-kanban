@@ -2,7 +2,11 @@ import { mkdtemp, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { RunEventAppendInput, RunTerminalExecuteRequest } from '@veritas-kanban/shared';
+import type {
+  RunEventAppendInput,
+  RunEventEnvelope,
+  RunTerminalExecuteRequest,
+} from '@veritas-kanban/shared';
 import {
   RunTerminalService,
   type RunTerminalLaunchContext,
@@ -10,22 +14,75 @@ import {
 
 const launchManifestDigest = `sha256:${'a'.repeat(64)}`;
 
-async function fixture(options: {
-  outputLimitBytes?: number;
-  maximumOutputBytes?: number;
-  chunkLimitBytes?: number;
-  terminationGraceMs?: number;
-} = {}) {
+async function fixture(
+  options: {
+    outputLimitBytes?: number;
+    maximumOutputBytes?: number;
+    chunkLimitBytes?: number;
+    terminationGraceMs?: number;
+  } = {}
+) {
   const worktreeRoot = await mkdtemp(path.join(os.tmpdir(), 'vk-run-terminal-'));
   const events: RunEventAppendInput[] = [];
+  const persistedEvents: RunEventEnvelope[] = [];
+  const journal = {
+    append: async (event: RunEventAppendInput) => {
+      events.push(event);
+      const duplicate = event.dedupeKey
+        ? persistedEvents.find((candidate) => candidate.dedupeKey === event.dedupeKey)
+        : undefined;
+      if (duplicate) return { event: duplicate, appended: false };
+      const envelope = {
+        schemaVersion: 'run-event/v1',
+        eventId: `event_${persistedEvents.length + 1}`,
+        taskId: event.taskId,
+        runId: event.attemptId,
+        attemptId: event.attemptId,
+        sequence: persistedEvents.length + 1,
+        receivedAt: new Date().toISOString(),
+        kind: event.kind,
+        source: event.source,
+        redaction: {
+          status: 'none',
+          fields: [],
+          originalBytes: 0,
+          persistedBytes: 0,
+        },
+        payload: structuredClone(event.payload),
+        payloadHash: '0'.repeat(64),
+        dedupeKey: event.dedupeKey,
+      } as RunEventEnvelope;
+      persistedEvents.push(envelope);
+      return { event: envelope, appended: true };
+    },
+    list: async (query: {
+      taskId: string;
+      attemptId: string;
+      afterSequence?: number;
+      limit?: number;
+    }) => {
+      const afterSequence = query.afterSequence ?? 0;
+      const limit = query.limit ?? 200;
+      const available = persistedEvents.filter(
+        (event) =>
+          event.taskId === query.taskId &&
+          event.attemptId === query.attemptId &&
+          event.sequence > afterSequence
+      );
+      const page = available.slice(0, limit);
+      return {
+        schemaVersion: 'run-event/v1' as const,
+        taskId: query.taskId,
+        attemptId: query.attemptId,
+        events: page,
+        nextCursor: page.at(-1)?.sequence ?? afterSequence,
+        hasMore: available.length > page.length,
+      };
+    },
+  };
   const service = new RunTerminalService({
     ...options,
-    journal: {
-      append: async (event) => {
-        events.push(event);
-        return {} as never;
-      },
-    },
+    journal,
   });
   const context: RunTerminalLaunchContext = {
     workspaceId: 'workspace_1',
@@ -36,7 +93,7 @@ async function fixture(options: {
     environment: {},
     allowedCommands: [process.execPath],
   };
-  return { service, context, events };
+  return { service, context, events, journal };
 }
 
 function request(script: string): RunTerminalExecuteRequest {
@@ -82,6 +139,55 @@ describe('RunTerminalService', () => {
     ]);
   });
 
+  it('fails closed when ownership cannot be persisted before handle return', async () => {
+    const { context } = await fixture();
+    const service = new RunTerminalService({
+      journal: {
+        append: async () => {
+          throw new Error('journal unavailable');
+        },
+        list: async (query) => ({
+          schemaVersion: 'run-event/v1',
+          taskId: query.taskId,
+          attemptId: query.attemptId,
+          events: [],
+          nextCursor: query.afterSequence ?? 0,
+          hasMore: false,
+        }),
+      },
+    });
+
+    await expect(service.execute(context, request('setInterval(() => {}, 1000)'))).rejects.toThrow(
+      'ownership could not be persisted'
+    );
+    expect(service.list(context.workspaceId, context.taskId, context.attemptId)).toEqual([]);
+  });
+
+  it('does not report a durable completion when terminal evidence cannot be persisted', async () => {
+    const { context } = await fixture();
+    let appendCount = 0;
+    const service = new RunTerminalService({
+      journal: {
+        append: async () => {
+          appendCount += 1;
+          if (appendCount > 1) throw new Error('journal unavailable');
+          return {} as never;
+        },
+        list: async (query) => ({
+          schemaVersion: 'run-event/v1',
+          taskId: query.taskId,
+          attemptId: query.attemptId,
+          events: [],
+          nextCursor: query.afterSequence ?? 0,
+          hasMore: false,
+        }),
+      },
+    });
+    const started = await service.execute(context, request('process.exit(0)'));
+
+    await expect(service.wait(started.id, 5_000)).rejects.toThrow('journal evidence is incomplete');
+  });
+
   it('redacts and truncates bounded output while reporting cursor gaps', async () => {
     const { service, context } = await fixture({
       outputLimitBytes: 4 * 1024,
@@ -107,6 +213,28 @@ describe('RunTerminalService', () => {
     expect(JSON.stringify(page)).not.toContain('secret-value');
   });
 
+  it('keeps durable stream events below the journal spill threshold', async () => {
+    const { service, context, events } = await fixture();
+    const started = await service.execute(
+      context,
+      request('process.stdout.write("safe output line\\n".repeat(500))')
+    );
+    await service.wait(started.id, 5_000);
+
+    const streamEvents = events.filter((event) => event.kind === 'stream.stdout');
+    expect(streamEvents.length).toBeGreaterThan(1);
+    expect(
+      streamEvents.every(
+        (event) => Buffer.byteLength(String(event.payload.content ?? ''), 'utf8') <= 6 * 1024
+      )
+    ).toBe(true);
+    expect(
+      streamEvents.every(
+        (event) => Buffer.byteLength(JSON.stringify(event.payload), 'utf8') < 8 * 1024
+      )
+    ).toBe(true);
+  });
+
   it('trips the volume circuit before output can flood the run journal', async () => {
     const { service, context, events } = await fixture({
       outputLimitBytes: 4 * 1024,
@@ -123,9 +251,7 @@ describe('RunTerminalService', () => {
       volumeCircuitTripped: true,
       observedBytes: expect.any(Number),
     });
-    expect(
-      events.find((event) => event.kind === 'run.error')
-    ).toMatchObject({
+    expect(events.find((event) => event.kind === 'run.error')).toMatchObject({
       payload: { code: 'terminal-output-volume-limit' },
     });
   });
@@ -150,14 +276,8 @@ describe('RunTerminalService', () => {
 
   it('waits for any handle without blocking the remaining process', async () => {
     const { service, context } = await fixture();
-    const fast = await service.execute(
-      context,
-      request('setTimeout(() => process.exit(0), 40)')
-    );
-    const slow = await service.execute(
-      context,
-      request('setTimeout(() => process.exit(0), 1000)')
-    );
+    const fast = await service.execute(context, request('setTimeout(() => process.exit(0), 40)'));
+    const slow = await service.execute(context, request('setTimeout(() => process.exit(0), 1000)'));
 
     expect(await service.waitAny([fast.id, slow.id], 5_000)).toMatchObject({
       mode: 'any',
@@ -172,10 +292,7 @@ describe('RunTerminalService', () => {
 
   it('waits for all handles with a bounded timeout', async () => {
     const { service, context } = await fixture();
-    const first = await service.execute(
-      context,
-      request('setTimeout(() => process.exit(0), 40)')
-    );
+    const first = await service.execute(context, request('setTimeout(() => process.exit(0), 40)'));
     const second = await service.execute(
       context,
       request('setTimeout(() => process.exit(0), 100)')
@@ -203,16 +320,90 @@ describe('RunTerminalService', () => {
     });
 
     expect(started.startMode).toBe('foreground');
-    expect(service.detach(started.id)).toMatchObject({
+    expect(await service.detach(started.id)).toMatchObject({
       id: started.id,
       attemptId: context.attemptId,
       startMode: 'background',
     });
     await service.wait(started.id, 5_000);
-    expect(service.output(started.id).chunks.map((chunk) => chunk.content).join('')).toBe(
-      'detached'
-    );
+    expect(
+      service
+        .output(started.id)
+        .chunks.map((chunk) => chunk.content)
+        .join('')
+    ).toBe('detached');
     expect(events.map((event) => event.kind)).toContain('command.detached');
+  });
+
+  it('reconstructs terminal handles and retained output from the durable journal', async () => {
+    const { service, context, journal } = await fixture();
+    const started = await service.execute(
+      context,
+      request('process.stdout.write("durable output")')
+    );
+    await service.wait(started.id, 5_000);
+
+    await expect(
+      new RunTerminalService({ journal }).reconcileAttempt(
+        'workspace_other',
+        context.taskId,
+        context.attemptId
+      )
+    ).rejects.toThrow('scope does not match');
+    const restarted = new RunTerminalService({ journal });
+    const reconciliation = await restarted.reconcileAttempt(
+      context.workspaceId,
+      context.taskId,
+      context.attemptId
+    );
+
+    expect(reconciliation).toMatchObject({
+      schemaVersion: 'run-terminal-reconciliation/v1',
+      recoveredHandleIds: [started.id],
+      interruptedHandleIds: [],
+      handles: [{ id: started.id, state: 'exited', exitCode: 0 }],
+    });
+    expect(
+      restarted
+        .output(started.id)
+        .chunks.map((chunk) => chunk.content)
+        .join('')
+    ).toBe('durable output');
+  });
+
+  it('fails closed by interrupting a dangling handle after restart', async () => {
+    const { service, context, events, journal } = await fixture();
+    const started = await service.execute(context, request('setInterval(() => {}, 1000)'));
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const restarted = new RunTerminalService({ journal });
+      const reconciliation = await restarted.reconcileAttempt(
+        context.workspaceId,
+        context.taskId,
+        context.attemptId
+      );
+
+      expect(reconciliation).toMatchObject({
+        recoveredHandleIds: [started.id],
+        interruptedHandleIds: [started.id],
+        handles: [
+          {
+            id: started.id,
+            state: 'interrupted',
+            capabilities: { restartReattachment: 'unsupported' },
+          },
+        ],
+      });
+      expect(restarted.get(started.id).failure).toContain('cannot reattach inherited pipes');
+      expect(
+        events.filter(
+          (event) => event.dedupeKey === `run-terminal:${started.id}:restart-interrupted`
+        )
+      ).toHaveLength(1);
+    } finally {
+      await service.terminate(started.id);
+    }
   });
 
   it('terminates the owned process group gracefully', async () => {
@@ -234,17 +425,15 @@ describe('RunTerminalService', () => {
   it('fails closed for PTY mode until its controls exist', async () => {
     const { service, context } = await fixture();
 
-    await expect(
-      service.execute(context, { ...request(''), mode: 'pty' })
-    ).rejects.toThrow('PTY mode is not supported');
+    await expect(service.execute(context, { ...request(''), mode: 'pty' })).rejects.toThrow(
+      'PTY mode is not supported'
+    );
   });
 
   it('rejects cwd traversal and unapproved environment keys before spawn', async () => {
     const { service, context } = await fixture();
 
-    await expect(
-      service.execute(context, { ...request(''), cwd: '../outside' })
-    ).rejects.toThrow();
+    await expect(service.execute(context, { ...request(''), cwd: '../outside' })).rejects.toThrow();
     await expect(
       service.execute(context, {
         ...request(''),
@@ -253,13 +442,14 @@ describe('RunTerminalService', () => {
     ).rejects.toThrow('not approved by the run launch manifest');
   });
 
-  it.runIf(process.platform !== 'win32')('rejects a symlinked cwd outside the worktree', async () => {
-    const { service, context } = await fixture();
-    const outside = await mkdtemp(path.join(os.tmpdir(), 'vk-run-terminal-outside-'));
-    await symlink(outside, path.join(context.worktreeRoot, 'escape'));
+  it.runIf(process.platform !== 'win32')(
+    'rejects a symlinked cwd outside the worktree',
+    async () => {
+      const { service, context } = await fixture();
+      const outside = await mkdtemp(path.join(os.tmpdir(), 'vk-run-terminal-outside-'));
+      await symlink(outside, path.join(context.worktreeRoot, 'escape'));
 
-    await expect(
-      service.execute(context, { ...request(''), cwd: 'escape' })
-    ).rejects.toThrow();
-  });
+      await expect(service.execute(context, { ...request(''), cwd: 'escape' })).rejects.toThrow();
+    }
+  );
 });

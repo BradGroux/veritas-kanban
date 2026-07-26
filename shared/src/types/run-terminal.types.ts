@@ -1,5 +1,6 @@
 export const RUN_TERMINAL_HANDLE_SCHEMA_VERSION = 'run-terminal-handle/v1' as const;
 export const RUN_TERMINAL_OUTPUT_SCHEMA_VERSION = 'run-terminal-output/v1' as const;
+export const RUN_TERMINAL_RECONCILIATION_SCHEMA_VERSION = 'run-terminal-reconciliation/v1' as const;
 
 export const RUN_TERMINAL_MODES = ['pipe', 'pty'] as const;
 export const RUN_TERMINAL_START_MODES = ['background', 'foreground'] as const;
@@ -10,6 +11,7 @@ export const RUN_TERMINAL_STATES = [
   'failed',
   'terminating',
   'terminated',
+  'interrupted',
 ] as const;
 
 export type RunTerminalMode = (typeof RUN_TERMINAL_MODES)[number];
@@ -107,4 +109,14 @@ export interface RunTerminalTerminationResult {
   handle: RunTerminalHandle;
   gracefulSignalAt?: string;
   forceSignalAt?: string;
+}
+
+export interface RunTerminalReconciliationResult {
+  schemaVersion: typeof RUN_TERMINAL_RECONCILIATION_SCHEMA_VERSION;
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  handles: RunTerminalHandle[];
+  recoveredHandleIds: string[];
+  interruptedHandleIds: string[];
 }
