@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { chmod, open } from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type {
@@ -13,14 +13,28 @@ import type {
   WorkspaceCheckpointFile,
   WorkspaceCheckpointFileSource,
   WorkspaceCheckpointPolicy,
+  WorkspaceCheckpointRewindPreview,
+  WorkspaceCheckpointRewindTransaction,
   WorkspaceCheckpointRetentionResult,
 } from '@veritas-kanban/shared';
-import { parseWorkspaceCheckpoint } from '../schemas/workspace-checkpoint-schemas.js';
+import {
+  parseWorkspaceCheckpoint,
+  parseWorkspaceCheckpointRewindTransaction,
+} from '../schemas/workspace-checkpoint-schemas.js';
 import { ConflictError } from '../middleware/error-handler.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
-import { atomicWriteFile, lstat, mkdir, readdir, realpath, rename, rm } from './fs-helpers.js';
+import {
+  atomicWriteFile,
+  lstat,
+  mkdir,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  unlink,
+} from './fs-helpers.js';
 
 const DEFAULT_POLICY: WorkspaceCheckpointPolicy = {
   ignoredFiles: 'excluded',
@@ -34,6 +48,7 @@ const DEFAULT_POLICY: WorkspaceCheckpointPolicy = {
 };
 const MAX_METADATA_BYTES = 32 * 1_024 * 1_024;
 const MAX_GIT_OUTPUT_BYTES = 32 * 1_024 * 1_024;
+const rewindMutationQueues = new Map<string, Promise<void>>();
 const MAX_POLICY: Record<'maxFiles' | 'maxBytes' | 'maxFileBytes' | 'maxExclusions', number> = {
   maxFiles: 100_000,
   maxBytes: 4 * 1_024 * 1_024 * 1_024,
@@ -90,6 +105,20 @@ export interface WorkspaceCheckpointRetentionInput extends WorkspaceCheckpointLi
   protectedCheckpointIds?: string[];
 }
 
+export interface WorkspaceCheckpointRewindInput extends WorkspaceCheckpointListQuery {
+  operationId: string;
+  worktreePath: string;
+  preview: WorkspaceCheckpointRewindPreview;
+}
+
+export interface WorkspaceCheckpointRewindLookup extends WorkspaceCheckpointListQuery {
+  transactionId: string;
+}
+
+export interface WorkspaceCheckpointRewindRecoveryInput extends WorkspaceCheckpointRewindLookup {
+  worktreePath: string;
+}
+
 export interface WorkspaceCheckpointRepository {
   capture(input: WorkspaceCheckpointCaptureInput): Promise<WorkspaceCheckpoint>;
   get(lookup: WorkspaceCheckpointLookup): Promise<WorkspaceCheckpoint | null>;
@@ -99,6 +128,13 @@ export interface WorkspaceCheckpointRepository {
     input: WorkspaceCheckpointCurrentInspectionInput
   ): Promise<WorkspaceCheckpointCurrentState>;
   prune(input: WorkspaceCheckpointRetentionInput): Promise<WorkspaceCheckpointRetentionResult>;
+  rewind(input: WorkspaceCheckpointRewindInput): Promise<WorkspaceCheckpointRewindTransaction>;
+  getRewind(
+    lookup: WorkspaceCheckpointRewindLookup
+  ): Promise<WorkspaceCheckpointRewindTransaction | null>;
+  recoverRewind(
+    input: WorkspaceCheckpointRewindRecoveryInput
+  ): Promise<WorkspaceCheckpointRewindTransaction>;
 }
 
 export interface WorkspaceCheckpointCommandResult {
@@ -118,6 +154,11 @@ export interface FileWorkspaceCheckpointRepositoryOptions {
   now?: () => Date;
   runCommand?: WorkspaceCheckpointCommandRunner;
   beforePublish?: (checkpoint: WorkspaceCheckpoint) => void | Promise<void>;
+  beforeRewindMutation?: (input: {
+    phase: 'apply' | 'rollback';
+    path: string;
+    index: number;
+  }) => void | Promise<void>;
 }
 
 interface GitCaptureState {
@@ -141,6 +182,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
   private readonly now: () => Date;
   private readonly runCommand: WorkspaceCheckpointCommandRunner;
   private readonly beforePublish?: (checkpoint: WorkspaceCheckpoint) => void | Promise<void>;
+  private readonly beforeRewindMutation?: FileWorkspaceCheckpointRepositoryOptions['beforeRewindMutation'];
 
   constructor(options: FileWorkspaceCheckpointRepositoryOptions = {}) {
     this.baseDir = path.resolve(options.baseDir ?? getWorkspaceCheckpointsDir());
@@ -148,6 +190,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     this.now = options.now ?? (() => new Date());
     this.runCommand = options.runCommand ?? defaultCommandRunner;
     this.beforePublish = options.beforePublish;
+    this.beforeRewindMutation = options.beforeRewindMutation;
   }
 
   async capture(input: WorkspaceCheckpointCaptureInput): Promise<WorkspaceCheckpoint> {
@@ -639,6 +682,620 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     };
   }
 
+  async rewind(
+    input: WorkspaceCheckpointRewindInput
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    validateScope(input);
+    validateOpaqueReference(input.operationId, 'operationId');
+    return serializeRewindMutation(input, () => this.rewindLocked(input));
+  }
+
+  private async rewindLocked(
+    input: WorkspaceCheckpointRewindInput
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    const preview = input.preview;
+    const { digest: previewDigest, ...previewPayload } = preview;
+    if (
+      previewDigest !== digestRunLaunchValue(previewPayload) ||
+      preview.workspaceId !== input.workspaceId ||
+      preview.taskId !== input.taskId ||
+      preview.attemptId !== input.attemptId ||
+      !preview.safeForAutomaticRewind ||
+      preview.conflicts.length > 0 ||
+      preview.files.some((file) => file.conflicts.length > 0) ||
+      !preview.checkpointDiff.directParent ||
+      (preview.checkpointDiff.files.length > 0 &&
+        !preview.checkpointDiff.attribution?.evidenceComplete) ||
+      preview.checkpointDiff.files.some(
+        (file) =>
+          file.attribution?.source !== 'agent-tool' || file.attribution.confidence !== 'high'
+      ) ||
+      preview.git.headWillChange ||
+      preview.git.branchWillChange ||
+      preview.git.indexWillChange
+    ) {
+      throw new ConflictError(
+        'Workspace rewind requires an intact conflict-free automatic preview.'
+      );
+    }
+    const affectedPaths = [...new Set(preview.files.map((file) => file.path))].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    const diffPaths = [...new Set(preview.checkpointDiff.files.map((file) => file.path))].sort(
+      (left, right) => left.localeCompare(right)
+    );
+    if (JSON.stringify(affectedPaths) !== JSON.stringify(diffPaths)) {
+      throw new ConflictError(
+        'Workspace rewind preview paths do not match its attributed checkpoint diff.'
+      );
+    }
+    for (const candidate of affectedPaths) validateCurrentInspectionPath(candidate);
+    const scope = {
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      attemptId: input.attemptId,
+    };
+    const [target, descendant] = await Promise.all([
+      this.get({ ...scope, checkpointId: preview.targetCheckpointId }),
+      this.get({ ...scope, checkpointId: preview.descendantCheckpointId }),
+    ]);
+    if (
+      !target ||
+      !descendant ||
+      descendant.parentCheckpointId !== target.id ||
+      preview.checkpointDiff.fromCheckpoint.id !== target.id ||
+      preview.checkpointDiff.toCheckpoint.id !== descendant.id ||
+      target.digest !== preview.checkpointDiff.fromCheckpoint.digest ||
+      descendant.digest !== preview.checkpointDiff.toCheckpoint.digest ||
+      target.worktreeRootDigest !== descendant.worktreeRootDigest ||
+      target.worktreeManifestId !== preview.ownership.manifestId ||
+      descendant.worktreeManifestId !== preview.ownership.manifestId ||
+      preview.ownership.ownerAttemptId !== input.attemptId ||
+      target.git.head !== descendant.git.head ||
+      target.git.branch !== descendant.git.branch ||
+      target.git.indexDigest !== descendant.git.indexDigest ||
+      preview.checkpointDiff.git.headChanged !== (target.git.head !== descendant.git.head) ||
+      preview.checkpointDiff.git.branchChanged !== (target.git.branch !== descendant.git.branch) ||
+      preview.checkpointDiff.git.indexChanged !==
+        (target.git.indexDigest !== descendant.git.indexDigest) ||
+      preview.checkpointDiff.git.statusChanged !==
+        (target.git.statusDigest !== descendant.git.statusDigest) ||
+      target.exclusionsTruncated ||
+      descendant.exclusionsTruncated ||
+      (target.git.statusDigest !== descendant.git.statusDigest &&
+        (target.excludedCount > 0 || descendant.excludedCount > 0))
+    ) {
+      throw new ConflictError(
+        'Workspace rewind checkpoints do not match the approved direct restore chain.'
+      );
+    }
+    const operationIdDigest = digestRunLaunchValue(input.operationId);
+    const transactionId = getWorkspaceCheckpointRewindIdForOperation({
+      ...scope,
+      operationIdDigest,
+    });
+    const requestDigest = digestRunLaunchValue({
+      ...scope,
+      operationIdDigest,
+      previewDigest,
+      expectedCurrentDigest: preview.current.digest,
+      targetCheckpointId: target.id,
+      targetCheckpointDigest: target.digest,
+      descendantCheckpointId: descendant.id,
+      descendantCheckpointDigest: descendant.digest,
+      worktreeRootDigest: target.worktreeRootDigest,
+      affectedPaths,
+    });
+    const existing = await this.getRewind({ ...scope, transactionId });
+    if (existing) {
+      if (existing.requestDigest !== requestDigest) {
+        throw new ConflictError(
+          'Workspace rewind operation identity was reused for a changed request.',
+          { transactionId }
+        );
+      }
+      if (existing.state === 'committed') return existing;
+      throw new ConflictError(
+        existing.state === 'rolled-back'
+          ? 'Workspace rewind operation was rolled back and requires a new preview and operation identity.'
+          : 'Workspace rewind operation is incomplete and requires explicit durable recovery.',
+        { transactionId, state: existing.state }
+      );
+    }
+
+    const canonicalRoot = await this.assertExactWorktreeRoot(
+      input.worktreePath,
+      target.worktreeRootDigest
+    );
+    const current = await this.inspectCurrent({
+      worktreePath: canonicalRoot,
+      paths: affectedPaths,
+      maxFileBytes: Math.max(target.policy.maxFileBytes, descendant.policy.maxFileBytes),
+      maxBytes: Math.max(target.policy.maxBytes, descendant.policy.maxBytes),
+    });
+    if (
+      !sameCurrentState(current, preview.current) ||
+      !checkpointMatchesCurrent(descendant, current, affectedPaths)
+    ) {
+      throw new ConflictError(
+        'Workspace rewind current state no longer matches its approved descendant.'
+      );
+    }
+
+    const startedAt = this.now().toISOString();
+    const published = await this.publishRewindTransaction(
+      sealRewindTransaction({
+        schemaVersion: 'workspace-checkpoint-rewind-transaction/v1',
+        id: transactionId,
+        ...scope,
+        operationIdDigest,
+        requestDigest,
+        previewDigest,
+        expectedCurrentDigest: preview.current.digest,
+        targetCheckpointId: target.id,
+        targetCheckpointDigest: target.digest,
+        descendantCheckpointId: descendant.id,
+        descendantCheckpointDigest: descendant.digest,
+        worktreeRootDigest: target.worktreeRootDigest,
+        state: 'prepared',
+        affectedPaths,
+        restoredPathCount: 0,
+        recoveryCheckpointId: descendant.id,
+        startedAt,
+        updatedAt: startedAt,
+      })
+    );
+    if (!published.created) {
+      if (published.transaction.state === 'committed') return published.transaction;
+      throw new ConflictError('Workspace rewind operation is already owned by another executor.', {
+        transactionId,
+        state: published.transaction.state,
+      });
+    }
+    let transaction = published.transaction;
+
+    try {
+      const immediatelyBefore = await this.inspectCurrent({
+        worktreePath: canonicalRoot,
+        paths: affectedPaths,
+        maxFileBytes: Math.max(target.policy.maxFileBytes, descendant.policy.maxFileBytes),
+        maxBytes: Math.max(target.policy.maxBytes, descendant.policy.maxBytes),
+      });
+      if (!checkpointMatchesCurrent(descendant, immediatelyBefore, affectedPaths)) {
+        throw new ConflictError(
+          'Workspace rewind descendant changed after the transaction was prepared.'
+        );
+      }
+      transaction = await this.updateRewindTransaction(transaction, {
+        state: 'applying',
+        updatedAt: this.now().toISOString(),
+      });
+      await this.applyCheckpointFiles(canonicalRoot, target, affectedPaths, 'apply');
+      const restored = await this.inspectCurrent({
+        worktreePath: canonicalRoot,
+        paths: affectedPaths,
+        maxFileBytes: target.policy.maxFileBytes,
+        maxBytes: target.policy.maxBytes,
+      });
+      if (!checkpointMatchesCurrent(target, restored, affectedPaths)) {
+        throw new ConflictError('Workspace rewind did not produce the exact target state.');
+      }
+      const completedAt = this.now().toISOString();
+      return this.updateRewindTransaction(transaction, {
+        state: 'committed',
+        restoredPathCount: affectedPaths.length,
+        updatedAt: completedAt,
+        completedAt,
+      });
+    } catch (error) {
+      if (transaction.state === 'prepared') {
+        const completedAt = this.now().toISOString();
+        await this.updateRewindTransaction(transaction, {
+          state: 'rolled-back',
+          restoredPathCount: 0,
+          updatedAt: completedAt,
+          completedAt,
+        });
+        throw new ConflictError(
+          'Workspace rewind aborted before mutation and preserved the changed workspace.',
+          {
+            transactionId,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+      }
+      transaction = await this.bestEffortRewindState(transaction, {
+        state: 'rolling-back',
+        updatedAt: this.now().toISOString(),
+      });
+      try {
+        await this.applyCheckpointFiles(canonicalRoot, descendant, affectedPaths, 'rollback');
+        const recovered = await this.inspectCurrent({
+          worktreePath: canonicalRoot,
+          paths: affectedPaths,
+          maxFileBytes: descendant.policy.maxFileBytes,
+          maxBytes: descendant.policy.maxBytes,
+        });
+        if (!checkpointMatchesCurrent(descendant, recovered, affectedPaths)) {
+          throw new ConflictError(
+            'Workspace rewind rollback did not recover the descendant state.'
+          );
+        }
+        const completedAt = this.now().toISOString();
+        await this.updateRewindTransaction(transaction, {
+          state: 'rolled-back',
+          restoredPathCount: 0,
+          updatedAt: completedAt,
+          completedAt,
+        });
+      } catch (rollbackError) {
+        throw new ConflictError(
+          'Workspace rewind failed and requires durable transaction recovery.',
+          {
+            transactionId,
+            error: error instanceof Error ? error.message : String(error),
+            rollbackError:
+              rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+          }
+        );
+      }
+      throw new ConflictError('Workspace rewind failed and restored the descendant checkpoint.', {
+        transactionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async getRewind(
+    lookup: WorkspaceCheckpointRewindLookup
+  ): Promise<WorkspaceCheckpointRewindTransaction | null> {
+    validateScope(lookup);
+    validateIdentifier(lookup.transactionId, 'transactionId');
+    const metadataPath = this.rewindMetadataPath(lookup);
+    if (!(await this.assertPrivateDirectoryPath(path.dirname(metadataPath), true))) return null;
+    const content = await this.readBoundedRegularFile(
+      metadataPath,
+      MAX_METADATA_BYTES,
+      'Workspace rewind transaction metadata failed its integrity bound.',
+      true
+    );
+    if (!content) return null;
+    const transaction = parseWorkspaceCheckpointRewindTransaction(
+      JSON.parse(content.toString('utf8'))
+    );
+    if (
+      transaction.workspaceId !== lookup.workspaceId ||
+      transaction.taskId !== lookup.taskId ||
+      transaction.attemptId !== lookup.attemptId ||
+      transaction.id !== lookup.transactionId
+    ) {
+      throw new ConflictError('Workspace rewind transaction scope does not match its path.', {
+        transactionId: lookup.transactionId,
+      });
+    }
+    const { digest: _digest, ...payload } = transaction;
+    if (transaction.digest !== digestRunLaunchValue(payload)) {
+      throw new ConflictError('Workspace rewind transaction digest is invalid.', {
+        transactionId: lookup.transactionId,
+      });
+    }
+    return transaction;
+  }
+
+  async recoverRewind(
+    input: WorkspaceCheckpointRewindRecoveryInput
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    validateScope(input);
+    validateIdentifier(input.transactionId, 'transactionId');
+    return serializeRewindMutation(input, () => this.recoverRewindLocked(input));
+  }
+
+  private async recoverRewindLocked(
+    input: WorkspaceCheckpointRewindRecoveryInput
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    const transaction = await this.getRewind(input);
+    if (!transaction) {
+      throw new ConflictError('Workspace rewind transaction was not found.');
+    }
+    if (transaction.state === 'committed' || transaction.state === 'rolled-back') {
+      return transaction;
+    }
+    const [target, descendant] = await Promise.all([
+      this.get({
+        workspaceId: input.workspaceId,
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        checkpointId: transaction.targetCheckpointId,
+      }),
+      this.get({
+        workspaceId: input.workspaceId,
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        checkpointId: transaction.recoveryCheckpointId,
+      }),
+    ]);
+    if (
+      !target ||
+      !descendant ||
+      target.digest !== transaction.targetCheckpointDigest ||
+      descendant.digest !== transaction.descendantCheckpointDigest ||
+      target.worktreeRootDigest !== transaction.worktreeRootDigest ||
+      descendant.worktreeRootDigest !== transaction.worktreeRootDigest
+    ) {
+      throw new ConflictError(
+        'Workspace rewind recovery checkpoint is missing or does not match the transaction.'
+      );
+    }
+    const canonicalRoot = await this.assertExactWorktreeRoot(
+      input.worktreePath,
+      transaction.worktreeRootDigest
+    );
+    const beforeRecovery = await this.inspectCurrent({
+      worktreePath: canonicalRoot,
+      paths: transaction.affectedPaths,
+      maxFileBytes: Math.max(target.policy.maxFileBytes, descendant.policy.maxFileBytes),
+      maxBytes: Math.max(target.policy.maxBytes, descendant.policy.maxBytes),
+    });
+    if (
+      !rewindRecoveryMatchesKnownStates(
+        target,
+        descendant,
+        beforeRecovery,
+        transaction.affectedPaths
+      )
+    ) {
+      throw new ConflictError(
+        'Workspace rewind recovery found changes outside the known transaction states.',
+        { transactionId: transaction.id }
+      );
+    }
+    let recovering = await this.bestEffortRewindState(transaction, {
+      state: 'rolling-back',
+      updatedAt: this.now().toISOString(),
+    });
+    await this.applyCheckpointFiles(
+      canonicalRoot,
+      descendant,
+      transaction.affectedPaths,
+      'rollback'
+    );
+    const recovered = await this.inspectCurrent({
+      worktreePath: canonicalRoot,
+      paths: transaction.affectedPaths,
+      maxFileBytes: descendant.policy.maxFileBytes,
+      maxBytes: descendant.policy.maxBytes,
+    });
+    if (!checkpointFilesMatchCurrent(descendant, recovered, transaction.affectedPaths)) {
+      throw new ConflictError('Workspace rewind recovery did not restore the descendant state.', {
+        transactionId: transaction.id,
+      });
+    }
+    const completedAt = this.now().toISOString();
+    recovering = await this.updateRewindTransaction(recovering, {
+      state: 'rolled-back',
+      restoredPathCount: 0,
+      updatedAt: completedAt,
+      completedAt,
+    });
+    return recovering;
+  }
+
+  private async assertExactWorktreeRoot(
+    worktreePath: string,
+    expectedDigest: string
+  ): Promise<string> {
+    const canonicalRoot = await realpath(path.resolve(worktreePath));
+    const gitRoot = (await this.git(canonicalRoot, ['rev-parse', '--show-toplevel']))
+      .toString('utf8')
+      .trim();
+    const canonicalGitRoot = await realpath(gitRoot);
+    if (
+      canonicalGitRoot !== canonicalRoot ||
+      digestRunLaunchValue(canonicalRoot) !== expectedDigest
+    ) {
+      throw new ConflictError(
+        'Workspace rewind root is not the exact checkpoint-owned Git worktree.'
+      );
+    }
+    return canonicalRoot;
+  }
+
+  private async applyCheckpointFiles(
+    worktreeRoot: string,
+    checkpoint: WorkspaceCheckpoint,
+    affectedPaths: string[],
+    phase: 'apply' | 'rollback'
+  ): Promise<void> {
+    const files = new Map(checkpoint.files.map((file) => [file.path, file]));
+    for (const [index, relativePath] of affectedPaths.entries()) {
+      await this.beforeRewindMutation?.({ phase, path: relativePath, index });
+      const file = files.get(relativePath);
+      const parentReady = await this.prepareSafeWorktreeParent(
+        worktreeRoot,
+        relativePath,
+        file?.state === 'present'
+      );
+      const destination = ensureWithinBase(worktreeRoot, path.resolve(worktreeRoot, relativePath));
+      if (!file || file.state === 'absent') {
+        if (!parentReady) continue;
+        try {
+          const existing = await lstat(destination);
+          if (!existing.isFile() || existing.isSymbolicLink()) {
+            throw new ConflictError('Workspace rewind refused to delete a non-regular file.', {
+              path: relativePath,
+            });
+          }
+          await unlink(destination);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+        continue;
+      }
+      if (!parentReady || !file.blobDigest || file.mode === undefined) {
+        throw new ConflictError('Workspace rewind target file is incomplete.', {
+          path: relativePath,
+        });
+      }
+      try {
+        const existing = await lstat(destination);
+        if (!existing.isFile() || existing.isSymbolicLink()) {
+          throw new ConflictError('Workspace rewind refused to replace a non-regular file.', {
+            path: relativePath,
+          });
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      const content = await this.readBlob(file.blobDigest);
+      if (content.byteLength !== file.size || sha256(content) !== file.contentDigest) {
+        throw new ConflictError('Workspace rewind target blob does not match its checkpoint.', {
+          path: relativePath,
+        });
+      }
+      await atomicWriteFile(destination, content);
+      await chmod(destination, file.mode);
+    }
+  }
+
+  private async prepareSafeWorktreeParent(
+    worktreeRoot: string,
+    relativePath: string,
+    create: boolean
+  ): Promise<boolean> {
+    const segments = relativePath.split('/').slice(0, -1);
+    let current = worktreeRoot;
+    for (const segment of segments) {
+      current = ensureWithinBase(worktreeRoot, path.join(current, segment));
+      try {
+        const stat = await lstat(current);
+        if (!stat.isDirectory() || stat.isSymbolicLink()) {
+          throw new ConflictError(
+            'Workspace rewind path contains a non-directory or symbolic-link parent.',
+            { path: relativePath }
+          );
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        if (!create) return false;
+        await mkdir(current, { mode: 0o700 });
+        const created = await lstat(current);
+        if (!created.isDirectory() || created.isSymbolicLink()) {
+          throw new ConflictError('Workspace rewind could not create a safe parent directory.', {
+            path: relativePath,
+          });
+        }
+      }
+      if ((await realpath(current)) !== current) {
+        throw new ConflictError('Workspace rewind path resolves through an unexpected parent.', {
+          path: relativePath,
+        });
+      }
+    }
+    return true;
+  }
+
+  private async publishRewindTransaction(
+    transaction: WorkspaceCheckpointRewindTransaction
+  ): Promise<{ transaction: WorkspaceCheckpointRewindTransaction; created: boolean }> {
+    const parent = await this.preparePrivateDirectory([
+      transaction.workspaceId,
+      transaction.taskId,
+      transaction.attemptId,
+      'rewinds',
+    ]);
+    const destination = this.rewindPath({
+      workspaceId: transaction.workspaceId,
+      taskId: transaction.taskId,
+      attemptId: transaction.attemptId,
+      transactionId: transaction.id,
+    });
+    const temporary = ensureWithinBase(
+      parent,
+      path.join(parent, `.tmp-${transaction.id}-${nanoid(8)}`)
+    );
+    await mkdir(temporary, { mode: 0o700 });
+    try {
+      await this.writeRewindMetadata(path.join(temporary, 'metadata.json'), transaction);
+      await rename(temporary, destination);
+      return { transaction, created: true };
+    } catch (error) {
+      const raced = await this.getRewind({
+        workspaceId: transaction.workspaceId,
+        taskId: transaction.taskId,
+        attemptId: transaction.attemptId,
+        transactionId: transaction.id,
+      });
+      if (raced?.requestDigest === transaction.requestDigest) {
+        return { transaction: raced, created: false };
+      }
+      throw error;
+    } finally {
+      await rm(temporary, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  private async updateRewindTransaction(
+    transaction: WorkspaceCheckpointRewindTransaction,
+    patch: Partial<
+      Pick<
+        WorkspaceCheckpointRewindTransaction,
+        'state' | 'restoredPathCount' | 'updatedAt' | 'completedAt'
+      >
+    >
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    const current = await this.getRewind({
+      workspaceId: transaction.workspaceId,
+      taskId: transaction.taskId,
+      attemptId: transaction.attemptId,
+      transactionId: transaction.id,
+    });
+    if (!current || current.digest !== transaction.digest) {
+      throw new ConflictError('Workspace rewind transaction changed before its state update.', {
+        transactionId: transaction.id,
+      });
+    }
+    const updated = sealRewindTransaction({ ...current, ...patch, digest: undefined });
+    await this.writeRewindMetadata(
+      this.rewindMetadataPath({
+        workspaceId: updated.workspaceId,
+        taskId: updated.taskId,
+        attemptId: updated.attemptId,
+        transactionId: updated.id,
+      }),
+      updated
+    );
+    return updated;
+  }
+
+  private async bestEffortRewindState(
+    transaction: WorkspaceCheckpointRewindTransaction,
+    patch: Partial<
+      Pick<
+        WorkspaceCheckpointRewindTransaction,
+        'state' | 'restoredPathCount' | 'updatedAt' | 'completedAt'
+      >
+    >
+  ): Promise<WorkspaceCheckpointRewindTransaction> {
+    try {
+      return await this.updateRewindTransaction(transaction, patch);
+    } catch {
+      return transaction;
+    }
+  }
+
+  private async writeRewindMetadata(
+    metadataPath: string,
+    transaction: WorkspaceCheckpointRewindTransaction
+  ): Promise<void> {
+    const metadata = `${JSON.stringify(transaction, null, 2)}\n`;
+    if (Buffer.byteLength(metadata) > MAX_METADATA_BYTES) {
+      throw new ConflictError('Workspace rewind transaction metadata exceeds its bound.', {
+        transactionId: transaction.id,
+      });
+    }
+    await atomicWriteFile(metadataPath, metadata);
+  }
+
   private async captureGitState(worktreeRoot: string): Promise<GitCaptureState> {
     const [headResult, branchResult, indexPathResult, status, tracked, untracked] =
       await Promise.all([
@@ -823,6 +1480,18 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
 
   private metadataPath(lookup: WorkspaceCheckpointLookup): string {
     return path.join(this.checkpointPath(lookup), 'metadata.json');
+  }
+
+  private rewindMetadataPath(lookup: WorkspaceCheckpointRewindLookup): string {
+    return path.join(this.rewindPath(lookup), 'metadata.json');
+  }
+
+  private rewindPath(lookup: WorkspaceCheckpointRewindLookup): string {
+    validateIdentifier(lookup.transactionId, 'transactionId');
+    return ensureWithinBase(
+      this.baseDir,
+      path.join(this.attemptPath(lookup), 'rewinds', lookup.transactionId)
+    );
   }
 
   private checkpointPath(lookup: WorkspaceCheckpointLookup): string {
@@ -1021,6 +1690,150 @@ export function getWorkspaceCheckpointIdForOperation(
   })
     .slice('sha256:'.length)
     .slice(0, 24)}`;
+}
+
+export function getWorkspaceCheckpointRewindIdForOperation(
+  lookup: WorkspaceCheckpointOperationLookup
+): string {
+  validateScope(lookup);
+  if (!/^sha256:[a-f0-9]{64}$/.test(lookup.operationIdDigest)) {
+    throw new Error('Workspace rewind operation digest is invalid.');
+  }
+  return `rewind_${digestRunLaunchValue({
+    workspaceId: lookup.workspaceId,
+    taskId: lookup.taskId,
+    attemptId: lookup.attemptId,
+    operationIdDigest: lookup.operationIdDigest,
+  })
+    .slice('sha256:'.length)
+    .slice(0, 24)}`;
+}
+
+function sealRewindTransaction(
+  input: Omit<WorkspaceCheckpointRewindTransaction, 'digest'> & { digest?: undefined }
+): WorkspaceCheckpointRewindTransaction {
+  const { digest: _digest, ...payload } = input;
+  return parseWorkspaceCheckpointRewindTransaction({
+    ...payload,
+    digest: digestRunLaunchValue(payload),
+  });
+}
+
+function sameCurrentState(
+  left: WorkspaceCheckpointCurrentState,
+  right: WorkspaceCheckpointCurrentState
+): boolean {
+  return (
+    left.worktreeRootDigest === right.worktreeRootDigest &&
+    left.git.head === right.git.head &&
+    left.git.branch === right.git.branch &&
+    left.git.indexDigest === right.git.indexDigest &&
+    left.git.statusDigest === right.git.statusDigest &&
+    left.git.dirty === right.git.dirty &&
+    stableCurrentFiles(left.files) === stableCurrentFiles(right.files)
+  );
+}
+
+function checkpointMatchesCurrent(
+  checkpoint: WorkspaceCheckpoint,
+  current: WorkspaceCheckpointCurrentState,
+  paths: string[]
+): boolean {
+  if (
+    checkpoint.worktreeRootDigest !== current.worktreeRootDigest ||
+    checkpoint.git.head !== current.git.head ||
+    checkpoint.git.branch !== current.git.branch ||
+    checkpoint.git.indexDigest !== current.git.indexDigest ||
+    checkpoint.git.statusDigest !== current.git.statusDigest ||
+    checkpoint.git.dirty !== current.git.dirty
+  ) {
+    return false;
+  }
+  return checkpointFilesMatchCurrent(checkpoint, current, paths);
+}
+
+function checkpointFilesMatchCurrent(
+  checkpoint: WorkspaceCheckpoint,
+  current: WorkspaceCheckpointCurrentState,
+  paths: string[]
+): boolean {
+  if (
+    checkpoint.worktreeRootDigest !== current.worktreeRootDigest ||
+    checkpoint.git.head !== current.git.head ||
+    checkpoint.git.branch !== current.git.branch ||
+    checkpoint.git.indexDigest !== current.git.indexDigest
+  ) {
+    return false;
+  }
+  const checkpointFiles = new Map(checkpoint.files.map((file) => [file.path, file]));
+  const currentFiles = new Map(current.files.map((file) => [file.path, file]));
+  return paths.every((candidate) =>
+    checkpointFileMatchesCurrent(checkpointFiles.get(candidate), currentFiles.get(candidate))
+  );
+}
+
+function rewindRecoveryMatchesKnownStates(
+  target: WorkspaceCheckpoint,
+  descendant: WorkspaceCheckpoint,
+  current: WorkspaceCheckpointCurrentState,
+  paths: string[]
+): boolean {
+  if (
+    target.worktreeRootDigest !== current.worktreeRootDigest ||
+    target.git.head !== current.git.head ||
+    target.git.branch !== current.git.branch ||
+    target.git.indexDigest !== current.git.indexDigest
+  ) {
+    return false;
+  }
+  const targetFiles = new Map(target.files.map((file) => [file.path, file]));
+  const descendantFiles = new Map(descendant.files.map((file) => [file.path, file]));
+  const currentFiles = new Map(current.files.map((file) => [file.path, file]));
+  return paths.every((candidate) => {
+    const actual = currentFiles.get(candidate);
+    return (
+      checkpointFileMatchesCurrent(targetFiles.get(candidate), actual) ||
+      checkpointFileMatchesCurrent(descendantFiles.get(candidate), actual)
+    );
+  });
+}
+
+function checkpointFileMatchesCurrent(
+  expected: WorkspaceCheckpointFile | undefined,
+  actual: WorkspaceCheckpointCurrentFile | undefined
+): boolean {
+  const expectedState = expected?.state ?? 'absent';
+  if (!actual || expectedState !== actual.state) return false;
+  if (expectedState === 'absent') return true;
+  return (
+    expected?.contentDigest === actual.contentDigest &&
+    expected?.mode === actual.mode &&
+    expected?.size === actual.size
+  );
+}
+
+function stableCurrentFiles(files: WorkspaceCheckpointCurrentFile[]): string {
+  return JSON.stringify([...files].sort((left, right) => left.path.localeCompare(right.path)));
+}
+
+async function serializeRewindMutation<T>(
+  scope: Pick<WorkspaceCheckpointLookup, 'workspaceId' | 'taskId' | 'attemptId'>,
+  operation: () => Promise<T>
+): Promise<T> {
+  const key = `${scope.workspaceId}:${scope.taskId}:${scope.attemptId}`;
+  const previous = rewindMutationQueues.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  rewindMutationQueues.set(key, current);
+  await previous.catch(() => undefined);
+  try {
+    return await operation();
+  } finally {
+    if (rewindMutationQueues.get(key) === current) rewindMutationQueues.delete(key);
+    release();
+  }
 }
 
 function mergeCandidates(

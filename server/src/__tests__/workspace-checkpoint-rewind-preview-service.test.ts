@@ -8,6 +8,7 @@ import type {
 } from '@veritas-kanban/shared';
 import type { WorkspaceCheckpointRepository } from '../storage/workspace-checkpoint-repository.js';
 import { WorkspaceCheckpointRewindPreviewService } from '../services/workspace-checkpoint-rewind-preview-service.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const hash = (character: string) => `sha256:${character.repeat(64)}`;
 const targetId = 'checkpoint_target12345678901234';
@@ -291,6 +292,8 @@ describe('WorkspaceCheckpointRewindPreviewService', () => {
       conversation: { cursorWillChange: true, targetCursorAvailable: true },
       files: [{ path: 'file.ts', action: 'restore', conflicts: [] }],
     });
+    const { digest, ...payload } = result;
+    expect(digest).toBe(digestRunLaunchValue(payload));
     expect(fixture.ownership.getManifest).toHaveBeenCalledTimes(2);
   });
 
@@ -338,5 +341,36 @@ describe('WorkspaceCheckpointRewindPreviewService', () => {
       overlappingPaths: ['file.ts'],
       inventoryIncomplete: true,
     });
+  });
+
+  it('blocks status changes that may be hidden by excluded checkpoint files', async () => {
+    const target = checkpoint(targetId, hash('d'), {
+      exclusions: [{ path: 'binary.dat', source: 'tracked', reason: 'binary', size: 12 }],
+      excludedCount: 1,
+    });
+    const descendant = checkpoint(descendantId, hash('e'), {
+      parentCheckpointId: target.id,
+      exclusions: [{ path: 'binary.dat', source: 'tracked', reason: 'binary', size: 12 }],
+      excludedCount: 1,
+      git: { ...target.git, statusDigest: hash('0') },
+    });
+    const currentState = current(descendant);
+    const fixture = service(target, descendant, checkpointDiff('agent-tool'), currentState);
+
+    const result = await fixture.preview.preview({
+      taskEnvelope: envelope(),
+      taskId: 'task-872',
+      attemptId: 'attempt-872',
+      targetCheckpointId: target.id,
+      descendantCheckpointId: descendant.id,
+    });
+
+    expect(result.safeForAutomaticRewind).toBe(false);
+    expect(result.conflicts).toContainEqual(
+      expect.objectContaining({
+        kind: 'inventory-incomplete',
+        message: expect.stringContaining('exclude files'),
+      })
+    );
   });
 });

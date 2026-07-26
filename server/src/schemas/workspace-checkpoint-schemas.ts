@@ -2,8 +2,10 @@ import { z } from 'zod';
 import {
   WORKSPACE_CHECKPOINT_BOUNDARIES,
   WORKSPACE_CHECKPOINT_EXCLUSION_REASONS,
+  WORKSPACE_CHECKPOINT_REWIND_TRANSACTION_SCHEMA_VERSION,
   WORKSPACE_CHECKPOINT_SCHEMA_VERSION,
   type WorkspaceCheckpoint,
+  type WorkspaceCheckpointRewindTransaction,
 } from '@veritas-kanban/shared';
 
 const identifierSchema = z
@@ -190,6 +192,59 @@ export const WorkspaceCheckpointSchema = z
     }
   });
 
+export const WorkspaceCheckpointRewindTransactionSchema = z
+  .object({
+    schemaVersion: z.literal(WORKSPACE_CHECKPOINT_REWIND_TRANSACTION_SCHEMA_VERSION),
+    id: identifierSchema,
+    workspaceId: identifierSchema,
+    taskId: identifierSchema,
+    attemptId: identifierSchema,
+    operationIdDigest: digestSchema,
+    requestDigest: digestSchema,
+    previewDigest: digestSchema,
+    expectedCurrentDigest: digestSchema,
+    targetCheckpointId: identifierSchema,
+    targetCheckpointDigest: digestSchema,
+    descendantCheckpointId: identifierSchema,
+    descendantCheckpointDigest: digestSchema,
+    worktreeRootDigest: digestSchema,
+    state: z.enum(['prepared', 'applying', 'committed', 'rolling-back', 'rolled-back']),
+    affectedPaths: z.array(relativePathSchema).max(100_000),
+    restoredPathCount: z.number().int().nonnegative(),
+    recoveryCheckpointId: identifierSchema,
+    startedAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    completedAt: z.iso.datetime().optional(),
+    digest: digestSchema,
+  })
+  .strict()
+  .superRefine((transaction, context) => {
+    if (transaction.restoredPathCount > transaction.affectedPaths.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['restoredPathCount'],
+        message: 'Restored path count cannot exceed the transaction inventory.',
+      });
+    }
+    if (
+      ['committed', 'rolled-back'].includes(transaction.state) !== Boolean(transaction.completedAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['completedAt'],
+        message: 'Only terminal rewind transactions require a completion timestamp.',
+      });
+    }
+  });
+
 export function parseWorkspaceCheckpoint(value: unknown): WorkspaceCheckpoint {
   return WorkspaceCheckpointSchema.parse(value) as WorkspaceCheckpoint;
+}
+
+export function parseWorkspaceCheckpointRewindTransaction(
+  value: unknown
+): WorkspaceCheckpointRewindTransaction {
+  return WorkspaceCheckpointRewindTransactionSchema.parse(
+    value
+  ) as WorkspaceCheckpointRewindTransaction;
 }
