@@ -1,5 +1,6 @@
 export const PROGRESS_WATCHDOG_POLICY_SCHEMA_VERSION = 'progress-watchdog-policy/v1' as const;
 export const PROGRESS_WATCHDOG_FINDING_SCHEMA_VERSION = 'progress-watchdog-finding/v1' as const;
+export const PROGRESS_WATCHDOG_ACTION_SCHEMA_VERSION = 'progress-watchdog-action/v1' as const;
 
 export type ProgressWatchdogDetector =
   'identical-repetition' | 'multi-step-cycle' | 'failed-file-edit' | 'no-durable-progress';
@@ -45,6 +46,11 @@ export interface ProgressWatchdogPolicy {
   failedEditThreshold: number;
   noProgressEventThreshold: number;
   noProgressSeconds: number;
+  noProgressTotalTokens: number;
+  noProgressCostUsd: number;
+  highConfidenceMultiplier: number;
+  progressSignals: DurableProgressSignal[];
+  expectedRepetitionAllowedKinds: string[];
   maxExpectedRepetitionLeaseSeconds: number;
   recovery: ProgressWatchdogRecoveryPolicy;
 }
@@ -81,4 +87,18 @@ export interface ProgressWatchdogEvaluation {
   latestSequence: number;
   progressResetSequence?: number;
   suppressedEventIds: string[];
+}
+
+export type ProgressWatchdogActionStatus = 'executed' | 'operator-required' | 'failed';
+
+export interface ProgressWatchdogActionOutcome {
+  schemaVersion: typeof PROGRESS_WATCHDOG_ACTION_SCHEMA_VERSION;
+  findingId: string;
+  taskId: string;
+  attemptId: string;
+  turnId?: string;
+  action: ProgressWatchdogAction;
+  status: ProgressWatchdogActionStatus;
+  diagnostic: string;
+  recordedAt: string;
 }

@@ -10,6 +10,15 @@ const actionSchema = z.enum([
   'pause',
   'cancel',
 ]);
+const progressSignalSchema = z.enum([
+  'workspace-delta',
+  'artifact',
+  'verification-passed',
+  'task-transition',
+  'goal-transition',
+  'external-evidence',
+  'operator-input',
+]);
 
 export const ProgressWatchdogPolicySchema = z
   .object({
@@ -23,6 +32,11 @@ export const ProgressWatchdogPolicySchema = z
     failedEditThreshold: z.number().int().min(2).max(100),
     noProgressEventThreshold: z.number().int().min(2).max(500),
     noProgressSeconds: z.number().int().min(1).max(86_400),
+    noProgressTotalTokens: z.number().int().min(1).max(1_000_000_000),
+    noProgressCostUsd: z.number().positive().max(1_000_000),
+    highConfidenceMultiplier: z.number().int().min(2).max(20),
+    progressSignals: z.array(progressSignalSchema).min(1).max(7),
+    expectedRepetitionAllowedKinds: z.array(z.string().trim().min(1).max(160)).min(1).max(64),
     maxExpectedRepetitionLeaseSeconds: z.number().int().min(1).max(86_400),
     recovery: z
       .object({
@@ -48,6 +62,23 @@ export const ProgressWatchdogPolicySchema = z
         code: z.ZodIssueCode.custom,
         path: ['windowEvents'],
         message: 'windowEvents must cover the configured cycle window',
+      });
+    }
+    if (new Set(policy.progressSignals).size !== policy.progressSignals.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['progressSignals'],
+        message: 'progressSignals must not contain duplicates',
+      });
+    }
+    if (
+      new Set(policy.expectedRepetitionAllowedKinds).size !==
+      policy.expectedRepetitionAllowedKinds.length
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expectedRepetitionAllowedKinds'],
+        message: 'expectedRepetitionAllowedKinds must not contain duplicates',
       });
     }
   });
