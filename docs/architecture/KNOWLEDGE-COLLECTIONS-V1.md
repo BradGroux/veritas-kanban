@@ -62,26 +62,27 @@ The file backend keeps collection metadata, source revisions, derived pages, ing
 
 The initial REST surface is mounted at both `/api/v1/knowledge/collections` and `/api/knowledge/collections`:
 
-| Method | Path                                                                           | Purpose                     |
-| ------ | ------------------------------------------------------------------------------ | --------------------------- |
-| `GET`  | `/knowledge/collections`                                                       | List readable collections   |
-| `POST` | `/knowledge/collections`                                                       | Create a collection         |
-| `GET`  | `/knowledge/collections/:collectionId`                                         | Read collection metadata    |
-| `GET`  | `/knowledge/collections/:collectionId/sources`                                 | List source revisions       |
-| `POST` | `/knowledge/collections/:collectionId/sources`                                 | Register a source revision  |
-| `GET`  | `/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata        |
-| `GET`  | `/knowledge/collections/:collectionId/pages`                                   | List derived pages          |
-| `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                           | Read a derived page         |
-| `POST` | `/knowledge/collections/:collectionId/integrity/lint`                          | Run deterministic lint      |
-| `POST` | `/knowledge/collections/:collectionId/search`                                  | Search raw and derived data |
-| `POST` | `/knowledge/collections/:collectionId/search/promotions`                       | Promote selected results    |
-| `POST` | `/knowledge/collections/:collectionId/exports`                                 | Create a cited work product |
-| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals`                     | List dry runs               |
-| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals`                     | Create a dry run            |
-| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read a dry run              |
-| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`   | Apply atomically            |
-| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse` | Reverse atomically          |
-| `GET`  | `/knowledge/collections/:collectionId/activity`                                | List append-only activity   |
+| Method | Path                                                                             | Purpose                     |
+| ------ | -------------------------------------------------------------------------------- | --------------------------- |
+| `GET`  | `/knowledge/collections`                                                         | List readable collections   |
+| `POST` | `/knowledge/collections`                                                         | Create a collection         |
+| `GET`  | `/knowledge/collections/:collectionId`                                           | Read collection metadata    |
+| `GET`  | `/knowledge/collections/:collectionId/sources`                                   | List source revisions       |
+| `POST` | `/knowledge/collections/:collectionId/sources`                                   | Register a source revision  |
+| `GET`  | `/knowledge/collections/:collectionId/sources/:sourceId`                         | Read source metadata        |
+| `GET`  | `/knowledge/collections/:collectionId/pages`                                     | List derived pages          |
+| `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                             | Read a derived page         |
+| `POST` | `/knowledge/collections/:collectionId/pages/:pageId/claims/:claimId/transitions` | Transition a cited claim    |
+| `POST` | `/knowledge/collections/:collectionId/integrity/lint`                            | Run deterministic lint      |
+| `POST` | `/knowledge/collections/:collectionId/search`                                    | Search raw and derived data |
+| `POST` | `/knowledge/collections/:collectionId/search/promotions`                         | Promote selected results    |
+| `POST` | `/knowledge/collections/:collectionId/exports`                                   | Create a cited work product |
+| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals`                       | List dry runs               |
+| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals`                       | Create a dry run            |
+| `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`           | Read a dry run              |
+| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`     | Apply atomically            |
+| `POST` | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse`   | Reverse atomically          |
+| `GET`  | `/knowledge/collections/:collectionId/activity`                                  | List append-only activity   |
 
 The REST API deliberately returns source metadata, not stored source content. Collection-scoped search reads snapshots internally through the repository, distinguishes `raw-source` from `derived-page` results, and returns source IDs and claim locators instead of uncited synthesis. Collection and workspace RBAC apply before any search data is read.
 
@@ -107,6 +108,22 @@ or source media types. Findings have stable IDs and digests, contain identifiers
 rather than source text, and are deterministically ordered. Repeating an
 unchanged request over unchanged inputs returns the same report digest.
 Research candidates are opt-in and informational.
+
+## Claim lifecycle
+
+Every newly created material claim starts `active`. A compare-and-set transition
+can move it through `needs-review`, `disputed`, `superseded`, `retracted`, or
+back to an earlier state. The caller supplies the expected page digest, expected
+claim state, operation identity, reason, and optional retained evidence source
+IDs. Each transition records both states, evidence IDs, actor, timestamp,
+operation and request digests, and its own digest in a new page revision.
+
+Agents can flag claims only as `needs-review` or `disputed`; an administrator
+must finalize supersession, retraction, or resolution. Exact retries are
+idempotent, changed reuse of an operation identity fails, stale page or state
+evidence fails compare-and-set, and page history makes the transition
+reversible. A disputed claim remains visible with all citations and transition
+evidence; the transition never deletes or silently replaces either side.
 
 ## Query promotion
 

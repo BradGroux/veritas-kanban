@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   KNOWLEDGE_ACCESS_ROLES,
+  KNOWLEDGE_CLAIM_STATES,
   KNOWLEDGE_ACTIVITY_ENTRY_SCHEMA_VERSION,
   KNOWLEDGE_CLASSIFICATIONS,
   KNOWLEDGE_COLLECTION_DEFINITION_SCHEMA_VERSION,
@@ -339,6 +340,25 @@ const KnowledgePageClaimInputSchema = z
 
 export const KnowledgePageClaimSchema = KnowledgePageClaimInputSchema.extend({
   id: identifierSchema,
+  lifecycleState: z.enum(KNOWLEDGE_CLAIM_STATES).optional(),
+  transitions: z
+    .array(
+      z
+        .object({
+          from: z.enum(KNOWLEDGE_CLAIM_STATES),
+          to: z.enum(KNOWLEDGE_CLAIM_STATES),
+          reason: z.string().trim().min(1).max(2_000),
+          evidenceSourceIds: z.array(identifierSchema).max(100).refine(uniqueStrings),
+          actorId: opaqueTextSchema,
+          at: z.iso.datetime(),
+          operationIdDigest: digestSchema,
+          requestDigest: digestSchema,
+          digest: digestSchema,
+        })
+        .strict()
+    )
+    .max(1_000)
+    .optional(),
 }).strict();
 
 const aliasesSchema = z
@@ -723,6 +743,21 @@ export const TransitionKnowledgeIngestionProposalBodySchema = z
     proposalDigest: digestSchema,
   })
   .strict();
+
+export const TransitionKnowledgeClaimBodySchema = z
+  .object({
+    operationId: opaqueTextSchema.max(240),
+    expectedPageDigest: digestSchema,
+    expectedState: z.enum(KNOWLEDGE_CLAIM_STATES),
+    to: z.enum(KNOWLEDGE_CLAIM_STATES),
+    reason: z.string().trim().min(1).max(2_000),
+    evidenceSourceIds: z.array(identifierSchema).max(100).refine(uniqueStrings).optional(),
+  })
+  .strict()
+  .refine((input) => input.expectedState !== input.to, {
+    message: 'Knowledge claim transition must change state.',
+    path: ['to'],
+  });
 
 export const SearchKnowledgeCollectionBodySchema = z
   .object({

@@ -648,6 +648,101 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     expect(first.findings.every((finding) => finding.digest.startsWith('sha256:'))).toBe(true);
   });
 
+  it('versions, attributes, replays, and reverses claim lifecycle transitions', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, {
+      ...COLLECTION_INPUT,
+      operationId: 'create-claim-lifecycle',
+      slug: 'claim-lifecycle',
+    });
+    const source = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({ operationId: 'claim-lifecycle-source' })
+    );
+    const [page] = await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'claim-lifecycle-page',
+      pages: [pageCandidate('claim-lifecycle', source.id)],
+    });
+    const claimId = page.current.claims[0].id;
+    const disputeInput = {
+      operationId: 'dispute-lifecycle-claim',
+      expectedPageDigest: page.digest,
+      expectedState: 'active' as const,
+      to: 'disputed' as const,
+      reason: 'A second interpretation requires explicit review.',
+      evidenceSourceIds: [source.id],
+    };
+
+    const disputed = await service.transitionClaim(
+      WORKSPACE_ID,
+      collection.id,
+      page.id,
+      claimId,
+      AGENT,
+      disputeInput
+    );
+    const replayed = await service.transitionClaim(
+      WORKSPACE_ID,
+      collection.id,
+      page.id,
+      claimId,
+      AGENT,
+      disputeInput
+    );
+
+    expect(replayed).toEqual(disputed);
+    expect(disputed.current.claims[0]).toMatchObject({
+      lifecycleState: 'disputed',
+      transitions: [
+        expect.objectContaining({
+          from: 'active',
+          to: 'disputed',
+          actorId: AGENT.id,
+          evidenceSourceIds: [source.id],
+        }),
+      ],
+    });
+    await expect(
+      service.transitionClaim(WORKSPACE_ID, collection.id, page.id, claimId, AGENT, {
+        ...disputeInput,
+        reason: 'Changed input.',
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+    await expect(
+      service.transitionClaim(WORKSPACE_ID, collection.id, page.id, claimId, AGENT, {
+        operationId: 'agent-retract-claim',
+        expectedPageDigest: disputed.digest,
+        expectedState: 'disputed',
+        to: 'retracted',
+        reason: 'Agent cannot finalize retraction.',
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+
+    const restored = await service.transitionClaim(
+      WORKSPACE_ID,
+      collection.id,
+      page.id,
+      claimId,
+      ADMIN,
+      {
+        operationId: 'restore-lifecycle-claim',
+        expectedPageDigest: disputed.digest,
+        expectedState: 'disputed',
+        to: 'active',
+        reason: 'Administrator resolved the dispute with retained evidence.',
+        evidenceSourceIds: [source.id],
+      }
+    );
+
+    expect(restored.current.claims[0].lifecycleState).toBe('active');
+    expect(restored.current.claims[0].transitions).toHaveLength(2);
+    expect(restored.history.map((revision) => revision.version)).toContain(
+      disputed.current.version
+    );
+  });
+
   it('fails closed on unknown citations, links, and unauthorized review decisions', async () => {
     const service = await createService(storageType);
     const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);
