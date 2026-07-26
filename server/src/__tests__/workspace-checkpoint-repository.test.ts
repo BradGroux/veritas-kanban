@@ -107,6 +107,7 @@ async function rewindPreview(
     estimatedDiscardedBytes:
       current.files.find((candidate) => candidate.path === file.path)?.size ?? 0,
     attribution,
+    selectedForRewind: true,
     conflicts: [],
   }));
   const payload = {
@@ -165,6 +166,8 @@ async function rewindPreview(
       targetCursorAvailable: Boolean(target.conversationCursor),
     },
     files: previewFiles,
+    resolutions: [],
+    selectedPaths: previewFiles.map((file) => file.path),
     exclusions: {
       targetCount: target.excludedCount,
       descendantCount: descendant.excludedCount,
@@ -172,11 +175,13 @@ async function rewindPreview(
       inventoryIncomplete: false,
     },
     conflicts: [],
+    unresolvedConflicts: [],
     estimatedDataLossBytes: previewFiles.reduce(
       (total, file) => total + file.estimatedDiscardedBytes,
       0
     ),
     safeForAutomaticRewind: true,
+    safeForApprovedRewind: true,
   };
   const preview = {
     ...payload,
@@ -599,6 +604,84 @@ describe('FileWorkspaceCheckpointRepository', () => {
     );
     await expect(fs.readFile(path.join(worktreePath, 'added.txt'), 'utf8')).resolves.toBe(
       'added by agent\n'
+    );
+  });
+
+  it('commits only explicitly accepted paths and preserves rejected descendant files', async () => {
+    const { worktreePath, storePath } = await fixture();
+    await fs.rm(path.join(worktreePath, 'binary.bin'));
+    await fs.rm(path.join(worktreePath, 'linked.txt'));
+    const repository = new FileWorkspaceCheckpointRepository({ baseDir: storePath });
+    const scope = {
+      workspaceId: 'workspace-selective',
+      taskId: 'task-selective',
+      attemptId: 'attempt-selective',
+      boundary: 'manual' as const,
+      worktreePath,
+      worktreeManifestId: 'manifest-selective',
+    };
+    const target = await repository.capture({
+      ...scope,
+      operationId: 'selective-target',
+      conversationCursor: 'cursor-target',
+    });
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'descendant content\n');
+    await fs.writeFile(path.join(worktreePath, 'added.txt'), 'preserve this descendant file\n');
+    const descendant = await repository.capture({
+      ...scope,
+      operationId: 'selective-descendant',
+      parentCheckpointId: target.id,
+      conversationCursor: 'cursor-descendant',
+    });
+    const original = await rewindPreview(repository, worktreePath, target, descendant, [
+      'added.txt',
+      'tracked.txt',
+    ]);
+    const { digest: _digest, evidenceDigest: _evidenceDigest, ...originalPayload } = original;
+    const resolvedPayload = {
+      ...originalPayload,
+      files: original.files.map((file) =>
+        file.path === 'added.txt'
+          ? {
+              ...file,
+              resolution: 'reject' as const,
+              selectedForRewind: false,
+            }
+          : file
+      ),
+      resolutions: [{ path: 'added.txt', decision: 'reject' as const }],
+      selectedPaths: ['tracked.txt'],
+      estimatedDataLossBytes:
+        original.files.find((file) => file.path === 'tracked.txt')?.estimatedDiscardedBytes ?? 0,
+      safeForAutomaticRewind: false,
+      safeForApprovedRewind: true,
+    };
+    const resolvedWithEvidence = {
+      ...resolvedPayload,
+      evidenceDigest: digestWorkspaceCheckpointRewindEvidence(resolvedPayload),
+    };
+    const preview = {
+      ...resolvedWithEvidence,
+      digest: digestRunLaunchValue(resolvedWithEvidence),
+    };
+
+    const transaction = await repository.rewind({
+      ...scope,
+      operationId: 'selective-operation',
+      preview,
+    });
+
+    expect(transaction).toMatchObject({
+      state: 'committed',
+      affectedPaths: ['tracked.txt'],
+      resolutions: [{ path: 'added.txt', decision: 'reject' }],
+      restoredPathCount: 1,
+    });
+    await expect(fs.readFile(path.join(worktreePath, 'tracked.txt'), 'utf8')).resolves.toBe(
+      'tracked worktree\n'
+    );
+    await expect(fs.readFile(path.join(worktreePath, 'added.txt'), 'utf8')).resolves.toBe(
+      'preserve this descendant file\n'
     );
   });
 

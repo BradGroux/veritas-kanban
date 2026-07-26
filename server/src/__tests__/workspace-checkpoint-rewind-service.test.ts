@@ -122,6 +122,8 @@ function preview(evidenceDigest = hash('3'), digest = hash('4')): WorkspaceCheck
     git: { headWillChange: false, branchWillChange: false, indexWillChange: false },
     conversation: { cursorWillChange: true, targetCursorAvailable: true },
     files: [],
+    resolutions: [],
+    selectedPaths: [],
     exclusions: {
       targetCount: 0,
       descendantCount: 0,
@@ -129,8 +131,10 @@ function preview(evidenceDigest = hash('3'), digest = hash('4')): WorkspaceCheck
       inventoryIncomplete: false,
     },
     conflicts: [],
+    unresolvedConflicts: [],
     estimatedDataLossBytes: 12,
     safeForAutomaticRewind: true,
+    safeForApprovedRewind: true,
     evidenceDigest,
     digest,
   };
@@ -259,6 +263,27 @@ function fixture(options: {
 }
 
 describe('WorkspaceCheckpointRewindService', () => {
+  it('rejects unresolved conflicts before inspecting or quiescing the runtime', async () => {
+    const conflict = {
+      kind: 'file-diverged' as const,
+      path: 'file.ts',
+      message: 'Current file no longer matches the descendant checkpoint.',
+    };
+    const unsafe = {
+      ...preview(),
+      conflicts: [conflict],
+      unresolvedConflicts: [conflict],
+      safeForAutomaticRewind: false,
+      safeForApprovedRewind: false,
+    };
+    const test = fixture({ previews: [unsafe] });
+
+    await expect(test.service.execute(test.request)).rejects.toThrow('unresolved conflicts');
+    expect(test.runtime.inspect).not.toHaveBeenCalled();
+    expect(test.runtime.quiesce).not.toHaveBeenCalled();
+    expect(test.approvalBroker.request).not.toHaveBeenCalled();
+  });
+
   it('returns the exact approval request without quiescing a live runtime', async () => {
     const test = fixture({ approvalStatus: 'pending' });
 

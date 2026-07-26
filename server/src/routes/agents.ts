@@ -225,6 +225,29 @@ const workspaceCheckpointRewindSchema = z
     targetCheckpointId: z.string().trim().min(1).max(240),
     descendantCheckpointId: z.string().trim().min(1).max(240),
     requestId: z.string().trim().min(8).max(240),
+    resolutions: z
+      .array(
+        z
+          .object({
+            path: z
+              .string()
+              .min(1)
+              .max(4_096)
+              .refine(
+                (value) =>
+                  !value.includes('\0') &&
+                  !value.includes('\\') &&
+                  !value.startsWith('/') &&
+                  !/^[A-Za-z]:/.test(value) &&
+                  !value.split('/').includes('..'),
+                { message: 'Resolution paths must be safe relative paths.' }
+              ),
+            decision: z.enum(['accept', 'reject', 'leave-untouched']),
+          })
+          .strict()
+      )
+      .max(10_000)
+      .optional(),
   })
   .strict();
 

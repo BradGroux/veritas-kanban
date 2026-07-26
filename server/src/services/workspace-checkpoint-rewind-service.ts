@@ -3,6 +3,7 @@ import type {
   RunApprovalRequest,
   TaskEnvelope,
   WorkspaceCheckpointRewindPreview,
+  WorkspaceCheckpointRewindResolution,
   WorkspaceCheckpointRewindTransaction,
 } from '@veritas-kanban/shared';
 import { ConflictError, ForbiddenError } from '../middleware/error-handler.js';
@@ -23,6 +24,7 @@ export interface WorkspaceCheckpointRewindRequest {
   targetCheckpointId: string;
   descendantCheckpointId: string;
   requestId: string;
+  resolutions?: WorkspaceCheckpointRewindResolution[];
 }
 
 export interface WorkspaceCheckpointRewindRuntimeSnapshot {
@@ -99,9 +101,9 @@ export class WorkspaceCheckpointRewindService {
 
   async execute(input: WorkspaceCheckpointRewindRequest): Promise<WorkspaceCheckpointRewindResult> {
     const preview = await this.previews.preview(input);
-    if (!preview.safeForAutomaticRewind) {
+    if (!preview.safeForApprovedRewind) {
       throw new ConflictError('Workspace rewind preview contains unresolved conflicts.', {
-        conflicts: preview.conflicts,
+        conflicts: preview.unresolvedConflicts,
       });
     }
     const runtimeBeforeApproval = await this.runtime.inspect(input);
@@ -129,7 +131,7 @@ export class WorkspaceCheckpointRewindService {
       requestKind: 'approval',
       actionClass: 'filesystem',
       action: `Rewind workspace to ${input.targetCheckpointId}`,
-      details: `${preview.files.length} affected paths; estimated ${preview.estimatedDataLossBytes} bytes discarded`,
+      details: `${preview.selectedPaths.length} of ${preview.files.length} paths selected; estimated ${preview.estimatedDataLossBytes} bytes discarded`,
       resourceScope: [
         `worktree:${preview.ownership.manifestId}`,
         `checkpoint:${input.targetCheckpointId}`,
@@ -152,6 +154,8 @@ export class WorkspaceCheckpointRewindService {
         previewEvidenceDigest: preview.evidenceDigest,
         runtimeStateDigest: runtimeBeforeApproval.stateDigest,
         runtimeEvidenceRevision: runtimeBeforeApproval.evidenceRevision,
+        resolutions: preview.resolutions,
+        selectedPaths: preview.selectedPaths,
         estimatedDataLossBytes: preview.estimatedDataLossBytes,
       },
     });

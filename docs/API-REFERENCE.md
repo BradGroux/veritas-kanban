@@ -2641,11 +2641,18 @@ An `agent:write` principal with local run-control authority can request a previe
   "attemptId": "attempt_123",
   "targetCheckpointId": "checkpoint_target",
   "descendantCheckpointId": "checkpoint_descendant",
-  "requestId": "operator-generated-idempotency-key"
+  "requestId": "operator-generated-idempotency-key",
+  "resolutions": [
+    { "path": "src/agent-change.ts", "decision": "accept" },
+    { "path": "src/operator-change.ts", "decision": "reject" },
+    { "path": "notes/local.md", "decision": "leave-untouched" }
+  ]
 }
 ```
 
-`X-Idempotency-Key` may supply `requestId` and takes precedence over the body. A conflict-free first request returns `202` with a critical, non-mobile approval bound to the checkpoint IDs, stable preview evidence, runtime state, provider evidence revision, and estimated data loss. Repeating the same request after approval revalidates all evidence, quiesces the provider, commits the recoverable storage transaction, and then recovers provider history from the approved checkpoint cursor.
+`resolutions` is optional. An unresolved attribution conflict returns `409` with its exact path. Re-submit with one decision per conflicted path: `accept` includes the path in the rewind, while `reject` and `leave-untouched` preserve its descendant content. Unknown paths, duplicate decisions, current-state divergence, Git/index conflicts, exclusions, and incomplete inventories still fail closed. The canonical decisions and selected paths are included in the preview digest, approval action, transaction digest, and recovery record.
+
+`X-Idempotency-Key` may supply `requestId` and takes precedence over the body. A conflict-free or fully resolved first request returns `202` with a critical, non-mobile approval bound to the checkpoint IDs, stable preview evidence, selected paths, resolutions, runtime state, provider evidence revision, and estimated data loss. Repeating the same request after approval revalidates all evidence, quiesces the provider, commits the recoverable storage transaction, and then recovers provider history from the approved checkpoint cursor.
 
 Production runtime recovery currently supports only an active Codex app-server thread with an earlier exact turn cursor in the same thread. Item-level cursors, the currently interrupted turn, other threads, stale runtime evidence, unresolved workspace conflicts, and providers without native fork return `409 Conflict`. A successful response records a new live provider thread plus the checkpoint cursor used as its rewind anchor; it does not pretend the provider reused the old thread ID.
 
