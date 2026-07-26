@@ -311,6 +311,74 @@ describe('WorkspaceCheckpointRewindPreviewService', () => {
     expect(fixture.ownership.getManifest).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ['accept', true],
+    ['reject', false],
+    ['leave-untouched', false],
+  ] as const)(
+    'binds an explicit %s decision to an attribution conflict',
+    async (decision, selectedForRewind) => {
+      const target = checkpoint(targetId, hash('d'));
+      const descendant = checkpoint(descendantId, hash('e'), {
+        parentCheckpointId: target.id,
+      });
+      const fixture = service(target, descendant, checkpointDiff('operator'), current(descendant));
+
+      const result = await fixture.preview.preview({
+        taskEnvelope: envelope(),
+        taskId: 'task-872',
+        attemptId: 'attempt-872',
+        targetCheckpointId: target.id,
+        descendantCheckpointId: descendant.id,
+        resolutions: [{ path: 'file.ts', decision }],
+      });
+
+      expect(result).toMatchObject({
+        safeForAutomaticRewind: false,
+        safeForApprovedRewind: true,
+        resolutions: [{ path: 'file.ts', decision }],
+        selectedPaths: selectedForRewind ? ['file.ts'] : [],
+        unresolvedConflicts: [],
+        estimatedDataLossBytes: selectedForRewind ? 12 : 0,
+        files: [{ path: 'file.ts', resolution: decision, selectedForRewind }],
+      });
+      expect(result.conflicts).toContainEqual(
+        expect.objectContaining({ kind: 'attribution-ambiguous', path: 'file.ts' })
+      );
+    }
+  );
+
+  it('rejects duplicate or unknown path decisions before approval', async () => {
+    const target = checkpoint(targetId, hash('d'));
+    const descendant = checkpoint(descendantId, hash('e'), {
+      parentCheckpointId: target.id,
+    });
+    const fixture = service(target, descendant, checkpointDiff('operator'), current(descendant));
+    const input = {
+      taskEnvelope: envelope(),
+      taskId: 'task-872',
+      attemptId: 'attempt-872',
+      targetCheckpointId: target.id,
+      descendantCheckpointId: descendant.id,
+    };
+
+    await expect(
+      fixture.preview.preview({
+        ...input,
+        resolutions: [
+          { path: 'file.ts', decision: 'accept' },
+          { path: 'file.ts', decision: 'reject' },
+        ],
+      })
+    ).rejects.toThrow('duplicate path resolutions');
+    await expect(
+      fixture.preview.preview({
+        ...input,
+        resolutions: [{ path: 'other.ts', decision: 'leave-untouched' }],
+      })
+    ).rejects.toThrow('unknown or unsafe path');
+  });
+
   it('blocks divergent, excluded, incomplete, or non-agent changes with explicit conflicts', async () => {
     const target = checkpoint(targetId, hash('d'), {
       files: [],

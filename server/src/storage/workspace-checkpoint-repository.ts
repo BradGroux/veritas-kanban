@@ -709,33 +709,41 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
       preview.workspaceId !== input.workspaceId ||
       preview.taskId !== input.taskId ||
       preview.attemptId !== input.attemptId ||
-      !preview.safeForAutomaticRewind ||
-      preview.conflicts.length > 0 ||
-      preview.files.some((file) => file.conflicts.length > 0) ||
+      !preview.safeForApprovedRewind ||
+      preview.unresolvedConflicts.length > 0 ||
+      !validResolvedPreview(preview) ||
       !preview.checkpointDiff.directParent ||
-      (preview.checkpointDiff.files.length > 0 &&
-        !preview.checkpointDiff.attribution?.evidenceComplete) ||
-      preview.checkpointDiff.files.some(
-        (file) =>
-          file.attribution?.source !== 'agent-tool' || file.attribution.confidence !== 'high'
-      ) ||
       preview.git.headWillChange ||
       preview.git.branchWillChange ||
       preview.git.indexWillChange
     ) {
       throw new ConflictError(
-        'Workspace rewind requires an intact conflict-free automatic preview.'
+        'Workspace rewind requires an intact conflict-free or explicitly resolved preview.'
       );
     }
-    const affectedPaths = [...new Set(preview.files.map((file) => file.path))].sort((left, right) =>
-      left.localeCompare(right)
-    );
+    const affectedPaths = [...preview.selectedPaths];
     const diffPaths = [...new Set(preview.checkpointDiff.files.map((file) => file.path))].sort(
       (left, right) => left.localeCompare(right)
     );
-    if (JSON.stringify(affectedPaths) !== JSON.stringify(diffPaths)) {
+    const previewPaths = [...new Set(preview.files.map((file) => file.path))].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    const previewSelectedPaths = preview.files
+      .filter((file) => file.selectedForRewind)
+      .map((file) => file.path)
+      .sort((left, right) => left.localeCompare(right));
+    const canonicalAffectedPaths = [...new Set(affectedPaths)].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    if (
+      previewPaths.length !== preview.files.length ||
+      JSON.stringify(previewPaths) !== JSON.stringify(diffPaths) ||
+      JSON.stringify(affectedPaths) !== JSON.stringify(canonicalAffectedPaths) ||
+      JSON.stringify(affectedPaths) !== JSON.stringify(previewSelectedPaths) ||
+      affectedPaths.some((candidate) => !diffPaths.includes(candidate))
+    ) {
       throw new ConflictError(
-        'Workspace rewind preview paths do not match its attributed checkpoint diff.'
+        'Workspace rewind selected paths do not match its resolved checkpoint preview.'
       );
     }
     for (const candidate of affectedPaths) validateCurrentInspectionPath(candidate);
@@ -795,6 +803,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
       descendantCheckpointDigest: descendant.digest,
       worktreeRootDigest: target.worktreeRootDigest,
       affectedPaths,
+      resolutions: preview.resolutions,
     });
     const existing = await this.getRewind({ ...scope, transactionId });
     if (existing) {
@@ -819,13 +828,13 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     );
     const current = await this.inspectCurrent({
       worktreePath: canonicalRoot,
-      paths: affectedPaths,
+      paths: diffPaths,
       maxFileBytes: Math.max(target.policy.maxFileBytes, descendant.policy.maxFileBytes),
       maxBytes: Math.max(target.policy.maxBytes, descendant.policy.maxBytes),
     });
     if (
       !sameCurrentState(current, preview.current) ||
-      !checkpointMatchesCurrent(descendant, current, affectedPaths)
+      !checkpointMatchesCurrent(descendant, current, diffPaths)
     ) {
       throw new ConflictError(
         'Workspace rewind current state no longer matches its approved descendant.'
@@ -850,6 +859,7 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
         worktreeRootDigest: target.worktreeRootDigest,
         state: 'prepared',
         affectedPaths,
+        ...(preview.resolutions.length > 0 ? { resolutions: preview.resolutions } : {}),
         restoredPathCount: 0,
         recoveryCheckpointId: descendant.id,
         startedAt,
@@ -868,11 +878,11 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     try {
       const immediatelyBefore = await this.inspectCurrent({
         worktreePath: canonicalRoot,
-        paths: affectedPaths,
+        paths: diffPaths,
         maxFileBytes: Math.max(target.policy.maxFileBytes, descendant.policy.maxFileBytes),
         maxBytes: Math.max(target.policy.maxBytes, descendant.policy.maxBytes),
       });
-      if (!checkpointMatchesCurrent(descendant, immediatelyBefore, affectedPaths)) {
+      if (!checkpointMatchesCurrent(descendant, immediatelyBefore, diffPaths)) {
         throw new ConflictError(
           'Workspace rewind descendant changed after the transaction was prepared.'
         );
@@ -884,11 +894,13 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
       await this.applyCheckpointFiles(canonicalRoot, target, affectedPaths, 'apply');
       const restored = await this.inspectCurrent({
         worktreePath: canonicalRoot,
-        paths: affectedPaths,
+        paths: diffPaths,
         maxFileBytes: target.policy.maxFileBytes,
         maxBytes: target.policy.maxBytes,
       });
-      if (!checkpointMatchesCurrent(target, restored, affectedPaths)) {
+      if (
+        !checkpointSelectionMatchesCurrent(target, descendant, restored, affectedPaths, diffPaths)
+      ) {
         throw new ConflictError('Workspace rewind did not produce the exact target state.');
       }
       const completedAt = this.now().toISOString();
@@ -1806,6 +1818,35 @@ function checkpointFilesMatchCurrent(
   );
 }
 
+function checkpointSelectionMatchesCurrent(
+  target: WorkspaceCheckpoint,
+  descendant: WorkspaceCheckpoint,
+  current: WorkspaceCheckpointCurrentState,
+  selectedPaths: string[],
+  allPaths: string[]
+): boolean {
+  if (
+    target.worktreeRootDigest !== current.worktreeRootDigest ||
+    target.git.head !== current.git.head ||
+    target.git.branch !== current.git.branch ||
+    target.git.indexDigest !== current.git.indexDigest
+  ) {
+    return false;
+  }
+  if (selectedPaths.length === allPaths.length) {
+    return checkpointMatchesCurrent(target, current, allPaths);
+  }
+  const selected = new Set(selectedPaths);
+  return (
+    checkpointFilesMatchCurrent(target, current, selectedPaths) &&
+    checkpointFilesMatchCurrent(
+      descendant,
+      current,
+      allPaths.filter((candidate) => !selected.has(candidate))
+    )
+  );
+}
+
 function rewindRecoveryMatchesKnownStates(
   target: WorkspaceCheckpoint,
   descendant: WorkspaceCheckpoint,
@@ -1830,6 +1871,38 @@ function rewindRecoveryMatchesKnownStates(
       checkpointFileMatchesCurrent(descendantFiles.get(candidate), actual)
     );
   });
+}
+
+function validResolvedPreview(preview: WorkspaceCheckpointRewindPreview): boolean {
+  const resolutions = new Map<string, (typeof preview.resolutions)[number]>();
+  for (const resolution of preview.resolutions) {
+    if (resolutions.has(resolution.path)) return false;
+    resolutions.set(resolution.path, resolution);
+  }
+  if (
+    [...resolutions.keys()].some(
+      (candidate) => !preview.files.some((file) => file.path === candidate)
+    )
+  ) {
+    return false;
+  }
+  for (const file of preview.files) {
+    const resolution = resolutions.get(file.path);
+    if (file.resolution !== resolution?.decision) return false;
+    if (file.selectedForRewind !== (resolution ? resolution.decision === 'accept' : true)) {
+      return false;
+    }
+    for (const conflict of file.conflicts) {
+      if (conflict.kind !== 'attribution-ambiguous' || conflict.path !== file.path || !resolution) {
+        return false;
+      }
+    }
+  }
+  return preview.conflicts.every(
+    (conflict) =>
+      conflict.kind === 'attribution-ambiguous' &&
+      Boolean(conflict.path && resolutions.has(conflict.path))
+  );
 }
 
 function checkpointFileMatchesCurrent(

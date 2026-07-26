@@ -7,6 +7,7 @@ import type {
   WorkspaceCheckpointRewindConflict,
   WorkspaceCheckpointRewindFilePreview,
   WorkspaceCheckpointRewindPreview,
+  WorkspaceCheckpointRewindResolution,
 } from '@veritas-kanban/shared';
 import { ConflictError } from '../middleware/error-handler.js';
 import {
@@ -20,6 +21,7 @@ import {
 } from './workspace-checkpoint-ownership-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import { digestWorkspaceCheckpointRewindEvidence } from '../utils/workspace-checkpoint-rewind-digest.js';
+import { normalizeWorkspaceEvidencePath } from './provider-event-evidence.js';
 
 export interface WorkspaceCheckpointRewindPreviewInput {
   taskEnvelope: TaskEnvelope;
@@ -27,6 +29,7 @@ export interface WorkspaceCheckpointRewindPreviewInput {
   attemptId: string;
   targetCheckpointId: string;
   descendantCheckpointId: string;
+  resolutions?: WorkspaceCheckpointRewindResolution[];
 }
 
 export interface WorkspaceCheckpointRewindPreviewServiceOptions {
@@ -190,6 +193,13 @@ export class WorkspaceCheckpointRewindPreviewService {
 
     const descendantFiles = new Map(descendant.files.map((file) => [file.path, file]));
     const currentFiles = new Map(current.files.map((file) => [file.path, file]));
+    const resolutions = normalizeResolutions(
+      input.resolutions,
+      new Set(checkpointDiff.files.map((file) => file.path))
+    );
+    const resolutionsByPath = new Map(
+      resolutions.map((resolution) => [resolution.path, resolution])
+    );
     const files = checkpointDiff.files.map((file) => {
       const fileConflicts = inspectFileConflicts(
         file.path,
@@ -208,6 +218,10 @@ export class WorkspaceCheckpointRewindPreviewService {
         });
       }
       conflicts.push(...fileConflicts);
+      const resolution = resolutionsByPath.get(file.path);
+      const selectedForRewind = resolution
+        ? resolution.decision === 'accept'
+        : fileConflicts.length === 0;
       const action = rewindAction(file.kind);
       const estimatedDiscardedBytes =
         action === 'restore-mode' ? 0 : (currentFiles.get(file.path)?.size ?? 0);
@@ -216,9 +230,18 @@ export class WorkspaceCheckpointRewindPreviewService {
         action,
         estimatedDiscardedBytes,
         ...(file.attribution ? { attribution: file.attribution } : {}),
+        ...(resolution ? { resolution: resolution.decision } : {}),
+        selectedForRewind,
         conflicts: fileConflicts,
       } satisfies WorkspaceCheckpointRewindFilePreview;
     });
+    const unresolvedConflicts = conflicts.filter(
+      (conflict) => !resolutionSettlesConflict(conflict, resolutionsByPath)
+    );
+    const selectedPaths = files
+      .filter((file) => file.selectedForRewind)
+      .map((file) => file.path)
+      .sort((left, right) => left.localeCompare(right));
 
     const preview = {
       schemaVersion: 'workspace-checkpoint-rewind-preview/v1' as const,
@@ -243,6 +266,8 @@ export class WorkspaceCheckpointRewindPreviewService {
         targetCursorAvailable: Boolean(target.conversationCursor),
       },
       files,
+      resolutions,
+      selectedPaths,
       exclusions: {
         targetCount: target.excludedCount,
         descendantCount: descendant.excludedCount,
@@ -250,11 +275,13 @@ export class WorkspaceCheckpointRewindPreviewService {
         inventoryIncomplete,
       },
       conflicts,
+      unresolvedConflicts,
       estimatedDataLossBytes: files.reduce(
-        (total, file) => total + file.estimatedDiscardedBytes,
+        (total, file) => total + (file.selectedForRewind ? file.estimatedDiscardedBytes : 0),
         0
       ),
-      safeForAutomaticRewind: conflicts.length === 0,
+      safeForAutomaticRewind: conflicts.length === 0 && resolutions.length === 0,
+      safeForApprovedRewind: unresolvedConflicts.length === 0,
     };
     const payload = {
       ...preview,
@@ -262,6 +289,44 @@ export class WorkspaceCheckpointRewindPreviewService {
     };
     return { ...payload, digest: digestRunLaunchValue(payload) };
   }
+}
+
+function normalizeResolutions(
+  resolutions: WorkspaceCheckpointRewindResolution[] | undefined,
+  availablePaths: Set<string>
+): WorkspaceCheckpointRewindResolution[] {
+  if ((resolutions?.length ?? 0) > 10_000) {
+    throw new ConflictError('Workspace rewind exceeds the path-resolution limit.');
+  }
+  const normalized: WorkspaceCheckpointRewindResolution[] = [];
+  const seen = new Set<string>();
+  for (const resolution of resolutions ?? []) {
+    if (!['accept', 'reject', 'leave-untouched'].includes(resolution.decision)) {
+      throw new ConflictError('Workspace rewind resolution decision is unsupported.', {
+        path: resolution.path,
+      });
+    }
+    const path = normalizeWorkspaceEvidencePath(resolution.path);
+    if (!path || path !== resolution.path || !availablePaths.has(path)) {
+      throw new ConflictError('Workspace rewind resolution references an unknown or unsafe path.', {
+        path: resolution.path,
+      });
+    }
+    if (seen.has(path)) {
+      throw new ConflictError('Workspace rewind contains duplicate path resolutions.', { path });
+    }
+    seen.add(path);
+    normalized.push({ path, decision: resolution.decision });
+  }
+  return normalized.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function resolutionSettlesConflict(
+  conflict: WorkspaceCheckpointRewindConflict,
+  resolutions: Map<string, WorkspaceCheckpointRewindResolution>
+): boolean {
+  if (conflict.kind !== 'attribution-ambiguous' || !conflict.path) return false;
+  return resolutions.has(conflict.path);
 }
 
 function inspectFileConflicts(

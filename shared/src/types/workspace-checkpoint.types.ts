@@ -214,6 +214,13 @@ export interface WorkspaceCheckpointCurrentState {
 }
 
 export type WorkspaceCheckpointRewindAction = 'delete' | 'restore' | 'restore-mode';
+export type WorkspaceCheckpointRewindResolutionDecision = 'accept' | 'reject' | 'leave-untouched';
+
+export interface WorkspaceCheckpointRewindResolution {
+  path: string;
+  decision: WorkspaceCheckpointRewindResolutionDecision;
+}
+
 export type WorkspaceCheckpointRewindConflictKind =
   | 'worktree-root-changed'
   | 'head-diverged'
@@ -242,6 +249,8 @@ export interface WorkspaceCheckpointRewindFilePreview {
   action: WorkspaceCheckpointRewindAction;
   estimatedDiscardedBytes: number;
   attribution?: WorkspaceCheckpointHunkAttribution;
+  resolution?: WorkspaceCheckpointRewindResolutionDecision;
+  selectedForRewind: boolean;
   conflicts: WorkspaceCheckpointRewindConflict[];
 }
 
@@ -270,6 +279,8 @@ export interface WorkspaceCheckpointRewindPreview {
     targetCursorAvailable: boolean;
   };
   files: WorkspaceCheckpointRewindFilePreview[];
+  resolutions: WorkspaceCheckpointRewindResolution[];
+  selectedPaths: string[];
   exclusions: {
     targetCount: number;
     descendantCount: number;
@@ -277,8 +288,10 @@ export interface WorkspaceCheckpointRewindPreview {
     inventoryIncomplete: boolean;
   };
   conflicts: WorkspaceCheckpointRewindConflict[];
+  unresolvedConflicts: WorkspaceCheckpointRewindConflict[];
   estimatedDataLossBytes: number;
   safeForAutomaticRewind: boolean;
+  safeForApprovedRewind: boolean;
   evidenceDigest: string;
   digest: string;
 }
@@ -304,6 +317,7 @@ export interface WorkspaceCheckpointRewindTransaction {
   worktreeRootDigest: string;
   state: WorkspaceCheckpointRewindTransactionState;
   affectedPaths: string[];
+  resolutions?: WorkspaceCheckpointRewindResolution[];
   restoredPathCount: number;
   recoveryCheckpointId: string;
   startedAt: string;

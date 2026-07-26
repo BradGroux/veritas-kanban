@@ -211,6 +211,17 @@ export const WorkspaceCheckpointRewindTransactionSchema = z
     worktreeRootDigest: digestSchema,
     state: z.enum(['prepared', 'applying', 'committed', 'rolling-back', 'rolled-back']),
     affectedPaths: z.array(relativePathSchema).max(100_000),
+    resolutions: z
+      .array(
+        z
+          .object({
+            path: relativePathSchema,
+            decision: z.enum(['accept', 'reject', 'leave-untouched']),
+          })
+          .strict()
+      )
+      .max(100_000)
+      .optional(),
     restoredPathCount: z.number().int().nonnegative(),
     recoveryCheckpointId: identifierSchema,
     startedAt: z.iso.datetime(),

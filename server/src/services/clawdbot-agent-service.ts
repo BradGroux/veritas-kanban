@@ -4849,6 +4849,7 @@ export class ClawdbotAgentService {
       targetCheckpointId: string;
       descendantCheckpointId: string;
       requestId: string;
+      resolutions?: WorkspaceCheckpointRewindRequest['resolutions'];
     }
   ): Promise<WorkspaceCheckpointRewindResult> {
     await this.assertActiveRunControl(taskId, 'interrupt', input.attemptId);

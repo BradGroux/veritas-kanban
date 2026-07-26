@@ -574,6 +574,10 @@ describe('agent local capability enforcement', () => {
         targetCheckpointId: 'checkpoint_target',
         descendantCheckpointId: 'checkpoint_descendant',
         requestId: 'spoofed-request-id',
+        resolutions: [
+          { path: 'src/agent-change.ts', decision: 'accept' },
+          { path: 'src/operator-change.ts', decision: 'leave-untouched' },
+        ],
       });
 
     expect(response.status).toBe(202);
@@ -582,6 +586,10 @@ describe('agent local capability enforcement', () => {
       targetCheckpointId: 'checkpoint_target',
       descendantCheckpointId: 'checkpoint_descendant',
       requestId: 'rewind-request-123',
+      resolutions: [
+        { path: 'src/agent-change.ts', decision: 'accept' },
+        { path: 'src/operator-change.ts', decision: 'leave-untouched' },
+      ],
     });
   });
 
