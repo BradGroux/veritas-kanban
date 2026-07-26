@@ -7,6 +7,7 @@ export type SandboxPolicyDecision = 'allow' | 'warn' | 'block';
 export type SandboxPolicyRuleStatus = 'supported' | 'unsupported' | 'advisory';
 export const RUN_EGRESS_POLICY_SCHEMA_VERSION = 'run-egress-policy/v1' as const;
 export const RUN_EGRESS_DECISION_SCHEMA_VERSION = 'run-egress-decision/v1' as const;
+export const RUN_EGRESS_GATEWAY_EVIDENCE_SCHEMA_VERSION = 'run-egress-gateway-evidence/v1' as const;
 export type FilesystemSandboxBackendId = 'codex-sandbox' | 'provider-native' | 'none';
 export type FilesystemSandboxBackendState = 'available' | 'native' | 'unavailable';
 export type SandboxProviderCapabilityId =
@@ -108,6 +109,21 @@ export interface RunEgressDecision {
   matchedRule?: RunEgressHostRule;
   blockedAddressClass?: 'private' | 'loopback' | 'link-local' | 'metadata';
   approvalEligible: boolean;
+}
+
+export interface RunEgressGatewayEvidence {
+  schemaVersion: typeof RUN_EGRESS_GATEWAY_EVIDENCE_SCHEMA_VERSION;
+  gatewayId: string;
+  runKey: string;
+  attributionKey: string;
+  policyHash: string;
+  state: 'enforced' | 'stopped';
+  protocols: Array<'http' | 'connect' | 'ws'>;
+  proxyEnvironmentKeys: Array<
+    'HTTP_PROXY' | 'HTTPS_PROXY' | 'http_proxy' | 'https_proxy' | 'NO_PROXY' | 'no_proxy'
+  >;
+  startedAt: string;
+  stoppedAt?: string;
 }
 
 export interface SandboxEnvironmentRules {

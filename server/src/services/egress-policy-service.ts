@@ -26,6 +26,10 @@ const METADATA_HOSTS = new Set([
 
 type AddressClass = 'public' | 'private' | 'loopback' | 'link-local' | 'metadata' | 'invalid';
 type EgressHostResolver = (host: string) => Promise<string[]>;
+export interface ResolvedEgressDecision {
+  decision: RunEgressDecision;
+  resolvedAddresses: string[];
+}
 
 export class EgressPolicyService {
   constructor(
@@ -130,12 +134,25 @@ export class EgressPolicyService {
     policy: RunEgressPolicy,
     input: Omit<RunEgressDecisionInput, 'resolvedAddresses'>
   ): Promise<RunEgressDecision> {
+    return (await this.resolveAndEvaluate(policy, input)).decision;
+  }
+
+  async resolveAndEvaluate(
+    policy: RunEgressPolicy,
+    input: Omit<RunEgressDecisionInput, 'resolvedAddresses'>
+  ): Promise<ResolvedEgressDecision> {
     const host = normalizeHost(input.host);
     try {
       const resolvedAddresses = isIP(host) === 0 ? await this.resolveHost(host) : [host];
-      return this.evaluate(policy, { ...input, resolvedAddresses });
+      return {
+        decision: this.evaluate(policy, { ...input, resolvedAddresses }),
+        resolvedAddresses,
+      };
     } catch {
-      return this.evaluate(policy, { ...input, resolvedAddresses: ['unresolved'] });
+      return {
+        decision: this.evaluate(policy, { ...input, resolvedAddresses: ['unresolved'] }),
+        resolvedAddresses: [],
+      };
     }
   }
 }
