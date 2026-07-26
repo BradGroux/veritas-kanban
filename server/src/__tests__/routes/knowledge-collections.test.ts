@@ -15,6 +15,7 @@ const knowledge = vi.hoisted(() => ({
   getPage: vi.fn(),
   searchCollection: vi.fn(),
   createQueryPromotion: vi.fn(),
+  createCitedExport: vi.fn(),
   createIngestionProposal: vi.fn(),
   listIngestionProposals: vi.fn(),
   getIngestionProposal: vi.fn(),
@@ -255,6 +256,51 @@ describe('knowledge collection routes', () => {
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ state: 'dry-run' });
     expect(knowledge.createQueryPromotion).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      input
+    );
+  });
+
+  it('creates a citation-preserving work product export', async () => {
+    const sourceId = 'knowledge_source_0123456789abcdef';
+    const input = {
+      title: 'Architecture evidence',
+      evidence: {
+        query: 'architecture',
+        backend: 'keyword',
+        degraded: false,
+        results: [
+          {
+            id: sourceId,
+            kind: 'raw-source',
+            backend: 'keyword',
+            title: 'Architecture source',
+            snippet: 'Architecture evidence',
+            score: 0.9,
+            sourceId,
+            citations: [{ sourceId }],
+          },
+        ],
+        evidenceDigest: `sha256:${'a'.repeat(64)}`,
+      },
+      selectedResultIds: [sourceId],
+      redaction: 'standard',
+    };
+    knowledge.createCitedExport.mockResolvedValue({
+      id: 'wp_knowledge_export',
+      kind: 'markdown',
+      title: input.title,
+    });
+
+    const response = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/exports`)
+      .send(input);
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ id: 'wp_knowledge_export', kind: 'markdown' });
+    expect(knowledge.createCitedExport).toHaveBeenCalledWith(
       'workspace-a',
       COLLECTION_ID,
       { id: 'operator-1', role: 'admin' },

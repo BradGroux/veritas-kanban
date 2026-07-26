@@ -367,3 +367,10 @@ export interface CreateKnowledgeQueryPromotionInput {
   pages: UpsertKnowledgePageCandidate[];
   contradictions?: KnowledgeIngestionContradictionInput[];
 }
+
+export interface CreateKnowledgeCitedExportInput {
+  title: string;
+  evidence: KnowledgeSearchResponse;
+  selectedResultIds: string[];
+  redaction?: 'none' | 'standard' | 'strict';
+}

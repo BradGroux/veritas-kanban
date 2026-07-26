@@ -4713,6 +4713,7 @@ Knowledge collections establish a workspace-scoped, immutable source catalog for
 | `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                           | Read one cited derived page        |
 | `POST` | `/api/knowledge/collections/:collectionId/search`                                  | Search raw and derived knowledge   |
 | `POST` | `/api/knowledge/collections/:collectionId/search/promotions`                       | Promote selected search results    |
+| `POST` | `/api/knowledge/collections/:collectionId/exports`                                 | Create a cited work product        |
 | `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | List ingestion dry runs            |
 | `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | Create an ingestion dry run        |
 | `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read one dry run                   |
@@ -4876,6 +4877,10 @@ Every search response includes `evidenceDigest`, computed over the exact query a
   ]
 }
 ```
+
+To create a durable work product instead, send `title`, the same unchanged `evidence`, `selectedResultIds`, and optional `redaction` (`none`, `standard`, or `strict`) to `/exports`. The Markdown body records each result's kind, backend, score, redacted snippet, source ID, locator, and excerpt hash. Work-product source links point back to the collection objects, while metadata retains the collection ID, query, evidence digest, selected-result count, citation count, and export policy.
+
+Collection `exportPolicy` is authoritative. `forbidden` rejects creation. `redacted-only` rejects `redaction: "none"`, sets redacted export as the product default, and prevents the general work-product export endpoint from honoring `?redacted=false`. `allowed` accepts the requested posture and defaults to standard redaction.
 
 ---
 
