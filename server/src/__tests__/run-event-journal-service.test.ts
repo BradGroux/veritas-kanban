@@ -495,6 +495,31 @@ describe('provider run event mappers', () => {
       kind: 'tool.started',
       payload: { tool: 'Write', paths: ['docs/guide.md'] },
     });
+    expect(
+      getProviderRunEventMapper('codex-app-server').mapEvent('item/fileChange/patchUpdated', {
+        changes: [
+          {
+            path: 'server/src/index.ts',
+            kind: 'update',
+            diff: '@@ -10,2 +10,3 @@\n-old\n+new\n+extra',
+          },
+        ],
+      })
+    ).toMatchObject({
+      kind: 'file.changed',
+      payload: {
+        paths: ['server/src/index.ts'],
+        hunkRanges: [
+          {
+            path: 'server/src/index.ts',
+            oldStart: 10,
+            oldLines: 2,
+            newStart: 10,
+            newLines: 3,
+          },
+        ],
+      },
+    });
   });
 
   it('deduplicates retries without collapsing distinct phases that share one item ID', () => {

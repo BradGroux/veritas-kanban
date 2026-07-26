@@ -10,6 +10,14 @@ const FILE_PATH_KEYS = new Set([
   'relativePath',
 ]);
 
+export interface ProviderEventHunkRange {
+  path: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+}
+
 export function extractProviderEventPaths(value: unknown): string[] {
   const paths = new Set<string>();
   const seen = new Set<object>();
@@ -37,6 +45,53 @@ export function extractProviderEventPaths(value: unknown): string[] {
   };
   visit(value, undefined, 0);
   return [...paths].sort((left, right) => left.localeCompare(right));
+}
+
+export function extractProviderEventHunkRanges(value: unknown): ProviderEventHunkRange[] {
+  const ranges: ProviderEventHunkRange[] = [];
+  const seen = new Set<object>();
+  const visit = (candidate: unknown, depth: number): void => {
+    if (depth > 8 || ranges.length >= 100 || !candidate || typeof candidate !== 'object') return;
+    if (seen.has(candidate)) return;
+    seen.add(candidate);
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate.slice(0, 100)) visit(entry, depth + 1);
+      return;
+    }
+    const record = candidate as Record<string, unknown>;
+    const rawPath =
+      typeof record.path === 'string'
+        ? record.path
+        : typeof record.file_path === 'string'
+          ? record.file_path
+          : typeof record.filePath === 'string'
+            ? record.filePath
+            : undefined;
+    const path = rawPath ? normalizeWorkspaceEvidencePath(rawPath) : undefined;
+    if (path && typeof record.diff === 'string' && record.diff.length <= 1_048_576) {
+      for (const range of parseUnifiedDiffHunkRanges(record.diff)) {
+        ranges.push({ path, ...range });
+        if (ranges.length >= 100) break;
+      }
+    }
+    for (const child of Object.values(record).slice(0, 256)) {
+      visit(child, depth + 1);
+      if (ranges.length >= 100) break;
+    }
+  };
+  visit(value, 0);
+  const unique = new Map(
+    ranges.map((range) => [
+      `${range.path}:${range.oldStart}:${range.oldLines}:${range.newStart}:${range.newLines}`,
+      range,
+    ])
+  );
+  return [...unique.values()].sort(
+    (left, right) =>
+      left.path.localeCompare(right.path) ||
+      left.oldStart - right.oldStart ||
+      left.newStart - right.newStart
+  );
 }
 
 export function extractProviderEventToolName(value: unknown): string | undefined {
@@ -106,6 +161,28 @@ export function normalizeWorkspaceEvidencePath(value: string): string | undefine
     return undefined;
   }
   return segments.join('/');
+}
+
+function parseUnifiedDiffHunkRanges(diff: string): Array<Omit<ProviderEventHunkRange, 'path'>> {
+  const ranges: Array<Omit<ProviderEventHunkRange, 'path'>> = [];
+  const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm;
+  for (const match of diff.matchAll(header)) {
+    const oldStart = Number(match[1]);
+    const oldLines = match[2] === undefined ? 1 : Number(match[2]);
+    const newStart = Number(match[3]);
+    const newLines = match[4] === undefined ? 1 : Number(match[4]);
+    if (
+      ![oldStart, oldLines, newStart, newLines].every(Number.isSafeInteger) ||
+      oldStart > 10_000_000 ||
+      newStart > 10_000_000 ||
+      oldLines > 1_000_000 ||
+      newLines > 1_000_000
+    ) {
+      continue;
+    }
+    ranges.push({ oldStart, oldLines, newStart, newLines });
+  }
+  return ranges;
 }
 
 function hasControlCharacters(value: string): boolean {
