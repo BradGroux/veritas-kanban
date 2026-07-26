@@ -47,6 +47,7 @@ import type {
   ReflectionExtractionJobRepository,
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
+  RunOutputArtifactRepository,
 } from './interfaces.js';
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
 import { ConfigService, type ConfigServiceOptions } from '../services/config-service.js';
@@ -78,6 +79,7 @@ import { FileDurableGoalRepository } from './durable-goal-repository.js';
 import { FileReflectionExtractionJobRepository } from './reflection-extraction-job-repository.js';
 import { FileAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
+import { FileRunOutputArtifactRepository } from './run-output-artifact-repository.js';
 
 // ---------------------------------------------------------------------------
 // FileTaskRepository
@@ -502,6 +504,7 @@ export interface FileStorageOptions {
   reflectionExtractionJobsPath?: string;
   admissionReservationsPath?: string;
   toolControlPlanePath?: string;
+  runOutputArtifactsDir?: string;
 }
 
 export class FileStorageProvider implements StorageProvider {
@@ -521,6 +524,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly reflectionExtractionJobs: ReflectionExtractionJobRepository;
   readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
+  readonly runOutputArtifacts: RunOutputArtifactRepository;
 
   private taskService: TaskService;
   private configService: ConfigService;
@@ -582,6 +586,7 @@ export class FileStorageProvider implements StorageProvider {
       options.admissionReservationsPath
     );
     this.toolControlPlane = new FileToolControlPlaneRepository(options.toolControlPlanePath);
+    this.runOutputArtifacts = new FileRunOutputArtifactRepository(options.runOutputArtifactsDir);
   }
 
   async initialize(): Promise<void> {

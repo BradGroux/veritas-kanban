@@ -5,6 +5,7 @@ import {
   RUN_OUTPUT_CONTENT_CLASSES,
   RUN_OUTPUT_PREVIEW_SCHEMA_VERSION,
   RUN_OUTPUT_QUERY_OPERATIONS,
+  RUN_OUTPUT_QUARANTINE_REASONS,
   RUN_OUTPUT_SOURCE_KINDS,
   RUN_OUTPUT_TRUNCATION_REASONS,
   type RunOutputArtifactMetadata,
@@ -74,6 +75,7 @@ export const RunOutputArtifactMetadataSchema: z.ZodType<RunOutputArtifactMetadat
       })
       .strict(),
     state: z.enum(RUN_OUTPUT_ARTIFACT_STATES),
+    quarantineReason: z.enum(RUN_OUTPUT_QUARANTINE_REASONS).optional(),
   })
   .strict();
 
