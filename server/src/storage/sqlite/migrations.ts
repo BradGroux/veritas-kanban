@@ -1577,6 +1577,30 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON knowledge_activity_entries(collection_id, created_at DESC, id);
     `,
   },
+  {
+    version: 33,
+    name: '0033_knowledge_integrity_findings',
+    up: `
+      CREATE TABLE knowledge_integrity_findings (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL
+          REFERENCES knowledge_collections(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (
+          status IN ('open', 'acknowledged', 'remediating', 'resolved')
+        ),
+        severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'error')),
+        finding_json TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_knowledge_integrity_findings_collection_status
+        ON knowledge_integrity_findings(
+          collection_id, status, severity, last_seen_at DESC, id
+        );
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

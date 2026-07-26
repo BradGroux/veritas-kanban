@@ -13,6 +13,7 @@ import type {
   KnowledgeIngestionContradictionInput,
   KnowledgeIngestionProposal,
   KnowledgeIntegrityReport,
+  KnowledgeIntegrityFindingRecord,
   KnowledgeLaunchContext,
   KnowledgePage,
   KnowledgePageClaim,
@@ -26,6 +27,7 @@ import type {
   SearchKnowledgeCollectionInput,
   TransitionKnowledgeIngestionProposalInput,
   TransitionKnowledgeClaimInput,
+  TransitionKnowledgeIntegrityFindingInput,
   UpsertKnowledgePageCandidate,
   UpsertKnowledgePagesInput,
   WorkProduct,
@@ -42,6 +44,7 @@ import {
   SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
   TransitionKnowledgeClaimBodySchema,
+  TransitionKnowledgeIntegrityFindingBodySchema,
   UpsertKnowledgePagesBodySchema,
   parseKnowledgeActivityEntry,
   parseKnowledgeCollection,
@@ -797,10 +800,24 @@ export class KnowledgeCollectionService {
   ): Promise<KnowledgeIntegrityReport> {
     const parsed = RunKnowledgeIntegrityLintBodySchema.parse(input);
     const collection = await this.requireReadableCollection(workspaceId, collectionId, actor);
-    const [sources, pages] = await Promise.all([
+    const [sources, allPages] = await Promise.all([
       this.listSources(workspaceId, collectionId, actor),
       this.listPages(workspaceId, collectionId, actor),
     ]);
+    const sortedPages = [...allPages].sort((left, right) => left.id.localeCompare(right.id));
+    const cursorIndex = parsed.pageCursor
+      ? sortedPages.findIndex((page) => page.id === parsed.pageCursor)
+      : -1;
+    if (parsed.pageCursor && cursorIndex < 0) {
+      throw new ConflictError('Knowledge integrity page cursor is stale or invalid.');
+    }
+    const pageLimit = parsed.pageLimit ?? 500;
+    const pages = sortedPages.slice(cursorIndex + 1, cursorIndex + 1 + pageLimit);
+    const complete = cursorIndex + 1 + pages.length >= sortedPages.length;
+    const continuation = {
+      ...(complete || pages.length === 0 ? {} : { nextPageCursor: pages.at(-1)?.id }),
+      complete,
+    };
     const sourceInputs = await Promise.all(
       sources.map(async (source): Promise<KnowledgeSourceIntegrityInput> => {
         if (source.storage !== 'content-addressed-blob') {
@@ -822,15 +839,178 @@ export class KnowledgeCollectionService {
         }
       })
     );
-    return lintKnowledgeCollection({
+    const report = lintKnowledgeCollection({
       collection,
       pages,
+      knownPages: sortedPages,
       sources: sourceInputs,
       asOf: parsed.asOf ?? this.now().toISOString(),
       freshnessRules: parsed.freshnessRules ?? [],
       includeResearchCandidates: parsed.includeResearchCandidates ?? false,
+      includeSemanticCandidates: parsed.includeSemanticCandidates ?? false,
+      continuation,
       ...(actor.launchContext ? { launchContext: actor.launchContext } : {}),
     });
+    if (!parsed.persistFindings) return report;
+    await this.requireWritableCollection(workspaceId, collectionId, actor);
+    const findingRecords = await this.repository.syncIntegrityFindings(
+      workspaceId,
+      collectionId,
+      report.findings,
+      this.now().toISOString(),
+      digestRunLaunchValue({
+        runId: parsed.runId,
+        pageCursor: parsed.pageCursor ?? null,
+      })
+    );
+    return { ...report, findingRecords };
+  }
+
+  async listIntegrityFindings(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor
+  ): Promise<KnowledgeIntegrityFindingRecord[]> {
+    await this.requireReadableCollection(workspaceId, collectionId, actor);
+    const [records, sources, pages, launchResources] = await Promise.all([
+      this.repository.listIntegrityFindings(workspaceId, collectionId),
+      this.repository.listSources(workspaceId, collectionId),
+      this.repository.listPages(workspaceId, collectionId),
+      this.launchResources(actor),
+    ]);
+    if (!launchResources) return records;
+    return records.filter((record) => this.findingAllowed(record, sources, pages, launchResources));
+  }
+
+  async getIntegrityHealth(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor
+  ): Promise<{
+    status: 'healthy' | 'degraded' | 'critical';
+    generatedAt: string;
+    lastObservedAt: string | null;
+    findings: number;
+    open: number;
+    acknowledged: number;
+    remediating: number;
+    resolved: number;
+    overdue: number;
+  }> {
+    const findings = await this.listIntegrityFindings(workspaceId, collectionId, actor);
+    const generatedAt = this.now().toISOString();
+    const active = findings.filter((finding) => finding.status !== 'resolved');
+    const status = active.some(
+      (finding) => finding.status === 'open' && finding.severity === 'error'
+    )
+      ? 'critical'
+      : active.some((finding) => finding.status === 'open')
+        ? 'degraded'
+        : 'healthy';
+    return {
+      status,
+      generatedAt,
+      lastObservedAt:
+        findings
+          .map((finding) => finding.lastSeenAt)
+          .sort((left, right) => right.localeCompare(left))[0] ?? null,
+      findings: findings.length,
+      open: findings.filter((finding) => finding.status === 'open').length,
+      acknowledged: findings.filter((finding) => finding.status === 'acknowledged').length,
+      remediating: findings.filter((finding) => finding.status === 'remediating').length,
+      resolved: findings.filter((finding) => finding.status === 'resolved').length,
+      overdue: active.filter(
+        (finding) => finding.dueAt && Date.parse(finding.dueAt) < Date.parse(generatedAt)
+      ).length,
+    };
+  }
+
+  async transitionIntegrityFinding(
+    workspaceId: string,
+    collectionId: string,
+    findingId: string,
+    actor: KnowledgeCollectionActor,
+    input: TransitionKnowledgeIntegrityFindingInput
+  ): Promise<KnowledgeIntegrityFindingRecord> {
+    const parsed = TransitionKnowledgeIntegrityFindingBodySchema.parse(input);
+    await this.requireWritableCollection(workspaceId, collectionId, actor);
+    const records = await this.listIntegrityFindings(workspaceId, collectionId, actor);
+    const current = records.find((record) => record.id === findingId);
+    if (!current) throw new NotFoundError('Knowledge integrity finding not found.');
+    if (actor.role !== 'admin' && parsed.to === 'resolved') {
+      throw new ForbiddenError('Only an administrator can resolve integrity findings.');
+    }
+    const operationIdDigest = digestRunLaunchValue(parsed.operationId);
+    const remediationLinks = [...(parsed.remediationLinks ?? current.remediationLinks)].sort();
+    const replay = current.transitions.find(
+      (transition) => transition.operationIdDigest === operationIdDigest
+    );
+    const requestDigest = digestRunLaunchValue({
+      workspaceId,
+      collectionId,
+      findingId,
+      from: replay?.from ?? current.status,
+      to: parsed.to,
+      owner: parsed.owner,
+      acknowledgementReason: parsed.acknowledgementReason,
+      dueAt: parsed.dueAt,
+      remediationLinks,
+    });
+    if (replay) {
+      if (replay.requestDigest !== requestDigest) {
+        throw new ConflictError(
+          'Knowledge integrity finding transition identity was reused for changed input.'
+        );
+      }
+      return current;
+    }
+    if (current.recordDigest !== parsed.expectedDigest) {
+      throw new ConflictError('Knowledge integrity finding digest is stale.');
+    }
+    if (current.status === parsed.to) {
+      throw new ConflictError('Knowledge integrity finding transition must change status.');
+    }
+    const transitionPayload = {
+      from: current.status,
+      to: parsed.to,
+      ...(parsed.owner ? { owner: parsed.owner } : {}),
+      ...(parsed.acknowledgementReason
+        ? { acknowledgementReason: parsed.acknowledgementReason }
+        : {}),
+      ...(parsed.dueAt ? { dueAt: parsed.dueAt } : {}),
+      remediationLinks,
+      actorId: actor.id,
+      at: this.now().toISOString(),
+      operationIdDigest,
+      requestDigest,
+    };
+    const transition = {
+      ...transitionPayload,
+      digest: digestRunLaunchValue(transitionPayload),
+    };
+    const payload = {
+      ...current,
+      status: parsed.to,
+      ...(parsed.owner ? { owner: parsed.owner } : {}),
+      ...(parsed.acknowledgementReason
+        ? { acknowledgementReason: parsed.acknowledgementReason }
+        : {}),
+      ...(parsed.dueAt ? { dueAt: parsed.dueAt } : {}),
+      remediationLinks,
+      revision: current.revision + 1,
+      transitions: [...current.transitions, transition],
+    };
+    const { recordDigest: _recordDigest, ...withoutDigest } = payload;
+    return this.repository.transitionIntegrityFinding(
+      workspaceId,
+      collectionId,
+      findingId,
+      current.recordDigest,
+      {
+        ...withoutDigest,
+        recordDigest: digestRunLaunchValue(withoutDigest),
+      }
+    );
   }
 
   async searchCollection(
@@ -1506,6 +1686,31 @@ export class KnowledgeCollectionService {
         return Boolean(source && this.sourceAllowed(source, resources));
       })
     );
+  }
+
+  private findingAllowed(
+    finding: KnowledgeIntegrityFindingRecord,
+    sources: KnowledgeSource[],
+    pages: KnowledgePage[],
+    resources: Set<string>
+  ): boolean {
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    const pagesById = new Map(pages.map((page) => [page.id, page]));
+    if (finding.sourceId) {
+      const source = sourcesById.get(finding.sourceId);
+      if (!source || !this.sourceAllowed(source, resources)) return false;
+    }
+    if (finding.pageId) {
+      const page = pagesById.get(finding.pageId);
+      if (!page || !this.pageAllowed(page, sources, resources)) return false;
+    }
+    return finding.relatedIds.every((relatedId) => {
+      const source = sourcesById.get(relatedId);
+      if (source) return this.sourceAllowed(source, resources);
+      const page = pagesById.get(relatedId);
+      if (page) return this.pageAllowed(page, sources, resources);
+      return true;
+    });
   }
 
   private assertWorkspaceIdentifier(workspaceId: string): void {

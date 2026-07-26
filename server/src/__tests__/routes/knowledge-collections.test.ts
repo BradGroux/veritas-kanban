@@ -15,6 +15,9 @@ const knowledge = vi.hoisted(() => ({
   getPage: vi.fn(),
   transitionClaim: vi.fn(),
   runIntegrityLint: vi.fn(),
+  listIntegrityFindings: vi.fn(),
+  getIntegrityHealth: vi.fn(),
+  transitionIntegrityFinding: vi.fn(),
   searchCollection: vi.fn(),
   createQueryPromotion: vi.fn(),
   createCitedExport: vi.fn(),
@@ -239,6 +242,45 @@ describe('knowledge collection routes', () => {
     expect(knowledge.runIntegrityLint).toHaveBeenCalledWith(
       'workspace-a',
       COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      input
+    );
+  });
+
+  it('lists and transitions durable integrity findings', async () => {
+    const findingId = 'knowledge_finding_0123456789abcdef';
+    knowledge.listIntegrityFindings.mockResolvedValue([{ id: findingId, status: 'open' }]);
+    knowledge.transitionIntegrityFinding.mockResolvedValue({
+      id: findingId,
+      status: 'remediating',
+      owner: 'architecture',
+    });
+    const listed = await request(createApp()).get(
+      `/api/knowledge/collections/${COLLECTION_ID}/integrity/findings`
+    );
+    const input = {
+      operationId: 'remediate-finding',
+      expectedDigest: `sha256:${'a'.repeat(64)}`,
+      to: 'remediating',
+      owner: 'architecture',
+      remediationLinks: ['task:repair-knowledge-link'],
+    };
+    const transitioned = await request(createApp())
+      .post(
+        `/api/knowledge/collections/${COLLECTION_ID}/integrity/findings/${findingId}/transitions`
+      )
+      .send(input);
+
+    expect(listed.status).toBe(200);
+    expect(transitioned.status).toBe(200);
+    expect(knowledge.listIntegrityFindings).toHaveBeenCalledWith('workspace-a', COLLECTION_ID, {
+      id: 'operator-1',
+      role: 'admin',
+    });
+    expect(knowledge.transitionIntegrityFinding).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      findingId,
       { id: 'operator-1', role: 'admin' },
       input
     );

@@ -22,18 +22,21 @@ export interface KnowledgeSourceIntegrityInput {
 export interface KnowledgeIntegrityLintOptions {
   collection: KnowledgeCollection;
   pages: KnowledgePage[];
+  knownPages?: KnowledgePage[];
   sources: KnowledgeSourceIntegrityInput[];
   asOf: string;
   freshnessRules: KnowledgeFreshnessRule[];
   includeResearchCandidates: boolean;
+  includeSemanticCandidates: boolean;
   launchContext?: KnowledgeLaunchContext;
+  continuation?: KnowledgeIntegrityReport['continuation'];
 }
 
 export function lintKnowledgeCollection(
   options: KnowledgeIntegrityLintOptions
 ): KnowledgeIntegrityReport {
   const findings: KnowledgeIntegrityFinding[] = [];
-  const pagesById = new Map(options.pages.map((page) => [page.id, page]));
+  const pagesById = new Map((options.knownPages ?? options.pages).map((page) => [page.id, page]));
   const sourcesById = new Map(options.sources.map((entry) => [entry.source.id, entry]));
   const identityOwners = new Map<string, string[]>();
   const asOfMs = Date.parse(options.asOf);
@@ -150,6 +153,9 @@ export function lintKnowledgeCollection(
   if (options.includeResearchCandidates) {
     lintCanonicalTerms(findings, options.pages, identityOwners);
   }
+  if (options.includeSemanticCandidates) {
+    lintSemanticCandidates(findings, options.pages, options.sources);
+  }
 
   findings.sort(compareFindings);
   const inspected = {
@@ -171,6 +177,7 @@ export function lintKnowledgeCollection(
     inspected,
     findings,
     findingCounts,
+    ...(options.continuation ? { continuation: options.continuation } : {}),
   };
   return { ...payload, reportDigest: digestRunLaunchValue(payload) };
 }
@@ -340,6 +347,124 @@ function lintCanonicalTerms(
       )
     );
   }
+}
+
+function lintSemanticCandidates(
+  findings: KnowledgeIntegrityFinding[],
+  pages: KnowledgePage[],
+  sources: KnowledgeSourceIntegrityInput[]
+): void {
+  const sourcesById = new Map(sources.map((entry) => [entry.source.id, entry.source]));
+  const claims = pages
+    .flatMap((page) => page.current.claims.map((claim) => ({ page, claim })))
+    .sort(
+      (left, right) =>
+        left.claim.id.localeCompare(right.claim.id) || left.page.id.localeCompare(right.page.id)
+    )
+    .slice(0, 500);
+  for (const entry of claims) {
+    if (entry.claim.confidence < 0.5) {
+      findings.push(
+        finding('evidence-gap', 'info', 'A claim has low evidence confidence.', {
+          pageId: entry.page.id,
+          claimId: entry.claim.id,
+          relatedIds: entry.claim.citations.map((citation) => citation.sourceId),
+        })
+      );
+    }
+  }
+  for (let leftIndex = 0; leftIndex < claims.length; leftIndex += 1) {
+    const left = claims[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < claims.length; rightIndex += 1) {
+      const right = claims[rightIndex];
+      if (left.claim.id === right.claim.id) continue;
+      const relatedIds = [
+        left.page.id,
+        right.page.id,
+        left.claim.id,
+        right.claim.id,
+        ...left.claim.citations.map((citation) => citation.sourceId),
+        ...right.claim.citations.map((citation) => citation.sourceId),
+      ];
+      const normalizedLeft = normalizeClaimText(left.claim.text);
+      const normalizedRight = normalizeClaimText(right.claim.text);
+      if (left.claim.claimKey === right.claim.claimKey && normalizedLeft !== normalizedRight) {
+        findings.push(
+          finding(
+            'candidate-contradiction',
+            'warning',
+            'Claims with the same stable key present different assertions.',
+            {
+              pageId: left.page.id,
+              claimId: left.claim.id,
+              relatedIds,
+            }
+          )
+        );
+      } else {
+        const similarity = tokenSimilarity(normalizedLeft, normalizedRight);
+        if (similarity >= 0.82 && similarity < 1) {
+          findings.push(
+            finding(
+              'near-duplicate-claim',
+              'info',
+              'Two claims are near-duplicates and may need consolidation.',
+              {
+                pageId: left.page.id,
+                claimId: left.claim.id,
+                relatedIds,
+              }
+            )
+          );
+        }
+      }
+      const leftSources = left.claim.citations
+        .map((citation) => sourcesById.get(citation.sourceId))
+        .filter((source): source is KnowledgeSource => Boolean(source));
+      const rightSources = right.claim.citations
+        .map((citation) => sourcesById.get(citation.sourceId))
+        .filter((source): source is KnowledgeSource => Boolean(source));
+      if (
+        left.claim.claimKey === right.claim.claimKey &&
+        leftSources.some((leftSource) =>
+          rightSources.some(
+            (rightSource) =>
+              leftSource.sourceKey === rightSource.sourceKey &&
+              leftSource.revision !== rightSource.revision
+          )
+        )
+      ) {
+        findings.push(
+          finding(
+            'supersession-candidate',
+            'warning',
+            'Related claims cite different revisions of the same logical source.',
+            {
+              pageId: left.page.id,
+              claimId: left.claim.id,
+              relatedIds,
+            }
+          )
+        );
+      }
+    }
+  }
+}
+
+function normalizeClaimText(value: string): string {
+  return value
+    .toLocaleLowerCase('en-US')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenSimilarity(left: string, right: string): number {
+  const leftTokens = new Set(left.split(' ').filter(Boolean));
+  const rightTokens = new Set(right.split(' ').filter(Boolean));
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return intersection / new Set([...leftTokens, ...rightTokens]).size;
 }
 
 function finding(

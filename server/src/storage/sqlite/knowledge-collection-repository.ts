@@ -3,16 +3,20 @@ import type {
   KnowledgeActivityEntry,
   KnowledgeCollection,
   KnowledgeIngestionProposal,
+  KnowledgeIntegrityFinding,
+  KnowledgeIntegrityFindingRecord,
   KnowledgePage,
   KnowledgePageExpectedState,
   KnowledgeSource,
 } from '@veritas-kanban/shared';
 import { ConflictError } from '../../middleware/error-handler.js';
+import { digestRunLaunchValue } from '../../utils/run-launch-manifest-digest.js';
 import {
   MAX_KNOWLEDGE_PAGE_BATCH,
   assertKnowledgeActivityIntegrity,
   assertKnowledgeCollectionIntegrity,
   assertKnowledgeIngestionProposalIntegrity,
+  assertKnowledgeIntegrityFindingRecord,
   assertKnowledgeProposalTransition,
   assertKnowledgePageIntegrity,
   assertKnowledgeSourceIntegrity,
@@ -54,6 +58,10 @@ interface ProposalRow {
 
 interface ActivityRow {
   entry_json: string;
+}
+
+interface FindingRow {
+  finding_json: string;
 }
 
 export class SqliteKnowledgeCollectionRepository implements KnowledgeCollectionRepository {
@@ -615,6 +623,171 @@ export class SqliteKnowledgeCollectionRepository implements KnowledgeCollectionR
       }
       return activity;
     });
+  }
+
+  async syncIntegrityFindings(
+    workspaceId: string,
+    collectionId: string,
+    findings: KnowledgeIntegrityFinding[],
+    observedAt: string,
+    runIdDigest: string
+  ): Promise<KnowledgeIntegrityFindingRecord[]> {
+    const db = this.database.getConnection();
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+      if (!(await this.getCollection(workspaceId, collectionId))) {
+        throw new ConflictError('Knowledge collection does not exist.');
+      }
+      const existing = new Map(
+        (await this.listIntegrityFindings(workspaceId, collectionId)).map((entry) => [
+          entry.id,
+          entry,
+        ])
+      );
+      const records = findings.map((finding) => {
+        const prior = existing.get(finding.id);
+        if (prior?.lastRunIdDigest === runIdDigest) return prior;
+        const payload = prior
+          ? {
+              ...prior,
+              ...finding,
+              lastSeenAt: observedAt,
+              occurrences: prior.occurrences + 1,
+              revision: prior.revision + 1,
+              lastRunIdDigest: runIdDigest,
+            }
+          : {
+              ...finding,
+              workspaceId,
+              collectionId,
+              status: 'open' as const,
+              remediationLinks: [],
+              firstSeenAt: observedAt,
+              lastSeenAt: observedAt,
+              occurrences: 1,
+              revision: 1,
+              transitions: [],
+              lastRunIdDigest: runIdDigest,
+            };
+        const { recordDigest: _recordDigest, ...withoutDigest } =
+          payload as KnowledgeIntegrityFindingRecord;
+        return assertKnowledgeIntegrityFindingRecord({
+          ...withoutDigest,
+          recordDigest: digestRunLaunchValue(withoutDigest),
+        });
+      });
+      const statement = db.prepare(
+        `
+          INSERT INTO knowledge_integrity_findings (
+            id, workspace_id, collection_id, status, severity,
+            finding_json, first_seen_at, last_seen_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            status = excluded.status,
+            severity = excluded.severity,
+            finding_json = excluded.finding_json,
+            last_seen_at = excluded.last_seen_at
+        `
+      );
+      for (const record of records) {
+        statement.run(
+          record.id,
+          workspaceId,
+          collectionId,
+          record.status,
+          record.severity,
+          JSON.stringify(record),
+          record.firstSeenAt,
+          record.lastSeenAt
+        );
+      }
+      db.exec('COMMIT;');
+      return records;
+    } catch (error) {
+      db.exec('ROLLBACK;');
+      if (error instanceof ConflictError) throw error;
+      throw new ConflictError('Knowledge integrity findings could not be persisted.');
+    }
+  }
+
+  async listIntegrityFindings(
+    workspaceId: string,
+    collectionId: string
+  ): Promise<KnowledgeIntegrityFindingRecord[]> {
+    const rows = this.database
+      .getConnection()
+      .prepare(
+        `
+          SELECT finding_json
+          FROM knowledge_integrity_findings
+          WHERE workspace_id = ? AND collection_id = ?
+          ORDER BY status ASC,
+            CASE severity WHEN 'error' THEN 3 WHEN 'warning' THEN 2 ELSE 1 END DESC,
+            id ASC
+        `
+      )
+      .all(workspaceId, collectionId) as unknown as FindingRow[];
+    return rows.map((row) => {
+      const record = assertKnowledgeIntegrityFindingRecord(JSON.parse(row.finding_json));
+      if (record.workspaceId !== workspaceId || record.collectionId !== collectionId) {
+        throw new ConflictError('Knowledge integrity finding scope does not match its metadata.');
+      }
+      return record;
+    });
+  }
+
+  async transitionIntegrityFinding(
+    workspaceId: string,
+    collectionId: string,
+    findingId: string,
+    expectedRecordDigest: string,
+    next: KnowledgeIntegrityFindingRecord
+  ): Promise<KnowledgeIntegrityFindingRecord> {
+    const candidate = assertKnowledgeIntegrityFindingRecord(next);
+    const db = this.database.getConnection();
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+      const row = db
+        .prepare(
+          `
+            SELECT finding_json
+            FROM knowledge_integrity_findings
+            WHERE workspace_id = ? AND collection_id = ? AND id = ?
+          `
+        )
+        .get(workspaceId, collectionId, findingId) as unknown as FindingRow | undefined;
+      if (!row) throw new ConflictError('Knowledge integrity finding does not exist.');
+      const current = assertKnowledgeIntegrityFindingRecord(JSON.parse(row.finding_json));
+      if (current.recordDigest !== expectedRecordDigest) {
+        throw new ConflictError('Knowledge integrity finding changed before transition.');
+      }
+      if (
+        candidate.workspaceId !== workspaceId ||
+        candidate.collectionId !== collectionId ||
+        candidate.id !== findingId
+      ) {
+        throw new ConflictError('Knowledge integrity finding transition scope is invalid.');
+      }
+      db.prepare(
+        `
+          UPDATE knowledge_integrity_findings
+          SET status = ?, severity = ?, finding_json = ?, last_seen_at = ?
+          WHERE id = ?
+        `
+      ).run(
+        candidate.status,
+        candidate.severity,
+        JSON.stringify(candidate),
+        candidate.lastSeenAt,
+        candidate.id
+      );
+      db.exec('COMMIT;');
+      return candidate;
+    } catch (error) {
+      db.exec('ROLLBACK;');
+      if (error instanceof ConflictError) throw error;
+      throw new ConflictError('Knowledge integrity finding transition failed atomically.');
+    }
   }
 }
 

@@ -6,6 +6,8 @@ import type {
   KnowledgeActivityEntry,
   KnowledgeCollection,
   KnowledgeIngestionProposal,
+  KnowledgeIntegrityFinding,
+  KnowledgeIntegrityFindingRecord,
   KnowledgePage,
   KnowledgePageExpectedState,
   KnowledgeSource,
@@ -14,6 +16,7 @@ import {
   parseKnowledgeActivityEntry,
   parseKnowledgeCollection,
   parseKnowledgeIngestionProposal,
+  parseKnowledgeIntegrityFindingRecord,
   parseKnowledgePage,
   parseKnowledgeSource,
 } from '../schemas/knowledge-collection-schemas.js';
@@ -30,6 +33,7 @@ const MAX_SOURCES = 100_000;
 const MAX_PAGES = 100_000;
 const MAX_PROPOSALS = 100_000;
 const MAX_KNOWLEDGE_ACTIVITY = 100_000;
+const MAX_KNOWLEDGE_FINDINGS = 100_000;
 export const MAX_KNOWLEDGE_PAGE_BATCH = 5_000;
 
 interface KnowledgeCollectionFileState {
@@ -39,6 +43,7 @@ interface KnowledgeCollectionFileState {
   pages: KnowledgePage[];
   proposals: KnowledgeIngestionProposal[];
   activity: KnowledgeActivityEntry[];
+  findings: KnowledgeIntegrityFindingRecord[];
   blobs: Record<string, string>;
 }
 
@@ -90,6 +95,24 @@ export interface KnowledgeCollectionRepository {
     workspaceId: string,
     collectionId: string
   ): Promise<KnowledgeActivityEntry[]>;
+  syncIntegrityFindings(
+    workspaceId: string,
+    collectionId: string,
+    findings: KnowledgeIntegrityFinding[],
+    observedAt: string,
+    runIdDigest: string
+  ): Promise<KnowledgeIntegrityFindingRecord[]>;
+  listIntegrityFindings(
+    workspaceId: string,
+    collectionId: string
+  ): Promise<KnowledgeIntegrityFindingRecord[]>;
+  transitionIntegrityFinding(
+    workspaceId: string,
+    collectionId: string,
+    findingId: string,
+    expectedRecordDigest: string,
+    next: KnowledgeIntegrityFindingRecord
+  ): Promise<KnowledgeIntegrityFindingRecord>;
 }
 
 export function getKnowledgeCollectionStorePath(): string {
@@ -455,6 +478,123 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
       );
   }
 
+  async syncIntegrityFindings(
+    workspaceId: string,
+    collectionId: string,
+    findings: KnowledgeIntegrityFinding[],
+    observedAt: string,
+    runIdDigest: string
+  ): Promise<KnowledgeIntegrityFindingRecord[]> {
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const state = await this.readState();
+      this.requireCollection(state, workspaceId, collectionId);
+      const byId = new Map(
+        state.findings
+          .filter(
+            (entry) => entry.workspaceId === workspaceId && entry.collectionId === collectionId
+          )
+          .map((entry) => [entry.id, entry])
+      );
+      const records = findings.map((finding) => {
+        const existing = byId.get(finding.id);
+        if (existing?.lastRunIdDigest === runIdDigest) return existing;
+        const payload = existing
+          ? {
+              ...existing,
+              ...finding,
+              lastSeenAt: observedAt,
+              occurrences: existing.occurrences + 1,
+              revision: existing.revision + 1,
+              lastRunIdDigest: runIdDigest,
+            }
+          : {
+              ...finding,
+              workspaceId,
+              collectionId,
+              status: 'open' as const,
+              remediationLinks: [],
+              firstSeenAt: observedAt,
+              lastSeenAt: observedAt,
+              occurrences: 1,
+              revision: 1,
+              transitions: [],
+              lastRunIdDigest: runIdDigest,
+            };
+        const { recordDigest: _recordDigest, ...withoutDigest } =
+          payload as KnowledgeIntegrityFindingRecord;
+        return assertKnowledgeIntegrityFindingRecord({
+          ...withoutDigest,
+          recordDigest: digestRunLaunchValue(withoutDigest),
+        });
+      });
+      const newCount = records.filter((record) => !byId.has(record.id)).length;
+      if (state.findings.length + newCount > MAX_KNOWLEDGE_FINDINGS) {
+        throw new ConflictError('Knowledge collection store reached its finding limit.');
+      }
+      const recordIds = new Set(records.map((record) => record.id));
+      state.findings = [
+        ...state.findings.filter(
+          (entry) =>
+            entry.workspaceId !== workspaceId ||
+            entry.collectionId !== collectionId ||
+            !recordIds.has(entry.id)
+        ),
+        ...records,
+      ];
+      await this.writeState(state);
+      return records;
+    });
+  }
+
+  async listIntegrityFindings(
+    workspaceId: string,
+    collectionId: string
+  ): Promise<KnowledgeIntegrityFindingRecord[]> {
+    return (await this.readState()).findings
+      .filter((entry) => entry.workspaceId === workspaceId && entry.collectionId === collectionId)
+      .sort(
+        (left, right) =>
+          left.status.localeCompare(right.status) ||
+          findingSeverityRank(right.severity) - findingSeverityRank(left.severity) ||
+          left.id.localeCompare(right.id)
+      );
+  }
+
+  async transitionIntegrityFinding(
+    workspaceId: string,
+    collectionId: string,
+    findingId: string,
+    expectedRecordDigest: string,
+    next: KnowledgeIntegrityFindingRecord
+  ): Promise<KnowledgeIntegrityFindingRecord> {
+    const candidate = assertKnowledgeIntegrityFindingRecord(next);
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const state = await this.readState();
+      const index = state.findings.findIndex(
+        (entry) =>
+          entry.workspaceId === workspaceId &&
+          entry.collectionId === collectionId &&
+          entry.id === findingId
+      );
+      if (index < 0) throw new ConflictError('Knowledge integrity finding does not exist.');
+      if (state.findings[index].recordDigest !== expectedRecordDigest) {
+        throw new ConflictError('Knowledge integrity finding changed before transition.');
+      }
+      if (
+        candidate.workspaceId !== workspaceId ||
+        candidate.collectionId !== collectionId ||
+        candidate.id !== findingId
+      ) {
+        throw new ConflictError('Knowledge integrity finding transition scope is invalid.');
+      }
+      state.findings[index] = candidate;
+      await this.writeState(state);
+      return candidate;
+    });
+  }
+
   private validateSourceContent(source: KnowledgeSource, content: Buffer | null): void {
     if (source.storage === 'content-addressed-blob') {
       if (
@@ -522,6 +662,9 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
       const activity = Array.isArray(parsed.activity)
         ? parsed.activity.map(assertKnowledgeActivityIntegrity)
         : [];
+      const findings = Array.isArray(parsed.findings)
+        ? parsed.findings.map(assertKnowledgeIntegrityFindingRecord)
+        : [];
       const blobs =
         parsed.blobs && typeof parsed.blobs === 'object' && !Array.isArray(parsed.blobs)
           ? (parsed.blobs as Record<string, string>)
@@ -531,7 +674,8 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
         sources.length > MAX_SOURCES ||
         pages.length > MAX_PAGES ||
         proposals.length > MAX_PROPOSALS ||
-        activity.length > MAX_KNOWLEDGE_ACTIVITY
+        activity.length > MAX_KNOWLEDGE_ACTIVITY ||
+        findings.length > MAX_KNOWLEDGE_FINDINGS
       ) {
         throw new ConflictError('Knowledge collection store exceeds its bounded inventory.');
       }
@@ -552,6 +696,7 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
         pages,
         proposals,
         activity,
+        findings,
         blobs,
       };
     } catch (error) {
@@ -563,6 +708,7 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
           pages: [],
           proposals: [],
           activity: [],
+          findings: [],
           blobs: {},
         };
       }
@@ -603,6 +749,10 @@ function hasBase64Shape(value: string): boolean {
     return false;
   }
   return true;
+}
+
+function findingSeverityRank(severity: KnowledgeIntegrityFinding['severity']): number {
+  return severity === 'error' ? 3 : severity === 'warning' ? 2 : 1;
 }
 
 export function assertKnowledgeCollectionIntegrity(value: unknown): KnowledgeCollection {
@@ -681,6 +831,35 @@ export function assertKnowledgeActivityIntegrity(value: unknown): KnowledgeActiv
     throw new ConflictError('Knowledge activity entry digest is invalid.');
   }
   return activity;
+}
+
+export function assertKnowledgeIntegrityFindingRecord(
+  value: unknown
+): KnowledgeIntegrityFindingRecord {
+  const record = parseKnowledgeIntegrityFindingRecord(value);
+  for (const transition of record.transitions) {
+    const { digest, ...payload } = transition;
+    if (digestRunLaunchValue(payload) !== digest) {
+      throw new ConflictError('Knowledge integrity finding transition digest is invalid.');
+    }
+  }
+  const findingPayload = {
+    kind: record.kind,
+    severity: record.severity,
+    message: record.message,
+    ...(record.pageId ? { pageId: record.pageId } : {}),
+    ...(record.sourceId ? { sourceId: record.sourceId } : {}),
+    ...(record.claimId ? { claimId: record.claimId } : {}),
+    relatedIds: record.relatedIds,
+  };
+  if (digestRunLaunchValue(findingPayload) !== record.digest) {
+    throw new ConflictError('Knowledge integrity finding digest is invalid.');
+  }
+  const { recordDigest, ...payload } = record;
+  if (digestRunLaunchValue(payload) !== recordDigest) {
+    throw new ConflictError('Knowledge integrity finding record digest is invalid.');
+  }
+  return record;
 }
 
 export function validateKnowledgePageGraph(pages: KnowledgePage[]): void {
