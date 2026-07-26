@@ -14,6 +14,7 @@ export interface KnowledgeQmdSearchAdapter {
   search(input: {
     workspaceId: string;
     collectionId: string;
+    scopeId: string;
     query: string;
     limit: number;
     pages: KnowledgePage[];
@@ -26,6 +27,7 @@ export class KnowledgeQmdSearchService implements KnowledgeQmdSearchAdapter {
   async search(input: {
     workspaceId: string;
     collectionId: string;
+    scopeId: string;
     query: string;
     limit: number;
     pages: KnowledgePage[];
@@ -33,6 +35,7 @@ export class KnowledgeQmdSearchService implements KnowledgeQmdSearchAdapter {
     const projection = await this.projections.sync(
       input.workspaceId,
       input.collectionId,
+      input.scopeId,
       input.pages
     );
     return withFileLock(path.join(projection.directory, 'qmd-index'), async () => {

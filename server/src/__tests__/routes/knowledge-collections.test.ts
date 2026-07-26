@@ -212,6 +212,44 @@ describe('knowledge collection routes', () => {
     );
   });
 
+  it('binds complete launch evidence headers and rejects partial evidence', async () => {
+    knowledge.searchCollection.mockResolvedValue({
+      query: 'architecture',
+      backend: 'keyword',
+      degraded: false,
+      results: [],
+      evidenceDigest: `sha256:${'a'.repeat(64)}`,
+    });
+    const launchContext = {
+      taskId: 'task-1',
+      attemptId: 'attempt-1',
+      launchManifestDigest: `sha256:${'f'.repeat(64)}`,
+    };
+
+    const response = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/search`)
+      .set('x-veritas-task-id', launchContext.taskId)
+      .set('x-veritas-attempt-id', launchContext.attemptId)
+      .set('x-veritas-launch-manifest-digest', launchContext.launchManifestDigest)
+      .send({ query: 'architecture' });
+
+    expect(response.status).toBe(200);
+    expect(knowledge.searchCollection).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      { id: 'operator-1', role: 'admin', launchContext },
+      { query: 'architecture' }
+    );
+
+    const partial = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/search`)
+      .set('x-veritas-task-id', launchContext.taskId)
+      .send({ query: 'architecture' });
+
+    expect(partial.status).toBe(400);
+    expect(knowledge.searchCollection).toHaveBeenCalledTimes(1);
+  });
+
   it('promotes digest-bound selected search results into the ingestion workflow', async () => {
     const evidenceDigest = `sha256:${'a'.repeat(64)}`;
     const sourceId = 'knowledge_source_0123456789abcdef';
@@ -228,6 +266,7 @@ describe('knowledge collection routes', () => {
           snippet: 'Architecture evidence',
           score: 0.9,
           sourceId,
+          classification: 'internal',
           citations: [{ sourceId }],
         },
       ],
@@ -280,6 +319,7 @@ describe('knowledge collection routes', () => {
             snippet: 'Architecture evidence',
             score: 0.9,
             sourceId,
+            classification: 'internal',
             citations: [{ sourceId }],
           },
         ],

@@ -57,6 +57,7 @@ describe('KnowledgeQmdSearchService', () => {
     const first = await service.search({
       workspaceId: 'workspace-a',
       collectionId: 'collection-a',
+      scopeId: 'unrestricted',
       query: 'gateway',
       limit: 5,
       pages: [page],
@@ -64,6 +65,7 @@ describe('KnowledgeQmdSearchService', () => {
     const second = await service.search({
       workspaceId: 'workspace-a',
       collectionId: 'collection-a',
+      scopeId: 'unrestricted',
       query: 'gateway',
       limit: 5,
       pages: [page],

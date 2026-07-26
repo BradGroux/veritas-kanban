@@ -14,12 +14,21 @@ import {
   type KnowledgeWorkProductWriter,
 } from '../services/knowledge-collection-service.js';
 import type { KnowledgeQmdSearchAdapter } from '../services/knowledge-qmd-search-service.js';
+import type { KnowledgeLaunchPolicyResolver } from '../services/knowledge-launch-policy-service.js';
 import { WorkProductService } from '../services/work-product-service.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SQLITE_BASE_MIGRATIONS } from '../storage/sqlite/migrations.js';
 
 const ADMIN: KnowledgeCollectionActor = { id: 'operator-1', role: 'admin' };
-const AGENT: KnowledgeCollectionActor = { id: 'agent-1', role: 'agent' };
+const AGENT: KnowledgeCollectionActor = {
+  id: 'agent-1',
+  role: 'agent',
+  launchContext: {
+    taskId: 'task-1',
+    attemptId: 'attempt-1',
+    launchManifestDigest: `sha256:${'f'.repeat(64)}`,
+  },
+};
 const READER: KnowledgeCollectionActor = { id: 'reader-1', role: 'read-only' };
 const WORKSPACE_ID = 'workspace-alpha';
 
@@ -476,6 +485,103 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     });
   });
 
+  it('enforces run launch resources and classification-aware previews and exports', async () => {
+    const allowedResources = new Set<string>();
+    const service = await createService(storageType, undefined, undefined, {
+      resolve: async () => new Set(allowedResources),
+    });
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, {
+      ...COLLECTION_INPUT,
+      operationId: 'create-launch-policy',
+      slug: 'launch-policy',
+      accessPolicy: {
+        ...COLLECTION_INPUT.accessPolicy,
+        exportPolicy: 'allowed',
+      },
+    });
+    const internalSource = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({
+        operationId: 'launch-internal-source',
+        sourceKey: 'internal-source',
+        content: 'Internal gateway evidence.',
+      })
+    );
+    const confidentialSource = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({
+        operationId: 'launch-confidential-source',
+        sourceKey: 'confidential-source',
+        classification: 'confidential',
+        content: 'Confidential gateway evidence.',
+      })
+    );
+    await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'launch-policy-pages',
+      pages: [
+        pageCandidate('internal-gateway', internalSource.id),
+        pageCandidate('confidential-gateway', confidentialSource.id),
+      ],
+    });
+
+    await expect(
+      service.searchCollection(
+        WORKSPACE_ID,
+        collection.id,
+        { id: 'agent-without-launch', role: 'agent' },
+        { query: 'gateway' }
+      )
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+
+    allowedResources.add(internalSource.id);
+    const internalResults = await service.searchCollection(WORKSPACE_ID, collection.id, AGENT, {
+      query: 'gateway',
+      backend: 'keyword',
+    });
+    expect(
+      new Set(
+        internalResults.results.flatMap((result) =>
+          result.citations.map((citation) => citation.sourceId)
+        )
+      )
+    ).toEqual(new Set([internalSource.id]));
+
+    allowedResources.clear();
+    allowedResources.add(confidentialSource.id);
+    const confidentialResults = await service.searchCollection(WORKSPACE_ID, collection.id, AGENT, {
+      query: 'gateway',
+      backend: 'keyword',
+    });
+    expect(confidentialResults.results).not.toHaveLength(0);
+    expect(confidentialResults.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          classification: 'confidential',
+          snippet: '[confidential knowledge content withheld from preview]',
+        }),
+      ])
+    );
+    await expect(
+      service.createCitedExport(WORKSPACE_ID, collection.id, AGENT, {
+        title: 'Confidential evidence',
+        evidence: confidentialResults,
+        selectedResultIds: [confidentialResults.results[0].id],
+        redaction: 'none',
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    await expect(
+      service.createIngestionProposal(WORKSPACE_ID, collection.id, AGENT, {
+        operationId: 'disallowed-launch-ingestion',
+        sourceIds: [internalSource.id],
+        pages: [pageCandidate('disallowed-page', internalSource.id)],
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+  });
+
   it('fails closed on unknown citations, links, and unauthorized review decisions', async () => {
     const service = await createService(storageType);
     const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);
@@ -821,6 +927,9 @@ async function createService(
       createdAt: '2026-07-26T12:00:00.000Z',
       updatedAt: '2026-07-26T12:00:00.000Z',
     }),
+  },
+  launchPolicy: KnowledgeLaunchPolicyResolver = {
+    resolve: async () => new Set(['knowledge:*']),
   }
 ): Promise<KnowledgeCollectionService> {
   const root = await mkdtemp(path.join(tmpdir(), `veritas-knowledge-${storageType}-`));
@@ -833,6 +942,7 @@ async function createService(
           filePath: path.join(root, 'knowledge-collections.json'),
           qmdSearch,
           workProductWriter,
+          launchPolicy,
           now,
         })
       : new KnowledgeCollectionService({
@@ -840,6 +950,7 @@ async function createService(
           sqliteConnectionOptions: { databasePath: path.join(root, 'knowledge.db') },
           qmdSearch,
           workProductWriter,
+          launchPolicy,
           now,
         });
   cleanups.push(async () => {

@@ -1,6 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
-import type { KnowledgeAccessRole } from '@veritas-kanban/shared';
+import type { KnowledgeAccessRole, KnowledgeLaunchContext } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
@@ -350,13 +350,37 @@ function requestContext(req: AuthenticatedRequest): {
   actor: KnowledgeCollectionActor;
 } {
   const role = req.auth?.role as KnowledgeAccessRole | undefined;
+  const launchContext = parseLaunchContext(req);
   return {
     workspaceId: req.auth?.workspaceId ?? 'local',
     actor: {
       id: req.auth?.userId ?? req.auth?.keyName ?? role ?? 'unknown',
       role: role ?? 'read-only',
+      ...(launchContext ? { launchContext } : {}),
     },
   };
+}
+
+function parseLaunchContext(req: AuthenticatedRequest): KnowledgeLaunchContext | undefined {
+  const values = {
+    taskId: req.header('x-veritas-task-id'),
+    attemptId: req.header('x-veritas-attempt-id'),
+    launchManifestDigest: req.header('x-veritas-launch-manifest-digest'),
+  };
+  const supplied = Object.values(values).filter(Boolean).length;
+  if (supplied === 0) return undefined;
+  if (
+    supplied !== 3 ||
+    !values.taskId ||
+    !values.attemptId ||
+    !values.launchManifestDigest ||
+    !identifierSchema.safeParse(values.taskId).success ||
+    !identifierSchema.safeParse(values.attemptId).success ||
+    !/^sha256:[a-f0-9]{64}$/.test(values.launchManifestDigest)
+  ) {
+    throw new ValidationError('Invalid or incomplete knowledge launch evidence headers.');
+  }
+  return values as KnowledgeLaunchContext;
 }
 
 export { router as knowledgeCollectionRoutes };
