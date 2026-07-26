@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import {
   KNOWLEDGE_ACCESS_ROLES,
+  KNOWLEDGE_ACTIVITY_ENTRY_SCHEMA_VERSION,
   KNOWLEDGE_CLASSIFICATIONS,
   KNOWLEDGE_COLLECTION_DEFINITION_SCHEMA_VERSION,
   KNOWLEDGE_COLLECTION_SCHEMA_VERSION,
+  KNOWLEDGE_INGESTION_PROPOSAL_SCHEMA_VERSION,
   KNOWLEDGE_PAGE_REVISION_SCHEMA_VERSION,
   KNOWLEDGE_PAGE_SCHEMA_VERSION,
   KNOWLEDGE_SOURCE_SCHEMA_VERSION,
   type KnowledgeCollection,
+  type KnowledgeActivityEntry,
+  type KnowledgeIngestionProposal,
   type KnowledgePage,
   type KnowledgeSource,
 } from '@veritas-kanban/shared';
@@ -410,36 +414,304 @@ export const KnowledgePageSchema = z
     }
   });
 
+export const UpsertKnowledgePageCandidateSchema = z
+  .object({
+    stableKey: stableKeySchema,
+    title: z.string().trim().min(1).max(500),
+    pageKind: stableKeySchema,
+    aliases: aliasesSchema.optional(),
+    tags: tagsSchema.optional(),
+    metadata: metadataSchema,
+    markdown: z.string().max(2 * 1_024 * 1_024),
+    claims: z.array(KnowledgePageClaimInputSchema).max(500),
+    links: z.array(aliasSchema).max(1_000).refine(uniqueCaseInsensitive).optional(),
+    reviewState: z.enum(['draft', 'review-required', 'approved', 'rejected']),
+    confidence: confidenceSchema,
+  })
+  .strict();
+
+const pageCandidatesSchema = z
+  .array(UpsertKnowledgePageCandidateSchema)
+  .min(1)
+  .max(100)
+  .refine(
+    (pages) => uniqueStrings(pages.map((page) => page.stableKey)),
+    'Knowledge page candidate stable keys must be unique.'
+  )
+  .refine(
+    (pages) =>
+      pages.reduce((total, page) => total + Buffer.byteLength(page.markdown), 0) <=
+      16 * 1_024 * 1_024,
+    'Knowledge page batch Markdown cannot exceed 16 MiB.'
+  );
+
 export const UpsertKnowledgePagesBodySchema = z
   .object({
     operationId: opaqueTextSchema.max(240),
-    pages: z
-      .array(
-        z
-          .object({
-            stableKey: stableKeySchema,
-            title: z.string().trim().min(1).max(500),
-            pageKind: stableKeySchema,
-            aliases: aliasesSchema.optional(),
-            tags: tagsSchema.optional(),
-            metadata: metadataSchema,
-            markdown: z.string().max(2 * 1_024 * 1_024),
-            claims: z.array(KnowledgePageClaimInputSchema).max(500),
-            links: z.array(aliasSchema).max(1_000).refine(uniqueCaseInsensitive).optional(),
-            reviewState: z.enum(['draft', 'review-required', 'approved', 'rejected']),
-            confidence: confidenceSchema,
-          })
-          .strict()
-      )
-      .min(1)
-      .max(100)
-      .refine(
-        (pages) => uniqueStrings(pages.map((page) => page.stableKey)),
-        'Knowledge page candidate stable keys must be unique.'
-      ),
+    pages: pageCandidatesSchema,
   })
   .strict();
 
 export function parseKnowledgePage(value: unknown): KnowledgePage {
   return KnowledgePageSchema.parse(value) as KnowledgePage;
+}
+
+const KnowledgePageExpectedStateSchema = z
+  .object({
+    id: identifierSchema,
+    digest: digestSchema.nullable(),
+  })
+  .strict();
+
+const KnowledgeIngestionPageChangeSchema = z
+  .object({
+    pageId: identifierSchema,
+    stableKey: stableKeySchema,
+    action: z.enum(['create', 'revise', 'backlink-update']),
+    beforeDigest: digestSchema.nullable(),
+    afterDigest: digestSchema,
+    beforeVersion: z.number().int().min(1).nullable(),
+    afterVersion: z.number().int().min(1),
+  })
+  .strict();
+
+const KnowledgeIngestionIndexChangeSchema = z
+  .object({
+    pageId: identifierSchema,
+    action: z.literal('upsert'),
+    beforeContentHash: digestSchema.nullable(),
+    afterContentHash: digestSchema,
+  })
+  .strict();
+
+const contradictionShape = {
+  pageIdentity: aliasSchema,
+  claimKey: stableKeySchema.optional(),
+  description: z.string().trim().min(1).max(4_000),
+  severity: z.enum(['info', 'warning', 'blocking']),
+  sourceIds: z.array(identifierSchema).min(1).max(100).refine(uniqueStrings),
+};
+
+const KnowledgeIngestionContradictionSchema = z
+  .object({
+    id: identifierSchema,
+    ...contradictionShape,
+    detectedBy: z.enum(['extractor', 'stable-claim-diff']),
+  })
+  .strict();
+
+const KnowledgeIngestionActivityChangeSchema = z
+  .object({
+    type: z.literal('knowledge.ingestion.applied'),
+    sourceIds: z.array(identifierSchema).min(1).max(100).refine(uniqueStrings),
+    pageIds: z.array(identifierSchema).min(1).max(5_000).refine(uniqueStrings),
+  })
+  .strict();
+
+const KnowledgeIngestionProposalTransitionSchema = z
+  .object({
+    from: z.enum(['dry-run', 'applied']),
+    to: z.enum(['applied', 'reversed']),
+    fromProposalDigest: digestSchema,
+    actorId: opaqueTextSchema,
+    at: z.iso.datetime(),
+    digest: digestSchema,
+  })
+  .strict();
+
+export const KnowledgeIngestionProposalSchema = z
+  .object({
+    schemaVersion: z.literal(KNOWLEDGE_INGESTION_PROPOSAL_SCHEMA_VERSION),
+    id: identifierSchema,
+    workspaceId: identifierSchema,
+    collectionId: identifierSchema,
+    state: z.enum(['dry-run', 'applied', 'reversed']),
+    revision: z.number().int().min(1),
+    sourceIds: z.array(identifierSchema).min(1).max(100).refine(uniqueStrings),
+    expectedPages: z.array(KnowledgePageExpectedStateSchema).min(1).max(5_000),
+    beforePages: z
+      .array(
+        z
+          .object({
+            pageId: identifierSchema,
+            page: KnowledgePageSchema.nullable(),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(5_000),
+    afterPages: z.array(KnowledgePageSchema).min(1).max(5_000),
+    pageChanges: z.array(KnowledgeIngestionPageChangeSchema).min(1).max(5_000),
+    indexChanges: z.array(KnowledgeIngestionIndexChangeSchema).min(1).max(5_000),
+    contradictions: z.array(KnowledgeIngestionContradictionSchema).max(500),
+    activityChanges: z.array(KnowledgeIngestionActivityChangeSchema).length(1),
+    operationIdDigest: digestSchema,
+    requestDigest: digestSchema,
+    previewDigest: digestSchema,
+    proposedBy: opaqueTextSchema,
+    proposedAt: z.iso.datetime(),
+    transitions: z.array(KnowledgeIngestionProposalTransitionSchema).max(2),
+    digest: digestSchema,
+  })
+  .strict()
+  .superRefine((proposal, context) => {
+    const ids = proposal.expectedPages.map((entry) => entry.id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expectedPages'],
+        message: 'Knowledge ingestion expected page identities must be unique.',
+      });
+    }
+    if (
+      new Set(proposal.contradictions.map((contradiction) => contradiction.id)).size !==
+      proposal.contradictions.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['contradictions'],
+        message: 'Knowledge ingestion contradiction identities must be unique.',
+      });
+    }
+    for (const fieldIds of [
+      proposal.beforePages.map((entry) => entry.pageId),
+      proposal.afterPages.map((page) => page.id),
+      proposal.pageChanges.map((change) => change.pageId),
+      proposal.indexChanges.map((change) => change.pageId),
+    ]) {
+      if (
+        fieldIds.length !== ids.length ||
+        fieldIds.some((id) => !ids.includes(id)) ||
+        new Set(fieldIds).size !== fieldIds.length
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['expectedPages'],
+          message: 'Knowledge ingestion page inventories must match exactly.',
+        });
+        break;
+      }
+    }
+    const beforeById = new Map(proposal.beforePages.map((entry) => [entry.pageId, entry.page]));
+    const afterById = new Map(proposal.afterPages.map((page) => [page.id, page]));
+    const changeById = new Map(proposal.pageChanges.map((change) => [change.pageId, change]));
+    const indexById = new Map(proposal.indexChanges.map((change) => [change.pageId, change]));
+    for (const expected of proposal.expectedPages) {
+      const before = beforeById.get(expected.id) ?? null;
+      const after = afterById.get(expected.id);
+      const change = changeById.get(expected.id);
+      const index = indexById.get(expected.id);
+      if (
+        (before && before.id !== expected.id) ||
+        (before &&
+          (before.workspaceId !== proposal.workspaceId ||
+            before.collectionId !== proposal.collectionId)) ||
+        expected.digest !== (before?.digest ?? null) ||
+        !after ||
+        after.workspaceId !== proposal.workspaceId ||
+        after.collectionId !== proposal.collectionId ||
+        !change ||
+        !index ||
+        change.stableKey !== after.stableKey ||
+        change.beforeDigest !== (before?.digest ?? null) ||
+        change.afterDigest !== after.digest ||
+        change.beforeVersion !== (before?.current.version ?? null) ||
+        change.afterVersion !== after.current.version ||
+        index.beforeContentHash !== (before?.current.contentHash ?? null) ||
+        index.afterContentHash !== after.current.contentHash ||
+        (change.action === 'create') !== !before
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['pageChanges'],
+          message: 'Knowledge ingestion page and index changes must match their snapshots.',
+        });
+        break;
+      }
+    }
+    if (
+      proposal.activityChanges.some(
+        (activity) =>
+          !sameValues(activity.sourceIds, proposal.sourceIds) ||
+          !sameValues(
+            activity.pageIds,
+            proposal.afterPages.map((page) => page.id)
+          )
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['activityChanges'],
+        message: 'Knowledge ingestion activity changes must match proposal scope.',
+      });
+    }
+    const expectedTransitions =
+      proposal.state === 'dry-run' ? 0 : proposal.state === 'applied' ? 1 : 2;
+    if (proposal.transitions.length !== expectedTransitions) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transitions'],
+        message: 'Knowledge ingestion transition history does not match proposal state.',
+      });
+    }
+  });
+
+function sameValues(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    new Set(left).size === left.length &&
+    left.every((value) => right.includes(value))
+  );
+}
+
+export const KnowledgeActivityEntrySchema = z
+  .object({
+    schemaVersion: z.literal(KNOWLEDGE_ACTIVITY_ENTRY_SCHEMA_VERSION),
+    id: identifierSchema,
+    workspaceId: identifierSchema,
+    collectionId: identifierSchema,
+    proposalId: identifierSchema,
+    type: z.enum(['knowledge.ingestion.applied', 'knowledge.ingestion.reversed']),
+    sourceIds: z.array(identifierSchema).min(1).max(100).refine(uniqueStrings),
+    pageIds: z.array(identifierSchema).min(1).max(5_000).refine(uniqueStrings),
+    actorId: opaqueTextSchema,
+    createdAt: z.iso.datetime(),
+    digest: digestSchema,
+  })
+  .strict();
+
+export const CreateKnowledgeIngestionProposalBodySchema = z
+  .object({
+    operationId: opaqueTextSchema.max(240),
+    sourceIds: z.array(identifierSchema).min(1).max(100).refine(uniqueStrings),
+    pages: pageCandidatesSchema,
+    contradictions: z
+      .array(z.object(contradictionShape).strict())
+      .max(500)
+      .refine(
+        (contradictions) =>
+          uniqueStrings(
+            contradictions.map(
+              (contradiction) =>
+                `${contradiction.pageIdentity.toLocaleLowerCase('en-US')}\0${contradiction.claimKey ?? ''}\0${contradiction.description}`
+            )
+          ),
+        'Knowledge ingestion contradictions must be unique.'
+      )
+      .optional(),
+  })
+  .strict();
+
+export const TransitionKnowledgeIngestionProposalBodySchema = z
+  .object({
+    proposalDigest: digestSchema,
+  })
+  .strict();
+
+export function parseKnowledgeIngestionProposal(value: unknown): KnowledgeIngestionProposal {
+  return KnowledgeIngestionProposalSchema.parse(value) as KnowledgeIngestionProposal;
+}
+
+export function parseKnowledgeActivityEntry(value: unknown): KnowledgeActivityEntry {
+  return KnowledgeActivityEntrySchema.parse(value) as KnowledgeActivityEntry;
 }

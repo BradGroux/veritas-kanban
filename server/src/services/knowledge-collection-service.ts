@@ -1,28 +1,40 @@
 import { createHash } from 'node:crypto';
 import type {
+  CreateKnowledgeIngestionProposalInput,
   CreateKnowledgeCollectionInput,
   KnowledgeAccessRole,
+  KnowledgeActivityEntry,
   KnowledgeClassification,
   KnowledgeCollection,
+  KnowledgeIngestionContradiction,
+  KnowledgeIngestionContradictionInput,
+  KnowledgeIngestionProposal,
   KnowledgePage,
   KnowledgePageClaim,
+  KnowledgePageExpectedState,
   KnowledgePageRevision,
   KnowledgeSource,
   RegisterKnowledgeSourceInput,
+  TransitionKnowledgeIngestionProposalInput,
   UpsertKnowledgePageCandidate,
   UpsertKnowledgePagesInput,
 } from '@veritas-kanban/shared';
 import { ConflictError, ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
 import {
+  CreateKnowledgeIngestionProposalBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
+  TransitionKnowledgeIngestionProposalBodySchema,
   UpsertKnowledgePagesBodySchema,
+  parseKnowledgeActivityEntry,
   parseKnowledgeCollection,
+  parseKnowledgeIngestionProposal,
   parseKnowledgePage,
   parseKnowledgeSource,
 } from '../schemas/knowledge-collection-schemas.js';
 import {
   FileKnowledgeCollectionRepository,
+  computeKnowledgeIngestionPreviewDigest,
   type KnowledgeCollectionRepository,
 } from '../storage/knowledge-collection-repository.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
@@ -48,6 +60,17 @@ export interface KnowledgeCollectionServiceOptions {
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
   now?: () => Date;
+}
+
+interface PreparedKnowledgePageBatch {
+  operationIdDigest: string;
+  requestDigest: string;
+  afterPages: KnowledgePage[];
+  beforePages: Array<{ pageId: string; page: KnowledgePage | null }>;
+  expectedPages: KnowledgePageExpectedState[];
+  candidatePageIds: string[];
+  resultPages: KnowledgePage[];
+  replayed: boolean;
 }
 
 export class KnowledgeCollectionService {
@@ -293,12 +316,207 @@ export class KnowledgeCollectionService {
     return this.repository.getPage(workspaceId, collectionId, pageId);
   }
 
-  async upsertPages(
+  async createIngestionProposal(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor,
+    input: CreateKnowledgeIngestionProposalInput
+  ): Promise<KnowledgeIngestionProposal> {
+    const parsed = CreateKnowledgeIngestionProposalBodySchema.parse(input);
+    await this.requireWritableCollection(workspaceId, collectionId, actor);
+    const operationIdDigest = digestRunLaunchValue(parsed.operationId);
+    const requestDigest = digestRunLaunchValue({
+      workspaceId,
+      collectionId,
+      operationIdDigest,
+      sourceIds: parsed.sourceIds,
+      pages: parsed.pages,
+      contradictions: parsed.contradictions ?? [],
+    });
+    const proposalId = stableId('knowledge_proposal', {
+      workspaceId,
+      collectionId,
+      operationIdDigest,
+    });
+    const existing = await this.repository.getProposal(workspaceId, collectionId, proposalId);
+    if (existing) {
+      if (existing.requestDigest !== requestDigest) {
+        throw new ConflictError(
+          'Knowledge ingestion operation identity was reused for changed input.'
+        );
+      }
+      return existing;
+    }
+    const sources = await this.repository.listSources(workspaceId, collectionId);
+    const sourceIds = new Set(sources.map((source) => source.id));
+    if (parsed.sourceIds.some((sourceId) => !sourceIds.has(sourceId))) {
+      throw new ConflictError('Knowledge ingestion proposal selects an unknown source revision.');
+    }
+    const prepared = await this.preparePageBatch(workspaceId, collectionId, actor, {
+      operationId: parsed.operationId,
+      pages: parsed.pages,
+    });
+    if (prepared.replayed) {
+      throw new ConflictError(
+        'Knowledge ingestion operation identity already exists in page history without a matching proposal.'
+      );
+    }
+    if (prepared.afterPages.length === 0) {
+      throw new ConflictError('Knowledge ingestion proposal does not contain any page changes.');
+    }
+    const selectedSourceIds = new Set(parsed.sourceIds);
+    const candidatePageIds = new Set(prepared.candidatePageIds);
+    if (
+      prepared.afterPages.some(
+        (page) =>
+          candidatePageIds.has(page.id) &&
+          page.current.claims.some((claim) =>
+            claim.citations.some((citation) => !selectedSourceIds.has(citation.sourceId))
+          )
+      )
+    ) {
+      throw new ConflictError(
+        'Knowledge ingestion page claims must cite the proposal source selection.'
+      );
+    }
+    const proposedAt = this.now().toISOString();
+    const contradictions = buildProposalContradictions(
+      proposalId,
+      parsed.contradictions ?? [],
+      prepared,
+      selectedSourceIds
+    );
+    const beforeById = new Map(prepared.beforePages.map((entry) => [entry.pageId, entry.page]));
+    const pageChanges = prepared.afterPages.map((page) => {
+      const before = beforeById.get(page.id) ?? null;
+      return {
+        pageId: page.id,
+        stableKey: page.stableKey,
+        action: !before
+          ? ('create' as const)
+          : candidatePageIds.has(page.id)
+            ? ('revise' as const)
+            : ('backlink-update' as const),
+        beforeDigest: before?.digest ?? null,
+        afterDigest: page.digest,
+        beforeVersion: before?.current.version ?? null,
+        afterVersion: page.current.version,
+      };
+    });
+    const indexChanges = prepared.afterPages.map((page) => {
+      const before = beforeById.get(page.id) ?? null;
+      return {
+        pageId: page.id,
+        action: 'upsert' as const,
+        beforeContentHash: before?.current.contentHash ?? null,
+        afterContentHash: page.current.contentHash,
+      };
+    });
+    const plan = {
+      schemaVersion: 'knowledge-ingestion-proposal/v1' as const,
+      id: proposalId,
+      workspaceId,
+      collectionId,
+      state: 'dry-run' as const,
+      revision: 1,
+      sourceIds: [...parsed.sourceIds].sort(),
+      expectedPages: prepared.expectedPages,
+      beforePages: prepared.beforePages,
+      afterPages: prepared.afterPages,
+      pageChanges,
+      indexChanges,
+      contradictions,
+      activityChanges: [
+        {
+          type: 'knowledge.ingestion.applied' as const,
+          sourceIds: [...parsed.sourceIds].sort(),
+          pageIds: prepared.afterPages.map((page) => page.id).sort(),
+        },
+      ],
+      operationIdDigest,
+      requestDigest,
+      proposedBy: actor.id,
+      proposedAt,
+      transitions: [],
+    };
+    const previewDigest = computeKnowledgeIngestionPreviewDigest(plan);
+    const payload = { ...plan, previewDigest };
+    return this.repository.createProposal(
+      parseKnowledgeIngestionProposal({
+        ...payload,
+        digest: digestRunLaunchValue(payload),
+      })
+    );
+  }
+
+  async listIngestionProposals(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor
+  ): Promise<KnowledgeIngestionProposal[]> {
+    await this.requireReadableCollection(workspaceId, collectionId, actor);
+    return this.repository.listProposals(workspaceId, collectionId);
+  }
+
+  async getIngestionProposal(
+    workspaceId: string,
+    collectionId: string,
+    proposalId: string,
+    actor: KnowledgeCollectionActor
+  ): Promise<KnowledgeIngestionProposal | null> {
+    await this.requireReadableCollection(workspaceId, collectionId, actor);
+    return this.repository.getProposal(workspaceId, collectionId, proposalId);
+  }
+
+  async applyIngestionProposal(
+    workspaceId: string,
+    collectionId: string,
+    proposalId: string,
+    actor: KnowledgeCollectionActor,
+    input: TransitionKnowledgeIngestionProposalInput
+  ): Promise<KnowledgeIngestionProposal> {
+    return this.transitionIngestionProposal(
+      workspaceId,
+      collectionId,
+      proposalId,
+      actor,
+      input,
+      'applied'
+    );
+  }
+
+  async reverseIngestionProposal(
+    workspaceId: string,
+    collectionId: string,
+    proposalId: string,
+    actor: KnowledgeCollectionActor,
+    input: TransitionKnowledgeIngestionProposalInput
+  ): Promise<KnowledgeIngestionProposal> {
+    return this.transitionIngestionProposal(
+      workspaceId,
+      collectionId,
+      proposalId,
+      actor,
+      input,
+      'reversed'
+    );
+  }
+
+  async listKnowledgeActivity(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor
+  ): Promise<KnowledgeActivityEntry[]> {
+    await this.requireReadableCollection(workspaceId, collectionId, actor);
+    return this.repository.listKnowledgeActivity(workspaceId, collectionId);
+  }
+
+  private async preparePageBatch(
     workspaceId: string,
     collectionId: string,
     actor: KnowledgeCollectionActor,
     input: UpsertKnowledgePagesInput
-  ): Promise<KnowledgePage[]> {
+  ): Promise<PreparedKnowledgePageBatch> {
     const parsed = UpsertKnowledgePagesBodySchema.parse(input);
     const collection = await this.requireWritableCollection(workspaceId, collectionId, actor);
     const operationIdDigest = digestRunLaunchValue(parsed.operationId);
@@ -330,7 +548,17 @@ export class KnowledgeCollectionService {
       ) {
         throw new ConflictError('Knowledge page operation was already applied and superseded.');
       }
-      return priorOperationRevisions.map(({ page }) => page);
+      const resultPages = priorOperationRevisions.map(({ page }) => page);
+      return {
+        operationIdDigest,
+        requestDigest,
+        afterPages: [],
+        beforePages: [],
+        expectedPages: [],
+        candidatePageIds: resultPages.map((page) => page.id),
+        resultPages,
+        replayed: true,
+      };
     }
     const now = this.now().toISOString();
     const sourceIds = new Set(sources.map((source) => source.id));
@@ -434,19 +662,114 @@ export class KnowledgeCollectionService {
       changedPages.push(parseKnowledgePage({ ...payload, digest: digestRunLaunchValue(payload) }));
     }
     if (changedPages.length === 0) {
-      return resolved
+      const resultPages = resolved
         .map((entry) => existingById.get(entry.id))
         .filter((page): page is KnowledgePage => Boolean(page));
+      return {
+        operationIdDigest,
+        requestDigest,
+        afterPages: [],
+        beforePages: [],
+        expectedPages: [],
+        candidatePageIds: resolved.map((entry) => entry.id),
+        resultPages,
+        replayed: false,
+      };
     }
-    return this.repository.applyPageBatch(
+    const expectedPages = changedPages.map((page) => ({
+      id: page.id,
+      digest: existingById.get(page.id)?.digest ?? null,
+    }));
+    return {
+      operationIdDigest,
+      requestDigest,
+      afterPages: changedPages,
+      beforePages: changedPages.map((page) => ({
+        pageId: page.id,
+        page: existingById.get(page.id) ?? null,
+      })),
+      expectedPages,
+      candidatePageIds: resolved.map((entry) => entry.id),
+      resultPages: changedPages,
+      replayed: false,
+    };
+  }
+
+  private async transitionIngestionProposal(
+    workspaceId: string,
+    collectionId: string,
+    proposalId: string,
+    actor: KnowledgeCollectionActor,
+    input: TransitionKnowledgeIngestionProposalInput,
+    target: 'applied' | 'reversed'
+  ): Promise<KnowledgeIngestionProposal> {
+    const parsed = TransitionKnowledgeIngestionProposalBodySchema.parse(input);
+    await this.requireWritableCollection(workspaceId, collectionId, actor);
+    if (actor.role !== 'admin') {
+      throw new ForbiddenError('Only an administrator can apply or reverse knowledge ingestion.');
+    }
+    const current = await this.repository.getProposal(workspaceId, collectionId, proposalId);
+    if (!current) throw new NotFoundError('Knowledge ingestion proposal not found.');
+    if (current.state === target) {
+      const transition = current.transitions.at(-1);
+      if (transition?.to === target && transition.fromProposalDigest === parsed.proposalDigest) {
+        return current;
+      }
+    }
+    const expectedState = target === 'applied' ? 'dry-run' : 'applied';
+    if (current.state !== expectedState || current.digest !== parsed.proposalDigest) {
+      throw new ConflictError('Knowledge ingestion proposal state or digest is stale.');
+    }
+    if (
+      target === 'applied' &&
+      current.contradictions.some((contradiction) => contradiction.severity === 'blocking')
+    ) {
+      throw new ConflictError('Blocking contradictions require a replacement proposal.');
+    }
+    const at = this.now().toISOString();
+    const transitionPayload = {
+      from: current.state as 'dry-run' | 'applied',
+      to: target,
+      fromProposalDigest: current.digest,
+      actorId: actor.id,
+      at,
+    };
+    const transition = {
+      ...transitionPayload,
+      digest: digestRunLaunchValue(transitionPayload),
+    };
+    const { digest: _currentDigest, ...currentWithoutDigest } = current;
+    const nextWithoutDigest = {
+      ...currentWithoutDigest,
+      state: target,
+      revision: current.revision + 1,
+      transitions: [...current.transitions, transition],
+    };
+    const nextProposal = parseKnowledgeIngestionProposal({
+      ...nextWithoutDigest,
+      digest: digestRunLaunchValue(nextWithoutDigest),
+    });
+    const activity = createKnowledgeActivity(current, actor.id, at, target);
+    const isApply = target === 'applied';
+    return this.repository.transitionProposal({
       workspaceId,
       collectionId,
-      changedPages,
-      changedPages.map((page) => ({
-        id: page.id,
-        digest: existingById.get(page.id)?.digest ?? null,
-      }))
-    );
+      proposalId,
+      expectedProposalDigest: current.digest,
+      nextProposal,
+      expectedPages: isApply
+        ? current.expectedPages
+        : current.afterPages.map((page) => ({ id: page.id, digest: page.digest })),
+      upsertPages: isApply
+        ? current.afterPages
+        : current.beforePages
+            .map((entry) => entry.page)
+            .filter((page): page is KnowledgePage => Boolean(page)),
+      deletePageIds: isApply
+        ? []
+        : current.beforePages.filter((entry) => !entry.page).map((entry) => entry.pageId),
+      activity,
+    });
   }
 
   close(): void {
@@ -490,6 +813,132 @@ export class KnowledgeCollectionService {
 
 function stableId(prefix: string, value: unknown): string {
   return `${prefix}_${digestRunLaunchValue(value).slice('sha256:'.length, 40)}`;
+}
+
+function buildProposalContradictions(
+  proposalId: string,
+  supplied: KnowledgeIngestionContradictionInput[],
+  prepared: PreparedKnowledgePageBatch,
+  selectedSourceIds: Set<string>
+): KnowledgeIngestionContradiction[] {
+  const beforeById = new Map(prepared.beforePages.map((entry) => [entry.pageId, entry.page]));
+  const pagesByIdentity = new Map<string, KnowledgePage>();
+  for (const page of prepared.afterPages) {
+    const before = beforeById.get(page.id);
+    for (const identity of [
+      page.id,
+      page.stableKey,
+      ...page.current.aliases,
+      ...(before ? [before.stableKey, ...before.current.aliases] : []),
+    ]) {
+      pagesByIdentity.set(normalizePageIdentity(identity), page);
+    }
+  }
+  const contradictions: KnowledgeIngestionContradiction[] = supplied.map((contradiction, index) => {
+    if (contradiction.sourceIds.some((sourceId) => !selectedSourceIds.has(sourceId))) {
+      throw new ConflictError('Knowledge contradiction cites a source outside the proposal.');
+    }
+    const page = pagesByIdentity.get(normalizePageIdentity(contradiction.pageIdentity));
+    if (!page) {
+      throw new ConflictError('Knowledge contradiction references a page outside the proposal.');
+    }
+    if (
+      contradiction.claimKey &&
+      ![page.current, beforeById.get(page.id)?.current]
+        .filter((revision): revision is KnowledgePageRevision => Boolean(revision))
+        .some((revision) =>
+          revision.claims.some((claim) => claim.claimKey === contradiction.claimKey)
+        )
+    ) {
+      throw new ConflictError('Knowledge contradiction references an unknown stable claim.');
+    }
+    return {
+      id: stableId('knowledge_contradiction', {
+        proposalId,
+        detectedBy: 'extractor',
+        index,
+        contradiction,
+      }),
+      ...contradiction,
+      sourceIds: [...contradiction.sourceIds].sort(),
+      detectedBy: 'extractor',
+    };
+  });
+  const suppliedIdentities = new Set(
+    supplied.map(
+      (contradiction) =>
+        `${normalizePageIdentity(contradiction.pageIdentity)}\0${contradiction.claimKey ?? ''}`
+    )
+  );
+  for (const page of prepared.afterPages) {
+    const before = beforeById.get(page.id);
+    if (!before) continue;
+    const priorClaims = new Map(before.current.claims.map((claim) => [claim.claimKey, claim]));
+    for (const claim of page.current.claims) {
+      const prior = priorClaims.get(claim.claimKey);
+      if (!prior || prior.text === claim.text || sameCitationSourceSet(prior, claim)) {
+        continue;
+      }
+      const identity = `${normalizePageIdentity(page.stableKey)}\0${claim.claimKey}`;
+      if (suppliedIdentities.has(identity)) continue;
+      const sourceIds = [
+        ...new Set([...prior.citations, ...claim.citations].map((citation) => citation.sourceId)),
+      ].sort();
+      contradictions.push({
+        id: stableId('knowledge_contradiction', {
+          proposalId,
+          detectedBy: 'stable-claim-diff',
+          pageId: page.id,
+          claimKey: claim.claimKey,
+          sourceIds,
+        }),
+        pageIdentity: page.stableKey,
+        claimKey: claim.claimKey,
+        description: `Stable claim "${claim.claimKey}" changes text and supporting source revisions.`,
+        severity: 'warning',
+        sourceIds,
+        detectedBy: 'stable-claim-diff',
+      });
+    }
+  }
+  return contradictions.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function sameCitationSourceSet(left: KnowledgePageClaim, right: KnowledgePageClaim): boolean {
+  const leftIds = [...new Set(left.citations.map((citation) => citation.sourceId))].sort();
+  const rightIds = [...new Set(right.citations.map((citation) => citation.sourceId))].sort();
+  return (
+    leftIds.length === rightIds.length &&
+    leftIds.every((sourceId, index) => sourceId === rightIds[index])
+  );
+}
+
+function createKnowledgeActivity(
+  proposal: KnowledgeIngestionProposal,
+  actorId: string,
+  createdAt: string,
+  target: 'applied' | 'reversed'
+): KnowledgeActivityEntry {
+  const type =
+    target === 'applied'
+      ? ('knowledge.ingestion.applied' as const)
+      : ('knowledge.ingestion.reversed' as const);
+  const payload = {
+    schemaVersion: 'knowledge-activity-entry/v1' as const,
+    id: stableId('knowledge_activity', { proposalId: proposal.id, type }),
+    workspaceId: proposal.workspaceId,
+    collectionId: proposal.collectionId,
+    proposalId: proposal.id,
+    type,
+    sourceIds: proposal.sourceIds,
+    pageIds: proposal.afterPages.map((page) => page.id).sort(),
+    actorId,
+    createdAt,
+  };
+  return parseKnowledgeActivityEntry({
+    ...payload,
+    digest: digestRunLaunchValue(payload),
+  });
 }
 
 type KnowledgePageRevisionPayload = Omit<

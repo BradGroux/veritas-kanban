@@ -13,6 +13,12 @@ const knowledge = vi.hoisted(() => ({
   getSource: vi.fn(),
   listPages: vi.fn(),
   getPage: vi.fn(),
+  createIngestionProposal: vi.fn(),
+  listIngestionProposals: vi.fn(),
+  getIngestionProposal: vi.fn(),
+  applyIngestionProposal: vi.fn(),
+  reverseIngestionProposal: vi.fn(),
+  listKnowledgeActivity: vi.fn(),
 }));
 
 vi.mock('../../services/knowledge-collection-service.js', () => ({
@@ -42,6 +48,29 @@ const COLLECTION_INPUT = {
     maxSourceClassification: 'confidential',
     exportPolicy: 'redacted-only',
   },
+};
+const PROPOSAL_INPUT = {
+  operationId: 'ingest-readme',
+  sourceIds: ['knowledge_source_0123456789abcdef'],
+  pages: [
+    {
+      stableKey: 'architecture',
+      title: 'Architecture',
+      pageKind: 'concept',
+      metadata: { owner: 'product' },
+      markdown: '# Architecture',
+      claims: [
+        {
+          claimKey: 'supported-claim',
+          text: 'The source supports this claim.',
+          citations: [{ sourceId: 'knowledge_source_0123456789abcdef' }],
+          confidence: 0.9,
+        },
+      ],
+      reviewState: 'review-required',
+      confidence: 0.8,
+    },
+  ],
 };
 
 function createApp(workspaceId = 'workspace-a'): express.Express {
@@ -149,6 +178,61 @@ describe('knowledge collection routes', () => {
       id: 'operator-1',
       role: 'admin',
     });
+  });
+
+  it('creates, applies, and reverses digest-bound ingestion proposals', async () => {
+    const proposalId = 'knowledge_proposal_0123456789abcdef';
+    const dryRunDigest = `sha256:${'a'.repeat(64)}`;
+    const appliedDigest = `sha256:${'b'.repeat(64)}`;
+    knowledge.createIngestionProposal.mockResolvedValue({
+      id: proposalId,
+      state: 'dry-run',
+      digest: dryRunDigest,
+    });
+    knowledge.applyIngestionProposal.mockResolvedValue({
+      id: proposalId,
+      state: 'applied',
+      digest: appliedDigest,
+    });
+    knowledge.reverseIngestionProposal.mockResolvedValue({
+      id: proposalId,
+      state: 'reversed',
+      digest: `sha256:${'c'.repeat(64)}`,
+    });
+
+    const created = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/ingestion/proposals`)
+      .send(PROPOSAL_INPUT);
+    const applied = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/ingestion/proposals/${proposalId}/apply`)
+      .send({ proposalDigest: dryRunDigest });
+    const reversed = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/ingestion/proposals/${proposalId}/reverse`)
+      .send({ proposalDigest: appliedDigest });
+
+    expect(created.status).toBe(201);
+    expect(applied.body).toMatchObject({ state: 'applied' });
+    expect(reversed.body).toMatchObject({ state: 'reversed' });
+    expect(knowledge.createIngestionProposal).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      PROPOSAL_INPUT
+    );
+    expect(knowledge.applyIngestionProposal).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      proposalId,
+      { id: 'operator-1', role: 'admin' },
+      { proposalDigest: dryRunDigest }
+    );
+    expect(knowledge.reverseIngestionProposal).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      proposalId,
+      { id: 'operator-1', role: 'admin' },
+      { proposalDigest: appliedDigest }
+    );
   });
 
   it('rejects invalid identifiers and unknown request fields before service dispatch', async () => {

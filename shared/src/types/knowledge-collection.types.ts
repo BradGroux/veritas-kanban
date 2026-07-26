@@ -4,6 +4,9 @@ export const KNOWLEDGE_COLLECTION_DEFINITION_SCHEMA_VERSION =
 export const KNOWLEDGE_SOURCE_SCHEMA_VERSION = 'knowledge-source/v1' as const;
 export const KNOWLEDGE_PAGE_SCHEMA_VERSION = 'knowledge-page/v1' as const;
 export const KNOWLEDGE_PAGE_REVISION_SCHEMA_VERSION = 'knowledge-page-revision/v1' as const;
+export const KNOWLEDGE_INGESTION_PROPOSAL_SCHEMA_VERSION =
+  'knowledge-ingestion-proposal/v1' as const;
+export const KNOWLEDGE_ACTIVITY_ENTRY_SCHEMA_VERSION = 'knowledge-activity-entry/v1' as const;
 
 export const KNOWLEDGE_CLASSIFICATIONS = [
   'public',
@@ -212,4 +215,113 @@ export interface UpsertKnowledgePageCandidate {
 export interface UpsertKnowledgePagesInput {
   operationId: string;
   pages: UpsertKnowledgePageCandidate[];
+}
+
+export interface KnowledgePageExpectedState {
+  id: string;
+  digest: string | null;
+}
+
+export interface KnowledgeIngestionPageChange {
+  pageId: string;
+  stableKey: string;
+  action: 'create' | 'revise' | 'backlink-update';
+  beforeDigest: string | null;
+  afterDigest: string;
+  beforeVersion: number | null;
+  afterVersion: number;
+}
+
+export interface KnowledgeIngestionIndexChange {
+  pageId: string;
+  action: 'upsert';
+  beforeContentHash: string | null;
+  afterContentHash: string;
+}
+
+export interface KnowledgeIngestionContradiction {
+  id: string;
+  pageIdentity: string;
+  claimKey?: string;
+  description: string;
+  severity: 'info' | 'warning' | 'blocking';
+  sourceIds: string[];
+  detectedBy: 'extractor' | 'stable-claim-diff';
+}
+
+export interface KnowledgeIngestionActivityChange {
+  type: 'knowledge.ingestion.applied';
+  sourceIds: string[];
+  pageIds: string[];
+}
+
+export interface KnowledgeIngestionProposalTransition {
+  from: 'dry-run' | 'applied';
+  to: 'applied' | 'reversed';
+  fromProposalDigest: string;
+  actorId: string;
+  at: string;
+  digest: string;
+}
+
+export interface KnowledgeIngestionBeforePage {
+  pageId: string;
+  page: KnowledgePage | null;
+}
+
+export interface KnowledgeIngestionProposal {
+  schemaVersion: typeof KNOWLEDGE_INGESTION_PROPOSAL_SCHEMA_VERSION;
+  id: string;
+  workspaceId: string;
+  collectionId: string;
+  state: 'dry-run' | 'applied' | 'reversed';
+  revision: number;
+  sourceIds: string[];
+  expectedPages: KnowledgePageExpectedState[];
+  beforePages: KnowledgeIngestionBeforePage[];
+  afterPages: KnowledgePage[];
+  pageChanges: KnowledgeIngestionPageChange[];
+  indexChanges: KnowledgeIngestionIndexChange[];
+  contradictions: KnowledgeIngestionContradiction[];
+  activityChanges: KnowledgeIngestionActivityChange[];
+  operationIdDigest: string;
+  requestDigest: string;
+  previewDigest: string;
+  proposedBy: string;
+  proposedAt: string;
+  transitions: KnowledgeIngestionProposalTransition[];
+  digest: string;
+}
+
+export interface KnowledgeActivityEntry {
+  schemaVersion: typeof KNOWLEDGE_ACTIVITY_ENTRY_SCHEMA_VERSION;
+  id: string;
+  workspaceId: string;
+  collectionId: string;
+  proposalId: string;
+  type: 'knowledge.ingestion.applied' | 'knowledge.ingestion.reversed';
+  sourceIds: string[];
+  pageIds: string[];
+  actorId: string;
+  createdAt: string;
+  digest: string;
+}
+
+export interface KnowledgeIngestionContradictionInput {
+  pageIdentity: string;
+  claimKey?: string;
+  description: string;
+  severity: 'info' | 'warning' | 'blocking';
+  sourceIds: string[];
+}
+
+export interface CreateKnowledgeIngestionProposalInput {
+  operationId: string;
+  sourceIds: string[];
+  pages: UpsertKnowledgePageCandidate[];
+  contradictions?: KnowledgeIngestionContradictionInput[];
+}
+
+export interface TransitionKnowledgeIngestionProposalInput {
+  proposalDigest: string;
 }
