@@ -7,6 +7,7 @@ export const KNOWLEDGE_PAGE_REVISION_SCHEMA_VERSION = 'knowledge-page-revision/v
 export const KNOWLEDGE_INGESTION_PROPOSAL_SCHEMA_VERSION =
   'knowledge-ingestion-proposal/v1' as const;
 export const KNOWLEDGE_ACTIVITY_ENTRY_SCHEMA_VERSION = 'knowledge-activity-entry/v1' as const;
+export const KNOWLEDGE_INTEGRITY_REPORT_SCHEMA_VERSION = 'knowledge-integrity-report/v1' as const;
 
 export const KNOWLEDGE_CLASSIFICATIONS = [
   'public',
@@ -367,6 +368,65 @@ export interface KnowledgeSearchResponse {
   launchContext?: KnowledgeLaunchContext;
   results: KnowledgeSearchResult[];
   evidenceDigest: string;
+}
+
+export const KNOWLEDGE_INTEGRITY_FINDING_KINDS = [
+  'broken-link',
+  'backlink-drift',
+  'orphan-page',
+  'duplicate-identity',
+  'invalid-page-kind',
+  'missing-metadata',
+  'uncited-claim',
+  'inaccessible-source',
+  'changed-source-hash',
+  'invalid-citation-locator',
+  'stale-page',
+  'stale-source',
+  'missing-canonical-page',
+  'unanswered-question',
+] as const;
+export type KnowledgeIntegrityFindingKind = (typeof KNOWLEDGE_INTEGRITY_FINDING_KINDS)[number];
+export type KnowledgeIntegritySeverity = 'info' | 'warning' | 'error';
+
+export interface KnowledgeFreshnessRule {
+  target: 'page-kind' | 'source-media-type';
+  match: string;
+  maxAgeDays: number;
+}
+
+export interface RunKnowledgeIntegrityLintInput {
+  asOf?: string;
+  freshnessRules?: KnowledgeFreshnessRule[];
+  includeResearchCandidates?: boolean;
+}
+
+export interface KnowledgeIntegrityFinding {
+  id: string;
+  kind: KnowledgeIntegrityFindingKind;
+  severity: KnowledgeIntegritySeverity;
+  message: string;
+  pageId?: string;
+  sourceId?: string;
+  claimId?: string;
+  relatedIds: string[];
+  digest: string;
+}
+
+export interface KnowledgeIntegrityReport {
+  schemaVersion: typeof KNOWLEDGE_INTEGRITY_REPORT_SCHEMA_VERSION;
+  workspaceId: string;
+  collectionId: string;
+  asOf: string;
+  launchContext?: KnowledgeLaunchContext;
+  inspected: {
+    pages: number;
+    sources: number;
+    claims: number;
+  };
+  findings: KnowledgeIntegrityFinding[];
+  findingCounts: Record<KnowledgeIntegritySeverity, number>;
+  reportDigest: string;
 }
 
 export interface CreateKnowledgeQueryPromotionInput {

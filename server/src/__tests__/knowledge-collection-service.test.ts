@@ -582,6 +582,72 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
   });
 
+  it('produces deterministic structural, provenance, freshness, and research findings', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, {
+      ...COLLECTION_INPUT,
+      operationId: 'create-integrity-lint',
+      slug: 'integrity-lint',
+    });
+    const source = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({
+        operationId: 'integrity-source',
+        capturedAt: '2026-01-01T00:00:00.000Z',
+        content: '# Evidence\n\nRetained evidence.',
+      })
+    );
+    await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'integrity-pages',
+      pages: [
+        pageCandidate('integrity-one', source.id, {
+          markdown: '# Integrity one\n\nWhat evidence is still missing?',
+          claims: [
+            {
+              claimKey: 'invalid-location',
+              text: 'This claim points beyond the retained source.',
+              citations: [
+                {
+                  sourceId: source.id,
+                  locator: { kind: 'line-range', startLine: 99, endLine: 100 },
+                },
+              ],
+              confidence: 0.7,
+            },
+          ],
+        }),
+        pageCandidate('integrity-two', source.id),
+      ],
+    });
+    const input = {
+      asOf: '2026-08-30T00:00:00.000Z',
+      freshnessRules: [
+        { target: 'page-kind' as const, match: 'concept', maxAgeDays: 7 },
+        { target: 'source-media-type' as const, match: 'text/markdown', maxAgeDays: 30 },
+      ],
+      includeResearchCandidates: true,
+    };
+
+    const first = await service.runIntegrityLint(WORKSPACE_ID, collection.id, ADMIN, input);
+    const second = await service.runIntegrityLint(WORKSPACE_ID, collection.id, ADMIN, input);
+
+    expect(second).toEqual(first);
+    expect(first.inspected).toEqual({ pages: 2, sources: 1, claims: 2 });
+    expect(new Set(first.findings.map((finding) => finding.kind))).toEqual(
+      new Set([
+        'invalid-citation-locator',
+        'missing-canonical-page',
+        'orphan-page',
+        'stale-page',
+        'stale-source',
+        'unanswered-question',
+      ])
+    );
+    expect(first.findings.every((finding) => finding.digest.startsWith('sha256:'))).toBe(true);
+  });
+
   it('fails closed on unknown citations, links, and unauthorized review decisions', async () => {
     const service = await createService(storageType);
     const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);

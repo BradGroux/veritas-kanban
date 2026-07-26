@@ -11,6 +11,7 @@ import {
   CreateKnowledgeQueryPromotionBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
+  RunKnowledgeIntegrityLintBodySchema,
   SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
 } from '../schemas/knowledge-collection-schemas.js';
@@ -161,6 +162,22 @@ router.get(
     );
     if (!page) throw new NotFoundError('Knowledge page not found.');
     res.json(page);
+  })
+);
+
+router.post(
+  '/:collectionId/integrity/lint',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const input = parseBody(RunKnowledgeIntegrityLintBodySchema, req.body);
+    const context = requestContext(req);
+    const report = await getKnowledgeCollectionService().runIntegrityLint(
+      context.workspaceId,
+      collectionId,
+      context.actor,
+      input
+    );
+    res.json(report);
   })
 );
 

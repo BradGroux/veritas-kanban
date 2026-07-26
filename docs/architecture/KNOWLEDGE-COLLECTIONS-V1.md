@@ -72,6 +72,7 @@ The initial REST surface is mounted at both `/api/v1/knowledge/collections` and 
 | `GET`  | `/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata        |
 | `GET`  | `/knowledge/collections/:collectionId/pages`                                   | List derived pages          |
 | `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                           | Read a derived page         |
+| `POST` | `/knowledge/collections/:collectionId/integrity/lint`                          | Run deterministic lint      |
 | `POST` | `/knowledge/collections/:collectionId/search`                                  | Search raw and derived data |
 | `POST` | `/knowledge/collections/:collectionId/search/promotions`                       | Promote selected results    |
 | `POST` | `/knowledge/collections/:collectionId/exports`                                 | Create a cited work product |
@@ -91,6 +92,21 @@ Bounded keyword search spans immutable raw snapshots and current derived pages. 
 For `auto` or `qmd`, current derived page digests produce a Markdown projection under the runtime directory. Each workspace collection and launch-manifest scope receives a hashed QMD collection name inside an isolated `QMD_CONFIG_DIR` and `INDEX_PATH`; the adapter registers it with the documented `collection add --mask "**/*.md"` command, marks it excluded from unscoped QMD queries, refreshes only when projection digests change, and queries it with an exact `-c` filter. QMD paths are accepted only when they map back to an eligible page ID, and citations come from the authoritative page record rather than QMD output. Set `VERITAS_QMD_KNOWLEDGE_EMBED=true` to refresh embeddings for changed projections.
 
 The response follows the existing search degradation contract. QMD-ranked derived hits identify `backend: "qmd"` while raw-source hits identify `backend: "keyword"`. Missing QMD, refresh/query failure, or a raw-only scope returns cited keyword results with `degraded: true` and an explicit reason. Every hit also carries its effective classification. Confidential and restricted snippets are withheld from previews rather than returned to the caller.
+
+## Deterministic integrity lint
+
+`POST /knowledge/collections/:collectionId/integrity/lint` inspects only the
+sources and pages readable inside the caller's role and run launch manifest. It
+detects broken links, backlink drift, orphan pages, duplicate identities,
+invalid page kinds, missing required metadata, uncited claims, inaccessible
+sources, changed retained-source hashes, invalid citation locators, stale pages
+and sources, repeated terms without canonical pages, and unanswered questions.
+
+Callers can supply an exact `asOf` timestamp and freshness rules for page kinds
+or source media types. Findings have stable IDs and digests, contain identifiers
+rather than source text, and are deterministically ordered. Repeating an
+unchanged request over unchanged inputs returns the same report digest.
+Research candidates are opt-in and informational.
 
 ## Query promotion
 
