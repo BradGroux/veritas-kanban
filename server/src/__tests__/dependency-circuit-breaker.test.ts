@@ -230,6 +230,41 @@ describe('DependencyCircuitBreaker', () => {
     });
   });
 
+  it('restores rolling evidence and open-state timing after restart', () => {
+    const { breaker } = fixture({ minimumSamples: 3 });
+    record(breaker, 'dependency-failure');
+    record(breaker, 'success');
+    const state = breaker.exportState();
+    const restored = new DependencyCircuitBreaker({
+      dependency: state.snapshot.dependency,
+      policy: state.snapshot.policy,
+      state,
+      now: () => Date.parse(state.capturedAt),
+      jitter: () => 0.5,
+    });
+
+    record(restored, 'timeout');
+
+    expect(restored.getSnapshot()).toMatchObject({
+      state: 'open',
+      sampleCount: 3,
+      failureCount: 2,
+      reason: { code: 'failure-rate' },
+    });
+    const reopened = new DependencyCircuitBreaker({
+      dependency: restored.dependency,
+      policy: restored.policy,
+      state: restored.exportState(),
+      now: () => Date.parse(state.capturedAt),
+      jitter: () => 0.5,
+    });
+    expect(reopened.acquire()).toMatchObject({
+      allowed: false,
+      reason: 'circuit-open',
+      retryAt: '2026-07-25T12:00:02.000Z',
+    });
+  });
+
   it('rejects duplicate lease settlement', () => {
     const { breaker } = fixture();
     const lease = admitted(breaker.acquire());

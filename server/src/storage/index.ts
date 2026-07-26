@@ -49,6 +49,11 @@ export {
   type WorktreeManifestRepository,
 } from './worktree-manifest-repository.js';
 export {
+  FileDependencyCircuitStateRepository,
+  InMemoryDependencyCircuitStateRepository,
+  type DependencyCircuitStateRepository,
+} from './dependency-circuit-state-repository.js';
+export {
   FileStorageProvider,
   FileTaskRepository,
   FileSettingsRepository,
