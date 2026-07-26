@@ -10,6 +10,7 @@ const {
   mockStopAgent,
   mockInterruptConversation,
   mockSendMessage,
+  mockRewindWorkspaceCheckpoint,
   mockResumeConversation,
   mockFollowUpConversation,
   mockForkConversation,
@@ -32,6 +33,7 @@ const {
   mockStopAgent: vi.fn(),
   mockInterruptConversation: vi.fn(),
   mockSendMessage: vi.fn(),
+  mockRewindWorkspaceCheckpoint: vi.fn(),
   mockResumeConversation: vi.fn(),
   mockFollowUpConversation: vi.fn(),
   mockForkConversation: vi.fn(),
@@ -65,6 +67,7 @@ vi.mock('../../services/clawdbot-agent-service.js', () => ({
     stopAgent: mockStopAgent,
     interruptConversation: mockInterruptConversation,
     sendMessage: mockSendMessage,
+    rewindWorkspaceCheckpoint: mockRewindWorkspaceCheckpoint,
     resumeConversation: mockResumeConversation,
     followUpConversation: mockFollowUpConversation,
     forkConversation: mockForkConversation,
@@ -142,6 +145,10 @@ describe('agent local capability enforcement', () => {
       delivered: true,
     });
     mockSendMessage.mockResolvedValue({ delivered: true, note: 'delivered' });
+    mockRewindWorkspaceCheckpoint.mockResolvedValue({
+      status: 'approval-required',
+      approval: { id: 'approval_rewind_1', status: 'pending' },
+    });
     mockResumeConversation.mockResolvedValue({
       taskId: 'task_1',
       attemptId: 'attempt_2',
@@ -548,6 +555,34 @@ describe('agent local capability enforcement', () => {
     });
     expect(interrupt.status).toBe(200);
     expect(mockInterruptConversation).toHaveBeenCalledWith('task_1', 'attempt_1', 'operator_1');
+  });
+
+  it('binds workspace rewind to local capability, active attempt, and idempotency key', async () => {
+    const app = createApp(
+      auth({
+        userId: 'operator_1',
+        clientMode: 'desktop-local',
+        capabilities: ['desktop:local'],
+      })
+    );
+
+    const response = await request(app)
+      .post('/api/agents/task_1/workspace/checkpoints/rewind')
+      .set('X-Idempotency-Key', 'rewind-request-123')
+      .send({
+        attemptId: 'attempt_1',
+        targetCheckpointId: 'checkpoint_target',
+        descendantCheckpointId: 'checkpoint_descendant',
+        requestId: 'spoofed-request-id',
+      });
+
+    expect(response.status).toBe(202);
+    expect(mockRewindWorkspaceCheckpoint).toHaveBeenCalledWith('task_1', {
+      attemptId: 'attempt_1',
+      targetCheckpointId: 'checkpoint_target',
+      descendantCheckpointId: 'checkpoint_descendant',
+      requestId: 'rewind-request-123',
+    });
   });
 
   it('starts a fresh provider-neutral conversation with the operator prompt', async () => {

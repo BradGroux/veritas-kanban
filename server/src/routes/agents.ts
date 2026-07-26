@@ -219,6 +219,15 @@ const conversationFreshSchema = conversationTurnSchema
 
 const conversationControlSchema = runControlSchema.strict();
 
+const workspaceCheckpointRewindSchema = z
+  .object({
+    attemptId: z.string().trim().min(1).max(120),
+    targetCheckpointId: z.string().trim().min(1).max(240),
+    descendantCheckpointId: z.string().trim().min(1).max(240),
+    requestId: z.string().trim().min(8).max(240),
+  })
+  .strict();
+
 const reportTokensSchema = z.object({
   attemptId: z.string().trim().min(1).max(120),
   inputTokens: z.number({ message: 'inputTokens is required' }).int().nonnegative(),
@@ -668,6 +677,32 @@ router.post(
       expectedAttemptId: attemptId,
     });
     res.json(delivery);
+  })
+);
+
+// POST /api/agents/:taskId/workspace/checkpoints/rewind - Preview or execute an approved rewind.
+router.post(
+  '/:taskId/workspace/checkpoints/rewind',
+  requireLocalAgentCapability,
+  asyncHandler(async (req, res) => {
+    let body: z.infer<typeof workspaceCheckpointRewindSchema>;
+    try {
+      const headerRequestId = req.get('x-idempotency-key')?.trim();
+      body = workspaceCheckpointRewindSchema.parse({
+        ...(typeof req.body === 'object' && req.body !== null ? req.body : {}),
+        ...(headerRequestId ? { requestId: headerRequestId } : {}),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+    const result = await clawdbotAgentService.rewindWorkspaceCheckpoint(
+      req.params.taskId as string,
+      body
+    );
+    res.status(result.status === 'approval-required' ? 202 : 200).json(result);
   })
 );
 

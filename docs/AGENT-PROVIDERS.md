@@ -538,6 +538,8 @@ close. Every accepted action has auth-derived attribution and a causal
 gate; any recorded-only fallback returns `delivered: false`. Generic process
 stdin is not treated as provider delivery.
 
+Workspace checkpoint rewind is deliberately narrower than ordinary conversation fork. `POST /api/agents/:taskId/workspace/checkpoints/rewind` is preview-first, requires exact critical approval, and is available only for an active Codex app-server attempt whose target checkpoint names an earlier exact turn in the same thread. Veritas interrupts the current turn, commits the recoverable workspace transaction, forks the approved provider history, and records the new live cursor plus its checkpoint anchor. Other adapters and ambiguous or item-level cursors fail closed.
+
 Agents and supervisors can register the same validated manifest with
 `POST /api/agents/register` and refresh it through the heartbeat endpoint. Host
 provider, model, `tool.*`, and sandbox posture is derived only from those

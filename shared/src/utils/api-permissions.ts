@@ -193,6 +193,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       },
       {
         methods: ['POST'],
+        path: /^\/[^/]+\/workspace\/checkpoints\/rewind\/?$/,
+        permissions: 'agent:write',
+      },
+      {
+        methods: ['POST'],
         path: /^\/[^/]+\/conversation\/(fresh|resume|follow-up|fork|interrupt|compact|archive|close)\/?$/,
         permissions: 'agent:write',
       },

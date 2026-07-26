@@ -234,7 +234,11 @@ function fixture(options: {
       ? vi.fn(async () => {
           throw options.commitError;
         })
-      : vi.fn(async () => ({ ...runtimeSnapshot, conversationCursor: 'cursor-target' })),
+      : vi.fn(async () => ({
+          ...runtimeSnapshot,
+          conversationCursor: 'cursor-recovered',
+          rewindAnchorCursor: 'cursor-target',
+        })),
     rollback: vi.fn(async () => runtimeSnapshot),
   } satisfies WorkspaceCheckpointRewindRuntime;
   const service = new WorkspaceCheckpointRewindService({
@@ -281,7 +285,10 @@ describe('WorkspaceCheckpointRewindService', () => {
     await expect(test.service.execute(test.request)).resolves.toMatchObject({
       status: 'completed',
       transaction: { state: 'committed' },
-      runtime: { conversationCursor: 'cursor-target' },
+      runtime: {
+        conversationCursor: 'cursor-recovered',
+        rewindAnchorCursor: 'cursor-target',
+      },
     });
     expect(test.previewService.preview).toHaveBeenCalledTimes(2);
     expect(test.repository.rewind).toHaveBeenCalledWith(
@@ -305,7 +312,7 @@ describe('WorkspaceCheckpointRewindService', () => {
     });
 
     await expect(test.service.execute(test.request)).rejects.toThrow(
-      'restored the prior runtime state'
+      'recovered from the prior runtime anchor'
     );
     expect(test.repository.rollbackRewind).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -325,7 +332,7 @@ describe('WorkspaceCheckpointRewindService', () => {
     });
 
     await expect(test.service.execute(test.request)).rejects.toThrow(
-      'restored the prior runtime state'
+      'recovered from the prior runtime anchor'
     );
     expect(test.repository.rewind).not.toHaveBeenCalled();
     expect(test.runtime.rollback).toHaveBeenCalledOnce();

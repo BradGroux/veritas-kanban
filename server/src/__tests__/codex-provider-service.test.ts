@@ -27,6 +27,8 @@ const {
   mockSdkRunStreamed,
   mockHandleDurableGoalCompletion,
   mockReconcileDurableGoalContinuation,
+  mockWorkspaceRewindExecute,
+  mockWorkspaceRewindOptions,
 } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockGetConfig: vi.fn(),
@@ -48,6 +50,12 @@ const {
   mockSdkRunStreamed: vi.fn(),
   mockHandleDurableGoalCompletion: vi.fn(),
   mockReconcileDurableGoalContinuation: vi.fn(),
+  mockWorkspaceRewindExecute: vi.fn(),
+  mockWorkspaceRewindOptions: {
+    current: undefined as
+      | import('../services/workspace-checkpoint-rewind-service.js').WorkspaceCheckpointRewindServiceOptions
+      | undefined,
+  },
 }));
 
 vi.mock('child_process', async (importOriginal) => {
@@ -178,6 +186,23 @@ vi.mock('../services/circuit-registry.js', () => ({
   getBreaker: () => ({ execute: (fn: () => Promise<void>) => fn() }),
 }));
 
+vi.mock('../services/workspace-checkpoint-rewind-service.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../services/workspace-checkpoint-rewind-service.js')>();
+  return {
+    ...actual,
+    WorkspaceCheckpointRewindService: class {
+      constructor(
+        options: import('../services/workspace-checkpoint-rewind-service.js').WorkspaceCheckpointRewindServiceOptions
+      ) {
+        mockWorkspaceRewindOptions.current = options;
+      }
+
+      execute = mockWorkspaceRewindExecute;
+    },
+  };
+});
+
 import {
   AgentReadinessError,
   ClawdbotAgentService,
@@ -196,6 +221,7 @@ import type {
   ExecutionTreeIdentity,
   AdmissionQueueClaim,
   RunRecoveryRecord,
+  WorkspaceCheckpointRewindTransaction,
 } from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import {
@@ -524,7 +550,11 @@ function createFakeCodexAppServerChild(
     queueMicrotask(() => child.emit('close', null, signal));
     return true;
   });
-  const writeCompletion = () => {
+  const writeCompletion = (
+    status: 'completed' | 'interrupted' = 'completed',
+    threadId = 'thread-app-server-fixture',
+    turnId = 'turn-app-server-fixture'
+  ) => {
     const tokenUsage = {
       cachedInputTokens: 0,
       inputTokens: 11,
@@ -537,8 +567,8 @@ function createFakeCodexAppServerChild(
         JSON.stringify({
           method: 'item/agentMessage/delta',
           params: {
-            threadId: 'thread-app-server-fixture',
-            turnId: 'turn-app-server-fixture',
+            threadId,
+            turnId,
             itemId: 'message-app-server-fixture',
             delta: 'app-server completed',
           },
@@ -546,16 +576,16 @@ function createFakeCodexAppServerChild(
         JSON.stringify({
           method: 'thread/tokenUsage/updated',
           params: {
-            threadId: 'thread-app-server-fixture',
-            turnId: 'turn-app-server-fixture',
+            threadId,
+            turnId,
             tokenUsage: { last: tokenUsage, total: tokenUsage },
           },
         }),
         JSON.stringify({
           method: 'turn/completed',
           params: {
-            threadId: 'thread-app-server-fixture',
-            turn: { id: 'turn-app-server-fixture', items: [], status: 'completed' },
+            threadId,
+            turn: { id: turnId, items: [], status },
           },
         }),
       ].join('\n') + '\n'
@@ -616,11 +646,16 @@ function createFakeCodexAppServerChild(
           })}\n`
         );
       } else if (request.method === 'turn/start') {
+        const requestedThreadId = tmpPath(request, 'params', 'threadId');
+        const startedTurnId =
+          requestedThreadId === 'thread-app-server-rewind'
+            ? 'turn-app-server-recovered'
+            : 'turn-app-server-fixture';
         child.stdout.write(
           `${JSON.stringify({
             id,
             result: {
-              turn: { id: 'turn-app-server-fixture', items: [], status: 'inProgress' },
+              turn: { id: startedTurnId, items: [], status: 'inProgress' },
             },
           })}\n`
         );
@@ -650,8 +685,45 @@ function createFakeCodexAppServerChild(
             result: { turnId: 'turn-app-server-fixture' },
           })}\n`
         );
-      } else if (request.method === 'thread/compact/start' || request.method === 'turn/interrupt') {
+      } else if (request.method === 'thread/fork') {
+        child.stdout.write(
+          `${JSON.stringify({
+            id,
+            result: {
+              approvalPolicy: 'on-request',
+              approvalsReviewer: 'user',
+              cwd: tmpPath(request, 'params', 'cwd'),
+              model: 'gpt-5.6',
+              modelProvider: 'openai',
+              sandbox: { type: 'workspaceWrite', networkAccess: false, writableRoots: [] },
+              thread: {
+                cliVersion: '0.145.0',
+                createdAt: 2,
+                cwd: tmpPath(request, 'params', 'cwd'),
+                ephemeral: false,
+                id: 'thread-app-server-rewind',
+                modelProvider: 'openai',
+                preview: 'rewind fixture',
+                sessionId: 'thread-app-server-rewind',
+                source: 'appServer',
+                status: { type: 'idle' },
+                turns: [],
+                updatedAt: 2,
+              },
+            },
+          })}\n`
+        );
+      } else if (request.method === 'thread/compact/start') {
         child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`);
+      } else if (request.method === 'turn/interrupt') {
+        child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`);
+        if (options.holdTurnOpen) {
+          writeCompletion(
+            'interrupted',
+            tmpPath(request, 'params', 'threadId'),
+            tmpPath(request, 'params', 'turnId')
+          );
+        }
       }
     }
   });
@@ -691,6 +763,7 @@ describe('ClawdbotAgentService Codex providers', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockWorkspaceRewindOptions.current = undefined;
     mockHandleDurableGoalCompletion.mockResolvedValue({ action: 'not-found' });
     mockReconcileDurableGoalContinuation.mockResolvedValue({ action: 'not-found' });
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-provider-'));
@@ -1660,6 +1733,118 @@ describe('ClawdbotAgentService Codex providers', () => {
     );
     expect(received.some(({ method }) => method === 'thread/compact/start')).toBe(true);
 
+    await service.stopAgent(task.id, status.attemptId);
+  });
+
+  it('quiesces and forks Codex app-server history for an approved workspace rewind', async () => {
+    const received: Array<Record<string, unknown>> = [];
+    const child = createFakeCodexAppServerChild(received, { holdTurnOpen: true });
+    mockSpawn.mockReturnValue(child);
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'codex-app-server',
+          name: 'OpenAI Codex app-server',
+          command: 'codex',
+          args: [],
+          enabled: true,
+          provider: 'codex-app-server',
+          model: 'gpt-5.6',
+        },
+      ],
+    });
+    mockCheckAgent.mockImplementation(async (agent: AgentConfig) => ({
+      type: agent.type,
+      name: agent.name,
+      enabled: agent.enabled,
+      configured: true,
+      command: agent.command,
+      executableFound: true,
+      executablePath: '/opt/homebrew/bin/codex',
+      providerVersion: 'codex-cli 0.145.0',
+      providerVersionSource: 'codex --version',
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-07-23T00:00:00.000Z',
+    }));
+    const service = testableService(tmpDir);
+    const status = await service.startAgent(task.id, 'codex-app-server');
+    await waitFor(async () => {
+      expect(received.some(({ method }) => method === 'turn/start')).toBe(true);
+      expect((await service.getAgentStatus(task.id))?.conversation.currentTurnId).toBe(
+        'turn-app-server-fixture'
+      );
+    });
+    const targetCursor = JSON.stringify({
+      schemaVersion: 'provider-conversation-cursor/v1',
+      conversationId: 'thread-app-server-fixture',
+      turnId: 'turn-before-rewind',
+    });
+    mockWorkspaceRewindExecute.mockImplementationOnce(async (request) => {
+      const runtime = mockWorkspaceRewindOptions.current?.runtime;
+      if (!runtime) throw new Error('workspace rewind runtime was not provided');
+      const before = await runtime.inspect(request);
+      const quiesced = await runtime.quiesce({
+        ...request,
+        expectedStateDigest: before.stateDigest,
+        previewEvidenceDigest: `sha256:${'a'.repeat(64)}`,
+      });
+      const rewound = await runtime.commit({
+        request,
+        token: quiesced.token,
+        expectedStateDigest: before.stateDigest,
+        targetConversationCursor: targetCursor,
+        transaction: {
+          id: 'rewind-fixture',
+        } as WorkspaceCheckpointRewindTransaction,
+      });
+      return {
+        status: 'completed',
+        runtime: rewound,
+      };
+    });
+
+    const result = await service.rewindWorkspaceCheckpoint(task.id, {
+      attemptId: status.attemptId,
+      targetCheckpointId: 'checkpoint-target',
+      descendantCheckpointId: 'checkpoint-descendant',
+      requestId: 'rewind-request-fixture',
+    });
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      runtime: {
+        rewindAnchorCursor: targetCursor,
+      },
+    });
+    expect(received.map(({ method }) => method)).toContain('turn/interrupt');
+    expect(received.find(({ method }) => method === 'thread/fork')).toMatchObject({
+      params: {
+        threadId: 'thread-app-server-fixture',
+        lastTurnId: 'turn-before-rewind',
+      },
+    });
+    expect(mockPatchTaskAttempt).toHaveBeenCalledWith(
+      task.id,
+      status.attemptId,
+      expect.objectContaining({
+        threadId: 'thread-app-server-rewind',
+        conversation: expect.objectContaining({
+          conversationId: 'thread-app-server-rewind',
+          parentConversationId: 'thread-app-server-fixture',
+          forkTurnId: 'turn-before-rewind',
+        }),
+      })
+    );
+
+    await service.sendMessage(task.id, 'Continue from the recovered boundary.', {
+      expectedAttemptId: status.attemptId,
+    });
+    expect(received.filter(({ method }) => method === 'turn/start').at(-1)).toMatchObject({
+      params: {
+        threadId: 'thread-app-server-rewind',
+      },
+    });
     await service.stopAgent(task.id, status.attemptId);
   });
 
