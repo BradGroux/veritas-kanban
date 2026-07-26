@@ -4,6 +4,8 @@ export const WORKSPACE_CHECKPOINT_CURRENT_STATE_SCHEMA_VERSION =
   'workspace-checkpoint-current-state/v1' as const;
 export const WORKSPACE_CHECKPOINT_REWIND_PREVIEW_SCHEMA_VERSION =
   'workspace-checkpoint-rewind-preview/v1' as const;
+export const WORKSPACE_CHECKPOINT_REWIND_TRANSACTION_SCHEMA_VERSION =
+  'workspace-checkpoint-rewind-transaction/v1' as const;
 export const WORKSPACE_CHECKPOINT_RETENTION_RESULT_SCHEMA_VERSION =
   'workspace-checkpoint-retention-result/v1' as const;
 
@@ -274,6 +276,35 @@ export interface WorkspaceCheckpointRewindPreview {
   conflicts: WorkspaceCheckpointRewindConflict[];
   estimatedDataLossBytes: number;
   safeForAutomaticRewind: boolean;
+  digest: string;
+}
+
+export type WorkspaceCheckpointRewindTransactionState =
+  'prepared' | 'applying' | 'committed' | 'rolling-back' | 'rolled-back';
+
+export interface WorkspaceCheckpointRewindTransaction {
+  schemaVersion: typeof WORKSPACE_CHECKPOINT_REWIND_TRANSACTION_SCHEMA_VERSION;
+  id: string;
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  operationIdDigest: string;
+  requestDigest: string;
+  previewDigest: string;
+  expectedCurrentDigest: string;
+  targetCheckpointId: string;
+  targetCheckpointDigest: string;
+  descendantCheckpointId: string;
+  descendantCheckpointDigest: string;
+  worktreeRootDigest: string;
+  state: WorkspaceCheckpointRewindTransactionState;
+  affectedPaths: string[];
+  restoredPathCount: number;
+  recoveryCheckpointId: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  digest: string;
 }
 
 export interface WorkspaceCheckpointRetentionResult {

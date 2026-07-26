@@ -18,6 +18,7 @@ import {
   WorkspaceCheckpointOwnershipService,
   type WorkspaceCheckpointOwnershipSource,
 } from './workspace-checkpoint-ownership-service.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 export interface WorkspaceCheckpointRewindPreviewInput {
   taskEnvelope: TaskEnvelope;
@@ -175,6 +176,16 @@ export class WorkspaceCheckpointRewindPreviewService {
         message: 'Checkpoint exclusion inventory is truncated, so automatic rewind is unsafe.',
       });
     }
+    if (
+      target.git.statusDigest !== descendant.git.statusDigest &&
+      (target.excludedCount > 0 || descendant.excludedCount > 0)
+    ) {
+      conflicts.push({
+        kind: 'inventory-incomplete',
+        message:
+          'Git status changed across checkpoints that exclude files, so automatic rewind cannot prove the excluded workspace state.',
+      });
+    }
 
     const descendantFiles = new Map(descendant.files.map((file) => [file.path, file]));
     const currentFiles = new Map(current.files.map((file) => [file.path, file]));
@@ -208,8 +219,8 @@ export class WorkspaceCheckpointRewindPreviewService {
       } satisfies WorkspaceCheckpointRewindFilePreview;
     });
 
-    return {
-      schemaVersion: 'workspace-checkpoint-rewind-preview/v1',
+    const preview = {
+      schemaVersion: 'workspace-checkpoint-rewind-preview/v1' as const,
       ...scope,
       targetCheckpointId: target.id,
       descendantCheckpointId: descendant.id,
@@ -243,6 +254,10 @@ export class WorkspaceCheckpointRewindPreviewService {
         0
       ),
       safeForAutomaticRewind: conflicts.length === 0,
+    };
+    return {
+      ...preview,
+      digest: digestRunLaunchValue(preview),
     };
   }
 }

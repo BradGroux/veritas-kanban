@@ -4,7 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { promisify } from 'node:util';
-import { FileWorkspaceCheckpointRepository } from '../storage/workspace-checkpoint-repository.js';
+import type { WorkspaceCheckpoint, WorkspaceCheckpointRewindPreview } from '@veritas-kanban/shared';
+import {
+  FileWorkspaceCheckpointRepository,
+  getWorkspaceCheckpointRewindIdForOperation,
+} from '../storage/workspace-checkpoint-repository.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -37,6 +42,142 @@ async function fixture() {
   await fs.writeFile(path.join(worktreePath, 'binary.bin'), Buffer.from([1, 0, 2]));
   await fs.symlink('tracked.txt', path.join(worktreePath, 'linked.txt'));
   return { root, worktreePath, storePath };
+}
+
+async function rewindPreview(
+  repository: FileWorkspaceCheckpointRepository,
+  worktreePath: string,
+  target: WorkspaceCheckpoint,
+  descendant: WorkspaceCheckpoint,
+  paths: string[]
+): Promise<WorkspaceCheckpointRewindPreview> {
+  const current = await repository.inspectCurrent({
+    worktreePath,
+    paths,
+    maxFileBytes: Math.max(target.policy.maxFileBytes, descendant.policy.maxFileBytes),
+    maxBytes: Math.max(target.policy.maxBytes, descendant.policy.maxBytes),
+  });
+  const targetFiles = new Map(target.files.map((file) => [file.path, file]));
+  const descendantFiles = new Map(descendant.files.map((file) => [file.path, file]));
+  const attribution = {
+    source: 'agent-tool' as const,
+    confidence: 'high' as const,
+    basis: 'provider-file-event' as const,
+    scope: 'checkpoint-file-window' as const,
+    evidenceEventIds: ['event-rewind'],
+  };
+  const checkpointFiles = paths.map((candidate) => {
+    const from = targetFiles.get(candidate);
+    const to = descendantFiles.get(candidate);
+    const fromState = from?.state ?? 'absent';
+    const toState = to?.state ?? 'absent';
+    const kind =
+      fromState === 'absent'
+        ? ('added' as const)
+        : toState === 'absent'
+          ? ('deleted' as const)
+          : from?.contentDigest === to?.contentDigest
+            ? ('mode-changed' as const)
+            : ('modified' as const);
+    return {
+      path: candidate,
+      kind,
+      source: to?.source ?? from?.source ?? ('untracked' as const),
+      fromState,
+      toState,
+      ...(from?.mode === undefined ? {} : { fromMode: from.mode }),
+      ...(to?.mode === undefined ? {} : { toMode: to.mode }),
+      ...(from?.contentDigest ? { fromContentDigest: from.contentDigest } : {}),
+      ...(to?.contentDigest ? { toContentDigest: to.contentDigest } : {}),
+      additions: 1,
+      deletions: 1,
+      hunks: [],
+      attribution,
+    };
+  });
+  const previewFiles = checkpointFiles.map((file) => ({
+    path: file.path,
+    action:
+      file.kind === 'added'
+        ? ('delete' as const)
+        : file.kind === 'mode-changed'
+          ? ('restore-mode' as const)
+          : ('restore' as const),
+    estimatedDiscardedBytes:
+      current.files.find((candidate) => candidate.path === file.path)?.size ?? 0,
+    attribution,
+    conflicts: [],
+  }));
+  const payload = {
+    schemaVersion: 'workspace-checkpoint-rewind-preview/v1' as const,
+    workspaceId: target.workspaceId,
+    taskId: target.taskId,
+    attemptId: target.attemptId,
+    targetCheckpointId: target.id,
+    descendantCheckpointId: descendant.id,
+    ownership: {
+      manifestId: target.worktreeManifestId ?? 'manifest-rewind',
+      leaseId: 'lease-rewind',
+      ownerAttemptId: target.attemptId,
+      verifiedAt: '2026-07-26T06:05:00.000Z',
+    },
+    current,
+    checkpointDiff: {
+      schemaVersion: 'workspace-checkpoint-diff/v1' as const,
+      workspaceId: target.workspaceId,
+      taskId: target.taskId,
+      attemptId: target.attemptId,
+      fromCheckpoint: {
+        id: target.id,
+        boundary: target.boundary,
+        createdAt: target.createdAt,
+        digest: target.digest,
+      },
+      toCheckpoint: {
+        id: descendant.id,
+        boundary: descendant.boundary,
+        createdAt: descendant.createdAt,
+        digest: descendant.digest,
+      },
+      directParent: true as const,
+      git: {
+        headChanged: target.git.head !== descendant.git.head,
+        branchChanged: target.git.branch !== descendant.git.branch,
+        indexChanged: target.git.indexDigest !== descendant.git.indexDigest,
+        statusChanged: target.git.statusDigest !== descendant.git.statusDigest,
+      },
+      summary: {
+        filesChanged: checkpointFiles.length,
+        additions: checkpointFiles.length,
+        deletions: checkpointFiles.length,
+      },
+      attribution: { evidenceComplete: true, eventsConsidered: 1 },
+      files: checkpointFiles,
+    },
+    git: {
+      headWillChange: target.git.head !== descendant.git.head,
+      branchWillChange: target.git.branch !== descendant.git.branch,
+      indexWillChange: target.git.indexDigest !== descendant.git.indexDigest,
+    },
+    conversation: {
+      cursorWillChange: target.conversationCursor !== descendant.conversationCursor,
+      targetCursorAvailable: Boolean(target.conversationCursor),
+    },
+    files: previewFiles,
+    exclusions: {
+      targetCount: target.excludedCount,
+      descendantCount: descendant.excludedCount,
+      overlappingPaths: [],
+      inventoryIncomplete: false,
+    },
+    conflicts: [],
+    estimatedDataLossBytes: previewFiles.reduce(
+      (total, file) => total + file.estimatedDiscardedBytes,
+      0
+    ),
+    safeForAutomaticRewind: true,
+  };
+  return { ...payload, digest: digestRunLaunchValue(payload) };
 }
 
 afterEach(async () => {
@@ -368,6 +509,268 @@ describe('FileWorkspaceCheckpointRepository', () => {
     const firstTracked = first.files.find((file) => file.path === 'tracked.txt');
     await expect(repository.readBlob(firstTracked?.blobDigest ?? '')).resolves.toEqual(
       Buffer.from('tracked worktree\n')
+    );
+  });
+
+  it('commits a digest-bound rewind transaction to the exact target workspace state', async () => {
+    const { worktreePath, storePath } = await fixture();
+    await fs.rm(path.join(worktreePath, 'binary.bin'));
+    await fs.rm(path.join(worktreePath, 'linked.txt'));
+    const repository = new FileWorkspaceCheckpointRepository({ baseDir: storePath });
+    const scope = {
+      workspaceId: 'workspace-rewind',
+      taskId: 'task-rewind',
+      attemptId: 'attempt-rewind',
+      boundary: 'manual' as const,
+      worktreePath,
+      worktreeManifestId: 'manifest-rewind',
+    };
+    const target = await repository.capture({
+      ...scope,
+      operationId: 'rewind-target',
+      conversationCursor: 'cursor-target',
+    });
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'descendant content\n');
+    await fs.writeFile(path.join(worktreePath, 'added.txt'), 'added by agent\n');
+    const descendant = await repository.capture({
+      ...scope,
+      operationId: 'rewind-descendant',
+      parentCheckpointId: target.id,
+      conversationCursor: 'cursor-descendant',
+    });
+    const preview = await rewindPreview(repository, worktreePath, target, descendant, [
+      'added.txt',
+      'tracked.txt',
+    ]);
+
+    const request = {
+      ...scope,
+      operationId: 'rewind-operation',
+      preview,
+    };
+    const [transaction, retry] = await Promise.all([
+      repository.rewind(request),
+      repository.rewind(request),
+    ]);
+
+    expect(transaction).toMatchObject({
+      schemaVersion: 'workspace-checkpoint-rewind-transaction/v1',
+      state: 'committed',
+      previewDigest: preview.digest,
+      targetCheckpointId: target.id,
+      descendantCheckpointId: descendant.id,
+      recoveryCheckpointId: descendant.id,
+      restoredPathCount: 2,
+      completedAt: expect.any(String),
+      digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+    expect(retry).toEqual(transaction);
+    await expect(fs.readFile(path.join(worktreePath, 'tracked.txt'), 'utf8')).resolves.toBe(
+      'tracked worktree\n'
+    );
+    await expect(fs.lstat(path.join(worktreePath, 'added.txt'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(
+      repository.getRewind({
+        ...scope,
+        transactionId: transaction.id,
+      })
+    ).resolves.toEqual(transaction);
+  });
+
+  it('rolls a partially applied rewind back to its durable descendant checkpoint', async () => {
+    const { worktreePath, storePath } = await fixture();
+    await fs.rm(path.join(worktreePath, 'binary.bin'));
+    await fs.rm(path.join(worktreePath, 'linked.txt'));
+    const repository = new FileWorkspaceCheckpointRepository({
+      baseDir: storePath,
+      beforeRewindMutation: ({ phase, index }) => {
+        if (phase === 'apply' && index === 1) throw new Error('injected rewind failure');
+      },
+    });
+    const scope = {
+      workspaceId: 'workspace-rollback',
+      taskId: 'task-rollback',
+      attemptId: 'attempt-rollback',
+      boundary: 'manual' as const,
+      worktreePath,
+      worktreeManifestId: 'manifest-rollback',
+    };
+    const target = await repository.capture({
+      ...scope,
+      operationId: 'rollback-target',
+      conversationCursor: 'cursor-target',
+    });
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'descendant content\n');
+    await fs.writeFile(path.join(worktreePath, 'added.txt'), 'added by agent\n');
+    const descendant = await repository.capture({
+      ...scope,
+      operationId: 'rollback-descendant',
+      parentCheckpointId: target.id,
+      conversationCursor: 'cursor-descendant',
+    });
+    const preview = await rewindPreview(repository, worktreePath, target, descendant, [
+      'added.txt',
+      'tracked.txt',
+    ]);
+    const operationId = 'rollback-operation';
+
+    await expect(
+      repository.rewind({
+        ...scope,
+        operationId,
+        preview,
+      })
+    ).rejects.toThrow('restored the descendant checkpoint');
+
+    await expect(fs.readFile(path.join(worktreePath, 'tracked.txt'), 'utf8')).resolves.toBe(
+      'descendant content\n'
+    );
+    await expect(fs.readFile(path.join(worktreePath, 'added.txt'), 'utf8')).resolves.toBe(
+      'added by agent\n'
+    );
+    const transactionId = getWorkspaceCheckpointRewindIdForOperation({
+      ...scope,
+      operationIdDigest: digestRunLaunchValue(operationId),
+    });
+    await expect(repository.getRewind({ ...scope, transactionId })).resolves.toMatchObject({
+      state: 'rolled-back',
+      recoveryCheckpointId: descendant.id,
+      restoredPathCount: 0,
+      completedAt: expect.any(String),
+    });
+  });
+
+  it('preserves a workspace that diverges after transaction preparation but before mutation', async () => {
+    const { worktreePath, storePath } = await fixture();
+    await fs.rm(path.join(worktreePath, 'binary.bin'));
+    await fs.rm(path.join(worktreePath, 'linked.txt'));
+    const repository = new FileWorkspaceCheckpointRepository({ baseDir: storePath });
+    const scope = {
+      workspaceId: 'workspace-prepared-race',
+      taskId: 'task-prepared-race',
+      attemptId: 'attempt-prepared-race',
+      boundary: 'manual' as const,
+      worktreePath,
+      worktreeManifestId: 'manifest-prepared-race',
+    };
+    const target = await repository.capture({
+      ...scope,
+      operationId: 'prepared-target',
+      conversationCursor: 'cursor-target',
+    });
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'descendant content\n');
+    const descendant = await repository.capture({
+      ...scope,
+      operationId: 'prepared-descendant',
+      parentCheckpointId: target.id,
+      conversationCursor: 'cursor-descendant',
+    });
+    const preview = await rewindPreview(repository, worktreePath, target, descendant, [
+      'tracked.txt',
+    ]);
+    const inspectCurrent = repository.inspectCurrent.bind(repository);
+    let inspections = 0;
+    vi.spyOn(repository, 'inspectCurrent').mockImplementation(async (input) => {
+      inspections += 1;
+      if (inspections === 2) {
+        await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'external race edit\n');
+      }
+      return inspectCurrent(input);
+    });
+    const operationId = 'prepared-race-operation';
+
+    await expect(
+      repository.rewind({
+        ...scope,
+        operationId,
+        preview,
+      })
+    ).rejects.toThrow('aborted before mutation');
+
+    await expect(fs.readFile(path.join(worktreePath, 'tracked.txt'), 'utf8')).resolves.toBe(
+      'external race edit\n'
+    );
+    const transactionId = getWorkspaceCheckpointRewindIdForOperation({
+      ...scope,
+      operationIdDigest: digestRunLaunchValue(operationId),
+    });
+    await expect(repository.getRewind({ ...scope, transactionId })).resolves.toMatchObject({
+      state: 'rolled-back',
+      restoredPathCount: 0,
+    });
+  });
+
+  it('fails closed when durable rewind recovery finds an unknown external edit', async () => {
+    const { worktreePath, storePath } = await fixture();
+    await fs.rm(path.join(worktreePath, 'binary.bin'));
+    await fs.rm(path.join(worktreePath, 'linked.txt'));
+    const crashingRepository = new FileWorkspaceCheckpointRepository({
+      baseDir: storePath,
+      beforeRewindMutation: ({ phase, index }) => {
+        if ((phase === 'apply' && index === 1) || (phase === 'rollback' && index === 0)) {
+          throw new Error('injected interrupted transaction');
+        }
+      },
+    });
+    const scope = {
+      workspaceId: 'workspace-recovery',
+      taskId: 'task-recovery',
+      attemptId: 'attempt-recovery',
+      boundary: 'manual' as const,
+      worktreePath,
+      worktreeManifestId: 'manifest-recovery',
+    };
+    const target = await crashingRepository.capture({
+      ...scope,
+      operationId: 'recovery-target',
+      conversationCursor: 'cursor-target',
+    });
+    await fs.writeFile(path.join(worktreePath, 'tracked.txt'), 'descendant content\n');
+    await fs.writeFile(path.join(worktreePath, 'added.txt'), 'added by agent\n');
+    const descendant = await crashingRepository.capture({
+      ...scope,
+      operationId: 'recovery-descendant',
+      parentCheckpointId: target.id,
+      conversationCursor: 'cursor-descendant',
+    });
+    const preview = await rewindPreview(crashingRepository, worktreePath, target, descendant, [
+      'added.txt',
+      'tracked.txt',
+    ]);
+    const operationId = 'recovery-operation';
+
+    await expect(
+      crashingRepository.rewind({
+        ...scope,
+        operationId,
+        preview,
+      })
+    ).rejects.toThrow('requires durable transaction recovery');
+
+    await fs.writeFile(path.join(worktreePath, 'added.txt'), 'external edit after crash\n');
+    const recoveryRepository = new FileWorkspaceCheckpointRepository({ baseDir: storePath });
+    const transactionId = getWorkspaceCheckpointRewindIdForOperation({
+      ...scope,
+      operationIdDigest: digestRunLaunchValue(operationId),
+    });
+    await expect(recoveryRepository.recoverRewind({ ...scope, transactionId })).rejects.toThrow(
+      'outside the known transaction states'
+    );
+    await expect(fs.readFile(path.join(worktreePath, 'added.txt'), 'utf8')).resolves.toBe(
+      'external edit after crash\n'
+    );
+
+    await fs.writeFile(path.join(worktreePath, 'added.txt'), 'added by agent\n');
+    await expect(
+      recoveryRepository.recoverRewind({ ...scope, transactionId })
+    ).resolves.toMatchObject({
+      state: 'rolled-back',
+      recoveryCheckpointId: descendant.id,
+    });
+    await expect(fs.readFile(path.join(worktreePath, 'tracked.txt'), 'utf8')).resolves.toBe(
+      'descendant content\n'
     );
   });
 });

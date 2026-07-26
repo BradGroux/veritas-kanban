@@ -51,6 +51,7 @@ export {
 export {
   FileWorkspaceCheckpointRepository,
   getWorkspaceCheckpointIdForOperation,
+  getWorkspaceCheckpointRewindIdForOperation,
   getWorkspaceCheckpointsDir,
   type FileWorkspaceCheckpointRepositoryOptions,
   type WorkspaceCheckpointCaptureInput,
@@ -60,6 +61,9 @@ export {
   type WorkspaceCheckpointListQuery,
   type WorkspaceCheckpointLookup,
   type WorkspaceCheckpointOperationLookup,
+  type WorkspaceCheckpointRewindInput,
+  type WorkspaceCheckpointRewindLookup,
+  type WorkspaceCheckpointRewindRecoveryInput,
   type WorkspaceCheckpointRetentionInput,
   type WorkspaceCheckpointRepository,
 } from './workspace-checkpoint-repository.js';
