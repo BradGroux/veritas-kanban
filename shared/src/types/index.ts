@@ -60,6 +60,7 @@ export * from './time-breakdown.types.js';
 export * from './task-envelope.types.js';
 export * from './run-launch-manifest.types.js';
 export * from './run-event.types.js';
+export * from './progress-watchdog.types.js';
 export * from './run-recovery.types.js';
 export * from './runtime-hook.types.js';
 export * from './auth.types.js';
