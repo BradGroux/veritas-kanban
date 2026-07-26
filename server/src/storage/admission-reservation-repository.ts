@@ -597,7 +597,10 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       0o600
     );
     try {
-      await handle.write(line, undefined, 'utf8');
+      // FileHandle.write() may complete with fewer bytes than requested. A
+      // partial JSONL record makes the entire durable admission log unreadable,
+      // so use writeFile() to complete the full append before syncing.
+      await handle.writeFile(line, 'utf8');
       await handle.sync();
     } finally {
       await handle.close();
