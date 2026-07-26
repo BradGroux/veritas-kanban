@@ -33,7 +33,9 @@ Captures are serialized per attempt and chained through `parentCheckpointId`. Ev
 
 ## Deliberate next boundaries
 
-This foundation does not yet claim hunk attribution, preview, restore, or retention cleanup. Those layers must consume this immutable repository and remain preview-first. Rewind cannot write until current HEAD, index, file hashes, worktree ownership, external changes, and approval evidence all match the checkpoint descendant it intends to replace.
+Direct parent-to-child checkpoints can be compared without touching the worktree. The bounded comparison reports affected captured files, line-numbered unified hunks, content digests, mode changes, and whether HEAD, branch, index, or Git status changed. Comparisons fail closed if either checkpoint is missing, the checkpoints are not directly chained, or their worktree ownership evidence differs.
+
+This foundation does not yet claim hunk attribution, rewind conflict analysis, restore, or retention cleanup. Those layers must consume the immutable repository and remain preview-first. Rewind cannot write until current HEAD, index, file hashes, worktree ownership, external changes, and approval evidence all match the checkpoint descendant it intends to replace.
 
 ## Code
 
@@ -41,4 +43,5 @@ This foundation does not yet claim hunk attribution, preview, restore, or retent
 - Validation: `server/src/schemas/workspace-checkpoint-schemas.ts`
 - File repository: `server/src/storage/workspace-checkpoint-repository.ts`
 - Ownership and boundary coordination: `server/src/services/workspace-checkpoint-service.ts`
-- Focused verification: `server/src/__tests__/workspace-checkpoint-repository.test.ts`
+- Read-only comparison: `server/src/services/workspace-checkpoint-diff-service.ts`
+- Focused verification: `server/src/__tests__/workspace-checkpoint-repository.test.ts` and `server/src/__tests__/workspace-checkpoint-diff-service.test.ts`
