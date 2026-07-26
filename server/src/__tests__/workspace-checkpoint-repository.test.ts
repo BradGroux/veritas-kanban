@@ -10,6 +10,7 @@ import {
   getWorkspaceCheckpointRewindIdForOperation,
 } from '../storage/workspace-checkpoint-repository.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import { digestWorkspaceCheckpointRewindEvidence } from '../utils/workspace-checkpoint-rewind-digest.js';
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -177,7 +178,11 @@ async function rewindPreview(
     ),
     safeForAutomaticRewind: true,
   };
-  return { ...payload, digest: digestRunLaunchValue(payload) };
+  const preview = {
+    ...payload,
+    evidenceDigest: digestWorkspaceCheckpointRewindEvidence(payload),
+  };
+  return { ...preview, digest: digestRunLaunchValue(preview) };
 }
 
 afterEach(async () => {
@@ -512,7 +517,7 @@ describe('FileWorkspaceCheckpointRepository', () => {
     );
   });
 
-  it('commits a digest-bound rewind transaction to the exact target workspace state', async () => {
+  it('commits and can compensate a digest-bound rewind transaction', async () => {
     const { worktreePath, storePath } = await fixture();
     await fs.rm(path.join(worktreePath, 'binary.bin'));
     await fs.rm(path.join(worktreePath, 'linked.txt'));
@@ -557,6 +562,7 @@ describe('FileWorkspaceCheckpointRepository', () => {
       schemaVersion: 'workspace-checkpoint-rewind-transaction/v1',
       state: 'committed',
       previewDigest: preview.digest,
+      previewEvidenceDigest: preview.evidenceDigest,
       targetCheckpointId: target.id,
       descendantCheckpointId: descendant.id,
       recoveryCheckpointId: descendant.id,
@@ -577,6 +583,23 @@ describe('FileWorkspaceCheckpointRepository', () => {
         transactionId: transaction.id,
       })
     ).resolves.toEqual(transaction);
+
+    await expect(
+      repository.rollbackRewind({
+        ...scope,
+        transactionId: transaction.id,
+        expectedTransactionDigest: transaction.digest,
+      })
+    ).resolves.toMatchObject({
+      state: 'rolled-back',
+      recoveryCheckpointId: descendant.id,
+    });
+    await expect(fs.readFile(path.join(worktreePath, 'tracked.txt'), 'utf8')).resolves.toBe(
+      'descendant content\n'
+    );
+    await expect(fs.readFile(path.join(worktreePath, 'added.txt'), 'utf8')).resolves.toBe(
+      'added by agent\n'
+    );
   });
 
   it('rolls a partially applied rewind back to its durable descendant checkpoint', async () => {

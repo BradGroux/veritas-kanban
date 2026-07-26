@@ -276,6 +276,7 @@ export interface WorkspaceCheckpointRewindPreview {
   conflicts: WorkspaceCheckpointRewindConflict[];
   estimatedDataLossBytes: number;
   safeForAutomaticRewind: boolean;
+  evidenceDigest: string;
   digest: string;
 }
 
@@ -291,6 +292,7 @@ export interface WorkspaceCheckpointRewindTransaction {
   operationIdDigest: string;
   requestDigest: string;
   previewDigest: string;
+  previewEvidenceDigest: string;
   expectedCurrentDigest: string;
   targetCheckpointId: string;
   targetCheckpointDigest: string;

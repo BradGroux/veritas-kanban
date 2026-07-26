@@ -9,6 +9,7 @@ import type {
 import type { WorkspaceCheckpointRepository } from '../storage/workspace-checkpoint-repository.js';
 import { WorkspaceCheckpointRewindPreviewService } from '../services/workspace-checkpoint-rewind-preview-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import { digestWorkspaceCheckpointRewindEvidence } from '../utils/workspace-checkpoint-rewind-digest.js';
 
 const hash = (character: string) => `sha256:${character.repeat(64)}`;
 const targetId = 'checkpoint_target12345678901234';
@@ -294,6 +295,19 @@ describe('WorkspaceCheckpointRewindPreviewService', () => {
     });
     const { digest, ...payload } = result;
     expect(digest).toBe(digestRunLaunchValue(payload));
+    expect(result.evidenceDigest).toBe(digestWorkspaceCheckpointRewindEvidence(result));
+    expect(
+      digestWorkspaceCheckpointRewindEvidence({
+        ...result,
+        ownership: { ...result.ownership, verifiedAt: '2026-07-26T06:16:00.000Z' },
+        current: {
+          ...result.current,
+          inspectedAt: '2026-07-26T06:16:00.000Z',
+          digest: hash('f'),
+        },
+        digest: hash('0'),
+      })
+    ).toBe(result.evidenceDigest);
     expect(fixture.ownership.getManifest).toHaveBeenCalledTimes(2);
   });
 

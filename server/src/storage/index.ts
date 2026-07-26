@@ -64,6 +64,7 @@ export {
   type WorkspaceCheckpointRewindInput,
   type WorkspaceCheckpointRewindLookup,
   type WorkspaceCheckpointRewindRecoveryInput,
+  type WorkspaceCheckpointRewindRollbackInput,
   type WorkspaceCheckpointRetentionInput,
   type WorkspaceCheckpointRepository,
 } from './workspace-checkpoint-repository.js';

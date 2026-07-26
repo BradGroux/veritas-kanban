@@ -19,6 +19,7 @@ import {
   type WorkspaceCheckpointOwnershipSource,
 } from './workspace-checkpoint-ownership-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import { digestWorkspaceCheckpointRewindEvidence } from '../utils/workspace-checkpoint-rewind-digest.js';
 
 export interface WorkspaceCheckpointRewindPreviewInput {
   taskEnvelope: TaskEnvelope;
@@ -255,10 +256,11 @@ export class WorkspaceCheckpointRewindPreviewService {
       ),
       safeForAutomaticRewind: conflicts.length === 0,
     };
-    return {
+    const payload = {
       ...preview,
-      digest: digestRunLaunchValue(preview),
+      evidenceDigest: digestWorkspaceCheckpointRewindEvidence(preview),
     };
+    return { ...payload, digest: digestRunLaunchValue(payload) };
   }
 }
 
