@@ -289,3 +289,10 @@ export class DurableGoalService {
     });
   }
 }
+
+let durableGoalService: DurableGoalService | undefined;
+
+export function getDurableGoalService(): DurableGoalService {
+  durableGoalService ??= new DurableGoalService();
+  return durableGoalService;
+}

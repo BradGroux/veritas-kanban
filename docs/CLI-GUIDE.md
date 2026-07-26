@@ -20,6 +20,7 @@ Comprehensive guide to the `vk` command-line tool for Veritas Kanban.
   - [Project Management](#project-management)
   - [Agent Commands](#agent-commands)
   - [Admission Commands](#admission-commands)
+  - [Durable Goal Commands](#durable-goal-commands)
   - [Automation Commands](#automation-commands)
   - [Scheduler Commands](#scheduler-commands)
   - [Queue Monitor Commands](#queue-monitor-commands)
@@ -659,6 +660,62 @@ The Operations admission panel exposes the same controls. Queue rows can cancel
 one pending launch or its entire tree. Durable tree-control cards show bounded
 breaker signals and observed descendant/depth evidence, then allow an
 administrator to resume or cancel the tree with an audited reason.
+
+---
+
+### Durable Goal Commands
+
+Create and control one evidence-gated objective across multiple runs:
+
+```bash
+vk goals create \
+  --objective "Deliver the provider migration." \
+  --acceptance "All provider fixtures pass" "Operator docs are current" \
+  --requirement "provider-tests|test|Focused provider fixtures pass." \
+  --requirement "operator-docs|artifact|Operator documentation is reviewed." \
+  --root-task task_0123456789abcdef \
+  --mode automatic \
+  --max-turns 20 \
+  --require-rollover-approval \
+  --json
+
+vk goals list --state active blocked awaiting-approval --json
+vk goals get goal_0123456789abcdef --json
+
+vk goals transition goal_0123456789abcdef \
+  --revision 3 \
+  --state paused \
+  --reason "Operator paused before external coordination." \
+  --json
+
+vk goals transition goal_0123456789abcdef \
+  --revision 4 \
+  --state complete \
+  --reason "All configured evidence is verified." \
+  --evidence-json '[{"requirementId":"provider-tests","evidenceId":"ci-30182450098","summary":"Focused provider fixtures passed."},{"requirementId":"operator-docs","evidenceId":"review-20260726","summary":"Operator docs reviewed."}]' \
+  --json
+
+vk goals link-run goal_0123456789abcdef \
+  --revision 2 \
+  --task task_0123456789abcdef \
+  --attempt attempt_0123456789abcdef \
+  --conversation conversation_0123456789abcdef \
+  --json
+```
+
+`goals create` requires exactly one `--root-task` or `--root-workflow`.
+Completion requirements use `id|kind|description`; supported kinds are
+`test`, `build`, `artifact`, `operator`, `external`, and `other`. At least one
+required evidence item must exist, and a transition to `complete` fails until
+every required item has verified evidence.
+
+Every mutation requires the current `--revision`. A stale revision returns a
+conflict instead of overwriting a newer operator or supervisor decision.
+Blocked transitions use `--blocker-json` for the exact blocker, attempt count,
+next safe action, and required authority or external state change. The server
+derives the transition actor, workspace, verification timestamp, and evidence
+verifier from authenticated context; caller-supplied identity fields are
+rejected. Use `--json` for stable automation output.
 
 ---
 

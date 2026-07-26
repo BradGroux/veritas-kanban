@@ -256,6 +256,7 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
   { prefix: '/api/audit', read: 'admin:manage', write: 'admin:manage' },
   { prefix: '/api/lessons', read: 'task:read' },
   { prefix: '/api/delegation', read: 'agent:read', write: 'admin:manage' },
+  { prefix: '/api/goals', read: 'agent:read', write: 'admin:manage' },
   {
     prefix: '/api/workflows',
     read: 'workflow:read',

@@ -10,7 +10,7 @@ const IdentifierSchema = z.string().trim().min(1).max(240);
 const IsoTimestampSchema = z.string().datetime();
 const BoundedTextSchema = z.string().trim().min(1).max(4_000);
 
-const BudgetLimitsSchema = z
+export const DurableGoalBudgetLimitsSchema = z
   .object({
     inputTokens: z.number().nonnegative().optional(),
     outputTokens: z.number().nonnegative().optional(),
@@ -38,7 +38,7 @@ const BudgetUsageSchema = z
   })
   .strict();
 
-const RunLinkSchema = z
+export const DurableGoalRunLinkSchema = z
   .object({
     taskId: IdentifierSchema,
     attemptId: IdentifierSchema.optional(),
@@ -49,7 +49,7 @@ const RunLinkSchema = z
   })
   .strict();
 
-const CompletionRequirementSchema = z
+export const DurableGoalCompletionRequirementSchema = z
   .object({
     id: IdentifierSchema,
     description: BoundedTextSchema,
@@ -58,7 +58,7 @@ const CompletionRequirementSchema = z
   })
   .strict();
 
-const CompletionEvidenceSchema = z
+export const DurableGoalCompletionEvidenceSchema = z
   .object({
     requirementId: IdentifierSchema,
     evidenceId: IdentifierSchema,
@@ -97,10 +97,10 @@ export const DurableGoalRecordSchema: z.ZodType<DurableGoalRecord> = z
         requireApprovalForRollover: z.boolean().optional(),
       })
       .strict(),
-    budgets: BudgetLimitsSchema.optional(),
+    budgets: DurableGoalBudgetLimitsSchema.optional(),
     usage: BudgetUsageSchema,
-    currentRun: RunLinkSchema.optional(),
-    continuationChain: z.array(RunLinkSchema).max(10_000),
+    currentRun: DurableGoalRunLinkSchema.optional(),
+    continuationChain: z.array(DurableGoalRunLinkSchema).max(10_000),
     blockers: z
       .array(
         z
@@ -117,8 +117,8 @@ export const DurableGoalRecordSchema: z.ZodType<DurableGoalRecord> = z
           .strict()
       )
       .max(1_000),
-    completionRequirements: z.array(CompletionRequirementSchema).min(1).max(200),
-    completionEvidence: z.array(CompletionEvidenceSchema).max(1_000),
+    completionRequirements: z.array(DurableGoalCompletionRequirementSchema).min(1).max(200),
+    completionEvidence: z.array(DurableGoalCompletionEvidenceSchema).max(1_000),
     transitions: z
       .array(
         z
