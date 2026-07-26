@@ -76,6 +76,7 @@ import {
   scoreAdmissionQueueEntry,
   workspaceKey,
 } from './admission-queue-scheduler.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const MAX_CAS_ATTEMPTS = 8;
 const ACTIVE_INSPECTION_SNAPSHOT_LIMIT = 100_000;
@@ -785,12 +786,19 @@ export class AdmissionControlService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
-    const queueTarget: AdmissionQueueTarget | null =
+    const suppliedQueueTarget: AdmissionQueueTarget | null =
       queue && 'target' in queue
         ? queue.target
         : queue
           ? { kind: 'direct', agent: queue.agent }
           : null;
+    const queueTarget: AdmissionQueueTarget | null =
+      suppliedQueueTarget?.kind === 'workflow-root'
+        ? {
+            ...suppliedQueueTarget,
+            budgetPolicyDigest: digestRunLaunchValue(request.budgetPolicies ?? []),
+          }
+        : suppliedQueueTarget;
     const queueable = Boolean(
       queue &&
       queueTarget &&
