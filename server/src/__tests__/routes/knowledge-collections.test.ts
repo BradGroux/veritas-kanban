@@ -14,6 +14,7 @@ const knowledge = vi.hoisted(() => ({
   listPages: vi.fn(),
   getPage: vi.fn(),
   searchCollection: vi.fn(),
+  createQueryPromotion: vi.fn(),
   createIngestionProposal: vi.fn(),
   listIngestionProposals: vi.fn(),
   getIngestionProposal: vi.fn(),
@@ -203,6 +204,57 @@ describe('knowledge collection routes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ backend: 'keyword', degraded: true });
     expect(knowledge.searchCollection).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      input
+    );
+  });
+
+  it('promotes digest-bound selected search results into the ingestion workflow', async () => {
+    const evidenceDigest = `sha256:${'a'.repeat(64)}`;
+    const sourceId = 'knowledge_source_0123456789abcdef';
+    const evidence = {
+      query: 'architecture',
+      backend: 'keyword',
+      degraded: false,
+      results: [
+        {
+          id: sourceId,
+          kind: 'raw-source',
+          backend: 'keyword',
+          title: 'Architecture source',
+          snippet: 'Architecture evidence',
+          score: 0.9,
+          sourceId,
+          citations: [{ sourceId }],
+        },
+      ],
+      evidenceDigest,
+    };
+    const input = {
+      operationId: 'promote-architecture-query',
+      evidence,
+      selectedResultIds: [sourceId],
+      pages: PROPOSAL_INPUT.pages,
+    };
+    knowledge.createQueryPromotion.mockResolvedValue({
+      id: 'knowledge_proposal_query',
+      state: 'dry-run',
+      queryPromotion: {
+        query: evidence.query,
+        evidenceDigest,
+        selectedResultIds: [sourceId],
+      },
+    });
+
+    const response = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/search/promotions`)
+      .send(input);
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ state: 'dry-run' });
+    expect(knowledge.createQueryPromotion).toHaveBeenCalledWith(
       'workspace-a',
       COLLECTION_ID,
       { id: 'operator-1', role: 'admin' },
