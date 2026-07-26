@@ -23,6 +23,13 @@ const identifierSchema = z
   .min(1)
   .max(240)
   .regex(/^[A-Za-z0-9._:-]+$/);
+const KnowledgeLaunchContextSchema = z
+  .object({
+    taskId: identifierSchema,
+    attemptId: identifierSchema,
+    launchManifestDigest: digestSchema,
+  })
+  .strict();
 const opaqueTextSchema = z
   .string()
   .min(1)
@@ -550,6 +557,7 @@ export const KnowledgeIngestionProposalSchema = z
         query: z.string().trim().min(1).max(500),
         evidenceDigest: digestSchema,
         selectedResultIds: z.array(identifierSchema).min(1).max(50).refine(uniqueStrings),
+        launchContext: KnowledgeLaunchContextSchema.optional(),
       })
       .strict()
       .optional(),
@@ -736,6 +744,7 @@ const KnowledgeSearchResultSchema = z
     sourceId: identifierSchema.optional(),
     pageId: identifierSchema.optional(),
     stableKey: stableKeySchema.optional(),
+    classification: z.enum(KNOWLEDGE_CLASSIFICATIONS),
     citations: z.array(KnowledgeClaimCitationSchema).min(1).max(10_000),
   })
   .strict()
@@ -759,6 +768,7 @@ export const KnowledgeSearchEvidenceSchema = z
     backend: z.enum(['qmd', 'keyword']),
     degraded: z.boolean(),
     reason: z.string().trim().min(1).max(2_000).optional(),
+    launchContext: KnowledgeLaunchContextSchema.optional(),
     results: z
       .array(KnowledgeSearchResultSchema)
       .min(1)

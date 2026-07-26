@@ -28,6 +28,14 @@ Inline blobs are verified before persistence and whenever file-backed content is
 
 Source classifications are `public`, `internal`, `confidential`, and `restricted`. Registration cannot exceed the collection policy ceiling. Collection reads and source access require a role listed by the collection, in addition to the route-level `work_product:read` or `work_product:write` permission. Cross-workspace lookup does not reveal whether an object exists.
 
+Agent access is also bound to one persisted run launch manifest. Agent requests send
+`x-veritas-task-id`, `x-veritas-attempt-id`, and
+`x-veritas-launch-manifest-digest`; partial or malformed evidence is rejected.
+The server loads the exact attempt manifest and accepts access only when the
+task, attempt, digest, resource enforcement, and blocker state still match.
+`knowledge:*` allows the complete knowledge surface. Otherwise, a manifest must
+name an exact source ID, source key, source URI, page ID, or page stable key.
+
 ## Derived pages and citations
 
 `knowledge-page/v1` stores Markdown-compatible synthesis separately from immutable source evidence. Each page has one canonical stable key, durable aliases, a typed page kind, tags, collection-required metadata, review state, confidence, outgoing page IDs, computed backlinks, and a bounded revision history.
@@ -80,13 +88,13 @@ The REST API deliberately returns source metadata, not stored source content. Co
 
 Bounded keyword search spans immutable raw snapshots and current derived pages. Callers can search both layers or restrict the request to one. Raw hits cite their immutable source revision. Derived hits retain the deduplicated claim citations stored on the page, so consumers can distinguish evidence from synthesis and follow each material claim back to its registered source.
 
-For `auto` or `qmd`, current derived page digests produce a Markdown projection under the runtime directory. Each workspace collection receives a hashed QMD collection name inside an isolated `QMD_CONFIG_DIR` and `INDEX_PATH`; the adapter registers it with the documented `collection add --mask "**/*.md"` command, marks it excluded from unscoped QMD queries, refreshes only when projection digests change, and queries it with an exact `-c` filter. QMD paths are accepted only when they map back to an eligible page ID, and citations come from the authoritative page record rather than QMD output. Set `VERITAS_QMD_KNOWLEDGE_EMBED=true` to refresh embeddings for changed projections.
+For `auto` or `qmd`, current derived page digests produce a Markdown projection under the runtime directory. Each workspace collection and launch-manifest scope receives a hashed QMD collection name inside an isolated `QMD_CONFIG_DIR` and `INDEX_PATH`; the adapter registers it with the documented `collection add --mask "**/*.md"` command, marks it excluded from unscoped QMD queries, refreshes only when projection digests change, and queries it with an exact `-c` filter. QMD paths are accepted only when they map back to an eligible page ID, and citations come from the authoritative page record rather than QMD output. Set `VERITAS_QMD_KNOWLEDGE_EMBED=true` to refresh embeddings for changed projections.
 
-The response follows the existing search degradation contract. QMD-ranked derived hits identify `backend: "qmd"` while raw-source hits identify `backend: "keyword"`. Missing QMD, refresh/query failure, or a raw-only scope returns cited keyword results with `degraded: true` and an explicit reason.
+The response follows the existing search degradation contract. QMD-ranked derived hits identify `backend: "qmd"` while raw-source hits identify `backend: "keyword"`. Missing QMD, refresh/query failure, or a raw-only scope returns cited keyword results with `degraded: true` and an explicit reason. Every hit also carries its effective classification. Confidential and restricted snippets are withheld from previews rather than returned to the caller.
 
 ## Query promotion
 
-Search responses carry an evidence digest over the exact query and bounded result array. A caller can select one or more result IDs and propose new or revised pages without converting the answer directly into durable truth. Promotion validates the unchanged evidence digest, collection membership of raw sources, current identity and exact citations of derived pages, and the selected source set before creating a standard ingestion dry run.
+Search responses carry an evidence digest over the exact query, bounded result array, and launch context. A caller can select one or more result IDs and propose new or revised pages without converting the answer directly into durable truth. Promotion validates the unchanged evidence digest and run binding, collection membership of raw sources, current identity and exact citations of derived pages, and the selected source set before creating a standard ingestion dry run.
 
 The proposal persists the query, evidence digest, and sorted selected result IDs. Its candidate pages, source IDs, contradictions, review, atomic apply, reversal, attribution, and idempotency all use the same transaction contract as source ingestion. Promotion never adds a second mutation path.
 
@@ -94,16 +102,16 @@ The proposal persists the query, evidence digest, and sorted selected result IDs
 
 A validated search selection can also create a Markdown work product. The render preserves each selected result's raw-versus-derived kind, backend, score, redacted snippet, and exact source citations. Relative source links point back to immutable source metadata or the cited derived page. Work-product metadata retains the collection, query, evidence digest, export policy, selected-result count, and citation count so later Markdown or JSON export does not sever provenance.
 
-The collection export policy is enforced twice. `forbidden` blocks work-product creation. `redacted-only` prevents a `none` request, defaults the product to redacted export, and causes the general work-product exporter to reject an explicit full-export override. `allowed` collections can request full output but still default to standard redaction.
+The collection export policy is enforced twice. `forbidden` blocks work-product creation. `redacted-only` prevents a `none` request, defaults the product to redacted export, and causes the general work-product exporter to reject an explicit full-export override. `allowed` collections can request full output but still default to standard redaction. Confidential or restricted selected evidence independently forces redaction, and the work product retains the effective classification and launch-manifest digest for later enforcement.
 
 ## Current delivery boundary
 
-This foundation does not yet claim policy-aware content redaction beyond secret-shaped snippets or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited search, query promotion, cited export, and proposal transaction and must not add an alternate source or page store.
-
-The next implementation slices are:
-
-1. launch-manifest source restrictions; and
-2. classification-aware redaction beyond secret-shaped content.
+Knowledge collections now enforce workspace RBAC, collection policy,
+classification-aware previews and exports, and exact run launch resources
+through the same immutable catalog, page graph, search, promotion, export, and
+proposal transaction. The v1 boundary does not include an extractor framework
+or an alternate source/page store; ingestion candidates still arrive through
+the reviewed proposal API.
 
 ## Code
 

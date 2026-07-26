@@ -12,6 +12,7 @@ import type {
   KnowledgeIngestionContradiction,
   KnowledgeIngestionContradictionInput,
   KnowledgeIngestionProposal,
+  KnowledgeLaunchContext,
   KnowledgePage,
   KnowledgePageClaim,
   KnowledgePageExpectedState,
@@ -55,6 +56,10 @@ import {
   KnowledgeQmdSearchService,
   type KnowledgeQmdSearchAdapter,
 } from './knowledge-qmd-search-service.js';
+import {
+  KnowledgeLaunchPolicyService,
+  type KnowledgeLaunchPolicyResolver,
+} from './knowledge-launch-policy-service.js';
 import { getWorkProductService } from './work-product-service.js';
 
 const CLASSIFICATION_RANK: Record<KnowledgeClassification, number> = {
@@ -67,6 +72,7 @@ const CLASSIFICATION_RANK: Record<KnowledgeClassification, number> = {
 export interface KnowledgeCollectionActor {
   id: string;
   role: KnowledgeAccessRole;
+  launchContext?: KnowledgeLaunchContext;
 }
 
 export interface KnowledgeCollectionServiceOptions {
@@ -77,6 +83,7 @@ export interface KnowledgeCollectionServiceOptions {
   sqliteConnectionOptions?: SqliteConnectionOptions;
   qmdSearch?: KnowledgeQmdSearchAdapter;
   workProductWriter?: KnowledgeWorkProductWriter;
+  launchPolicy?: KnowledgeLaunchPolicyResolver;
   now?: () => Date;
 }
 
@@ -101,12 +108,14 @@ export class KnowledgeCollectionService {
   private readonly ownsSqliteDatabase: boolean;
   private readonly qmdSearch: KnowledgeQmdSearchAdapter;
   private readonly workProductWriter?: KnowledgeWorkProductWriter;
+  private readonly launchPolicy: KnowledgeLaunchPolicyResolver;
   private readonly now: () => Date;
 
   constructor(options: KnowledgeCollectionServiceOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.qmdSearch = options.qmdSearch ?? new KnowledgeQmdSearchService();
     this.workProductWriter = options.workProductWriter;
+    this.launchPolicy = options.launchPolicy ?? new KnowledgeLaunchPolicyService();
     this.ownsSqliteDatabase = false;
     if (options.repository) {
       this.repository = options.repository;
@@ -226,6 +235,13 @@ export class KnowledgeCollectionService {
       collectionId,
       operationIdDigest,
     });
+    const launchResources = await this.launchResources(actor);
+    if (
+      launchResources &&
+      !this.resourceAllowed(launchResources, sourceId, parsed.sourceKey, parsed.uri)
+    ) {
+      throw new ForbiddenError('Knowledge source is not allowed by the run launch manifest.');
+    }
     let content: Buffer | null;
     let contentHash: string;
     let contentBytes: number;
@@ -299,7 +315,11 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgeSource[]> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.listSources(workspaceId, collectionId);
+    const sources = await this.repository.listSources(workspaceId, collectionId);
+    const launchResources = await this.launchResources(actor);
+    return launchResources
+      ? sources.filter((source) => this.sourceAllowed(source, launchResources))
+      : sources;
   }
 
   async getSource(
@@ -309,7 +329,11 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgeSource | null> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.getSource(workspaceId, collectionId, sourceId);
+    const source = await this.repository.getSource(workspaceId, collectionId, sourceId);
+    const launchResources = await this.launchResources(actor);
+    return source && (!launchResources || this.sourceAllowed(source, launchResources))
+      ? source
+      : null;
   }
 
   async readSourceContent(
@@ -329,7 +353,14 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgePage[]> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.listPages(workspaceId, collectionId);
+    const [pages, sources] = await Promise.all([
+      this.repository.listPages(workspaceId, collectionId),
+      this.repository.listSources(workspaceId, collectionId),
+    ]);
+    const launchResources = await this.launchResources(actor);
+    return launchResources
+      ? pages.filter((page) => this.pageAllowed(page, sources, launchResources))
+      : pages;
   }
 
   async getPage(
@@ -339,7 +370,14 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgePage | null> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.getPage(workspaceId, collectionId, pageId);
+    const [page, sources] = await Promise.all([
+      this.repository.getPage(workspaceId, collectionId, pageId),
+      this.repository.listSources(workspaceId, collectionId),
+    ]);
+    const launchResources = await this.launchResources(actor);
+    return page && (!launchResources || this.pageAllowed(page, sources, launchResources))
+      ? page
+      : null;
   }
 
   async createIngestionProposal(
@@ -375,19 +413,45 @@ export class KnowledgeCollectionService {
       collectionId,
       operationIdDigest,
     });
-    const existing = await this.repository.getProposal(workspaceId, collectionId, proposalId);
+    const [existing, sources, launchResources] = await Promise.all([
+      this.repository.getProposal(workspaceId, collectionId, proposalId),
+      this.repository.listSources(workspaceId, collectionId),
+      this.launchResources(actor),
+    ]);
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
     if (existing) {
       if (existing.requestDigest !== requestDigest) {
         throw new ConflictError(
           'Knowledge ingestion operation identity was reused for changed input.'
         );
       }
+      if (
+        launchResources &&
+        existing.sourceIds.some((sourceId) => {
+          const source = sourcesById.get(sourceId);
+          return !source || !this.sourceAllowed(source, launchResources);
+        })
+      ) {
+        throw new ForbiddenError(
+          'Knowledge ingestion proposal is not allowed by the run launch manifest.'
+        );
+      }
       return existing;
     }
-    const sources = await this.repository.listSources(workspaceId, collectionId);
     const sourceIds = new Set(sources.map((source) => source.id));
     if (parsed.sourceIds.some((sourceId) => !sourceIds.has(sourceId))) {
       throw new ConflictError('Knowledge ingestion proposal selects an unknown source revision.');
+    }
+    if (
+      launchResources &&
+      parsed.sourceIds.some((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return !source || !this.sourceAllowed(source, launchResources);
+      })
+    ) {
+      throw new ForbiddenError(
+        'Knowledge ingestion source is not allowed by the run launch manifest.'
+      );
     }
     const prepared = await this.preparePageBatch(workspaceId, collectionId, actor, {
       operationId: parsed.operationId,
@@ -400,6 +464,12 @@ export class KnowledgeCollectionService {
     }
     if (prepared.afterPages.length === 0) {
       throw new ConflictError('Knowledge ingestion proposal does not contain any page changes.');
+    }
+    if (
+      launchResources &&
+      prepared.afterPages.some((page) => !this.pageAllowed(page, sources, launchResources))
+    ) {
+      throw new ForbiddenError('Knowledge ingestion page graph exceeds the run launch manifest.');
     }
     const selectedSourceIds = new Set(parsed.sourceIds);
     const candidatePageIds = new Set(prepared.candidatePageIds);
@@ -493,7 +563,19 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgeIngestionProposal[]> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.listProposals(workspaceId, collectionId);
+    const [proposals, sources, launchResources] = await Promise.all([
+      this.repository.listProposals(workspaceId, collectionId),
+      this.repository.listSources(workspaceId, collectionId),
+      this.launchResources(actor),
+    ]);
+    if (!launchResources) return proposals;
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    return proposals.filter((proposal) =>
+      proposal.sourceIds.every((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return Boolean(source && this.sourceAllowed(source, launchResources));
+      })
+    );
   }
 
   async getIngestionProposal(
@@ -503,7 +585,18 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgeIngestionProposal | null> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.getProposal(workspaceId, collectionId, proposalId);
+    const proposal = await this.repository.getProposal(workspaceId, collectionId, proposalId);
+    if (!proposal) return null;
+    const launchResources = await this.launchResources(actor);
+    if (!launchResources) return proposal;
+    const sources = await this.repository.listSources(workspaceId, collectionId);
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    return proposal.sourceIds.every((sourceId) => {
+      const source = sourcesById.get(sourceId);
+      return Boolean(source && this.sourceAllowed(source, launchResources));
+    })
+      ? proposal
+      : null;
   }
 
   async applyIngestionProposal(
@@ -546,7 +639,19 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor
   ): Promise<KnowledgeActivityEntry[]> {
     await this.requireReadableCollection(workspaceId, collectionId, actor);
-    return this.repository.listKnowledgeActivity(workspaceId, collectionId);
+    const [activity, sources, launchResources] = await Promise.all([
+      this.repository.listKnowledgeActivity(workspaceId, collectionId),
+      this.repository.listSources(workspaceId, collectionId),
+      this.launchResources(actor),
+    ]);
+    if (!launchResources) return activity;
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    return activity.filter((entry) =>
+      entry.sourceIds.every((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return Boolean(source && this.sourceAllowed(source, launchResources));
+      })
+    );
   }
 
   async searchCollection(
@@ -557,17 +662,27 @@ export class KnowledgeCollectionService {
   ): Promise<KnowledgeSearchResponse> {
     const parsed = SearchKnowledgeCollectionBodySchema.parse(input);
     await this.requireReadableCollection(workspaceId, collectionId, actor);
+    const launchEvidence = actor.launchContext ? { launchContext: actor.launchContext } : {};
     const terms = knowledgeQueryTerms(parsed.query);
     const scope = parsed.scope ?? 'all';
     const limit = parsed.limit ?? 10;
-    const [sources, pages] = await Promise.all([
-      scope === 'derived-pages'
-        ? Promise.resolve([])
-        : this.repository.listSources(workspaceId, collectionId),
-      scope === 'raw-sources'
-        ? Promise.resolve([])
-        : this.repository.listPages(workspaceId, collectionId),
+    const [catalogSources, catalogPages, launchResources] = await Promise.all([
+      this.repository.listSources(workspaceId, collectionId),
+      this.repository.listPages(workspaceId, collectionId),
+      this.launchResources(actor),
     ]);
+    const sources =
+      scope === 'derived-pages'
+        ? []
+        : catalogSources.filter(
+            (source) => !launchResources || this.sourceAllowed(source, launchResources)
+          );
+    const pages =
+      scope === 'raw-sources'
+        ? []
+        : catalogPages.filter(
+            (page) => !launchResources || this.pageAllowed(page, catalogSources, launchResources)
+          );
     const results: KnowledgeSearchResult[] = [];
 
     for (const source of sources) {
@@ -587,8 +702,9 @@ export class KnowledgeCollectionService {
         id: source.id,
         kind: 'raw-source',
         backend: 'keyword',
+        classification: source.classification,
         title: source.title ?? source.sourceKey,
-        snippet: redactKnowledgeSnippet(knowledgeSnippet(searchable, terms)),
+        snippet: knowledgeResultSnippet(knowledgeSnippet(searchable, terms), source.classification),
         score,
         sourceId: source.id,
         citations: [{ sourceId: source.id }],
@@ -597,6 +713,7 @@ export class KnowledgeCollectionService {
 
     for (const page of pages) {
       const revision = page.current;
+      const classification = pageClassification(page, catalogSources);
       const searchable = [
         revision.title,
         page.stableKey,
@@ -611,8 +728,9 @@ export class KnowledgeCollectionService {
         id: page.id,
         kind: 'derived-page',
         backend: 'keyword',
+        classification,
         title: revision.title,
-        snippet: redactKnowledgeSnippet(knowledgeSnippet(searchable, terms)),
+        snippet: knowledgeResultSnippet(knowledgeSnippet(searchable, terms), classification),
         score,
         pageId: page.id,
         stableKey: page.stableKey,
@@ -626,6 +744,7 @@ export class KnowledgeCollectionService {
         const hits = await this.qmdSearch.search({
           workspaceId,
           collectionId,
+          scopeId: actor.launchContext?.launchManifestDigest ?? 'unrestricted',
           query: parsed.query,
           limit,
           pages,
@@ -639,9 +758,11 @@ export class KnowledgeCollectionService {
               id: page.id,
               kind: 'derived-page',
               backend: 'qmd',
+              classification: pageClassification(page, catalogSources),
               title: page.current.title,
-              snippet: redactKnowledgeSnippet(
-                hit.snippet || knowledgeSnippet(page.current.markdown, terms)
+              snippet: knowledgeResultSnippet(
+                hit.snippet || knowledgeSnippet(page.current.markdown, terms),
+                pageClassification(page, catalogSources)
               ),
               score: hit.score,
               pageId: page.id,
@@ -656,6 +777,7 @@ export class KnowledgeCollectionService {
           query: parsed.query,
           backend: 'qmd',
           degraded: false,
+          ...launchEvidence,
           results: rankKnowledgeResults([
             ...qmdResults,
             ...results.filter((result) => result.kind === 'raw-source'),
@@ -668,6 +790,7 @@ export class KnowledgeCollectionService {
           backend: 'keyword',
           degraded: true,
           reason,
+          ...launchEvidence,
           results: rankKnowledgeResults(results).slice(0, limit),
         });
       }
@@ -676,6 +799,7 @@ export class KnowledgeCollectionService {
       query: parsed.query,
       backend: 'keyword',
       degraded: requestedBackend !== 'keyword',
+      ...launchEvidence,
       ...(requestedBackend === 'keyword'
         ? {}
         : {
@@ -697,6 +821,7 @@ export class KnowledgeCollectionService {
     const { selectedIds, sourceIds } = await this.validateSearchEvidence(
       workspaceId,
       collectionId,
+      actor,
       parsed.evidence,
       parsed.selectedResultIds
     );
@@ -714,6 +839,7 @@ export class KnowledgeCollectionService {
         query: parsed.evidence.query,
         evidenceDigest: parsed.evidence.evidenceDigest,
         selectedResultIds: [...selectedIds].sort(),
+        ...(parsed.evidence.launchContext ? { launchContext: parsed.evidence.launchContext } : {}),
       }
     );
   }
@@ -735,11 +861,24 @@ export class KnowledgeCollectionService {
     const { selectedResults } = await this.validateSearchEvidence(
       workspaceId,
       collectionId,
+      actor,
       parsed.evidence,
       parsed.selectedResultIds
     );
+    const classification = selectedResults.reduce<KnowledgeClassification>(
+      (highest, result) =>
+        CLASSIFICATION_RANK[result.classification] > CLASSIFICATION_RANK[highest]
+          ? result.classification
+          : highest,
+      'public'
+    );
+    const classificationRequiresRedaction =
+      CLASSIFICATION_RANK[classification] >= CLASSIFICATION_RANK.confidential;
+    if (classificationRequiresRedaction && parsed.redaction === 'none') {
+      throw new ForbiddenError('Knowledge classification requires redacted export.');
+    }
     const redactionLevel =
-      collection.accessPolicy.exportPolicy === 'redacted-only'
+      collection.accessPolicy.exportPolicy === 'redacted-only' || classificationRequiresRedaction
         ? 'standard'
         : (parsed.redaction ?? 'standard');
     const citations = uniqueKnowledgeCitations(
@@ -773,7 +912,12 @@ export class KnowledgeCollectionService {
         knowledgeCollectionId: collectionId,
         knowledgeEvidenceDigest: parsed.evidence.evidenceDigest,
         knowledgeQuery: parsed.evidence.query,
+        knowledgeLaunchManifestDigest: parsed.evidence.launchContext?.launchManifestDigest ?? null,
         knowledgeExportPolicy: collection.accessPolicy.exportPolicy,
+        knowledgeClassification: classification,
+        knowledgeRequiresRedaction:
+          collection.accessPolicy.exportPolicy === 'redacted-only' ||
+          classificationRequiresRedaction,
         selectedResultCount: selectedResults.length,
         citationCount: citations.length,
       },
@@ -784,6 +928,7 @@ export class KnowledgeCollectionService {
   private async validateSearchEvidence(
     workspaceId: string,
     collectionId: string,
+    actor: KnowledgeCollectionActor,
     evidence: KnowledgeSearchResponse,
     selectedResultIds: string[]
   ): Promise<{
@@ -793,10 +938,18 @@ export class KnowledgeCollectionService {
   }> {
     const expectedEvidenceDigest = computeKnowledgeSearchEvidenceDigest(
       evidence.query,
-      evidence.results
+      evidence.results,
+      evidence.launchContext
     );
     if (evidence.evidenceDigest !== expectedEvidenceDigest) {
       throw new ConflictError('Knowledge search evidence digest is stale or invalid.');
+    }
+    if (
+      actor.role === 'agent' &&
+      (!actor.launchContext ||
+        JSON.stringify(evidence.launchContext) !== JSON.stringify(actor.launchContext))
+    ) {
+      throw new ConflictError('Knowledge search evidence belongs to another run launch manifest.');
     }
     const selectedIds = new Set(selectedResultIds);
     const selectedResults = evidence.results.filter((result) => selectedIds.has(result.id));
@@ -809,9 +962,15 @@ export class KnowledgeCollectionService {
     ]);
     const sourcesById = new Map(sources.map((source) => [source.id, source]));
     const pagesById = new Map(pages.map((page) => [page.id, page]));
+    const launchResources = await this.launchResources(actor);
     for (const result of selectedResults) {
       if (result.kind === 'raw-source') {
-        if (!result.sourceId || !sourcesById.has(result.sourceId)) {
+        const source = result.sourceId ? sourcesById.get(result.sourceId) : undefined;
+        if (
+          !source ||
+          result.classification !== source.classification ||
+          (launchResources && !this.sourceAllowed(source, launchResources))
+        ) {
           throw new ConflictError('Knowledge search source evidence is no longer valid.');
         }
         continue;
@@ -820,6 +979,8 @@ export class KnowledgeCollectionService {
       if (
         !page ||
         page.stableKey !== result.stableKey ||
+        result.classification !== pageClassification(page, sources) ||
+        (launchResources && !this.pageAllowed(page, sources, launchResources)) ||
         !sameKnowledgeCitations(
           result.citations,
           uniqueKnowledgeCitations(page.current.claims.flatMap((claim) => claim.citations))
@@ -1132,6 +1293,41 @@ export class KnowledgeCollectionService {
     return actor.role === 'admin' || collection.accessPolicy.readRoles.includes(actor.role);
   }
 
+  private async launchResources(actor: KnowledgeCollectionActor): Promise<Set<string> | null> {
+    if (actor.role !== 'agent') return null;
+    if (!actor.launchContext) {
+      throw new ForbiddenError('Agent knowledge access requires run launch evidence.');
+    }
+    return this.launchPolicy.resolve(actor.launchContext);
+  }
+
+  private resourceAllowed(resources: Set<string>, ...identities: string[]): boolean {
+    return resources.has('knowledge:*') || identities.some((identity) => resources.has(identity));
+  }
+
+  private sourceAllowed(source: KnowledgeSource, resources: Set<string>): boolean {
+    return this.resourceAllowed(resources, source.id, source.sourceKey, source.uri);
+  }
+
+  private pageAllowed(
+    page: KnowledgePage,
+    sources: KnowledgeSource[],
+    resources: Set<string>
+  ): boolean {
+    if (this.resourceAllowed(resources, page.id, page.stableKey)) return true;
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    const citedSourceIds = new Set(
+      page.current.claims.flatMap((claim) => claim.citations.map((citation) => citation.sourceId))
+    );
+    return (
+      citedSourceIds.size > 0 &&
+      [...citedSourceIds].every((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return Boolean(source && this.sourceAllowed(source, resources));
+      })
+    );
+  }
+
   private assertWorkspaceIdentifier(workspaceId: string): void {
     if (!/^[A-Za-z0-9._:-]{1,240}$/.test(workspaceId)) {
       throw new ConflictError('Knowledge collection workspace identifier is invalid.');
@@ -1281,6 +1477,29 @@ function redactKnowledgeSnippet(value: string): string {
     .slice(0, 500);
 }
 
+function knowledgeResultSnippet(value: string, classification: KnowledgeClassification): string {
+  return CLASSIFICATION_RANK[classification] >= CLASSIFICATION_RANK.confidential
+    ? `[${classification} knowledge content withheld from preview]`
+    : redactKnowledgeSnippet(value);
+}
+
+function pageClassification(
+  page: KnowledgePage,
+  sources: KnowledgeSource[]
+): KnowledgeClassification {
+  const classificationBySourceId = new Map(
+    sources.map((source) => [source.id, source.classification])
+  );
+  return page.current.claims
+    .flatMap((claim) => claim.citations)
+    .reduce<KnowledgeClassification>((highest, citation) => {
+      const classification = classificationBySourceId.get(citation.sourceId) ?? 'restricted';
+      return CLASSIFICATION_RANK[classification] > CLASSIFICATION_RANK[highest]
+        ? classification
+        : highest;
+    }, 'public');
+}
+
 function uniqueKnowledgeCitations(
   citations: KnowledgePageClaim['citations']
 ): KnowledgePageClaim['citations'] {
@@ -1312,6 +1531,7 @@ function renderKnowledgeCitedExport(
     '',
     `Type: ${result.kind}`,
     `Backend: ${result.backend}`,
+    `Classification: ${result.classification}`,
     `Score: ${result.score}`,
     '',
     redactKnowledgeSnippet(result.snippet),
@@ -1332,9 +1552,10 @@ function renderKnowledgeCitedExport(
 
 function computeKnowledgeSearchEvidenceDigest(
   query: string,
-  results: KnowledgeSearchResult[]
+  results: KnowledgeSearchResult[],
+  launchContext?: KnowledgeLaunchContext
 ): string {
-  return digestRunLaunchValue({ query, results });
+  return digestRunLaunchValue({ query, results, launchContext });
 }
 
 function finalizeKnowledgeSearchResponse(
@@ -1342,7 +1563,11 @@ function finalizeKnowledgeSearchResponse(
 ): KnowledgeSearchResponse {
   return {
     ...response,
-    evidenceDigest: computeKnowledgeSearchEvidenceDigest(response.query, response.results),
+    evidenceDigest: computeKnowledgeSearchEvidenceDigest(
+      response.query,
+      response.results,
+      response.launchContext
+    ),
   };
 }
 

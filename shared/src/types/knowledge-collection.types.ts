@@ -19,6 +19,12 @@ export type KnowledgeClassification = (typeof KNOWLEDGE_CLASSIFICATIONS)[number]
 export const KNOWLEDGE_ACCESS_ROLES = ['admin', 'read-only', 'agent'] as const;
 export type KnowledgeAccessRole = (typeof KNOWLEDGE_ACCESS_ROLES)[number];
 
+export interface KnowledgeLaunchContext {
+  taskId: string;
+  attemptId: string;
+  launchManifestDigest: string;
+}
+
 export interface KnowledgeCollectionAccessPolicy {
   readRoles: KnowledgeAccessRole[];
   writeRoles: KnowledgeAccessRole[];
@@ -288,6 +294,7 @@ export interface KnowledgeIngestionProposal {
     query: string;
     evidenceDigest: string;
     selectedResultIds: string[];
+    launchContext?: KnowledgeLaunchContext;
   };
   operationIdDigest: string;
   requestDigest: string;
@@ -348,6 +355,7 @@ export interface KnowledgeSearchResult {
   sourceId?: string;
   pageId?: string;
   stableKey?: string;
+  classification: KnowledgeClassification;
   citations: KnowledgeClaimCitation[];
 }
 
@@ -356,6 +364,7 @@ export interface KnowledgeSearchResponse {
   backend: 'qmd' | 'keyword';
   degraded: boolean;
   reason?: string;
+  launchContext?: KnowledgeLaunchContext;
   results: KnowledgeSearchResult[];
   evidenceDigest: string;
 }

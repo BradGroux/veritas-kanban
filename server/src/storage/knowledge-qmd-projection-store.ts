@@ -23,10 +23,11 @@ export class KnowledgeQmdProjectionStore {
   async sync(
     workspaceId: string,
     collectionId: string,
+    scopeId: string,
     pages: KnowledgePage[]
   ): Promise<KnowledgeQmdProjection> {
     const key = createHash('sha256')
-      .update(`${workspaceId}\0${collectionId}`)
+      .update(`${workspaceId}\0${collectionId}\0${scopeId}`)
       .digest('hex')
       .slice(0, 24);
     const directory = ensureWithinBase(this.baseDir, path.join(this.baseDir, 'collections', key));

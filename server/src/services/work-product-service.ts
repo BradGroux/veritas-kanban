@@ -391,11 +391,14 @@ export class WorkProductService {
     options: { format?: 'markdown' | 'json'; redacted?: boolean } = {}
   ): string {
     const knowledgeExportPolicy = product.metadata?.knowledgeExportPolicy;
-    if (knowledgeExportPolicy === 'redacted-only' && options.redacted === false) {
+    const knowledgeRequiresRedaction =
+      knowledgeExportPolicy === 'redacted-only' ||
+      product.metadata?.knowledgeRequiresRedaction === true;
+    if (knowledgeRequiresRedaction && options.redacted === false) {
       throw new ForbiddenError('Knowledge collection policy requires redacted export.');
     }
     const redacted =
-      knowledgeExportPolicy === 'redacted-only' ||
+      knowledgeRequiresRedaction ||
       (options.redacted ?? product.redaction?.exportDefault !== 'full');
     if (options.format === 'json') {
       const exported = redacted ? this.redactProduct(product) : product;

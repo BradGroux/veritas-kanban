@@ -4821,7 +4821,7 @@ Only administrators can apply or reverse. Send the exact current proposal digest
 
 Apply atomically updates every affected page, proposal state, and append-only activity entry. Reverse requires the applied digest, restores complete prior page records, removes proposal-created pages, and appends reversal activity. Exact retries return the committed state. Blocking contradictions, stale page digests, later conflicting edits, and unsafe graph changes return `409` without partial mutation.
 
-Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind and per-result backend and preserve source citations; derived results carry the citations from their material claims. `backend: "auto"` or `"qmd"` projects current derived pages into an isolated, non-default QMD collection and refreshes it only when page digests change. Raw source matches remain keyword-scored. If QMD is unavailable or the requested scope has no derived pages, the response uses `backend: "keyword"`, sets `degraded: true`, and includes a reason.
+Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind, backend, effective classification, and source citations; derived results carry the citations from their material claims. Confidential and restricted snippets are withheld. `backend: "auto"` or `"qmd"` projects current eligible derived pages into an isolated, non-default QMD collection scoped by workspace, collection, and launch-manifest digest, and refreshes it only when page digests change. Raw source matches remain keyword-scored. If QMD is unavailable or the requested scope has no derived pages, the response uses `backend: "keyword"`, sets `degraded: true`, and includes a reason.
 
 ```json
 {
@@ -4832,7 +4832,19 @@ Search one readable collection with a bounded query. `scope` can be `all`, `raw-
 }
 ```
 
-Every search response includes `evidenceDigest`, computed over the exact query and bounded result set. To retain selected results as durable knowledge, send the unchanged response, selected result IDs, and proposed pages to `/search/promotions`. Veritas rejects a changed digest, unknown selection, missing source revision, or a derived result whose current citations no longer match. A valid request creates the same dry-run ingestion proposal used by source ingestion; it does not mutate pages.
+Every search response includes `evidenceDigest`, computed over the exact query, bounded result set, and optional launch context. To retain selected results as durable knowledge, send the unchanged response, selected result IDs, and proposed pages to `/search/promotions`. Veritas rejects a changed digest, another run's launch binding, unknown selection, missing source revision, or a derived result whose current citations no longer match. A valid request creates the same dry-run ingestion proposal used by source ingestion; it does not mutate pages.
+
+Agent calls to source, page, proposal, activity, search, promotion, and export
+operations must send all three headers below. The server verifies them against
+the persisted attempt manifest and filters every read and mutation to the exact
+resources in `resources.shared`. Administrator and read-only calls do not
+require these headers.
+
+```http
+x-veritas-task-id: task_...
+x-veritas-attempt-id: attempt_...
+x-veritas-launch-manifest-digest: sha256:...
+```
 
 ```json
 {
