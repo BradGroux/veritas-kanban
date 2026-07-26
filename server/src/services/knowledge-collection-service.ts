@@ -12,6 +12,7 @@ import type {
   KnowledgeIngestionContradiction,
   KnowledgeIngestionContradictionInput,
   KnowledgeIngestionProposal,
+  KnowledgeIntegrityReport,
   KnowledgeLaunchContext,
   KnowledgePage,
   KnowledgePageClaim,
@@ -21,6 +22,7 @@ import type {
   KnowledgeSearchResult,
   KnowledgeSource,
   RegisterKnowledgeSourceInput,
+  RunKnowledgeIntegrityLintInput,
   SearchKnowledgeCollectionInput,
   TransitionKnowledgeIngestionProposalInput,
   UpsertKnowledgePageCandidate,
@@ -35,6 +37,7 @@ import {
   CreateKnowledgeQueryPromotionBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
+  RunKnowledgeIntegrityLintBodySchema,
   SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
   UpsertKnowledgePagesBodySchema,
@@ -56,6 +59,10 @@ import {
   KnowledgeQmdSearchService,
   type KnowledgeQmdSearchAdapter,
 } from './knowledge-qmd-search-service.js';
+import {
+  lintKnowledgeCollection,
+  type KnowledgeSourceIntegrityInput,
+} from './knowledge-integrity-service.js';
 import {
   KnowledgeLaunchPolicyService,
   type KnowledgeLaunchPolicyResolver,
@@ -652,6 +659,50 @@ export class KnowledgeCollectionService {
         return Boolean(source && this.sourceAllowed(source, launchResources));
       })
     );
+  }
+
+  async runIntegrityLint(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor,
+    input: RunKnowledgeIntegrityLintInput
+  ): Promise<KnowledgeIntegrityReport> {
+    const parsed = RunKnowledgeIntegrityLintBodySchema.parse(input);
+    const collection = await this.requireReadableCollection(workspaceId, collectionId, actor);
+    const [sources, pages] = await Promise.all([
+      this.listSources(workspaceId, collectionId, actor),
+      this.listPages(workspaceId, collectionId, actor),
+    ]);
+    const sourceInputs = await Promise.all(
+      sources.map(async (source): Promise<KnowledgeSourceIntegrityInput> => {
+        if (source.storage !== 'content-addressed-blob') {
+          return { source, content: null, integrityError: false };
+        }
+        try {
+          const content = await this.repository.readSourceContent(
+            workspaceId,
+            collectionId,
+            source.id
+          );
+          return {
+            source,
+            content: content?.toString('utf8') ?? null,
+            integrityError: content === null,
+          };
+        } catch {
+          return { source, content: null, integrityError: true };
+        }
+      })
+    );
+    return lintKnowledgeCollection({
+      collection,
+      pages,
+      sources: sourceInputs,
+      asOf: parsed.asOf ?? this.now().toISOString(),
+      freshnessRules: parsed.freshnessRules ?? [],
+      includeResearchCandidates: parsed.includeResearchCandidates ?? false,
+      ...(actor.launchContext ? { launchContext: actor.launchContext } : {}),
+    });
   }
 
   async searchCollection(

@@ -4711,6 +4711,7 @@ Knowledge collections establish a workspace-scoped, immutable source catalog for
 | `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata               |
 | `GET`  | `/api/knowledge/collections/:collectionId/pages`                                   | List derived pages                 |
 | `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                           | Read one cited derived page        |
+| `POST` | `/api/knowledge/collections/:collectionId/integrity/lint`                          | Run deterministic integrity lint   |
 | `POST` | `/api/knowledge/collections/:collectionId/search`                                  | Search raw and derived knowledge   |
 | `POST` | `/api/knowledge/collections/:collectionId/search/promotions`                       | Promote selected search results    |
 | `POST` | `/api/knowledge/collections/:collectionId/exports`                                 | Create a cited work product        |
@@ -4820,6 +4821,29 @@ Only administrators can apply or reverse. Send the exact current proposal digest
 ```
 
 Apply atomically updates every affected page, proposal state, and append-only activity entry. Reverse requires the applied digest, restores complete prior page records, removes proposal-created pages, and appends reversal activity. Exact retries return the committed state. Blocking contradictions, stale page digests, later conflicting edits, and unsafe graph changes return `409` without partial mutation.
+
+Run deterministic integrity lint with an optional fixed timestamp, freshness
+rules, and research-candidate discovery:
+
+```json
+{
+  "asOf": "2026-07-26T00:00:00.000Z",
+  "freshnessRules": [
+    { "target": "page-kind", "match": "decision", "maxAgeDays": 90 },
+    {
+      "target": "source-media-type",
+      "match": "text/markdown",
+      "maxAgeDays": 30
+    }
+  ],
+  "includeResearchCandidates": true
+}
+```
+
+The report counts inspected pages, sources, and claims and returns stable,
+severity-ranked findings for structural, provenance, freshness, and research
+gaps. It contains identifiers but never retained source text. Agent reports are
+limited to resources in the verified launch manifest.
 
 Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind, backend, effective classification, and source citations; derived results carry the citations from their material claims. Confidential and restricted snippets are withheld. `backend: "auto"` or `"qmd"` projects current eligible derived pages into an isolated, non-default QMD collection scoped by workspace, collection, and launch-manifest digest, and refreshes it only when page digests change. Raw source matches remain keyword-scored. If QMD is unavailable or the requested scope has no derived pages, the response uses `backend: "keyword"`, sets `degraded: true`, and includes a reason.
 

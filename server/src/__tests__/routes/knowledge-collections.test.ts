@@ -13,6 +13,7 @@ const knowledge = vi.hoisted(() => ({
   getSource: vi.fn(),
   listPages: vi.fn(),
   getPage: vi.fn(),
+  runIntegrityLint: vi.fn(),
   searchCollection: vi.fn(),
   createQueryPromotion: vi.fn(),
   createCitedExport: vi.fn(),
@@ -205,6 +206,36 @@ describe('knowledge collection routes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ backend: 'keyword', degraded: true });
     expect(knowledge.searchCollection).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      input
+    );
+  });
+
+  it('runs bounded integrity linting in the authenticated launch scope', async () => {
+    knowledge.runIntegrityLint.mockResolvedValue({
+      schemaVersion: 'knowledge-integrity-report/v1',
+      workspaceId: 'workspace-a',
+      collectionId: COLLECTION_ID,
+      asOf: '2026-07-26T00:00:00.000Z',
+      inspected: { pages: 2, sources: 1, claims: 2 },
+      findings: [],
+      findingCounts: { info: 0, warning: 0, error: 0 },
+      reportDigest: `sha256:${'a'.repeat(64)}`,
+    });
+    const input = {
+      asOf: '2026-07-26T00:00:00.000Z',
+      freshnessRules: [{ target: 'page-kind', match: 'concept', maxAgeDays: 30 }],
+      includeResearchCandidates: true,
+    };
+
+    const response = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/integrity/lint`)
+      .send(input);
+
+    expect(response.status).toBe(200);
+    expect(knowledge.runIntegrityLint).toHaveBeenCalledWith(
       'workspace-a',
       COLLECTION_ID,
       { id: 'operator-1', role: 'admin' },

@@ -733,6 +733,25 @@ export const SearchKnowledgeCollectionBodySchema = z
   })
   .strict();
 
+export const RunKnowledgeIntegrityLintBodySchema = z
+  .object({
+    asOf: z.string().datetime({ offset: true }).optional(),
+    freshnessRules: z
+      .array(
+        z
+          .object({
+            target: z.enum(['page-kind', 'source-media-type']),
+            match: z.string().trim().min(1).max(240),
+            maxAgeDays: z.number().int().min(1).max(36_500),
+          })
+          .strict()
+      )
+      .max(100)
+      .optional(),
+    includeResearchCandidates: z.boolean().optional(),
+  })
+  .strict();
+
 const KnowledgeSearchResultSchema = z
   .object({
     id: identifierSchema,
