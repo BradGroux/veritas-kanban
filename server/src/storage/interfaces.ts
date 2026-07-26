@@ -74,6 +74,15 @@ import type {
   ToolServerDiscovery,
   WorkspaceExecutionTrustDecision,
   WorkspaceExecutionTrustInventory,
+  RunOutputArtifactCleanupInput,
+  RunOutputArtifactCleanupResult,
+  RunOutputArtifactCreateResult,
+  RunOutputArtifactListQuery,
+  RunOutputArtifactLookup,
+  RunOutputArtifactMetadata,
+  RunOutputArtifactRange,
+  RunOutputArtifactRangeQuery,
+  RunOutputQuarantineReason,
 } from '@veritas-kanban/shared';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
@@ -381,6 +390,37 @@ export interface RunEventRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Governed Run Output Artifacts
+// ---------------------------------------------------------------------------
+
+export interface RunOutputArtifactRepository {
+  /** Atomically persist redacted content and its immutable causal metadata. */
+  create(
+    metadata: RunOutputArtifactMetadata,
+    content: Uint8Array | null
+  ): Promise<RunOutputArtifactCreateResult>;
+
+  /** Resolve metadata only when every workspace/run scope component matches. */
+  get(lookup: RunOutputArtifactLookup): Promise<RunOutputArtifactMetadata | null>;
+
+  /** Return a bounded content range without materializing the complete artifact. */
+  readRange(query: RunOutputArtifactRangeQuery): Promise<RunOutputArtifactRange | null>;
+
+  /** List bounded metadata records without returning artifact content. */
+  list(query: RunOutputArtifactListQuery): Promise<RunOutputArtifactMetadata[]>;
+
+  /** Expire eligible bodies while preserving metadata tombstones for event references. */
+  cleanup(input: RunOutputArtifactCleanupInput): Promise<RunOutputArtifactCleanupResult>;
+
+  /** Quarantine an unsafe body while retaining a scoped metadata tombstone. */
+  quarantine(
+    lookup: RunOutputArtifactLookup,
+    reason: RunOutputQuarantineReason,
+    now: string
+  ): Promise<RunOutputArtifactMetadata | null>;
+}
+
+// ---------------------------------------------------------------------------
 // Run Approval Repository
 // ---------------------------------------------------------------------------
 
@@ -543,6 +583,7 @@ export interface StorageProvider {
   readonly managedLists: ManagedListProvider;
   readonly telemetry: TelemetryRepository;
   readonly runEvents: RunEventRepository;
+  readonly runOutputArtifacts: RunOutputArtifactRepository;
   readonly runApprovals: RunApprovalRepository;
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
