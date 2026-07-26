@@ -1,12 +1,70 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist is the stable-release gate for Veritas Kanban 6.0.2. Command
-results, platform details, workflow links, limitations, and artifact hashes
-belong in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
+This checklist contains the active stable-release gate for Veritas Kanban
+6.1.0 and retains the completed 6.0.2 evidence below. Command results, platform
+details, workflow links, limitations, and artifact hashes belong in
+[v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
+Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
 
-## Source And Scope
+## 6.1.0 Active Release Gate
+
+- [x] Roadmap issues #855, #864, #865, #866, #867, #868, #871, #872, #873,
+      #876, and #879 are closed through merged pull requests.
+- [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.1.0.
+- [x] README, canonical agent instructions, API/MCP references, compatibility
+      policy, upgrade guide, release notes, and changelog agree on 6.1.0.
+- [x] The reviewed GitHub release body exists at `docs/releases/v6.1.0.md` and
+      passes the full-width release-format gate.
+- [x] Focused verification passed for each roadmap slice before merge.
+- [ ] The milestone workspace suite is green. The current candidate has 3,214
+      passing tests, 5 skipped tests, and three unrelated release-gate
+      failures: two stale `node:fs/promises` mocks omit `lstat`, and the
+      automation start-route test expects 200 but receives 404.
+- [ ] Required release-PR CI, production audit, lint, typecheck, build,
+      compatibility smoke, and packaging gates pass on the reviewed candidate.
+- [ ] The release PR merges, annotated `v6.1.0` tag and GitHub release publish,
+      and the desktop workflow uploads signed/notarized assets and updater
+      metadata.
+- [ ] Independent download, signature, Gatekeeper, stapling, readiness,
+      updater, GitHub release-body, and Homebrew cask verification pass.
+
+## Final Release Validation Commands
+
+Run once from the clean 6.1.0 release candidate after the three known milestone
+failures are cleared:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check:pnpm-settings
+pnpm audit --prod --audit-level=high
+pnpm lint
+pnpm lint:budget
+pnpm qa:mantine
+pnpm typecheck
+pnpm build
+pnpm test:unit
+pnpm test:e2e
+pnpm smoke:cli-mcp
+pnpm test:buzz:compatibility
+pnpm desktop:test
+pnpm desktop:build
+pnpm desktop:check:electron-artifacts
+pnpm desktop:smoke:mac:local
+pnpm desktop:package:mac:unsigned
+pnpm validate:release -- --version 6.1.0
+pnpm validate:release -- --version 6.1.0 --docker-build
+```
+
+## Distribution And Post-Publication
+
+Publish only after every active 6.1.0 gate above is checked. The canonical
+GitHub body is `docs/releases/v6.1.0.md`; post-publication validation must run
+`pnpm validate:release -- --version 6.1.0 --github --repo BradGroux/veritas-kanban`.
+Update the Homebrew cask only from the independently verified published ZIP
+checksum.
+
+## Historical 6.0.2 Source And Scope
 
 - [x] The Buzz integration epic and every required child are closed through
       merged, focused pull requests.
@@ -145,7 +203,7 @@ Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2.
 - [x] Bundle sizes remain within the recorded QA budgets or have an explicit
       release-risk acceptance.
 
-## Final Release Validation Commands
+## Historical 6.0.2 Final Release Validation Commands
 
 Run from the clean release-candidate worktree:
 
@@ -179,7 +237,7 @@ their test counts and exact fixture baselines separately. Run credential-gated
 provider smoke only when the exact binary, authentication, subscription, and
 quota are available.
 
-## Distribution And Post-Publication
+## Historical 6.0.2 Distribution And Post-Publication
 
 - [x] The ready release PR passes required CI and the milestone-wide workspace
       suite, then merges to main.
