@@ -1,13 +1,13 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist contains the active stable-release gate for Veritas Kanban
+This checklist contains the completed stable-release gate for Veritas Kanban
 6.1.0 and retains the completed 6.0.2 evidence below. Command results, platform
 details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
 Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
 
-## 6.1.0 Active Release Gate
+## 6.1.0 Completed Release Gate
 
 - [x] Roadmap issues #855, #864, #865, #866, #867, #868, #871, #872, #873,
       #876, and #879 are closed through merged pull requests.
@@ -21,12 +21,12 @@ Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
       successfully across every workspace on the consolidated candidate;
       server reported 3,234 passing and 5 skipped tests, web reported 469
       passing tests, and desktop reported 67 passing tests.
-- [ ] Required release-PR CI, production audit, lint, typecheck, build,
+- [x] Required release-PR CI, production audit, lint, typecheck, build,
       compatibility smoke, and packaging gates pass on the reviewed candidate.
-- [ ] The release PR merges, annotated `v6.1.0` tag and GitHub release publish,
+- [x] The release PR merges, annotated `v6.1.0` tag and GitHub release publish,
       and the desktop workflow uploads signed/notarized assets and updater
       metadata.
-- [ ] Independent download, signature, Gatekeeper, stapling, readiness,
+- [x] Independent download, signature, Gatekeeper, stapling, readiness,
       updater, GitHub release-body, and Homebrew cask verification pass.
 
 ## Final Release Validation Commands
