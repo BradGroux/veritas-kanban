@@ -51,6 +51,7 @@ export const agentTaskAccess = routeAccess('agent:read', 'task:write', [
   },
 ]);
 export const agentStatusAccess = routeAccess('agent:read', 'telemetry:write');
+export const runTerminalAccess = routeAccess('agent:read', 'agent:write');
 export const admissionAccess = routeAccess('agent:read', 'admin:manage');
 export const goalAccess = routeAccess('agent:read', 'admin:manage');
 export const reportAccess = routeAccess('report:read', 'report:read');

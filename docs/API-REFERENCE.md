@@ -1,7 +1,7 @@
 # Veritas Kanban — API Reference
 
 **Version**: 6.0.2
-**Last Updated**: 2026-07-24
+**Last Updated**: 2026-07-25
 **Base URL**: `http://localhost:3001/api`
 **Canonical prefix**: `/api/v1` (alias: `/api`)
 
@@ -30,40 +30,41 @@
 17. [WebSocket](#websocket)
 18. [Shared Run Sessions](#shared-run-sessions)
 19. [Run Approvals](#run-approvals)
-20. [Task Verification](#task-verification)
-21. [Task Comments](#task-comments)
-22. [Task Subtasks](#task-subtasks)
-23. [Task Deliverables](#task-deliverables)
-24. [Recurring Work Scheduler](#recurring-work-scheduler)
-25. [Queue Intake Monitors](#queue-intake-monitors)
-26. [Task Archive](#task-archive)
-27. [Attachments](#attachments)
-28. [Agent Permissions](#agent-permissions)
-29. [Workspace Execution Trust](#workspace-execution-trust)
-30. [Agent Routing](#agent-routing)
-31. [Sandbox Policies](#sandbox-policies)
-32. [Shared Resources](#shared-resources)
-33. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
-34. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
-35. [Doc Freshness](#doc-freshness)
-36. [Cost Prediction](#cost-prediction)
-37. [Error Learning](#error-learning)
-38. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
-39. [External Tracker Introspection](#external-tracker-introspection)
-40. [Run-scoped Tool Control Plane](#run-scoped-tool-control-plane)
-41. [Tool Policies](#tool-policies)
-42. [Watcher Continuation Policies](#watcher-continuation-policies)
-43. [Traces](#traces)
-44. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
-45. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
-46. [Audit](#audit)
-47. [Maintenance Center](#maintenance-center-apiv1maintenance)
-48. [Common Workflows](#common-workflows)
-49. [Versioning & Deprecation](#versioning--deprecation)
-50. [Rate Limits](#rate-limits)
-51. [Additional Endpoint Groups](#additional-endpoint-groups)
-52. [Execution Admission](#execution-admission)
-53. [Durable Goals](#durable-goals)
+20. [Run Terminal Control](#run-terminal-control)
+21. [Task Verification](#task-verification)
+22. [Task Comments](#task-comments)
+23. [Task Subtasks](#task-subtasks)
+24. [Task Deliverables](#task-deliverables)
+25. [Recurring Work Scheduler](#recurring-work-scheduler)
+26. [Queue Intake Monitors](#queue-intake-monitors)
+27. [Task Archive](#task-archive)
+28. [Attachments](#attachments)
+29. [Agent Permissions](#agent-permissions)
+30. [Workspace Execution Trust](#workspace-execution-trust)
+31. [Agent Routing](#agent-routing)
+32. [Sandbox Policies](#sandbox-policies)
+33. [Shared Resources](#shared-resources)
+34. [Skill Capability Profiles](#skill-capability-profiles-apiskillscapabilities)
+35. [Skill Security Scanner](#skill-security-scanner-apiskillssecurity)
+36. [Doc Freshness](#doc-freshness)
+37. [Cost Prediction](#cost-prediction)
+38. [Error Learning](#error-learning)
+39. [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
+40. [External Tracker Introspection](#external-tracker-introspection)
+41. [Run-scoped Tool Control Plane](#run-scoped-tool-control-plane)
+42. [Tool Policies](#tool-policies)
+43. [Watcher Continuation Policies](#watcher-continuation-policies)
+44. [Traces](#traces)
+45. [Ceremony Requirements](#ceremony-requirements-apiceremonies)
+46. [Governance Decision Traces](#governance-decision-traces-apigovernancetraces)
+47. [Audit](#audit)
+48. [Maintenance Center](#maintenance-center-apiv1maintenance)
+49. [Common Workflows](#common-workflows)
+50. [Versioning & Deprecation](#versioning--deprecation)
+51. [Rate Limits](#rate-limits)
+52. [Additional Endpoint Groups](#additional-endpoint-groups)
+53. [Execution Admission](#execution-admission)
+54. [Durable Goals](#durable-goals)
 
 ---
 
@@ -1618,6 +1619,29 @@ Subscribers to the `run-sessions` WebSocket channel receive
   "timestamp": "2026-07-23T12:01:00.000Z"
 }
 ```
+
+---
+
+## Run Terminal Control
+
+Provider-neutral supervision for command handles already owned by an active run attempt. Mounted at `/api/v1/run-terminals` with the standard `/api/run-terminals` compatibility alias.
+
+| Method | Path                                                                       | Description                                      | Permissions   |
+| ------ | -------------------------------------------------------------------------- | ------------------------------------------------ | ------------- |
+| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId`                            | List handles for the exact active attempt.       | `agent:read`  |
+| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId`          | Read one scoped handle.                          | `agent:read`  |
+| `GET`  | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/output`   | Read bounded output after a cursor.               | `agent:read`  |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/wait`     | Wait up to 300 seconds for one handle.            | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/wait-any`                   | Wait for any of up to 64 unique handles.          | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/wait-all`                   | Wait for all of up to 64 unique handles.          | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/detach`   | Detach a foreground handle without disowning it.  | `agent:write` |
+| `POST` | `/api/v1/run-terminals/runs/:taskId/:attemptId/handles/:handleId/terminate` | Gracefully terminate, then escalate if necessary. | `agent:write` |
+
+Output accepts `afterCursor` and `limit` query parameters. Single waits accept `{"timeoutMs": 25000}`. Multi-handle waits accept `{"handleIds": ["terminal_1", "terminal_2"], "timeoutMs": 25000}`.
+
+Every route resolves the current active attempt before checking the handle's workspace, task, and attempt identity. Stale attempts and cross-scope handles return `404`. Output and wait limits return `400` when invalid.
+
+This control surface cannot start commands. Externally initiated execution remains fail-closed until exact shell approval and the run's filesystem and network policy are applied to the terminal child.
 
 ---
 

@@ -140,4 +140,15 @@ describe('shared API permission metadata', () => {
       getApiPermissionRequirement('/api/tool-servers/call', { method: 'POST' }).permissions
     ).toEqual(['agent:write']);
   });
+
+  it('separates run-terminal observation from control', () => {
+    expect(
+      getApiPermissionRequirement('/api/v1/run-terminals/runs/task_1/attempt_1').permissions
+    ).toEqual(['agent:read']);
+    expect(
+      getApiPermissionRequirement('/api/run-terminals/runs/task_1/attempt_1/wait-any', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['agent:write']);
+  });
 });
