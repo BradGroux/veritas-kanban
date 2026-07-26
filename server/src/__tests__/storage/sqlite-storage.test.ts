@@ -11,6 +11,7 @@ import {
   SqliteActivityRepository,
   SqliteStatusHistoryRepository,
   SqliteTelemetryRepository,
+  SqliteDurableGoalRepository,
   type FileStorageOptions,
 } from '../../storage/index.js';
 
@@ -70,6 +71,7 @@ describe('SqliteStorageProvider', () => {
     expect(provider.activities).toBeInstanceOf(SqliteActivityRepository);
     expect(provider.statusHistory).toBeInstanceOf(SqliteStatusHistoryRepository);
     expect(provider.telemetry).toBeInstanceOf(SqliteTelemetryRepository);
+    expect(provider.durableGoals).toBeInstanceOf(SqliteDurableGoalRepository);
 
     await provider.shutdown();
     expect(provider.getDatabase().isOpen()).toBe(false);

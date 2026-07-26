@@ -27,6 +27,8 @@ export type {
   RunEventRepositoryAppendInput,
   RunApprovalRepository,
   PhaseTransitionRepository,
+  RunSupervisorRepository,
+  DurableGoalRepository,
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
   SetupContextRepository,
@@ -63,6 +65,7 @@ export {
   InMemoryPhaseTransitionRepository,
   getPhaseTransitionsPath,
 } from './phase-transition-repository.js';
+export { FileDurableGoalRepository, getDurableGoalsPath } from './durable-goal-repository.js';
 export {
   FileAdmissionReservationRepository,
   getAdmissionReservationsPath,
@@ -95,6 +98,7 @@ export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
 export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
 export { SqliteRunApprovalRepository } from './sqlite/run-approval-repository.js';
 export { SqlitePhaseTransitionRepository } from './sqlite/phase-transition-repository.js';
+export { SqliteDurableGoalRepository } from './sqlite/durable-goal-repository.js';
 export { SqliteAdmissionReservationRepository } from './sqlite/admission-reservation-repository.js';
 export {
   FileToolControlPlaneRepository,

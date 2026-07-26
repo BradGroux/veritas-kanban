@@ -44,6 +44,10 @@ import type {
   RunSupervisorCompareAndSetResult,
   RunSupervisorListQuery,
   RunSupervisorRecord,
+  DurableGoalCompareAndSetInput,
+  DurableGoalCompareAndSetResult,
+  DurableGoalListQuery,
+  DurableGoalRecord,
   AdmissionReservation,
   AdmissionReservationClaimInput,
   AdmissionReservationClaimResult,
@@ -436,6 +440,24 @@ export interface RunSupervisorRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Durable Goal Repository
+// ---------------------------------------------------------------------------
+
+export interface DurableGoalRepository {
+  /** Persist one newly allocated durable goal at revision 1. */
+  create(record: DurableGoalRecord): Promise<DurableGoalRecord>;
+
+  /** Return one durable goal, or null when it does not exist. */
+  get(id: string): Promise<DurableGoalRecord | null>;
+
+  /** Query materialized durable goals. */
+  list(query: DurableGoalListQuery): Promise<DurableGoalRecord[]>;
+
+  /** Replace one goal with a revision-guarded compare-and-set operation. */
+  compareAndSet(input: DurableGoalCompareAndSetInput): Promise<DurableGoalCompareAndSetResult>;
+}
+
+// ---------------------------------------------------------------------------
 // Durable Admission Reservation Repository
 // ---------------------------------------------------------------------------
 
@@ -494,6 +516,7 @@ export interface StorageProvider {
   readonly runApprovals: RunApprovalRepository;
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
+  readonly durableGoals: DurableGoalRepository;
   readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
   readonly setupContext?: SetupContextRepository;

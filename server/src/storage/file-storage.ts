@@ -43,6 +43,7 @@ import type {
   RunApprovalRepository,
   PhaseTransitionRepository,
   RunSupervisorRepository,
+  DurableGoalRepository,
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
 } from './interfaces.js';
@@ -72,6 +73,7 @@ import { FileRunEventRepository } from './run-event-repository.js';
 import { FileRunApprovalRepository } from './run-approval-repository.js';
 import { FilePhaseTransitionRepository } from './phase-transition-repository.js';
 import { FileRunSupervisorRepository } from './run-supervisor-repository.js';
+import { FileDurableGoalRepository } from './durable-goal-repository.js';
 import { FileAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
 
@@ -494,6 +496,7 @@ export interface FileStorageOptions {
   runApprovalsPath?: string;
   phaseTransitionsPath?: string;
   runSupervisorsPath?: string;
+  durableGoalsPath?: string;
   admissionReservationsPath?: string;
   toolControlPlanePath?: string;
 }
@@ -511,6 +514,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly runApprovals: RunApprovalRepository;
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;
+  readonly durableGoals: DurableGoalRepository;
   readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
 
@@ -566,6 +570,7 @@ export class FileStorageProvider implements StorageProvider {
     this.runApprovals = new FileRunApprovalRepository(options.runApprovalsPath);
     this.phaseTransitions = new FilePhaseTransitionRepository(options.phaseTransitionsPath);
     this.runSupervisors = new FileRunSupervisorRepository(options.runSupervisorsPath);
+    this.durableGoals = new FileDurableGoalRepository(options.durableGoalsPath);
     this.admissionReservations = new FileAdmissionReservationRepository(
       options.admissionReservationsPath
     );
