@@ -246,4 +246,66 @@ describe('FileWorkspaceCheckpointRepository', () => {
 
     await expect(repository.readBlob(digest)).rejects.toThrow('blob is not a bounded regular file');
   });
+
+  it('inspects current affected paths without persisting another checkpoint', async () => {
+    const { worktreePath, storePath } = await fixture();
+    await fs.writeFile(path.join(worktreePath, 'large.txt'), 'x'.repeat(64));
+    const repository = new FileWorkspaceCheckpointRepository({
+      baseDir: storePath,
+      policy: {
+        maxFiles: 100,
+        maxBytes: 1_024,
+        maxFileBytes: 32,
+        maxExclusions: 100,
+      },
+      now: () => new Date('2026-07-26T06:00:00.000Z'),
+    });
+    const request = {
+      workspaceId: 'workspace-inspect',
+      taskId: 'task-inspect',
+      attemptId: 'attempt-inspect',
+      operationId: 'capture-inspect',
+      boundary: 'manual' as const,
+      worktreePath,
+    };
+    const checkpoint = await repository.capture(request);
+
+    const current = await repository.inspectCurrent({
+      worktreePath,
+      paths: ['tracked.txt', 'deleted.txt', 'linked.txt', 'large.txt'],
+      maxFileBytes: 32,
+      maxBytes: 1_024,
+    });
+
+    expect(current).toMatchObject({
+      schemaVersion: 'workspace-checkpoint-current-state/v1',
+      worktreeRootDigest: checkpoint.worktreeRootDigest,
+      git: {
+        head: checkpoint.git.head,
+        branch: checkpoint.git.branch,
+        indexDigest: checkpoint.git.indexDigest,
+        statusDigest: checkpoint.git.statusDigest,
+      },
+      digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+    expect(current.files).toEqual([
+      { path: 'deleted.txt', state: 'absent' },
+      { path: 'large.txt', state: 'too-large', size: 64 },
+      { path: 'linked.txt', state: 'symlink', size: expect.any(Number) },
+      expect.objectContaining({
+        path: 'tracked.txt',
+        state: 'present',
+        contentDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      }),
+    ]);
+    await expect(repository.list(request)).resolves.toEqual([checkpoint]);
+    await expect(
+      repository.inspectCurrent({
+        worktreePath,
+        paths: ['../outside.txt'],
+        maxFileBytes: 32,
+        maxBytes: 1_024,
+      })
+    ).rejects.toThrow('inspection path is invalid');
+  });
 });

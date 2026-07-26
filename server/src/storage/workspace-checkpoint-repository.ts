@@ -7,6 +7,8 @@ import { nanoid } from 'nanoid';
 import type {
   WorkspaceCheckpoint,
   WorkspaceCheckpointBoundary,
+  WorkspaceCheckpointCurrentFile,
+  WorkspaceCheckpointCurrentState,
   WorkspaceCheckpointExclusion,
   WorkspaceCheckpointFile,
   WorkspaceCheckpointFileSource,
@@ -72,11 +74,21 @@ export interface WorkspaceCheckpointListQuery {
   limit?: number;
 }
 
+export interface WorkspaceCheckpointCurrentInspectionInput {
+  worktreePath: string;
+  paths: string[];
+  maxFileBytes: number;
+  maxBytes: number;
+}
+
 export interface WorkspaceCheckpointRepository {
   capture(input: WorkspaceCheckpointCaptureInput): Promise<WorkspaceCheckpoint>;
   get(lookup: WorkspaceCheckpointLookup): Promise<WorkspaceCheckpoint | null>;
   list(query: WorkspaceCheckpointListQuery): Promise<WorkspaceCheckpoint[]>;
   readBlob(digest: string): Promise<Buffer>;
+  inspectCurrent(
+    input: WorkspaceCheckpointCurrentInspectionInput
+  ): Promise<WorkspaceCheckpointCurrentState>;
 }
 
 export interface WorkspaceCheckpointCommandResult {
@@ -436,6 +448,75 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     return content;
   }
 
+  async inspectCurrent(
+    input: WorkspaceCheckpointCurrentInspectionInput
+  ): Promise<WorkspaceCheckpointCurrentState> {
+    if (
+      !Number.isInteger(input.maxFileBytes) ||
+      input.maxFileBytes < 1 ||
+      input.maxFileBytes > MAX_POLICY.maxFileBytes ||
+      !Number.isInteger(input.maxBytes) ||
+      input.maxBytes < input.maxFileBytes ||
+      input.maxBytes > MAX_POLICY.maxBytes
+    ) {
+      throw new Error('Workspace checkpoint current inspection limits are invalid.');
+    }
+    const paths = [...new Set(input.paths)].sort((left, right) => left.localeCompare(right));
+    if (paths.length > MAX_POLICY.maxFiles) {
+      throw new Error('Workspace checkpoint current inspection exceeds its file-count bound.');
+    }
+    for (const candidate of paths) validateCurrentInspectionPath(candidate);
+
+    const canonicalRoot = await realpath(path.resolve(input.worktreePath));
+    const gitRoot = (await this.git(canonicalRoot, ['rev-parse', '--show-toplevel']))
+      .toString('utf8')
+      .trim();
+    const canonicalGitRoot = await realpath(gitRoot);
+    if (canonicalGitRoot !== canonicalRoot) {
+      throw new ConflictError('Workspace checkpoint inspection root is not the exact Git root.');
+    }
+    const before = await this.captureGitState(canonicalRoot);
+    const files: WorkspaceCheckpointCurrentFile[] = [];
+    let inspectedBytes = 0;
+    for (const candidate of paths) {
+      const file = await this.inspectCurrentFile(
+        canonicalRoot,
+        candidate,
+        input.maxFileBytes,
+        Math.max(0, input.maxBytes - inspectedBytes)
+      );
+      files.push(file);
+      if (file.state === 'present') inspectedBytes += file.size ?? 0;
+    }
+    const after = await this.captureGitState(canonicalRoot);
+    if (
+      before.head !== after.head ||
+      before.branch !== after.branch ||
+      before.indexDigest !== after.indexDigest ||
+      before.statusDigest !== after.statusDigest
+    ) {
+      throw new ConflictError('Workspace Git state changed during checkpoint inspection.');
+    }
+    const inspectedAt = this.now().toISOString();
+    const payload = {
+      schemaVersion: 'workspace-checkpoint-current-state/v1' as const,
+      worktreeRootDigest: digestRunLaunchValue(canonicalRoot),
+      git: {
+        head: before.head,
+        branch: before.branch,
+        indexDigest: before.indexDigest,
+        statusDigest: before.statusDigest,
+        dirty: before.status.byteLength > 0,
+      },
+      files,
+      inspectedAt,
+    };
+    return {
+      ...payload,
+      digest: digestRunLaunchValue(payload),
+    };
+  }
+
   private async captureGitState(worktreeRoot: string): Promise<GitCaptureState> {
     const [headResult, branchResult, indexPathResult, status, tracked, untracked] =
       await Promise.all([
@@ -467,6 +548,79 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
       tracked: parseNullList(tracked),
       untracked: parseNullList(untracked),
     };
+  }
+
+  private async inspectCurrentFile(
+    worktreeRoot: string,
+    relativePath: string,
+    maxFileBytes: number,
+    remainingBytes: number
+  ): Promise<WorkspaceCheckpointCurrentFile> {
+    const resolved = ensureWithinBase(worktreeRoot, path.resolve(worktreeRoot, relativePath));
+    let first: Awaited<ReturnType<typeof lstat>>;
+    try {
+      first = await lstat(resolved);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { path: relativePath, state: 'absent' };
+      }
+      return { path: relativePath, state: 'unreadable' };
+    }
+    if (first.isSymbolicLink()) {
+      return { path: relativePath, state: 'symlink', size: first.size };
+    }
+    if (!first.isFile()) {
+      return { path: relativePath, state: 'unsupported', size: first.size };
+    }
+    if (first.size > maxFileBytes || first.size > remainingBytes) {
+      return { path: relativePath, state: 'too-large', size: first.size };
+    }
+
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      handle = await open(resolved, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      const opened = await handle.stat();
+      if (
+        !opened.isFile() ||
+        first.dev !== opened.dev ||
+        first.ino !== opened.ino ||
+        first.size !== opened.size ||
+        first.mtimeMs !== opened.mtimeMs
+      ) {
+        throw new ConflictError('Workspace file changed during checkpoint inspection.', {
+          path: relativePath,
+        });
+      }
+      const content = await handle.readFile();
+      const second = await handle.stat();
+      if (
+        !second.isFile() ||
+        opened.dev !== second.dev ||
+        opened.ino !== second.ino ||
+        opened.size !== second.size ||
+        opened.mtimeMs !== second.mtimeMs ||
+        content.byteLength !== second.size
+      ) {
+        throw new ConflictError('Workspace file changed during checkpoint inspection.', {
+          path: relativePath,
+        });
+      }
+      return {
+        path: relativePath,
+        state: 'present',
+        mode: second.mode & 0o7777,
+        size: content.byteLength,
+        contentDigest: sha256(content),
+      };
+    } catch (error) {
+      if (error instanceof ConflictError) throw error;
+      if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
+        return { path: relativePath, state: 'symlink', size: first.size };
+      }
+      return { path: relativePath, state: 'unreadable', size: first.size };
+    } finally {
+      await handle?.close();
+    }
   }
 
   private async git(worktreeRoot: string, args: string[], allowFailure = false): Promise<Buffer> {
@@ -680,6 +834,20 @@ function validateScope(
   validateIdentifier(scope.workspaceId, 'workspaceId');
   validateIdentifier(scope.taskId, 'taskId');
   validateIdentifier(scope.attemptId, 'attemptId');
+}
+
+function validateCurrentInspectionPath(value: string): void {
+  if (
+    !value ||
+    value.length > 4_096 ||
+    value.includes('\0') ||
+    value.includes('\\') ||
+    value.startsWith('/') ||
+    /^[A-Za-z]:/.test(value) ||
+    value.split('/').some((segment) => segment === '..' || segment === '')
+  ) {
+    throw new Error('Workspace checkpoint inspection path is invalid.');
+  }
 }
 
 function validateIdentifier(value: string, label: string): void {

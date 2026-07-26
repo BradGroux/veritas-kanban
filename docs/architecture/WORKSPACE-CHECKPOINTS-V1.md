@@ -37,7 +37,9 @@ Direct parent-to-child checkpoints can be compared without touching the worktree
 
 Provider event mappers normalize bounded relative file paths and tool names into the causal journal. The attribution service considers only evidence between the two checkpoint-created events. Explicit provider file events and known path-bearing write tools are agent evidence; operator file events are operator evidence; system file events are external evidence. Every changed hunk inherits the conservative file-window attribution. Missing or mixed evidence is `unknown`, and missing checkpoint event boundaries mark the evidence window incomplete.
 
-This foundation does not yet claim exact overlapping-hunk attribution, rewind conflict analysis, restore, or retention cleanup. Those layers must consume the immutable repository and remain preview-first. Rewind cannot write until current HEAD, index, file hashes, worktree ownership, external changes, and approval evidence all match the checkpoint descendant it intends to replace.
+Rewind preview revalidates the durable worktree lease before and after a no-follow current-state inspection. It compares the current worktree root, HEAD, branch, index, status, affected file hashes, modes, exclusions, and attribution against the expected descendant checkpoint. The result lists reverse file actions, Git and conversation-cursor changes, estimated discarded bytes, and explicit blockers. Automatic rewind is safe only when every current-state and ownership check matches and every changed file is exclusively supported by high-confidence agent evidence.
+
+This foundation does not yet claim exact overlapping-hunk attribution, selective conflict resolution, restore, recoverable transaction execution, or retention cleanup. Those layers must consume the immutable repository and remain preview-first. A later rewind write must revalidate the same evidence plus exact approval immediately before mutation.
 
 ## Code
 
@@ -47,4 +49,5 @@ This foundation does not yet claim exact overlapping-hunk attribution, rewind co
 - Ownership and boundary coordination: `server/src/services/workspace-checkpoint-service.ts`
 - Read-only comparison: `server/src/services/workspace-checkpoint-diff-service.ts`
 - Conservative causal attribution: `server/src/services/workspace-checkpoint-attribution-service.ts`
-- Focused verification: `server/src/__tests__/workspace-checkpoint-repository.test.ts`, `server/src/__tests__/workspace-checkpoint-diff-service.test.ts`, and `server/src/__tests__/workspace-checkpoint-attribution-service.test.ts`
+- Conflict-aware rewind preview: `server/src/services/workspace-checkpoint-rewind-preview-service.ts`
+- Focused verification: `server/src/__tests__/workspace-checkpoint-repository.test.ts`, `server/src/__tests__/workspace-checkpoint-diff-service.test.ts`, `server/src/__tests__/workspace-checkpoint-attribution-service.test.ts`, and `server/src/__tests__/workspace-checkpoint-rewind-preview-service.test.ts`
