@@ -419,11 +419,13 @@ function toFinding(
   };
   return {
     schemaVersion: PROGRESS_WATCHDOG_FINDING_SCHEMA_VERSION,
-    id: `watchdog_${hashValue({
-      detector: draft.detector,
-      policyVersion: policy.version,
-      evidenceEventIds,
-    }).slice(0, 32)}`,
+    id: watchdogFindingId(
+      hashValue({
+        detector: draft.detector,
+        policyVersion: policy.version,
+        evidenceEventIds,
+      })
+    ),
     taskId: firstEvent.taskId,
     attemptId: firstEvent.attemptId,
     turnId: draft.evidence.at(-1)?.turnId ?? usage.turnId,
@@ -540,6 +542,10 @@ function eventSucceeded(event: RunEventEnvelope): boolean {
 
 function hashValue(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value)).digest('hex');
+}
+
+function watchdogFindingId(hash: string): string {
+  return `watchdog_${hash.slice(0, 32).match(/.{8}/g)?.join('-')}`;
 }
 
 function canonicalJson(value: unknown): string {

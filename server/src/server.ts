@@ -84,8 +84,11 @@ import { getRunEventJournalService } from './services/run-event-journal-service.
 import { getToolControlPlaneService } from './services/tool-control-plane-service.js';
 import { runToolBridgeRoutes } from './routes/run-tool-bridge.js';
 import { getReflectionExtractionWorkerService } from './services/reflection-extraction-worker-service.js';
+import { ProgressWatchdogCoordinatorService } from './services/progress-watchdog-coordinator-service.js';
+import { createAgentProgressWatchdogActionExecutor } from './services/progress-watchdog-action-executor.js';
 
 const log = createLogger('server');
+let progressWatchdogCoordinator: ProgressWatchdogCoordinatorService | undefined;
 
 // ============================================
 // Process Error Handlers (register early)
@@ -590,6 +593,12 @@ async function initializeServices(): Promise<void> {
     storageInitialized = true;
     log.info('SQLite storage initialized');
   }
+  progressWatchdogCoordinator = new ProgressWatchdogCoordinatorService({
+    journal: getRunEventJournalService(),
+    executor: createAgentProgressWatchdogActionExecutor(agentService),
+  });
+  progressWatchdogCoordinator.start();
+  log.info('Progress watchdog coordinator initialized');
   await getCommunicationAdapterService().start();
   log.info('Communication adapter workers initialized');
   getReflectionExtractionWorkerService().start();
@@ -1237,6 +1246,9 @@ async function gracefulShutdown(signal: string) {
 
     stopScheduledDeliverablesRunner();
     log.info('Scheduled deliverables runner stopped');
+    progressWatchdogCoordinator?.stop();
+    progressWatchdogCoordinator = undefined;
+    log.info('Progress watchdog coordinator stopped');
     getReflectionExtractionWorkerService().stop();
     log.info('Reflection extraction worker stopped');
 

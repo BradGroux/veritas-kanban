@@ -90,6 +90,8 @@ describe('RunEventJournalService', () => {
           authorization: 'Bearer abcdefghijklmnop',
           summary: 'failed with Bearer abcdefghijklmnop',
           nested: { api_key: 'sk-secret-secret-secret' },
+          evidenceDigest: `sha256:${'a'.repeat(64)}`,
+          findingId: 'watchdog_aaaaaaaa-aaaaaaaa-aaaaaaaa-aaaaaaaa',
           inputTokens: 123,
           outputTokens: 45,
         },
@@ -100,6 +102,8 @@ describe('RunEventJournalService', () => {
     expect(result.event.redaction.fields).toContain('$.authorization');
     expect(JSON.stringify(result.event.payload)).not.toContain('abcdefghijklmnop');
     expect(JSON.stringify(result.event.payload)).not.toContain('sk-secret');
+    expect(result.event.payload.evidenceDigest).toBe(`sha256:${'a'.repeat(64)}`);
+    expect(result.event.payload.findingId).toBe('watchdog_aaaaaaaa-aaaaaaaa-aaaaaaaa-aaaaaaaa');
     expect(result.event.payload.inputTokens).toBe(123);
     expect(result.event.payload.outputTokens).toBe(45);
 

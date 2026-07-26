@@ -25,7 +25,11 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
-import { hasPermission, type AuthenticatedRequest } from '../middleware/auth.js';
+import {
+  authorizePermission,
+  hasPermission,
+  type AuthenticatedRequest,
+} from '../middleware/auth.js';
 import { ProviderRuntimeCapabilityIdSchema } from '../schemas/provider-runtime-manifest-schemas.js';
 import { TaskCommitPolicySchema } from '../schemas/task-envelope-schemas.js';
 import { RunEventQuerySchema } from '../schemas/run-event-schemas.js';
@@ -43,9 +47,12 @@ import {
   type PhaseTransitionActorContext,
 } from '../services/phase-transition-service.js';
 import { getRunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
+import { ProgressWatchdogOverrideInputSchema } from '../schemas/progress-watchdog-schemas.js';
+import { ProgressWatchdogControlService } from '../services/progress-watchdog-control-service.js';
 
 const router: RouterType = Router();
 const workspaceExecutionTrust = getWorkspaceExecutionTrustService();
+let progressWatchdogControl: ProgressWatchdogControlService | undefined;
 
 // Validation schemas
 const AgentTypeSchema = z.string().min(1).max(50);
@@ -470,6 +477,44 @@ router.post(
   })
 );
 
+// GET /api/agents/:taskId/watchdog - Inspect durable watchdog decisions for one attempt.
+router.get(
+  '/:taskId/watchdog',
+  authorizePermission('agent:read'),
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({ attemptId: z.string().trim().min(1).max(160) })
+      .strict()
+      .parse(req.query);
+    res.json(
+      await getProgressWatchdogControl().inspect(req.params.taskId as string, query.attemptId)
+    );
+  })
+);
+
+// POST /api/agents/:taskId/watchdog/:findingId/override - Resolve a paused decision.
+router.post(
+  '/:taskId/watchdog/:findingId/override',
+  authorizePermission('agent:write'),
+  requireLocalAgentCapability,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = ProgressWatchdogOverrideInputSchema.parse(req.body);
+    const findingId = z
+      .string()
+      .regex(/^watchdog_[a-f0-9]{8}(?:-[a-f0-9]{8}){3}$/)
+      .parse(req.params.findingId);
+    const result = await getProgressWatchdogControl().override({
+      taskId: req.params.taskId as string,
+      attemptId: input.attemptId,
+      findingId,
+      resolution: input.resolution,
+      reason: input.reason,
+      actor: requestActor(req),
+    });
+    res.status(result.status === 'completed' ? 200 : 202).json(result);
+  })
+);
+
 // GET /api/agents/:taskId/recovery - Read the latest durable recovery decision.
 router.get(
   '/:taskId/recovery',
@@ -812,6 +857,11 @@ router.post(
 
 // Export service for WebSocket use
 export { router as agentRoutes, clawdbotAgentService as agentService };
+
+function getProgressWatchdogControl(): ProgressWatchdogControlService {
+  progressWatchdogControl ??= new ProgressWatchdogControlService(undefined, clawdbotAgentService);
+  return progressWatchdogControl;
+}
 
 function parseConversationTurn(input: unknown): z.infer<typeof conversationTurnSchema> {
   try {
