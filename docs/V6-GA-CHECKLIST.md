@@ -17,10 +17,10 @@ Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
 - [x] The reviewed GitHub release body exists at `docs/releases/v6.1.0.md` and
       passes the full-width release-format gate.
 - [x] Focused verification passed for each roadmap slice before merge.
-- [ ] The milestone workspace suite is green. The current candidate has 3,214
-      passing tests, 5 skipped tests, and three unrelated release-gate
-      failures: two stale `node:fs/promises` mocks omit `lstat`, and the
-      automation start-route test expects 200 but receives 404.
+- [x] The milestone workspace suite is green. `pnpm test:unit` completed
+      successfully across every workspace on the consolidated candidate;
+      server reported 3,234 passing and 5 skipped tests, web reported 469
+      passing tests, and desktop reported 67 passing tests.
 - [ ] Required release-PR CI, production audit, lint, typecheck, build,
       compatibility smoke, and packaging gates pass on the reviewed candidate.
 - [ ] The release PR merges, annotated `v6.1.0` tag and GitHub release publish,
@@ -31,8 +31,7 @@ Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
 
 ## Final Release Validation Commands
 
-Run once from the clean 6.1.0 release candidate after the three known milestone
-failures are cleared:
+Run once from the clean 6.1.0 release candidate:
 
 ```bash
 pnpm install --frozen-lockfile

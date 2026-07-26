@@ -20,6 +20,8 @@ Run-scoped egress enforcement resolves and pins allowed destinations, routes gov
 
 Durable admission control now applies capacity, aggregate budgets, fairness, cancellation, queue leases, and circuit breaking to direct tasks, workflows, retries, fallbacks, continuations, provider handoffs, and child agents through one execution-tree contract. Agent-dependency health feeds load shedding so an unhealthy tree cannot continue amplifying provider, host, or workspace pressure.
 
+Append-only admission snapshots now complete each serialized write before syncing, preventing short filesystem writes from truncating durable reservation evidence. Knowledge-collection routes also share the exact server permission prefix, keeping client discovery and server enforcement in fail-closed parity.
+
 Durable goals survive turns, restarts, and provider continuations without inventing completion. Memory extraction is reviewed and attributable. Background commands and monitors are supervisor-owned, repetitive or stalled runs receive bounded recovery, and oversized output spills into governed artifacts instead of exhausting the active context.
 
 ## Knowledge Collections And Integrity
