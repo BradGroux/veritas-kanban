@@ -3717,14 +3717,17 @@ Reviewed queue for turning corrections, repeated mistakes, and failure lessons i
 
 Mounted at `/api/reflections`. Requires `workflow:read` for reads and `workflow:write` for writes.
 
-| Method   | Path                          | Description                                                             |
-| -------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `GET`    | `/api/reflections`            | List candidates with filters for status, category, source kind, task ID |
-| `POST`   | `/api/reflections`            | Create a reflection candidate from a linked source                      |
-| `POST`   | `/api/reflections/:id/accept` | Accept a pending candidate and apply its reviewed promotion             |
-| `POST`   | `/api/reflections/:id/reject` | Reject a pending candidate without affecting future context             |
-| `POST`   | `/api/reflections/:id/merge`  | Soft-merge a duplicate into its representative candidate                |
-| `DELETE` | `/api/reflections/:id`        | Soft-delete a candidate while preserving audit history                  |
+| Method   | Path                                           | Description                                                             |
+| -------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `GET`    | `/api/reflections`                             | List candidates with filters for status, category, source kind, task ID |
+| `POST`   | `/api/reflections`                             | Create a reflection candidate from a linked source                      |
+| `GET`    | `/api/reflections/consolidation/proposals`     | List durable proposals, optionally for one memory domain                |
+| `POST`   | `/api/reflections/consolidation/proposals`     | Create an idempotent proposal from explicit candidate IDs               |
+| `GET`    | `/api/reflections/consolidation/proposals/:id` | Inspect one proposal and its reviewer-facing diff                       |
+| `POST`   | `/api/reflections/:id/accept`                  | Accept a pending candidate and apply its reviewed promotion             |
+| `POST`   | `/api/reflections/:id/reject`                  | Reject a pending candidate without affecting future context             |
+| `POST`   | `/api/reflections/:id/merge`                   | Soft-merge a duplicate into its representative candidate                |
+| `DELETE` | `/api/reflections/:id`                         | Soft-delete a candidate while preserving audit history                  |
 
 Candidates support `session`, `agent`, `team`, `policy`, and `template` categories. Sources can link to `task-run`, `chat-message`, `error`, `user-correction`, `review-feedback`, or `task-observation`.
 
@@ -3771,6 +3774,36 @@ automated extractors to make candidate creation retry-safe. Tokens,
 credential-looking values, and `/Users/...` private paths are redacted before
 storage. Extracted candidates remain pending and cannot affect task lessons or
 agent context until accepted.
+
+### Create a Consolidation Proposal
+
+```http
+POST /api/reflections/consolidation/proposals
+```
+
+```json
+{
+  "domain": {
+    "kind": "workspace-memory",
+    "id": "primary",
+    "workspaceId": "workspace_1"
+  },
+  "candidateIds": ["reflection_1", "reflection_2"],
+  "policy": {
+    "staleAfterDays": 180,
+    "unusedAfterDays": 90,
+    "minimumConfidence": 0.5,
+    "maxCandidates": 500
+  }
+}
+```
+
+The server locks proposal computation per memory domain, rejects unknown or
+over-limit candidate sets, and persists an idempotent
+`reflection-consolidation-proposal/v1` record. The proposal includes the
+effective policy, source digest, stable duplicate clusters, and inspectable
+merge, contradiction, decay, and wider-promotion review operations. Creating a
+proposal never deletes, accepts, or promotes a candidate.
 
 ### Accept Candidate
 

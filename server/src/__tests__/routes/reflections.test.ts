@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 
-const { mockReflectionService } = vi.hoisted(() => ({
+const { mockReflectionService, mockConsolidationService } = vi.hoisted(() => ({
   mockReflectionService: {
     list: vi.fn(),
     create: vi.fn(),
@@ -11,10 +11,19 @@ const { mockReflectionService } = vi.hoisted(() => ({
     delete: vi.fn(),
     mergeDuplicate: vi.fn(),
   },
+  mockConsolidationService: {
+    propose: vi.fn(),
+    get: vi.fn(),
+    list: vi.fn(),
+  },
 }));
 
 vi.mock('../../services/reflection-service.js', () => ({
   getReflectionService: () => mockReflectionService,
+}));
+
+vi.mock('../../services/reflection-consolidation-service.js', () => ({
+  getReflectionConsolidationService: () => mockConsolidationService,
 }));
 
 import { reflectionRoutes } from '../../routes/reflections.js';
@@ -49,6 +58,26 @@ const candidate = {
   updatedAt: '2026-06-26T12:00:00.000Z',
 };
 
+const proposal = {
+  schemaVersion: 'reflection-consolidation-proposal/v1',
+  id: 'reflection_proposal_1',
+  domain: { kind: 'workspace-memory', id: 'primary', workspaceId: 'workspace_1' },
+  state: 'proposed',
+  revision: 1,
+  sourceDigest: `sha256:${'a'.repeat(64)}`,
+  policy: {
+    staleAfterDays: 180,
+    unusedAfterDays: 90,
+    minimumConfidence: 0.5,
+    maxCandidates: 500,
+  },
+  clusters: [],
+  diff: [],
+  candidateIds: ['reflection_1'],
+  createdAt: '2026-07-25T12:00:00.000Z',
+  updatedAt: '2026-07-25T12:00:00.000Z',
+};
+
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -80,6 +109,32 @@ describe('reflection routes', () => {
       status: 'deleted',
       mergedInto: 'reflection_0',
     });
+    mockConsolidationService.propose.mockResolvedValue(proposal);
+    mockConsolidationService.get.mockResolvedValue(proposal);
+    mockConsolidationService.list.mockResolvedValue([proposal]);
+  });
+
+  it('creates and inspects bounded consolidation proposals', async () => {
+    const app = createApp();
+    const created = await request(app)
+      .post('/api/reflections/consolidation/proposals')
+      .send({
+        domain: { kind: 'workspace-memory', id: 'primary', workspaceId: 'workspace_1' },
+        candidateIds: ['reflection_1'],
+      });
+    const listed = await request(app).get(
+      '/api/reflections/consolidation/proposals?kind=workspace-memory&id=primary&workspaceId=workspace_1'
+    );
+    const fetched = await request(app).get(
+      '/api/reflections/consolidation/proposals/reflection_proposal_1'
+    );
+
+    expect(created.status).toBe(201);
+    expect(listed.body.proposals).toHaveLength(1);
+    expect(fetched.body.id).toBe('reflection_proposal_1');
+    expect(mockConsolidationService.propose).toHaveBeenCalledWith(
+      expect.objectContaining({ candidateIds: ['reflection_1'] })
+    );
   });
 
   it('lists reflection candidates with validated filters', async () => {
