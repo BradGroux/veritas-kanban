@@ -36,6 +36,7 @@ const FINGERPRINT_EVENT_KINDS = new Set([
   'command.completed',
   'run.error',
   'provider.unknown',
+  'message.assistant',
 ]);
 
 export const DEFAULT_PROGRESS_WATCHDOG_POLICY: ProgressWatchdogPolicy = {
@@ -49,6 +50,17 @@ export const DEFAULT_PROGRESS_WATCHDOG_POLICY: ProgressWatchdogPolicy = {
   failedEditThreshold: 3,
   noProgressEventThreshold: 8,
   noProgressSeconds: 120,
+  noProgressTotalTokens: 20_000,
+  noProgressCostUsd: 2,
+  highConfidenceMultiplier: 2,
+  progressSignals: [...DURABLE_PROGRESS_SIGNALS],
+  expectedRepetitionAllowedKinds: [
+    'tool.started',
+    'tool.completed',
+    'command.started',
+    'command.completed',
+    'progress',
+  ],
   maxExpectedRepetitionLeaseSeconds: 3_600,
   recovery: {
     lowConfidenceAction: 'warn',
@@ -91,7 +103,7 @@ export class ProgressWatchdogService {
     const evaluatedAt = input.evaluatedAt ?? events.at(-1)?.receivedAt ?? new Date().toISOString();
     const suppressed = suppressedByExpectedRepetition(events, policy, evaluatedAt);
     const progress = events.flatMap((event) =>
-      progressSignalsForEvent(event).map((signal) => ({ event, signal }))
+      progressSignalsForEvent(event, policy).map((signal) => ({ event, signal }))
     );
     const latestProgressSequence = Math.max(0, ...progress.map(({ event }) => event.sequence));
     const active = events.filter(
@@ -144,21 +156,31 @@ function assertSingleRun(events: RunEventEnvelope[]): void {
   }
 }
 
-function progressSignalsForEvent(event: RunEventEnvelope): DurableProgressSignal[] {
+function progressSignalsForEvent(
+  event: RunEventEnvelope,
+  policy: ProgressWatchdogPolicy
+): DurableProgressSignal[] {
+  const allowed = new Set(policy.progressSignals);
   const explicit = stringValue(event.payload.durableProgress);
-  if (explicit && DURABLE_PROGRESS_SIGNALS.has(explicit as DurableProgressSignal)) {
+  if (
+    explicit &&
+    DURABLE_PROGRESS_SIGNALS.has(explicit as DurableProgressSignal) &&
+    allowed.has(explicit as DurableProgressSignal)
+  ) {
     return [explicit as DurableProgressSignal];
   }
-  if (event.kind === 'file.changed') return ['workspace-delta'];
-  if (event.kind === 'artifact.created') return ['artifact'];
+  if (event.kind === 'file.changed' && allowed.has('workspace-delta')) return ['workspace-delta'];
+  if (event.kind === 'artifact.created' && allowed.has('artifact')) return ['artifact'];
   if (
     event.kind === 'message.operator' &&
+    allowed.has('operator-input') &&
     stringValue(event.payload.source) !== 'progress-watchdog'
   ) {
     return ['operator-input'];
   }
   if (
     event.kind === 'command.completed' &&
+    allowed.has('verification-passed') &&
     booleanValue(event.payload.verification) === true &&
     eventSucceeded(event)
   ) {
@@ -195,6 +217,7 @@ function suppressedByExpectedRepetition(
       eventTime < startsAt ||
       eventTime > expiresAt ||
       expiresAt - startsAt > policy.maxExpectedRepetitionLeaseSeconds * 1_000 ||
+      !policy.expectedRepetitionAllowedKinds.includes(event.kind) ||
       (lease.allowedKinds?.length && !lease.allowedKinds.includes(event.kind))
     ) {
       continue;
@@ -259,7 +282,10 @@ function identicalRepetition(
   if (tail.length < policy.identicalRepetitionThreshold) return undefined;
   return {
     detector: 'identical-repetition',
-    confidence: tail.length >= policy.identicalRepetitionThreshold * 2 ? 'high' : 'medium',
+    confidence:
+      tail.length >= policy.identicalRepetitionThreshold * policy.highConfidenceMultiplier
+        ? 'high'
+        : 'medium',
     evidence: tail.map(({ event }) => event),
     fingerprints: [last.fingerprint],
   };
@@ -277,15 +303,22 @@ function multiStepCycle(
   for (let length = 2; length <= policy.cycleMaxLength; length += 1) {
     const required = length * policy.cycleRepetitionThreshold;
     if (fingerprinted.length < required) continue;
-    const tail = fingerprinted.slice(-required);
-    const pattern = tail.slice(-length).map((item) => item.fingerprint);
+    const pattern = fingerprinted.slice(-length).map((item) => item.fingerprint);
     if (new Set(pattern).size < 2) continue;
-    const repeated = tail.every((item, index) => item.fingerprint === pattern[index % length]);
-    if (!repeated) continue;
+    const tail: typeof fingerprinted = [];
+    for (let index = fingerprinted.length - 1; index >= 0; index -= 1) {
+      const patternIndex = (((index - (fingerprinted.length - length)) % length) + length) % length;
+      if (fingerprinted[index].fingerprint !== pattern[patternIndex]) break;
+      tail.unshift(fingerprinted[index]);
+    }
+    const repetitions = Math.floor(tail.length / length);
+    if (repetitions < policy.cycleRepetitionThreshold) continue;
     return {
       detector: 'multi-step-cycle',
       confidence:
-        fingerprinted.length >= length * (policy.cycleRepetitionThreshold + 1) ? 'high' : 'medium',
+        repetitions >= policy.cycleRepetitionThreshold * policy.highConfidenceMultiplier
+          ? 'high'
+          : 'medium',
       evidence: tail.map(({ event }) => event),
       fingerprints: [...new Set(pattern)],
     };
@@ -308,7 +341,10 @@ function failedFileEdits(
   if (matching.length < policy.failedEditThreshold) return undefined;
   return {
     detector: 'failed-file-edit',
-    confidence: matching.length >= policy.failedEditThreshold * 2 ? 'high' : 'medium',
+    confidence:
+      matching.length >= policy.failedEditThreshold * policy.highConfidenceMultiplier
+        ? 'high'
+        : 'medium',
     evidence: matching.map(({ event }) => event),
     fingerprints: [last.pathHash],
   };
@@ -322,14 +358,30 @@ function noDurableProgress(
   const firstTime = Date.parse(events[0].receivedAt);
   const lastTime = Date.parse(events.at(-1)?.receivedAt ?? '');
   const elapsedSeconds = (lastTime - firstTime) / 1_000;
-  if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < policy.noProgressSeconds) {
+  const usage = events
+    .filter((event) => event.kind === 'usage.updated')
+    .reduce(
+      (total, event) => ({
+        totalTokens: total.totalTokens + (numberValue(event.payload.totalTokens) ?? 0),
+        costUsd: total.costUsd + (numberValue(event.payload.costUsd) ?? 0),
+      }),
+      { totalTokens: 0, costUsd: 0 }
+    );
+  if (
+    !Number.isFinite(elapsedSeconds) ||
+    (elapsedSeconds < policy.noProgressSeconds &&
+      usage.totalTokens < policy.noProgressTotalTokens &&
+      usage.costUsd < policy.noProgressCostUsd)
+  ) {
     return undefined;
   }
   return {
     detector: 'no-durable-progress',
     confidence:
-      events.length >= policy.noProgressEventThreshold * 2 &&
-      elapsedSeconds >= policy.noProgressSeconds * 2
+      events.length >= policy.noProgressEventThreshold * policy.highConfidenceMultiplier &&
+      (elapsedSeconds >= policy.noProgressSeconds * policy.highConfidenceMultiplier ||
+        usage.totalTokens >= policy.noProgressTotalTokens * policy.highConfidenceMultiplier ||
+        usage.costUsd >= policy.noProgressCostUsd * policy.highConfidenceMultiplier)
         ? 'high'
         : 'low',
     evidence: events.slice(-policy.noProgressEventThreshold),
@@ -405,6 +457,43 @@ function actionForFinding(
 
 function fingerprintEvent(event: RunEventEnvelope): string | undefined {
   if (!FINGERPRINT_EVENT_KINDS.has(event.kind)) return undefined;
+  if (event.kind === 'message.assistant') {
+    const content =
+      stringValue(event.payload.content) ??
+      stringValue(event.payload.summary) ??
+      stringValue(event.payload.text);
+    if (!content) return undefined;
+    return `sha256:${hashValue({
+      kind: event.kind,
+      tailHash: hashValue(content.slice(-512)),
+    })}`;
+  }
+  if (event.kind === 'run.error' || event.kind === 'provider.unknown') {
+    return `sha256:${hashValue({
+      kind: event.kind,
+      errorClass:
+        stringValue(event.payload.errorClass) ??
+        stringValue(event.payload.code) ??
+        stringValue(event.payload.name) ??
+        stringValue(event.payload.type) ??
+        'unknown',
+    })}`;
+  }
+  const started = event.kind === 'tool.started' || event.kind === 'command.started';
+  const input = started
+    ? (event.payload.arguments ??
+      event.payload.input ??
+      event.payload.params ??
+      event.payload.command ??
+      event.payload.script)
+    : undefined;
+  const evidence = !started
+    ? (event.payload.resultHash ??
+      event.payload.outputHash ??
+      event.payload.evidenceHash ??
+      tailHash(event.payload.output) ??
+      tailHash(event.payload.result))
+    : undefined;
   const identity = {
     kind: event.kind,
     tool: stringValue(event.payload.toolName) ?? stringValue(event.payload.name),
@@ -412,9 +501,15 @@ function fingerprintEvent(event: RunEventEnvelope): string | undefined {
       stringValue(event.payload.status) ??
       stringValue(event.payload.outcome) ??
       stringValue(event.payload.code),
-    payloadHash: event.payloadHash,
+    ...(input !== undefined ? { inputHash: hashValue(input) } : {}),
+    ...(evidence !== undefined ? { evidenceHash: evidence } : {}),
+    ...(input === undefined && evidence === undefined ? { payloadHash: event.payloadHash } : {}),
   };
   return `sha256:${hashValue(identity)}`;
+}
+
+function tailHash(value: RunEventJsonValue | undefined): string | undefined {
+  return typeof value === 'string' ? hashValue(value.slice(-512)) : undefined;
 }
 
 function failedEditPathHash(event: RunEventEnvelope): string | undefined {

@@ -123,6 +123,59 @@ describe('ProgressWatchdogService', () => {
     expect(JSON.stringify(finding)).not.toContain('/workspace/src/app.ts');
   });
 
+  it('normalizes repeated error classes even when diagnostics differ', () => {
+    const service = new ProgressWatchdogService();
+    const events = [1, 2, 3].map((sequence) =>
+      event(
+        sequence,
+        'run.error',
+        {
+          errorClass: 'transport-timeout',
+          message: `private diagnostic ${sequence}`,
+        },
+        { hash: String(sequence).repeat(64).slice(0, 64) }
+      )
+    );
+
+    const finding = service
+      .evaluate({ events })
+      .findings.find((item) => item.detector === 'identical-repetition');
+
+    expect(finding?.evidenceEventIds).toEqual(['event_1', 'event_2', 'event_3']);
+    expect(JSON.stringify(finding)).not.toContain('private diagnostic');
+  });
+
+  it('fingerprints assistant tails without persisting assistant text', () => {
+    const service = new ProgressWatchdogService();
+    const events = [1, 2, 3].map((sequence) =>
+      event(sequence, 'message.assistant', {
+        content: `private prefix ${sequence}: ${'same tail '.repeat(80)}`,
+      })
+    );
+
+    const finding = service
+      .evaluate({ events })
+      .findings.find((item) => item.detector === 'identical-repetition');
+
+    expect(finding?.evidenceEventIds).toEqual(['event_1', 'event_2', 'event_3']);
+    expect(JSON.stringify(finding)).not.toContain('unresolved operation');
+  });
+
+  it('does not classify repeated verification with changed output as a cycle', () => {
+    const service = new ProgressWatchdogService();
+    const events = [1, 2, 3].flatMap((sequence) => [
+      event(sequence * 2 - 1, 'command.started', {
+        command: 'pnpm test exact-file.test.ts',
+      }),
+      event(sequence * 2, 'command.completed', {
+        status: 'success',
+        outputHash: `sha256:${String(sequence).repeat(64).slice(0, 64)}`,
+      }),
+    ]);
+
+    expect(service.evaluate({ events }).findings).toEqual([]);
+  });
+
   it('detects sustained activity without durable progress', () => {
     const service = new ProgressWatchdogService();
     const events = Array.from({ length: 8 }, (_, index) =>
@@ -139,6 +192,22 @@ describe('ProgressWatchdogService', () => {
           ).toISOString(),
         }
       )
+    );
+
+    const finding = service
+      .evaluate({ events })
+      .findings.find((item) => item.detector === 'no-durable-progress');
+
+    expect(finding).toMatchObject({ confidence: 'low', action: 'warn' });
+  });
+
+  it('detects sustained token spend without waiting for the wall-time threshold', () => {
+    const service = new ProgressWatchdogService();
+    const events = Array.from({ length: 8 }, (_, index) =>
+      event(index + 1, 'usage.updated', {
+        totalTokens: 3_000,
+        costUsd: 0.1,
+      })
     );
 
     const finding = service
@@ -239,6 +308,34 @@ describe('ProgressWatchdogService', () => {
     });
 
     expect(result.suppressedEventIds).toEqual(['event_1', 'event_2']);
+    expect(result.findings.some((item) => item.detector === 'identical-repetition')).toBe(true);
+  });
+
+  it('does not honor repetition leases for event kinds excluded by policy', () => {
+    const service = new ProgressWatchdogService();
+    const events = [1, 2, 3].map((sequence) =>
+      event(
+        sequence,
+        'run.error',
+        {
+          errorClass: 'transient',
+          expectedRepetition: {
+            leaseId: 'lease_1',
+            startsAt: '2026-07-25T12:00:00.000Z',
+            expiresAt: '2026-07-25T12:05:00.000Z',
+            maxEventsPerMinute: 5,
+          },
+        },
+        { hash: 'a'.repeat(64) }
+      )
+    );
+
+    const result = service.evaluate({
+      events,
+      evaluatedAt: '2026-07-25T12:03:00.000Z',
+    });
+
+    expect(result.suppressedEventIds).toEqual([]);
     expect(result.findings.some((item) => item.detector === 'identical-repetition')).toBe(true);
   });
 
