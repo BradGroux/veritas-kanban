@@ -28,6 +28,7 @@ export const RUN_EVENT_KINDS = [
   'command.detached',
   'command.completed',
   'file.changed',
+  'workspace.checkpoint.created',
   'tool.started',
   'tool.completed',
   'approval.requested',

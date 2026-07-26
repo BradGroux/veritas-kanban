@@ -50,6 +50,7 @@ export {
 } from './worktree-manifest-repository.js';
 export {
   FileWorkspaceCheckpointRepository,
+  getWorkspaceCheckpointIdForOperation,
   getWorkspaceCheckpointsDir,
   type FileWorkspaceCheckpointRepositoryOptions,
   type WorkspaceCheckpointCaptureInput,
@@ -57,6 +58,7 @@ export {
   type WorkspaceCheckpointCommandRunner,
   type WorkspaceCheckpointListQuery,
   type WorkspaceCheckpointLookup,
+  type WorkspaceCheckpointOperationLookup,
   type WorkspaceCheckpointRepository,
 } from './workspace-checkpoint-repository.js';
 export {

@@ -23,13 +23,22 @@ Blobs are written under a SHA-256 content address and verified on reuse. Metadat
 
 Caller operation IDs are persisted only as digests. Repeating the same exact capture operation returns the original checkpoint. Reusing that operation identity with changed boundary, scope, cursor, parent, worktree, or policy evidence returns conflict.
 
+## Runtime boundaries and ownership
+
+The workspace checkpoint coordinator captures immediately before the first provider turn, a native steered operator turn, and provider-native compaction. Recovery launches are labeled `before-retry`; cross-provider execution-tree edges are labeled `before-provider-handoff`; other launches and native steering are labeled `before-user-turn`.
+
+Only worktrees with a complete Veritas manifest and lease are eligible. The coordinator re-reads the durable manifest and requires exact task, attempt, path, branch, lease, lifecycle, rebase, and unexpired ownership evidence before each capture. Unmanaged worktrees are skipped, while partial, stale, expired, or conflicting ownership fails closed.
+
+Captures are serialized per attempt and chained through `parentCheckpointId`. Every published boundary emits a deduplicated `workspace.checkpoint.created` run event containing checkpoint identity, digest, boundary, counts, and a digest of any provider conversation cursor.
+
 ## Deliberate next boundaries
 
-This foundation does not yet claim turn hooks, hunk attribution, preview, restore, or retention cleanup. Those layers must consume this immutable repository and remain preview-first. Rewind cannot write until current HEAD, index, file hashes, worktree ownership, external changes, and approval evidence all match the checkpoint descendant it intends to replace.
+This foundation does not yet claim hunk attribution, preview, restore, or retention cleanup. Those layers must consume this immutable repository and remain preview-first. Rewind cannot write until current HEAD, index, file hashes, worktree ownership, external changes, and approval evidence all match the checkpoint descendant it intends to replace.
 
 ## Code
 
 - Shared contract: `shared/src/types/workspace-checkpoint.types.ts`
 - Validation: `server/src/schemas/workspace-checkpoint-schemas.ts`
 - File repository: `server/src/storage/workspace-checkpoint-repository.ts`
+- Ownership and boundary coordination: `server/src/services/workspace-checkpoint-service.ts`
 - Focused verification: `server/src/__tests__/workspace-checkpoint-repository.test.ts`
