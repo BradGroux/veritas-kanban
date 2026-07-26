@@ -7,6 +7,7 @@ const mockFs: Record<string, string> = vi.hoisted(() => ({}));
 
 vi.mock('node:fs/promises', () => {
   const access = vi.fn().mockResolvedValue(undefined);
+  const lstat = vi.fn().mockResolvedValue({ isSymbolicLink: () => false });
   const mkdir = vi.fn().mockResolvedValue(undefined);
   const readFile = vi.fn().mockResolvedValue('');
   const rename = vi.fn().mockResolvedValue(undefined);
@@ -16,6 +17,7 @@ vi.mock('node:fs/promises', () => {
   const rm = vi.fn().mockResolvedValue(undefined);
   return {
     access,
+    lstat,
     mkdir,
     readFile,
     rename,
@@ -23,7 +25,7 @@ vi.mock('node:fs/promises', () => {
     readdir,
     unlink,
     rm,
-    default: { access, mkdir, readFile, rename, writeFile, readdir, unlink, rm },
+    default: { access, lstat, mkdir, readFile, rename, writeFile, readdir, unlink, rm },
   };
 });
 
