@@ -248,7 +248,6 @@ import {
   CodexAppServerRpcClient,
   parseCodexAppServerLine,
   type CodexAppServerClassification,
-  type CodexAppServerBrokerRequest,
   type CodexAppServerTerminalResult,
   type CodexAppServerUsage,
 } from './codex-app-server-adapter.js';
@@ -269,6 +268,12 @@ import {
   getWorkspaceCheckpointService,
   type WorkspaceCheckpointService,
 } from './workspace-checkpoint-service.js';
+import {
+  WorkspaceCheckpointRewindService,
+  type WorkspaceCheckpointRewindRequest,
+  type WorkspaceCheckpointRewindResult,
+  type WorkspaceCheckpointRewindRuntimeSnapshot,
+} from './workspace-checkpoint-rewind-service.js';
 import {
   assertGrokBuildVersionEvidence,
   buildCopilotAcpArgs,
@@ -509,6 +514,40 @@ export class AgentReadinessError extends Error {
   }
 }
 
+interface ProviderConversationCursor {
+  conversationId: string;
+  turnId?: string;
+  itemId?: string;
+}
+
+interface CodexAppServerRewindState {
+  token: string;
+  phase: 'quiescing' | 'quiesced' | 'committed' | 'rolled-back';
+  sourceThreadId: string;
+  sourceTurnId: string;
+  resolveQuiesced?: () => void;
+  rejectQuiesced?: (error: Error) => void;
+}
+
+interface CodexAppServerControl {
+  interrupt(): Promise<void>;
+  steer(message: string): Promise<string>;
+  compact(): Promise<void>;
+  archive(): Promise<void>;
+  close(): void;
+  runtimeIdentity(): {
+    threadId: string;
+    turnId?: string;
+    generation: number;
+  };
+  quiesceForRewind(): Promise<string>;
+  forkForRewind(
+    token: string,
+    cursor: ProviderConversationCursor,
+    rollback: boolean
+  ): Promise<string>;
+}
+
 // Track pending agent requests
 interface PendingAgent {
   taskId: string;
@@ -540,13 +579,7 @@ interface PendingAgent {
   threadId?: string;
   abortController?: AbortController;
   process?: ChildProcessWithoutNullStreams;
-  codexAppServerControl?: {
-    interrupt(): Promise<void>;
-    steer(message: string): Promise<string>;
-    compact(): Promise<void>;
-    archive(): Promise<void>;
-    close(): void;
-  };
+  codexAppServerControl?: CodexAppServerControl;
   acpControl?: AcpStdioControl;
   runToolBridge?: RunToolBridgeLaunch;
   filesystemSandboxPlan?: FilesystemSandboxLaunchPlan;
@@ -4809,6 +4842,223 @@ export class ClawdbotAgentService {
     };
   }
 
+  async rewindWorkspaceCheckpoint(
+    taskId: string,
+    input: {
+      attemptId: string;
+      targetCheckpointId: string;
+      descendantCheckpointId: string;
+      requestId: string;
+    }
+  ): Promise<WorkspaceCheckpointRewindResult> {
+    await this.assertActiveRunControl(taskId, 'interrupt', input.attemptId);
+    await this.assertActiveRunControl(taskId, 'fork', input.attemptId);
+    const pending = this.requireWorkspaceRewindPending(taskId, input.attemptId);
+    const request: WorkspaceCheckpointRewindRequest = {
+      taskEnvelope: pending.taskEnvelope,
+      taskId,
+      ...input,
+    };
+    const service = new WorkspaceCheckpointRewindService({
+      approvals: this.approvalBroker,
+      runtime: {
+        inspect: async (runtimeRequest) => this.inspectWorkspaceRewindRuntime(runtimeRequest),
+        quiesce: async (runtimeRequest) => {
+          const snapshot = this.inspectWorkspaceRewindRuntime(runtimeRequest);
+          if (snapshot.stateDigest !== runtimeRequest.expectedStateDigest) {
+            throw new ConflictError('Workspace rewind runtime changed before quiescence.', {
+              expectedStateDigest: runtimeRequest.expectedStateDigest,
+              currentStateDigest: snapshot.stateDigest,
+            });
+          }
+          const active = this.requireWorkspaceRewindPending(
+            runtimeRequest.taskId,
+            runtimeRequest.attemptId
+          );
+          const token = await active.codexAppServerControl.quiesceForRewind();
+          return { token, snapshot };
+        },
+        commit: async ({
+          request: runtimeRequest,
+          token,
+          targetConversationCursor,
+          transaction,
+        }) => {
+          const active = this.requireWorkspaceRewindPending(
+            runtimeRequest.taskId,
+            runtimeRequest.attemptId
+          );
+          const target = parseProviderConversationCursor(targetConversationCursor);
+          const conversationId = await active.codexAppServerControl.forkForRewind(
+            token,
+            target,
+            false
+          );
+          await this.recordWorkspaceRewindConversation(active, conversationId, target);
+          const runtime = this.inspectWorkspaceRewindRuntime(
+            runtimeRequest,
+            targetConversationCursor
+          );
+          const event = await this.appendRunEvent(
+            runtimeRequest.taskId,
+            runtimeRequest.attemptId,
+            'workspace.rewind.committed',
+            {
+              transactionId: transaction.id,
+              targetCheckpointId: runtimeRequest.targetCheckpointId,
+              descendantCheckpointId: runtimeRequest.descendantCheckpointId,
+              conversationId,
+            },
+            {
+              provider: active.provider,
+              adapter: active.provider,
+              agent: active.agent,
+              model: active.model,
+              dedupeKey: `workspace.rewind.committed:${transaction.id}`,
+            }
+          );
+          this.emitJournalOutput(event);
+          return runtime;
+        },
+        rollback: async ({ request: runtimeRequest, token, snapshot }) => {
+          const active = this.requireWorkspaceRewindPending(
+            runtimeRequest.taskId,
+            runtimeRequest.attemptId
+          );
+          const descendant = parseProviderConversationCursor(snapshot.conversationCursor);
+          const conversationId = await active.codexAppServerControl.forkForRewind(
+            token,
+            descendant,
+            true
+          );
+          await this.recordWorkspaceRewindConversation(active, conversationId, descendant);
+          const runtime = this.inspectWorkspaceRewindRuntime(
+            runtimeRequest,
+            snapshot.conversationCursor
+          );
+          const event = await this.appendRunEvent(
+            runtimeRequest.taskId,
+            runtimeRequest.attemptId,
+            'workspace.rewind.rolled-back',
+            {
+              targetCheckpointId: runtimeRequest.targetCheckpointId,
+              descendantCheckpointId: runtimeRequest.descendantCheckpointId,
+              conversationId,
+            },
+            {
+              provider: active.provider,
+              adapter: active.provider,
+              agent: active.agent,
+              model: active.model,
+              dedupeKey: `workspace.rewind.rolled-back:${runtimeRequest.requestId}`,
+            }
+          );
+          this.emitJournalOutput(event);
+          return runtime;
+        },
+      },
+    });
+    return service.execute(request);
+  }
+
+  private requireWorkspaceRewindPending(
+    taskId: string,
+    attemptId: string
+  ): PendingAgent & {
+    provider: 'codex-app-server';
+    codexAppServerControl: CodexAppServerControl;
+  } {
+    const pending = pendingAgents.get(taskId);
+    if (
+      !pending ||
+      pending.attemptId !== attemptId ||
+      pending.provider !== 'codex-app-server' ||
+      !pending.codexAppServerControl
+    ) {
+      throw new ConflictError(
+        'Workspace rewind currently requires the exact active Codex app-server attempt.',
+        {
+          taskId,
+          attemptId,
+          activeAttemptId: pending?.attemptId,
+          activeProvider: pending?.provider,
+        }
+      );
+    }
+    return pending as PendingAgent & {
+      provider: 'codex-app-server';
+      codexAppServerControl: CodexAppServerControl;
+    };
+  }
+
+  private inspectWorkspaceRewindRuntime(
+    request: WorkspaceCheckpointRewindRequest,
+    rewindAnchorCursor?: string
+  ): WorkspaceCheckpointRewindRuntimeSnapshot {
+    const pending = this.requireWorkspaceRewindPending(request.taskId, request.attemptId);
+    const conversationCursor = workspaceConversationCursor(pending.conversation);
+    if (!conversationCursor) {
+      throw new ConflictError('Workspace rewind runtime has no durable conversation cursor.');
+    }
+    const runtimeIdentity = pending.codexAppServerControl.runtimeIdentity();
+    return {
+      provider: pending.provider,
+      agentId: pending.agent,
+      evidenceRevision: pending.providerRuntimeManifest.digest,
+      stateDigest: digestRunLaunchValue({
+        schemaVersion: 'workspace-checkpoint-runtime-state/v1',
+        taskId: request.taskId,
+        attemptId: request.attemptId,
+        provider: pending.provider,
+        providerRuntimeManifestDigest: pending.providerRuntimeManifest.digest,
+        conversationCursor,
+        runtimeIdentity,
+      }),
+      conversationCursor,
+      ...(rewindAnchorCursor ? { rewindAnchorCursor } : {}),
+    };
+  }
+
+  private async recordWorkspaceRewindConversation(
+    pending: PendingAgent,
+    conversationId: string,
+    anchor: ProviderConversationCursor
+  ): Promise<void> {
+    const {
+      conversationId: _conversationId,
+      currentTurnId: _currentTurnId,
+      lastItemId: _lastItemId,
+      parentConversationId: _parentConversationId,
+      parentAttemptId: _parentAttemptId,
+      forkTurnId: _forkTurnId,
+      ...base
+    } = pending.conversation;
+    const updatedAt = new Date().toISOString();
+    const conversation: ConversationLifecycleRecord = {
+      ...base,
+      mode: 'fork',
+      intent: 'fork',
+      conversationId,
+      parentConversationId: anchor.conversationId,
+      ...(anchor.turnId ? { forkTurnId: anchor.turnId } : {}),
+      state: 'active',
+      contextWindow: { posture: 'unknown', measuredAt: updatedAt },
+      updatedAt,
+    };
+    pending.conversation = conversation;
+    pending.threadId = conversationId;
+    await this.taskService.patchTaskAttempt(pending.taskId, pending.attemptId, {
+      threadId: conversationId,
+      conversation,
+    });
+    if (pending.supervisorId) {
+      await this.runSupervisor.checkpoint(pending.supervisorId, {
+        sessionId: conversationId,
+        threadId: conversationId,
+      });
+    }
+  }
+
   async resumeConversation(
     taskId: string,
     sourceAttemptId: string,
@@ -6685,6 +6935,8 @@ export class ClawdbotAgentService {
     let tokenUsage: CodexAppServerUsage | undefined;
     let threadId: string | undefined;
     let turnId: string | undefined;
+    let conversationGeneration = 0;
+    let rewindState: CodexAppServerRewindState | undefined;
     let eventProcessing = Promise.resolve();
     let eventProcessingError: Error | undefined;
     let launchError: Error | undefined;
@@ -6792,8 +7044,24 @@ export class ClawdbotAgentService {
         await rpcClient.interrupt(threadId, turnId);
       },
       steer: async (message) => {
-        if (!threadId || !turnId || terminalResult) {
-          throw new ConflictError('Codex app-server has no steerable active turn.');
+        if (
+          rewindState &&
+          (rewindState.phase === 'quiescing' || rewindState.phase === 'quiesced')
+        ) {
+          throw new ConflictError('Codex app-server is quiesced for an approved workspace rewind.');
+        }
+        if (!threadId || terminalResult) {
+          throw new ConflictError('Codex app-server has no controllable conversation.');
+        }
+        if (!turnId) {
+          turnId = await rpcClient.startTurn({
+            threadId,
+            prompt: message,
+            cwd: worktreePath,
+            model: agentConfig?.model,
+          });
+          conversationGeneration += 1;
+          return turnId;
         }
         const steeredTurnId = await rpcClient.steer(threadId, turnId, message);
         if (steeredTurnId !== turnId) {
@@ -6814,6 +7082,98 @@ export class ClawdbotAgentService {
         await rpcClient.archive(threadId);
       },
       close: () => requestGracefulClose('Codex app-server attempt was stopped.'),
+      runtimeIdentity: () => {
+        if (!threadId) {
+          throw new ConflictError('Codex app-server has no durable runtime identity.');
+        }
+        return {
+          threadId,
+          ...(turnId ? { turnId } : {}),
+          generation: conversationGeneration,
+        };
+      },
+      quiesceForRewind: async () => {
+        if (!threadId || !turnId || terminalResult) {
+          throw new ConflictError(
+            'Codex app-server rewind requires a live, non-terminal provider turn.'
+          );
+        }
+        if (
+          rewindState &&
+          (rewindState.phase === 'quiescing' || rewindState.phase === 'quiesced')
+        ) {
+          throw new ConflictError('Codex app-server already has a workspace rewind in progress.');
+        }
+        const token = `rewind_${nanoid()}`;
+        const sourceThreadId = threadId;
+        const sourceTurnId = turnId;
+        let timeout: NodeJS.Timeout | undefined;
+        const quiesced = new Promise<void>((resolve, reject) => {
+          rewindState = {
+            token,
+            phase: 'quiescing',
+            sourceThreadId,
+            sourceTurnId,
+            resolveQuiesced: resolve,
+            rejectQuiesced: reject,
+          };
+          timeout = setTimeout(() => {
+            if (rewindState?.token !== token || rewindState.phase !== 'quiescing') return;
+            rewindState = undefined;
+            reject(
+              new ConflictError(
+                'Codex app-server did not confirm turn interruption for workspace rewind.'
+              )
+            );
+          }, 10_000);
+        });
+        try {
+          await rpcClient.interrupt(threadId, turnId);
+          await quiesced;
+          return token;
+        } catch (error) {
+          if (rewindState?.token === token && rewindState.phase === 'quiescing') {
+            rewindState = undefined;
+          }
+          throw error;
+        } finally {
+          if (timeout) clearTimeout(timeout);
+        }
+      },
+      forkForRewind: async (token, cursor, rollback) => {
+        if (!rewindState || rewindState.token !== token) {
+          throw new ConflictError('Codex app-server rewind token is stale or unknown.');
+        }
+        if (
+          (!rollback && rewindState.phase !== 'quiesced') ||
+          (rollback && rewindState.phase !== 'quiesced' && rewindState.phase !== 'committed')
+        ) {
+          throw new ConflictError('Codex app-server rewind runtime is not in a recoverable state.');
+        }
+        if (
+          !cursor.turnId ||
+          cursor.itemId ||
+          cursor.conversationId !== rewindState.sourceThreadId ||
+          (!rollback && cursor.turnId === rewindState.sourceTurnId)
+        ) {
+          throw new ConflictError(
+            'Codex app-server can rewind only to an earlier exact turn in the active thread.'
+          );
+        }
+        const recoveredThreadId = await rpcClient.forkThread({
+          cwd: worktreePath,
+          model: agentConfig?.model,
+          sandboxMode: sandboxPolicy?.effective.sandboxMode ?? 'workspace-write',
+          ...(mcpServers && Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
+          threadId: cursor.conversationId,
+          ...(cursor.turnId ? { lastTurnId: cursor.turnId } : {}),
+        });
+        threadId = recoveredThreadId;
+        turnId = undefined;
+        conversationGeneration += 1;
+        rewindState.phase = rollback ? 'rolled-back' : 'committed';
+        return recoveredThreadId;
+      },
     };
 
     const processLine = async (line: string) => {
@@ -6881,6 +7241,33 @@ export class ClawdbotAgentService {
         });
         approvalTasks.add(approvalTask);
         void approvalTask.finally(() => approvalTasks.delete(approvalTask));
+        return;
+      }
+      const rewindClassification = classifyCodexAppServerNotification(inbound.record);
+      if (rewindState?.phase === 'quiescing' && rewindClassification.terminal) {
+        turnId = undefined;
+        rewindState.phase = 'quiesced';
+        rewindState.resolveQuiesced?.();
+        rewindState.resolveQuiesced = undefined;
+        rewindState.rejectQuiesced = undefined;
+        const interrupted = await this.appendRunEvent(
+          task.id,
+          attemptId,
+          'conversation.interrupted',
+          {
+            reason: 'workspace-rewind-quiescence',
+            conversationId: threadId,
+            turnId: rewindClassification.turnId,
+          },
+          {
+            provider: 'codex-app-server',
+            adapter: 'codex-app-server',
+            agent: agentConfig?.type || 'codex-app-server',
+            model: agentConfig?.model,
+            dedupeKey: `workspace-rewind-quiesced:${rewindClassification.turnId ?? 'unknown'}`,
+          }
+        );
+        this.emitJournalOutput(interrupted);
         return;
       }
       const classified = await this.handleCodexAppServerNotification(
@@ -11662,7 +12049,9 @@ function workspaceConversationCursor(
   conversation: ConversationLifecycleRecord
 ): string | undefined {
   const conversationId = conversation.conversationId ?? conversation.parentConversationId;
-  const turnId = conversation.currentTurnId ?? conversation.forkTurnId;
+  const turnId = conversation.conversationId
+    ? conversation.currentTurnId
+    : (conversation.currentTurnId ?? conversation.forkTurnId);
   const itemId = conversation.lastItemId;
   if (!conversationId && !turnId && !itemId) return undefined;
   const cursor = JSON.stringify({
@@ -11675,6 +12064,43 @@ function workspaceConversationCursor(
     throw new ConflictError('Provider conversation cursor exceeds the checkpoint integrity bound.');
   }
   return cursor;
+}
+
+function parseProviderConversationCursor(value: string): ProviderConversationCursor {
+  if (!value || value.length > 2_048) {
+    throw new ConflictError('Provider conversation cursor exceeds the checkpoint integrity bound.');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new ConflictError('Provider conversation cursor is not valid JSON.');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ConflictError('Provider conversation cursor is not an object.');
+  }
+  const record = parsed as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    record.schemaVersion !== 'provider-conversation-cursor/v1' ||
+    keys.some((key) => !['schemaVersion', 'conversationId', 'turnId', 'itemId'].includes(key)) ||
+    typeof record.conversationId !== 'string' ||
+    !record.conversationId.trim() ||
+    record.conversationId.length > 1_024 ||
+    (record.turnId !== undefined &&
+      (typeof record.turnId !== 'string' ||
+        !record.turnId.trim() ||
+        record.turnId.length > 1_024)) ||
+    (record.itemId !== undefined &&
+      (typeof record.itemId !== 'string' || !record.itemId.trim() || record.itemId.length > 1_024))
+  ) {
+    throw new ConflictError('Provider conversation cursor is invalid or unsupported.');
+  }
+  return {
+    conversationId: record.conversationId,
+    ...(typeof record.turnId === 'string' ? { turnId: record.turnId } : {}),
+    ...(typeof record.itemId === 'string' ? { itemId: record.itemId } : {}),
+  };
 }
 
 function manifestConversation(

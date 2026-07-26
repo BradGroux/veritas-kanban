@@ -2628,6 +2628,27 @@ An optional `phase` may narrow that authority but cannot widen it. Omitting the
 field inherits a profile-authoritative parent; a legacy source remains
 explicitly legacy.
 
+### Workspace Checkpoint Rewind
+
+```
+POST /api/agents/:taskId/workspace/checkpoints/rewind
+```
+
+An `agent:write` principal with local run-control authority can request a preview-first rewind for the exact active attempt:
+
+```json
+{
+  "attemptId": "attempt_123",
+  "targetCheckpointId": "checkpoint_target",
+  "descendantCheckpointId": "checkpoint_descendant",
+  "requestId": "operator-generated-idempotency-key"
+}
+```
+
+`X-Idempotency-Key` may supply `requestId` and takes precedence over the body. A conflict-free first request returns `202` with a critical, non-mobile approval bound to the checkpoint IDs, stable preview evidence, runtime state, provider evidence revision, and estimated data loss. Repeating the same request after approval revalidates all evidence, quiesces the provider, commits the recoverable storage transaction, and then recovers provider history from the approved checkpoint cursor.
+
+Production runtime recovery currently supports only an active Codex app-server thread with an earlier exact turn cursor in the same thread. Item-level cursors, the currently interrupted turn, other threads, stale runtime evidence, unresolved workspace conflicts, and providers without native fork return `409 Conflict`. A successful response records a new live provider thread plus the checkpoint cursor used as its rewind anchor; it does not pretend the provider reused the old thread ID.
+
 `commitPolicy` accepts `forbidden`, `allowed`, or `required`. A run value
 overrides `task.executionPolicy.commitPolicy`, then the legacy
 `features.agents.autoCommitOnComplete` setting. Legacy `true` maps to

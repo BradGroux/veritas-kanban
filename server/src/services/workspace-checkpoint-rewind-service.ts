@@ -31,6 +31,7 @@ export interface WorkspaceCheckpointRewindRuntimeSnapshot {
   evidenceRevision: string;
   stateDigest: string;
   conversationCursor: string;
+  rewindAnchorCursor?: string;
 }
 
 export interface WorkspaceCheckpointRewindQuiescedRuntime {
@@ -213,9 +214,9 @@ export class WorkspaceCheckpointRewindService {
         targetConversationCursor: target.conversationCursor,
         transaction,
       });
-      if (runtime.conversationCursor !== target.conversationCursor) {
+      if (runtime.rewindAnchorCursor !== target.conversationCursor) {
         throw new ConflictError(
-          'Workspace rewind runtime did not commit the target conversation cursor.'
+          'Workspace rewind runtime did not recover from the target conversation cursor.'
         );
       }
       return { status: 'completed', preview: approvedPreview, approval, transaction, runtime };
@@ -268,9 +269,12 @@ export class WorkspaceCheckpointRewindService {
           rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
       });
     }
-    throw new ConflictError('Workspace rewind failed and restored the prior runtime state.', {
-      cause,
-    });
+    throw new ConflictError(
+      'Workspace rewind failed and recovered from the prior runtime anchor.',
+      {
+        cause,
+      }
+    );
   }
 }
 
@@ -283,6 +287,7 @@ function sameRuntimeSnapshot(
     left.agentId === right.agentId &&
     left.evidenceRevision === right.evidenceRevision &&
     left.stateDigest === right.stateDigest &&
-    left.conversationCursor === right.conversationCursor
+    left.conversationCursor === right.conversationCursor &&
+    left.rewindAnchorCursor === right.rewindAnchorCursor
   );
 }
