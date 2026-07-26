@@ -9,6 +9,8 @@ The first implementation supports background pipe-mode commands with:
 - one opaque handle bound to workspace, task, attempt, and launch-manifest digest;
 - a manifest-approved executable, relative cwd, and environment-key subset;
 - immediate background return, bounded single/any/all waits, foreground detachment without changing ownership, status inspection, and attempt cleanup;
+- active run status includes only handles owned by that workspace, task, and attempt;
+- run completion and cancellation terminate all still-active attempt handles, including detached jobs, before the terminal run result is committed;
 - fail-closed ownership persistence before a new handle is returned;
 - redacted byte-bounded stdout/stderr chunks with monotonic cursors, explicit gap metadata, and a total-volume circuit that terminates noisy jobs before they flood the journal;
 - graceful process-group termination followed by bounded forced termination;
@@ -22,6 +24,10 @@ PTY mode, interactive stdin, restart reattachment, and external API/CLI/MCP expo
 The service accepts a server-owned launch context and an untrusted command request. The launch context contains the exact workspace, task, attempt, launch-manifest digest, worktree root, approved environment values, and approved executable list. The request may select only an approved command, arguments without credential material, a canonical cwd within the worktree, and environment keys already present in that context. Lexical traversal and symlink escapes fail closed before spawn.
 
 The child is launched without a shell. On Unix-like systems it owns a detached process group; on Windows it remains an exact child until the platform-specific tree supervisor is added. The service never exposes a writable stdin stream.
+
+Terminal children are subordinate to their owning run. Detaching changes foreground coordination only; it does not outlive the attempt. Attempt cleanup terminates matching live handles in parallel and verifies that already-terminal handles have complete journal evidence before allowing the run completion to commit.
+
+When a provider completion arrives after a server restart, Veritas reconciles the attempt's durable terminal journal before cleanup. Handles that cannot be safely reattached are recorded as interrupted before the provider's terminal result is committed.
 
 ## Output and replay
 
