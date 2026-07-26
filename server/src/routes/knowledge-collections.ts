@@ -14,6 +14,7 @@ import {
   RunKnowledgeIntegrityLintBodySchema,
   SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeClaimBodySchema,
+  TransitionKnowledgeIntegrityFindingBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
 } from '../schemas/knowledge-collection-schemas.js';
 import {
@@ -199,6 +200,57 @@ router.post(
       input
     );
     res.json(report);
+  })
+);
+
+router.get(
+  '/:collectionId/integrity/findings',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const pagination = parseQuery(paginationSchema, req.query);
+    const context = requestContext(req);
+    const findings = await getKnowledgeCollectionService().listIntegrityFindings(
+      context.workspaceId,
+      collectionId,
+      context.actor
+    );
+    sendPaginated(res, paginate(findings, pagination), {
+      ...pagination,
+      total: findings.length,
+    });
+  })
+);
+
+router.get(
+  '/:collectionId/integrity/health',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const context = requestContext(req);
+    res.json(
+      await getKnowledgeCollectionService().getIntegrityHealth(
+        context.workspaceId,
+        collectionId,
+        context.actor
+      )
+    );
+  })
+);
+
+router.post(
+  '/:collectionId/integrity/findings/:findingId/transitions',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const findingId = parseIdentifier(req.params.findingId);
+    const input = parseBody(TransitionKnowledgeIntegrityFindingBodySchema, req.body);
+    const context = requestContext(req);
+    const finding = await getKnowledgeCollectionService().transitionIntegrityFinding(
+      context.workspaceId,
+      collectionId,
+      findingId,
+      context.actor,
+      input
+    );
+    res.json(finding);
   })
 );
 

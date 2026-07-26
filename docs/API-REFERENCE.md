@@ -4713,6 +4713,9 @@ Knowledge collections establish a workspace-scoped, immutable source catalog for
 | `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                             | Read one cited derived page        |
 | `POST` | `/api/knowledge/collections/:collectionId/pages/:pageId/claims/:claimId/transitions` | Transition one material claim      |
 | `POST` | `/api/knowledge/collections/:collectionId/integrity/lint`                            | Run deterministic integrity lint   |
+| `GET`  | `/api/knowledge/collections/:collectionId/integrity/findings`                        | List durable integrity findings    |
+| `POST` | `/api/knowledge/collections/:collectionId/integrity/findings/:findingId/transitions` | Transition a finding               |
+| `GET`  | `/api/knowledge/collections/:collectionId/integrity/health`                          | Read integrity operational health  |
 | `POST` | `/api/knowledge/collections/:collectionId/search`                                    | Search raw and derived knowledge   |
 | `POST` | `/api/knowledge/collections/:collectionId/search/promotions`                         | Promote selected search results    |
 | `POST` | `/api/knowledge/collections/:collectionId/exports`                                   | Create a cited work product        |
@@ -4837,7 +4840,11 @@ rules, and research-candidate discovery:
       "maxAgeDays": 30
     }
   ],
-  "includeResearchCandidates": true
+  "includeResearchCandidates": true,
+  "includeSemanticCandidates": true,
+  "persistFindings": true,
+  "runId": "nightly-product-knowledge-2026-07-26",
+  "pageLimit": 500
 }
 ```
 
@@ -4845,6 +4852,21 @@ The report counts inspected pages, sources, and claims and returns stable,
 severity-ranked findings for structural, provenance, freshness, and research
 gaps. It contains identifiers but never retained source text. Agent reports are
 limited to resources in the verified launch manifest.
+
+Semantic candidates flag same-key disagreements, near-duplicates,
+source-revision supersession, and low-confidence evidence gaps with both page,
+claim, and source identities. Persisted runs require a stable `runId`. The
+response continuation returns `nextPageCursor` and `complete`; pass the cursor
+into the next request. Work is capped at 500 pages per call, and retrying the
+same run ID and cursor is idempotent. Scheduled workflows can therefore resume
+after interruption without duplicating observations.
+
+Durable findings support `open`, `acknowledged`, `remediating`, and `resolved`
+statuses. Transition requests use `expectedDigest` plus an operation ID and can
+set an owner, acknowledgement reason, due date, and remediation task or proposal
+links. Acknowledgement requires a reason, remediation requires an owner, and
+only administrators resolve. `/integrity/health` exposes scoped counts, overdue
+work, last observation, and `healthy`, `degraded`, or `critical` status.
 
 Transition a material claim by supplying compare-and-set page and lifecycle
 evidence:

@@ -417,6 +417,10 @@ export const KNOWLEDGE_INTEGRITY_FINDING_KINDS = [
   'stale-source',
   'missing-canonical-page',
   'unanswered-question',
+  'candidate-contradiction',
+  'near-duplicate-claim',
+  'supersession-candidate',
+  'evidence-gap',
 ] as const;
 export type KnowledgeIntegrityFindingKind = (typeof KNOWLEDGE_INTEGRITY_FINDING_KINDS)[number];
 export type KnowledgeIntegritySeverity = 'info' | 'warning' | 'error';
@@ -431,6 +435,11 @@ export interface RunKnowledgeIntegrityLintInput {
   asOf?: string;
   freshnessRules?: KnowledgeFreshnessRule[];
   includeResearchCandidates?: boolean;
+  includeSemanticCandidates?: boolean;
+  persistFindings?: boolean;
+  runId?: string;
+  pageCursor?: string;
+  pageLimit?: number;
 }
 
 export interface KnowledgeIntegrityFinding {
@@ -459,6 +468,54 @@ export interface KnowledgeIntegrityReport {
   findings: KnowledgeIntegrityFinding[];
   findingCounts: Record<KnowledgeIntegritySeverity, number>;
   reportDigest: string;
+  findingRecords?: KnowledgeIntegrityFindingRecord[];
+  continuation?: {
+    nextPageCursor?: string;
+    complete: boolean;
+  };
+}
+
+export type KnowledgeIntegrityFindingStatus = 'open' | 'acknowledged' | 'remediating' | 'resolved';
+
+export interface KnowledgeIntegrityFindingTransition {
+  from: KnowledgeIntegrityFindingStatus;
+  to: KnowledgeIntegrityFindingStatus;
+  owner?: string;
+  acknowledgementReason?: string;
+  dueAt?: string;
+  remediationLinks: string[];
+  actorId: string;
+  at: string;
+  operationIdDigest: string;
+  requestDigest: string;
+  digest: string;
+}
+
+export interface KnowledgeIntegrityFindingRecord extends KnowledgeIntegrityFinding {
+  workspaceId: string;
+  collectionId: string;
+  status: KnowledgeIntegrityFindingStatus;
+  owner?: string;
+  acknowledgementReason?: string;
+  dueAt?: string;
+  remediationLinks: string[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+  occurrences: number;
+  revision: number;
+  transitions: KnowledgeIntegrityFindingTransition[];
+  lastRunIdDigest?: string;
+  recordDigest: string;
+}
+
+export interface TransitionKnowledgeIntegrityFindingInput {
+  operationId: string;
+  expectedDigest: string;
+  to: KnowledgeIntegrityFindingStatus;
+  owner?: string;
+  acknowledgementReason?: string;
+  dueAt?: string;
+  remediationLinks?: string[];
 }
 
 export interface CreateKnowledgeQueryPromotionInput {

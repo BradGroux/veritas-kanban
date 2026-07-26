@@ -606,7 +606,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
           markdown: '# Integrity one\n\nWhat evidence is still missing?',
           claims: [
             {
-              claimKey: 'invalid-location',
+              claimKey: 'supported-claim',
               text: 'This claim points beyond the retained source.',
               citations: [
                 {
@@ -614,7 +614,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
                   locator: { kind: 'line-range', startLine: 99, endLine: 100 },
                 },
               ],
-              confidence: 0.7,
+              confidence: 0.4,
             },
           ],
         }),
@@ -628,6 +628,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
         { target: 'source-media-type' as const, match: 'text/markdown', maxAgeDays: 30 },
       ],
       includeResearchCandidates: true,
+      includeSemanticCandidates: true,
     };
 
     const first = await service.runIntegrityLint(WORKSPACE_ID, collection.id, ADMIN, input);
@@ -638,6 +639,8 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     expect(new Set(first.findings.map((finding) => finding.kind))).toEqual(
       new Set([
         'invalid-citation-locator',
+        'candidate-contradiction',
+        'evidence-gap',
         'missing-canonical-page',
         'orphan-page',
         'stale-page',
@@ -646,6 +649,87 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       ])
     );
     expect(first.findings.every((finding) => finding.digest.startsWith('sha256:'))).toBe(true);
+  });
+
+  it('persists and governs integrity finding ownership, acknowledgement, and remediation', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, {
+      ...COLLECTION_INPUT,
+      operationId: 'create-durable-findings',
+      slug: 'durable-findings',
+    });
+    const source = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({ operationId: 'durable-finding-source' })
+    );
+    await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'durable-finding-page',
+      pages: [pageCandidate('durable-finding', source.id)],
+    });
+
+    const report = await service.runIntegrityLint(WORKSPACE_ID, collection.id, ADMIN, {
+      asOf: '2026-07-26T00:00:00.000Z',
+      persistFindings: true,
+      runId: 'durable-finding-run-1',
+    });
+    const retriedReport = await service.runIntegrityLint(WORKSPACE_ID, collection.id, ADMIN, {
+      asOf: '2026-07-26T00:00:00.000Z',
+      persistFindings: true,
+      runId: 'durable-finding-run-1',
+    });
+    const orphan = report.findingRecords?.find((record) => record.kind === 'orphan-page');
+    expect(orphan).toMatchObject({
+      status: 'open',
+      occurrences: 1,
+      revision: 1,
+      workspaceId: WORKSPACE_ID,
+    });
+    expect(retriedReport.findingRecords).toEqual(report.findingRecords);
+    if (!orphan) throw new Error('Expected a persisted orphan finding.');
+    const input = {
+      operationId: 'acknowledge-orphan',
+      expectedDigest: orphan.recordDigest,
+      to: 'acknowledged' as const,
+      acknowledgementReason: 'The isolated page is intentional during migration.',
+      owner: 'architecture',
+      dueAt: '2026-08-15T00:00:00.000Z',
+      remediationLinks: ['task:knowledge-graph-migration'],
+    };
+    const acknowledged = await service.transitionIntegrityFinding(
+      WORKSPACE_ID,
+      collection.id,
+      orphan.id,
+      ADMIN,
+      input
+    );
+    const replayed = await service.transitionIntegrityFinding(
+      WORKSPACE_ID,
+      collection.id,
+      orphan.id,
+      ADMIN,
+      input
+    );
+
+    expect(replayed).toEqual(acknowledged);
+    expect(acknowledged).toMatchObject({
+      status: 'acknowledged',
+      owner: 'architecture',
+      acknowledgementReason: input.acknowledgementReason,
+      remediationLinks: input.remediationLinks,
+      revision: 2,
+    });
+    expect(acknowledged.transitions).toHaveLength(1);
+    expect(await service.listIntegrityFindings(WORKSPACE_ID, collection.id, ADMIN)).toContainEqual(
+      acknowledged
+    );
+    await expect(
+      service.transitionIntegrityFinding(WORKSPACE_ID, collection.id, orphan.id, ADMIN, {
+        ...input,
+        acknowledgementReason: 'Changed acknowledgement.',
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
   });
 
   it('versions, attributes, replays, and reverses claim lifecycle transitions', async () => {

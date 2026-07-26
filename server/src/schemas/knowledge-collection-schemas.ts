@@ -7,12 +7,14 @@ import {
   KNOWLEDGE_COLLECTION_DEFINITION_SCHEMA_VERSION,
   KNOWLEDGE_COLLECTION_SCHEMA_VERSION,
   KNOWLEDGE_INGESTION_PROPOSAL_SCHEMA_VERSION,
+  KNOWLEDGE_INTEGRITY_FINDING_KINDS,
   KNOWLEDGE_PAGE_REVISION_SCHEMA_VERSION,
   KNOWLEDGE_PAGE_SCHEMA_VERSION,
   KNOWLEDGE_SOURCE_SCHEMA_VERSION,
   type KnowledgeCollection,
   type KnowledgeActivityEntry,
   type KnowledgeIngestionProposal,
+  type KnowledgeIntegrityFindingRecord,
   type KnowledgePage,
   type KnowledgeSource,
 } from '@veritas-kanban/shared';
@@ -784,8 +786,93 @@ export const RunKnowledgeIntegrityLintBodySchema = z
       .max(100)
       .optional(),
     includeResearchCandidates: z.boolean().optional(),
+    includeSemanticCandidates: z.boolean().optional(),
+    persistFindings: z.boolean().optional(),
+    runId: opaqueTextSchema.max(240).optional(),
+    pageCursor: identifierSchema.optional(),
+    pageLimit: z.number().int().min(1).max(500).optional(),
+  })
+  .strict()
+  .refine((input) => !input.persistFindings || Boolean(input.runId), {
+    message: 'Persisted integrity lint requires a run identity.',
+    path: ['runId'],
+  });
+
+const KnowledgeIntegrityFindingTransitionSchema = z
+  .object({
+    from: z.enum(['open', 'acknowledged', 'remediating', 'resolved']),
+    to: z.enum(['open', 'acknowledged', 'remediating', 'resolved']),
+    owner: opaqueTextSchema.max(240).optional(),
+    acknowledgementReason: z.string().trim().min(1).max(2_000).optional(),
+    dueAt: z.iso.datetime().optional(),
+    remediationLinks: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    actorId: opaqueTextSchema,
+    at: z.iso.datetime(),
+    operationIdDigest: digestSchema,
+    requestDigest: digestSchema,
+    digest: digestSchema,
   })
   .strict();
+
+export const KnowledgeIntegrityFindingRecordSchema = z
+  .object({
+    id: identifierSchema,
+    kind: z.enum(KNOWLEDGE_INTEGRITY_FINDING_KINDS),
+    severity: z.enum(['info', 'warning', 'error']),
+    message: z.string().trim().min(1).max(2_000),
+    pageId: identifierSchema.optional(),
+    sourceId: identifierSchema.optional(),
+    claimId: identifierSchema.optional(),
+    relatedIds: z.array(z.string().trim().min(1).max(2_000)).max(1_000),
+    digest: digestSchema,
+    workspaceId: identifierSchema,
+    collectionId: identifierSchema,
+    status: z.enum(['open', 'acknowledged', 'remediating', 'resolved']),
+    owner: opaqueTextSchema.max(240).optional(),
+    acknowledgementReason: z.string().trim().min(1).max(2_000).optional(),
+    dueAt: z.iso.datetime().optional(),
+    remediationLinks: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    firstSeenAt: z.iso.datetime(),
+    lastSeenAt: z.iso.datetime(),
+    occurrences: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+    transitions: z.array(KnowledgeIntegrityFindingTransitionSchema).max(1_000),
+    lastRunIdDigest: digestSchema.optional(),
+    recordDigest: digestSchema,
+  })
+  .strict();
+
+export const TransitionKnowledgeIntegrityFindingBodySchema = z
+  .object({
+    operationId: opaqueTextSchema.max(240),
+    expectedDigest: digestSchema,
+    to: z.enum(['open', 'acknowledged', 'remediating', 'resolved']),
+    owner: opaqueTextSchema.max(240).optional(),
+    acknowledgementReason: z.string().trim().min(1).max(2_000).optional(),
+    dueAt: z.iso.datetime().optional(),
+    remediationLinks: z
+      .array(z.string().trim().min(1).max(2_000))
+      .max(100)
+      .refine(uniqueStrings)
+      .optional(),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    if (input.to === 'acknowledged' && !input.acknowledgementReason) {
+      context.addIssue({
+        code: 'custom',
+        path: ['acknowledgementReason'],
+        message: 'Acknowledged findings require a reason.',
+      });
+    }
+    if (input.to === 'remediating' && !input.owner) {
+      context.addIssue({
+        code: 'custom',
+        path: ['owner'],
+        message: 'Remediating findings require an owner.',
+      });
+    }
+  });
 
 const KnowledgeSearchResultSchema = z
   .object({
@@ -860,4 +947,10 @@ export function parseKnowledgeIngestionProposal(value: unknown): KnowledgeIngest
 
 export function parseKnowledgeActivityEntry(value: unknown): KnowledgeActivityEntry {
   return KnowledgeActivityEntrySchema.parse(value) as KnowledgeActivityEntry;
+}
+
+export function parseKnowledgeIntegrityFindingRecord(
+  value: unknown
+): KnowledgeIntegrityFindingRecord {
+  return KnowledgeIntegrityFindingRecordSchema.parse(value) as KnowledgeIntegrityFindingRecord;
 }

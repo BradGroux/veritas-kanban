@@ -58,7 +58,7 @@ Apply and reverse transitions are versioned, actor-attributed, timestamped, and 
 
 ## Storage and API
 
-The file backend keeps collection metadata, source revisions, derived pages, ingestion proposals, activity, and deduplicated blobs in one lock-protected, atomically replaced `knowledge-collections.json`. SQLite migrations 30 through 32 add unique workspace, slug, source revision, operation, page identity, stable-key, proposal, and activity constraints. Both implement the same repository interface.
+The file backend keeps collection metadata, source revisions, derived pages, ingestion proposals, activity, integrity findings, and deduplicated blobs in one lock-protected, atomically replaced `knowledge-collections.json`. SQLite migrations 30 through 33 add unique workspace, slug, source revision, operation, page identity, stable-key, proposal, activity, and integrity-finding constraints. Both implement the same repository interface.
 
 The initial REST surface is mounted at both `/api/v1/knowledge/collections` and `/api/knowledge/collections`:
 
@@ -74,6 +74,9 @@ The initial REST surface is mounted at both `/api/v1/knowledge/collections` and 
 | `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                             | Read a derived page         |
 | `POST` | `/knowledge/collections/:collectionId/pages/:pageId/claims/:claimId/transitions` | Transition a cited claim    |
 | `POST` | `/knowledge/collections/:collectionId/integrity/lint`                            | Run deterministic lint      |
+| `GET`  | `/knowledge/collections/:collectionId/integrity/findings`                        | List durable findings       |
+| `POST` | `/knowledge/collections/:collectionId/integrity/findings/:findingId/transitions` | Transition a finding        |
+| `GET`  | `/knowledge/collections/:collectionId/integrity/health`                          | Read integrity health       |
 | `POST` | `/knowledge/collections/:collectionId/search`                                    | Search raw and derived data |
 | `POST` | `/knowledge/collections/:collectionId/search/promotions`                         | Promote selected results    |
 | `POST` | `/knowledge/collections/:collectionId/exports`                                   | Create a cited work product |
@@ -108,6 +111,27 @@ or source media types. Findings have stable IDs and digests, contain identifiers
 rather than source text, and are deterministically ordered. Repeating an
 unchanged request over unchanged inputs returns the same report digest.
 Research candidates are opt-in and informational.
+
+Optional semantic candidate checks compare a bounded claim set and flag
+low-confidence evidence gaps, same-key disagreements, near-duplicates, and
+claims citing different revisions of one logical source. Findings link both
+page, claim, and source identities so reviewers can inspect both sides without
+copying protected text into the report.
+
+Set `persistFindings: true` with a stable `runId` to synchronize findings into
+the file or SQLite repository. Exact retries of one run chunk do not increment
+occurrence counts. `pageLimit` is capped at 500 and `pageCursor` resumes the
+deterministically ordered page scan; the response returns a continuation with
+the next cursor and completion state. Each scheduled-workflow tick therefore
+performs bounded work, persists idempotently, and resumes after interruption.
+
+Durable findings retain severity, status, owner, acknowledgement reason, due
+date, remediation task or proposal links, first and last observation,
+occurrence count, revision, and digest-bound transition history. Status is
+`open`, `acknowledged`, `remediating`, or `resolved`; only administrators
+resolve a finding. The findings list and integrity-health routes apply the same
+launch scope and expose open, acknowledged, remediating, resolved, overdue, and
+last-observation counts.
 
 ## Claim lifecycle
 
