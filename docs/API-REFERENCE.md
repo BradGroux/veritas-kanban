@@ -4177,11 +4177,14 @@ configured.
 
 ## Execution Admission
 
-Direct task starts, workflow roots, and provider-backed workflow steps
-atomically reserve configured run, process, and estimated-memory capacity
-before attempt persistence or provider dispatch. Workflow roots use the
-`workflow-control` admission provider; child steps use the resolved execution
-provider and selected host. Inspection requires `agent:read`.
+Direct starts, scheduled work, watcher continuations, conversation resume and
+follow-up, retries, fallbacks, provider handoffs, recovery, child-agent starts,
+workflow roots, and provider-backed workflow steps all pass through the same
+durable admission and queue contract. Each atomically reserves configured run,
+process, and estimated-memory capacity before attempt persistence or provider
+dispatch. Workflow roots use the `workflow-control` admission provider; child
+steps use the resolved execution provider and selected host. Inspection
+requires `agent:read`.
 
 | Method | Path                                          | Description                                                    |
 | ------ | --------------------------------------------- | -------------------------------------------------------------- |
@@ -4191,6 +4194,7 @@ provider and selected host. Inspection requires `agent:read`.
 | `POST` | `/api/admission/queue/:id/cancel`             | Cancel one queued launch before provider dispatch              |
 | `GET`  | `/api/admission/tree/:rootObjectiveId`        | Summarize one aggregate execution tree and its control state   |
 | `POST` | `/api/admission/tree/:rootObjectiveId/cancel` | Cancel queued and verified running work for one execution tree |
+| `POST` | `/api/admission/tree/:rootObjectiveId/resume` | Safely resume a circuit-breaker-paused execution tree          |
 | `GET`  | `/api/admission/:id`                          | Inspect one durable reservation                                |
 
 List filters are `workspaceId`, `taskId`, `rootTaskId`, `provider`, `hostId`,

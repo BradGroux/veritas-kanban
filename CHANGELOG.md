@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added durable execution-tree cancellation and a provider-neutral fan-out
+  circuit breaker. Operators can cancel one queued launch or an entire root
+  objective through REST, `vk admission`, and Operations; root cancellation is
+  recorded before descendants drain so late resume, retry, fallback,
+  workflow-step, and child-agent launches fail closed. The breaker evaluates
+  durable descendant count, depth, active and queued work, capacity pressure,
+  and aggregate budget pressure before every expansion, persists bounded
+  evidence across restart, and requires a safe operator resume before the tree
+  can grow again (#1055).
+- Routed scheduled workflows, watcher continuations, conversation resume and
+  follow-up, retries, fallbacks, provider handoffs, recovery, and child-agent
+  starts through the same durable admission and queue contract used by direct
+  tasks and workflow steps. Every source preserves its causal execution-tree
+  identity, revalidates immutable launch evidence before dispatch, and rejects
+  hidden adapter-owned queues or bypass launches (#1054).
+- Added one bounded durable admission queue shared by direct tasks and
+  workflows. Atomic dequeue claims both a queue lease and capacity; restart
+  recovery expires abandoned claims without duplicate dispatch. The scheduler
+  combines explicit priority, capped age promotion, workspace fairness, and
+  deterministic tie-breaking while retaining redacted conditional selection
+  evidence. REST, `vk admission`, and Operations expose queue health,
+  readiness, limiting scopes, age, priority, and safe cancellation with file
+  and SQLite parity (#1053).
 - Added versioned execution-tree identities and aggregate budget reservations
   to direct attempts, conversation continuations, retries, fallbacks, provider
   handoffs, child agents, workflow roots, and workflow steps. Capacity and the
