@@ -33,6 +33,18 @@ const CLI_SANDBOX: ProviderRuntimeCapabilityOverrides = {
   'environment.allowlist': supported('The adapter receives an allowlisted environment.'),
 };
 
+const RUN_EGRESS_GATEWAY: ProviderRuntimeCapabilityOverrides = {
+  'network.allowlist': hostEnforced(
+    'Veritas injects the authenticated run-scoped gateway and blocks local provider startup if the gateway is unavailable.'
+  ),
+  'network.block-private': hostEnforced(
+    'The run-scoped gateway resolves destinations and enforces private, link-local, and loopback policy before opening the transport.'
+  ),
+  'network.block-metadata': hostEnforced(
+    'The run-scoped gateway blocks metadata hostnames and resolved metadata addresses before opening the transport.'
+  ),
+};
+
 const NOT_YET_IMPLEMENTED: ProviderRuntimeCapabilityOverrides = {
   'run.follow-up': unsupported('The adapter does not expose provider-native follow-up turns.'),
   'run.steer': unsupported('The adapter does not expose provider-native steering.'),
@@ -50,6 +62,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ...COMMON_SUPPORTED,
     ...CLI_SANDBOX,
     ...NOT_YET_IMPLEMENTED,
+    ...RUN_EGRESS_GATEWAY,
     'run.stop': supported('The adapter terminates the supervised Codex process.'),
     'run.reattach': supported(
       'The durable run supervisor validates and reattaches the original Codex process group.'
@@ -77,6 +90,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ...COMMON_SUPPORTED,
     ...CLI_SANDBOX,
     ...NOT_YET_IMPLEMENTED,
+    ...RUN_EGRESS_GATEWAY,
     'run.stop': supported('The adapter aborts the active Codex SDK run.'),
     'run.streaming': supported('Codex SDK thread events are streamed into run events.'),
     'run.structured-events': supported('Codex SDK emits typed thread events.'),
@@ -106,6 +120,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       ...COMMON_SUPPORTED,
       ...CLI_SANDBOX,
       ...NOT_YET_IMPLEMENTED,
+      ...RUN_EGRESS_GATEWAY,
       'run.stop': supported(
         'The adapter requests turn/interrupt, closes the supervised stdio connection, and retains a bounded process-kill fallback.'
       ),
@@ -171,6 +186,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
   'claude-code': definition('claude-code', 'Claude Code', 'claude-code-stream-json/v1', {
     ...COMMON_SUPPORTED,
     ...NOT_YET_IMPLEMENTED,
+    ...RUN_EGRESS_GATEWAY,
     'run.stop': supported(
       'The adapter sends SIGTERM to the supervised Claude Code process with a bounded SIGKILL fallback.'
     ),
@@ -229,6 +245,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
   'acp-stdio': definition('acp-stdio', 'ACP stdio', 'acp/v1', {
     ...COMMON_SUPPORTED,
     ...NOT_YET_IMPLEMENTED,
+    ...RUN_EGRESS_GATEWAY,
     'run.stop': supported(
       'The adapter sends session/cancel and closes the supervised ACP process with a bounded kill fallback.'
     ),
@@ -278,6 +295,7 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
     ...COMMON_SUPPORTED,
     ...CLI_SANDBOX,
     ...NOT_YET_IMPLEMENTED,
+    ...RUN_EGRESS_GATEWAY,
     'run.stop': supported('The adapter terminates the supervised Hermes process.'),
     'run.reattach': supported(
       'The durable run supervisor validates and reattaches the original Hermes process group.'
@@ -372,6 +390,10 @@ function definition(
 
 function supported(reason: string) {
   return posture('supported', reason);
+}
+
+function hostEnforced(reason: string) {
+  return { state: 'supported' as const, reason, source: 'host-enforced' as const };
 }
 
 function advisory(reason: string) {

@@ -14,7 +14,7 @@ describe('HarnessCompatibilityMatrixService', () => {
     expect(matrix).toMatchObject({
       schemaVersion: 'harness-compatibility-matrix/v1',
       generatedAt: NOW.toISOString(),
-      probeRevision: 15,
+      probeRevision: 16,
     });
     expect(matrix.records.map((record) => record.agentType)).toEqual([
       'buzz-agent',

@@ -469,7 +469,7 @@ Implemented:
   successful provider result fails closed.
 - **Session continuity evidence** — Claude `session_id` is stored on the attempt
   and separately from turn/item identity in the event schema.
-- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 15,
+- **Versioned readiness** — The exact v2.1.218 runtime, probe revision 16,
   authentication posture, and safe agent-discovery summary determine support
   status.
 - **Capability truth** — The shared approval broker is available, but this
@@ -1176,6 +1176,11 @@ Reusable launch-time sandbox presets for provider execution guardrails.
 - Dry-runs also compile `run-egress-policy/v1`: host rules are normalized, deny
   rules take precedence, unsafe global allow wildcards fail validation, and a
   deterministic policy digest binds later gateway launch evidence.
+- Selective local-provider policies start an authenticated loopback gateway
+  before provider dispatch. Veritas injects HTTP, HTTPS, and all-proxy variables,
+  clears proxy bypass variables, pins the evaluated DNS address for transport,
+  and stops the gateway with the run. Remote OpenClaw execution fails closed
+  when the preset requires this local gateway.
 
 **Enforcement:**
 
@@ -1201,7 +1206,9 @@ Reusable launch-time sandbox presets for provider execution guardrails.
   catalogs. Existing provider authentication and explicit environment
   passthrough are not mislabeled as brokered.
 - Provider capability checks currently distinguish Codex CLI, Codex SDK,
-  Codex app-server, Claude Code, Hermes, and OpenClaw execution behavior.
+  Codex app-server, Claude Code, ACP stdio harnesses, Hermes, and OpenClaw
+  execution behavior. Gateway capability evidence is invalidated by provider
+  runtime probe revision 16.
 
 ### Session Isolation
 

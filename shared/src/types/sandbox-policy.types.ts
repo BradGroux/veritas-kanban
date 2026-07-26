@@ -120,7 +120,14 @@ export interface RunEgressGatewayEvidence {
   state: 'enforced' | 'stopped';
   protocols: Array<'http' | 'connect' | 'ws'>;
   proxyEnvironmentKeys: Array<
-    'HTTP_PROXY' | 'HTTPS_PROXY' | 'http_proxy' | 'https_proxy' | 'NO_PROXY' | 'no_proxy'
+    | 'HTTP_PROXY'
+    | 'HTTPS_PROXY'
+    | 'ALL_PROXY'
+    | 'http_proxy'
+    | 'https_proxy'
+    | 'all_proxy'
+    | 'NO_PROXY'
+    | 'no_proxy'
   >;
   startedAt: string;
   stoppedAt?: string;

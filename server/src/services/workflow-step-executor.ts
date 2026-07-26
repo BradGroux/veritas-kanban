@@ -42,6 +42,11 @@ import { getToolPolicyService } from './tool-policy-service.js';
 import { getAgentHostService } from './agent-host-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 import {
+  getRunEgressGatewayService,
+  runEgressPolicyRequiresGateway,
+  type RunEgressGatewayService,
+} from './run-egress-gateway-service.js';
+import {
   assertProviderRuntimeCapabilities,
   assertProviderRuntimeControl,
   BASELINE_LAUNCH_CAPABILITIES,
@@ -80,6 +85,7 @@ interface WorkflowStepExecutorOptions {
   runtimeManifestResolver?: (agent: AgentConfig) => Promise<ProviderRuntimeManifest>;
   persistRun?: (run: WorkflowRun) => Promise<void>;
   phaseAuthority?: PhaseLaunchAuthorityService;
+  runEgressGateway?: Pick<RunEgressGatewayService, 'start'>;
 }
 
 type WorkflowExecutableProvider = Extract<ExecutableAgentProvider, 'codex-sdk' | 'openclaw'>;
@@ -122,6 +128,7 @@ export class WorkflowStepExecutor {
   private runtimeManifestResolver: (agent: AgentConfig) => Promise<ProviderRuntimeManifest>;
   private persistRun: (run: WorkflowRun) => Promise<void>;
   private phaseAuthority: PhaseLaunchAuthorityService;
+  private runEgressGateway: Pick<RunEgressGatewayService, 'start'>;
   private appendCountCache?: Map<string, number>; // Performance: Track append counts to reduce stat() calls
 
   constructor(runsDir?: string, options: WorkflowStepExecutorOptions = {}) {
@@ -135,6 +142,7 @@ export class WorkflowStepExecutor {
       });
     this.persistRun = options.persistRun ?? (async () => undefined);
     this.phaseAuthority = options.phaseAuthority ?? new PhaseLaunchAuthorityService();
+    this.runEgressGateway = options.runEgressGateway ?? getRunEgressGatewayService();
   }
 
   /**
@@ -391,6 +399,17 @@ export class WorkflowStepExecutor {
     preparation: WorkflowAgentStepPreparation,
     run: WorkflowRun
   ): Promise<StepExecutionResult> {
+    const egressPolicy = preparation.sandboxPolicy.effective.networkPolicy;
+    if (
+      preparation.runtimeProvider === 'openclaw' &&
+      egressPolicy &&
+      preparation.sandboxPolicy.preset.enforcement === 'required' &&
+      runEgressPolicyRequiresGateway(egressPolicy)
+    ) {
+      throw new Error(
+        `OpenClaw workflow step ${preparation.step.id} cannot enforce the required run-scoped egress gateway`
+      );
+    }
     if (preparation.runtimeProvider === 'codex-sdk') {
       return this.executeCodexAgentStep(
         preparation.step,
@@ -843,125 +862,177 @@ export class WorkflowStepExecutor {
       agentDef?.command,
       `Workflow agent ${agentDef?.id || step.agent || step.id}`
     );
-    const { Codex } = await import('@openai/codex-sdk');
-    const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
-    const codex = new Codex({
-      codexPathOverride,
-      env: buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
-    });
-
-    const sessionKey = step.agent || agentDef?.id || step.id;
-    const existingThreadId =
-      sessionConfig.mode === 'reuse'
-        ? (run.context._sessions as Record<string, string> | undefined)?.[sessionKey]
+    const egressPolicy = sandboxPolicy.effective.networkPolicy;
+    const egressGateway =
+      egressPolicy && runEgressPolicyRequiresGateway(egressPolicy)
+        ? await this.runEgressGateway.start({
+            runId: this.workflowStepAttemptId(run, step.id),
+            policy: egressPolicy,
+            onDecision: async (event) => {
+              await getGovernanceTraceService().record({
+                kind: 'policy',
+                outcome: event.decision.decision === 'allow' ? 'allowed' : 'blocked',
+                title: 'Workflow egress decision',
+                summary: `${event.decision.protocol} request ${event.decision.decision}: ${event.decision.reason}`,
+                subject: {
+                  taskId: run.taskId,
+                  agentId: step.agent,
+                  actionType: 'workflow.network-egress',
+                },
+                evaluatedRules: [
+                  {
+                    id: event.decision.reason,
+                    label: 'Run-scoped egress gateway',
+                    type: 'policy',
+                    status: 'matched',
+                    outcome: event.decision.decision === 'allow' ? 'allowed' : 'blocked',
+                    message: event.decision.reason,
+                  },
+                ],
+                raw: {
+                  gatewayId: event.gatewayId,
+                  runKey: event.runKey,
+                  occurredAt: event.occurredAt,
+                  policyHash: event.decision.policyHash,
+                  protocol: event.decision.protocol,
+                  hostKey: event.decision.hostKey,
+                  port: event.decision.port,
+                  method: event.decision.method,
+                  decision: event.decision.decision,
+                  reason: event.decision.reason,
+                  blockedAddressClass: event.decision.blockedAddressClass,
+                  approvalEligible: event.decision.approvalEligible,
+                },
+              });
+            },
+          })
         : undefined;
-    const thread = existingThreadId
-      ? codex.resumeThread(existingThreadId, {
-          workingDirectory,
-          sandboxMode: sandboxPolicy.effective.sandboxMode,
-          approvalPolicy: 'never',
-          networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
-          model: agentDef?.model,
-        })
-      : codex.startThread({
-          workingDirectory,
-          skipGitRepoCheck: true,
-          sandboxMode: sandboxPolicy.effective.sandboxMode,
-          approvalPolicy: 'never',
-          networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
-          model: agentDef?.model,
-        });
+    try {
+      const { Codex } = await import('@openai/codex-sdk');
+      const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
+      const codex = new Codex({
+        codexPathOverride,
+        env: {
+          ...buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
+          ...egressGateway?.environment,
+        },
+      });
 
-    const streamed = await thread.runStreamed(prompt);
-    const events: unknown[] = [];
-    let threadId = existingThreadId || '';
-    let finalResponse = '';
-    let failureMessage = '';
-    let toolCalls = 0;
-    let tokenUsage:
-      | {
-          inputTokens: number;
-          outputTokens: number;
-          totalTokens?: number;
-          cost?: number;
+      const sessionKey = step.agent || agentDef?.id || step.id;
+      const existingThreadId =
+        sessionConfig.mode === 'reuse'
+          ? (run.context._sessions as Record<string, string> | undefined)?.[sessionKey]
+          : undefined;
+      const thread = existingThreadId
+        ? codex.resumeThread(existingThreadId, {
+            workingDirectory,
+            sandboxMode: sandboxPolicy.effective.sandboxMode,
+            approvalPolicy: 'never',
+            networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
+            model: agentDef?.model,
+          })
+        : codex.startThread({
+            workingDirectory,
+            skipGitRepoCheck: true,
+            sandboxMode: sandboxPolicy.effective.sandboxMode,
+            approvalPolicy: 'never',
+            networkAccessEnabled: sandboxPolicy.effective.networkAccessEnabled,
+            model: agentDef?.model,
+          });
+
+      const streamed = await thread.runStreamed(prompt);
+      const events: unknown[] = [];
+      let threadId = existingThreadId || '';
+      let finalResponse = '';
+      let failureMessage = '';
+      let toolCalls = 0;
+      let tokenUsage:
+        | {
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens?: number;
+            cost?: number;
+          }
+        | undefined;
+
+      for await (const event of streamed.events) {
+        events.push(event);
+        if (this.isCodexToolEvent(event)) {
+          assertProviderRuntimeControl(runtimeManifest, 'tool-calls');
+          toolCalls++;
         }
-      | undefined;
+        const eventUsage = this.extractCodexBudgetUsage(event);
+        if (eventUsage) {
+          assertProviderRuntimeControl(runtimeManifest, 'token-usage');
+          tokenUsage = eventUsage;
+        }
+        if (event.type === 'thread.started') {
+          threadId = event.thread_id;
+          this.recordWorkflowSession(run, step, sessionKey, threadId);
+        }
+        if (event.type === 'item.completed' && event.item.type === 'agent_message') {
+          finalResponse = event.item.text;
+        }
+        if (event.type === 'turn.failed') failureMessage = event.error.message;
+        if (event.type === 'error') failureMessage = event.message;
+      }
 
-    for await (const event of streamed.events) {
-      events.push(event);
-      if (this.isCodexToolEvent(event)) {
-        assertProviderRuntimeControl(runtimeManifest, 'tool-calls');
-        toolCalls++;
+      if (failureMessage) {
+        throw new Error(`Codex workflow step failed: ${failureMessage}`);
       }
-      const eventUsage = this.extractCodexBudgetUsage(event);
-      if (eventUsage) {
-        assertProviderRuntimeControl(runtimeManifest, 'token-usage');
-        tokenUsage = eventUsage;
-      }
-      if (event.type === 'thread.started') {
-        threadId = event.thread_id;
-        this.recordWorkflowSession(run, step, sessionKey, threadId);
-      }
-      if (event.type === 'item.completed' && event.item.type === 'agent_message') {
-        finalResponse = event.item.text;
-      }
-      if (event.type === 'turn.failed') failureMessage = event.error.message;
-      if (event.type === 'error') failureMessage = event.message;
+
+      const result = [
+        `# Codex Workflow Step: ${step.name || step.id}`,
+        '',
+        `Agent: ${agentDef?.name || step.agent}`,
+        `Provider: ${agentDef?.provider || 'codex-sdk'}`,
+        `Model: ${agentDef?.model || 'default'}`,
+        `Thread: ${threadId || 'unknown'}`,
+        `Working directory: ${workingDirectory}`,
+        `Host routing: ${hostRouting.policy}`,
+        `Selected host: ${hostRouting.selectedHostName || hostRouting.selectedHostId || 'none'}`,
+        `Routing reason: ${hostRouting.reason}`,
+        '',
+        '## Prompt',
+        '',
+        prompt,
+        '',
+        '## Final Response',
+        '',
+        finalResponse || 'Codex completed without a final response.',
+        '',
+        'STATUS: done',
+        `OUTPUT: ${finalResponse || 'Codex completed without a final response.'}`,
+        '',
+        '<details><summary>Codex events</summary>',
+        '',
+        '```json',
+        JSON.stringify(events, null, 2),
+        '```',
+        '',
+        '</details>',
+      ].join('\n');
+
+      const parsed = this.parseStepOutput(result, step);
+      await this.validateAcceptanceCriteria(step, result, parsed);
+      const outputPath = await this.saveStepOutput(run.id, step.id, result, step.output?.file);
+      await this.appendProgressFile(run.id, step.id, result);
+
+      return {
+        output: parsed,
+        outputPath,
+        budgetUsage: {
+          inputTokens: tokenUsage?.inputTokens,
+          outputTokens: tokenUsage?.outputTokens,
+          totalTokens: tokenUsage?.totalTokens,
+          costUsd: tokenUsage?.cost,
+          toolCalls,
+        },
+        providerRuntimeManifest: runtimeManifest,
+      };
+    } finally {
+      await egressGateway?.stop();
     }
-
-    if (failureMessage) {
-      throw new Error(`Codex workflow step failed: ${failureMessage}`);
-    }
-
-    const result = [
-      `# Codex Workflow Step: ${step.name || step.id}`,
-      '',
-      `Agent: ${agentDef?.name || step.agent}`,
-      `Provider: ${agentDef?.provider || 'codex-sdk'}`,
-      `Model: ${agentDef?.model || 'default'}`,
-      `Thread: ${threadId || 'unknown'}`,
-      `Working directory: ${workingDirectory}`,
-      `Host routing: ${hostRouting.policy}`,
-      `Selected host: ${hostRouting.selectedHostName || hostRouting.selectedHostId || 'none'}`,
-      `Routing reason: ${hostRouting.reason}`,
-      '',
-      '## Prompt',
-      '',
-      prompt,
-      '',
-      '## Final Response',
-      '',
-      finalResponse || 'Codex completed without a final response.',
-      '',
-      'STATUS: done',
-      `OUTPUT: ${finalResponse || 'Codex completed without a final response.'}`,
-      '',
-      '<details><summary>Codex events</summary>',
-      '',
-      '```json',
-      JSON.stringify(events, null, 2),
-      '```',
-      '',
-      '</details>',
-    ].join('\n');
-
-    const parsed = this.parseStepOutput(result, step);
-    await this.validateAcceptanceCriteria(step, result, parsed);
-    const outputPath = await this.saveStepOutput(run.id, step.id, result, step.output?.file);
-    await this.appendProgressFile(run.id, step.id, result);
-
-    return {
-      output: parsed,
-      outputPath,
-      budgetUsage: {
-        inputTokens: tokenUsage?.inputTokens,
-        outputTokens: tokenUsage?.outputTokens,
-        totalTokens: tokenUsage?.totalTokens,
-        costUsd: tokenUsage?.cost,
-        toolCalls,
-      },
-      providerRuntimeManifest: runtimeManifest,
-    };
   }
 
   private extractCodexBudgetUsage(event: unknown):

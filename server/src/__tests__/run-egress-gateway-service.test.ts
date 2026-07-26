@@ -83,6 +83,7 @@ describe('RunEgressGatewayService', () => {
       protocols: ['http', 'connect', 'ws'],
     });
     expect(JSON.stringify(gateway.evidence)).not.toContain(proxy.password);
+    expect(gateway.environment.ALL_PROXY).toBe(gateway.environment.HTTP_PROXY);
     expect(gateway.environment.NO_PROXY).toBe('');
 
     await expect(gateway.stop()).resolves.toMatchObject({
