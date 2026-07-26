@@ -6,12 +6,17 @@ import {
   DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION,
   DEPENDENCY_KINDS,
   DEPENDENCY_OUTCOMES,
+  DEPENDENCY_RETRY_BUDGET_KINDS,
+  DEPENDENCY_ROUTE_NO_MATCH_ACTIONS,
   type DependencyCircuitPolicy,
   type DependencyCircuitPersistedState,
   type DependencyCircuitReason,
   type DependencyCircuitSample,
   type DependencyCircuitSnapshot,
   type DependencyIdentity,
+  type DependencyRetryBudgetPolicy,
+  type DependencyRetryBudgetUsage,
+  type DependencyRoutePolicy,
 } from '@veritas-kanban/shared';
 
 const IdentifierSchema = z.string().trim().min(1).max(240);
@@ -100,5 +105,31 @@ export const DependencyCircuitPersistedStateSchema: z.ZodType<DependencyCircuitP
     snapshot: DependencyCircuitSnapshotSchema,
     samples: z.array(DependencyCircuitSampleSchema).max(100_000),
     capturedAt: TimestampSchema,
+  })
+  .strict();
+
+export const DependencyRoutePolicySchema: z.ZodType<DependencyRoutePolicy> = z
+  .object({
+    allowFallback: z.boolean(),
+    noMatchAction: z.enum(DEPENDENCY_ROUTE_NO_MATCH_ACTIONS),
+  })
+  .strict();
+
+const retryBudgetShape = Object.fromEntries(
+  DEPENDENCY_RETRY_BUDGET_KINDS.map((kind) => [
+    kind,
+    z.number().int().min(0).max(1_000_000),
+  ])
+) as Record<(typeof DEPENDENCY_RETRY_BUDGET_KINDS)[number], z.ZodNumber>;
+
+export const DependencyRetryBudgetPolicySchema: z.ZodType<DependencyRetryBudgetPolicy> = z
+  .object({
+    limits: z.object(retryBudgetShape).strict(),
+  })
+  .strict();
+
+export const DependencyRetryBudgetUsageSchema: z.ZodType<DependencyRetryBudgetUsage> = z
+  .object({
+    used: z.object(retryBudgetShape).strict(),
   })
   .strict();

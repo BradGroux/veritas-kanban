@@ -27,10 +27,25 @@ export const DEPENDENCY_OUTCOMES = [
 ] as const;
 
 export const DEPENDENCY_CIRCUIT_STATES = ['closed', 'open', 'half-open'] as const;
+export const DEPENDENCY_ROUTE_NO_MATCH_ACTIONS = [
+  'reject',
+  'queue',
+  'operator-approval',
+] as const;
+export const DEPENDENCY_RETRY_BUDGET_KINDS = [
+  'transport-retry',
+  'throttling-backoff',
+  'circuit-rejection',
+  'model-resample',
+  'watchdog-recovery',
+  'provider-fallback',
+] as const;
 
 export type DependencyKind = (typeof DEPENDENCY_KINDS)[number];
 export type DependencyOutcome = (typeof DEPENDENCY_OUTCOMES)[number];
 export type DependencyCircuitState = (typeof DEPENDENCY_CIRCUIT_STATES)[number];
+export type DependencyRouteNoMatchAction = (typeof DEPENDENCY_ROUTE_NO_MATCH_ACTIONS)[number];
+export type DependencyRetryBudgetKind = (typeof DEPENDENCY_RETRY_BUDGET_KINDS)[number];
 
 export interface DependencyIdentity {
   kind: DependencyKind;
@@ -135,4 +150,57 @@ export interface DependencyOutcomeSignals {
   timedOut?: boolean;
   statusCode?: number;
   errorCode?: string;
+}
+
+export interface DependencyRouteCandidate {
+  id: string;
+  label: string;
+  dependency: DependencyIdentity;
+  priority: number;
+  policy?: DependencyCircuitPolicy;
+}
+
+export interface DependencyRoutePolicy {
+  allowFallback: boolean;
+  noMatchAction: DependencyRouteNoMatchAction;
+}
+
+export interface DependencyRouteExclusion {
+  candidateId: string;
+  dependencyKey: string;
+  reason: 'circuit-open' | 'probe-concurrency-exhausted';
+  retryAt?: string;
+  snapshot: DependencyCircuitSnapshot;
+}
+
+export type DependencyRouteDecision =
+  | {
+      selected: true;
+      candidate: DependencyRouteCandidate;
+      admission: Extract<DependencyCircuitAdmission, { allowed: true }>;
+      fallback: boolean;
+      reason: string;
+      exclusions: DependencyRouteExclusion[];
+    }
+  | {
+      selected: false;
+      action: DependencyRouteNoMatchAction;
+      reason: string;
+      exclusions: DependencyRouteExclusion[];
+    };
+
+export interface DependencyRetryBudgetPolicy {
+  limits: Record<DependencyRetryBudgetKind, number>;
+}
+
+export interface DependencyRetryBudgetUsage {
+  used: Record<DependencyRetryBudgetKind, number>;
+}
+
+export interface DependencyRetryBudgetDecision {
+  kind: DependencyRetryBudgetKind;
+  allowed: boolean;
+  limit: number;
+  used: number;
+  remaining: number;
 }
