@@ -1,6 +1,10 @@
 import path from 'node:path';
 import type { DependencyIdentity } from '@veritas-kanban/shared';
 import {
+  FileDependencyCircuitOverrideRepository,
+  InMemoryDependencyCircuitOverrideRepository,
+} from '../storage/dependency-circuit-override-repository.js';
+import {
   FileDependencyCircuitStateRepository,
   InMemoryDependencyCircuitStateRepository,
 } from '../storage/dependency-circuit-state-repository.js';
@@ -17,6 +21,9 @@ export function getDependencyCircuitRegistryService(): DependencyCircuitRegistry
     repository: new FileDependencyCircuitStateRepository(
       path.join(getDataDir(), 'dependency-circuits')
     ),
+    overrideRepository: new FileDependencyCircuitOverrideRepository(
+      path.join(getDataDir(), 'dependency-circuit-overrides')
+    ),
   });
   return registry;
 }
@@ -31,6 +38,7 @@ export function defaultDependencyCircuitExecutionService(): DependencyCircuitExe
     return new DependencyCircuitExecutionService(
       new DependencyCircuitRegistryService({
         repository: new InMemoryDependencyCircuitStateRepository(),
+        overrideRepository: new InMemoryDependencyCircuitOverrideRepository(),
       })
     );
   }

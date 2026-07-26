@@ -3,6 +3,8 @@ export const DEPENDENCY_CIRCUIT_POLICY_SCHEMA_VERSION =
   'dependency-circuit-policy/v1' as const;
 export const DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION =
   'dependency-circuit-state/v1' as const;
+export const DEPENDENCY_CIRCUIT_OVERRIDE_SCHEMA_VERSION =
+  'dependency-circuit-override/v1' as const;
 
 export const DEPENDENCY_KINDS = [
   'provider',
@@ -40,12 +42,15 @@ export const DEPENDENCY_RETRY_BUDGET_KINDS = [
   'watchdog-recovery',
   'provider-fallback',
 ] as const;
+export const DEPENDENCY_CIRCUIT_OVERRIDE_MODES = ['allow', 'block'] as const;
 
 export type DependencyKind = (typeof DEPENDENCY_KINDS)[number];
 export type DependencyOutcome = (typeof DEPENDENCY_OUTCOMES)[number];
 export type DependencyCircuitState = (typeof DEPENDENCY_CIRCUIT_STATES)[number];
 export type DependencyRouteNoMatchAction = (typeof DEPENDENCY_ROUTE_NO_MATCH_ACTIONS)[number];
 export type DependencyRetryBudgetKind = (typeof DEPENDENCY_RETRY_BUDGET_KINDS)[number];
+export type DependencyCircuitOverrideMode =
+  (typeof DEPENDENCY_CIRCUIT_OVERRIDE_MODES)[number];
 
 export interface DependencyIdentity {
   kind: DependencyKind;
@@ -123,6 +128,7 @@ export interface DependencyCircuitLease {
   id: string;
   circuitKey: string;
   probe: boolean;
+  overrideId?: string;
   acquiredAt: string;
 }
 
@@ -136,7 +142,7 @@ export type DependencyCircuitAdmission =
   | {
       allowed: false;
       decision: 'reject';
-      reason: 'circuit-open' | 'probe-concurrency-exhausted';
+      reason: 'circuit-open' | 'probe-concurrency-exhausted' | 'operator-block';
       retryAt?: string;
       snapshot: DependencyCircuitSnapshot;
     };
@@ -168,7 +174,7 @@ export interface DependencyRoutePolicy {
 export interface DependencyRouteExclusion {
   candidateId: string;
   dependencyKey: string;
-  reason: 'circuit-open' | 'probe-concurrency-exhausted';
+  reason: 'circuit-open' | 'probe-concurrency-exhausted' | 'operator-block';
   retryAt?: string;
   snapshot: DependencyCircuitSnapshot;
 }
@@ -203,4 +209,15 @@ export interface DependencyRetryBudgetDecision {
   limit: number;
   used: number;
   remaining: number;
+}
+
+export interface DependencyCircuitOverride {
+  schemaVersion: typeof DEPENDENCY_CIRCUIT_OVERRIDE_SCHEMA_VERSION;
+  id: string;
+  circuitKey: string;
+  mode: DependencyCircuitOverrideMode;
+  reason: string;
+  actorId: string;
+  createdAt: string;
+  expiresAt: string;
 }

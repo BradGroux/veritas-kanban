@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   DEPENDENCY_CIRCUIT_POLICY_SCHEMA_VERSION,
+  DEPENDENCY_CIRCUIT_OVERRIDE_MODES,
+  DEPENDENCY_CIRCUIT_OVERRIDE_SCHEMA_VERSION,
   DEPENDENCY_CIRCUIT_SCHEMA_VERSION,
   DEPENDENCY_CIRCUIT_STATES,
   DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION,
@@ -9,6 +11,7 @@ import {
   DEPENDENCY_RETRY_BUDGET_KINDS,
   DEPENDENCY_ROUTE_NO_MATCH_ACTIONS,
   type DependencyCircuitPolicy,
+  type DependencyCircuitOverride,
   type DependencyCircuitPersistedState,
   type DependencyCircuitReason,
   type DependencyCircuitSample,
@@ -133,3 +136,20 @@ export const DependencyRetryBudgetUsageSchema: z.ZodType<DependencyRetryBudgetUs
     used: z.object(retryBudgetShape).strict(),
   })
   .strict();
+
+export const DependencyCircuitOverrideSchema: z.ZodType<DependencyCircuitOverride> = z
+  .object({
+    schemaVersion: z.literal(DEPENDENCY_CIRCUIT_OVERRIDE_SCHEMA_VERSION),
+    id: z.string().regex(/^ciroverride_[A-Za-z0-9_-]{12,64}$/),
+    circuitKey: z.string().trim().min(1).max(2_000),
+    mode: z.enum(DEPENDENCY_CIRCUIT_OVERRIDE_MODES),
+    reason: z.string().trim().min(8).max(1_000),
+    actorId: z.string().trim().min(1).max(240),
+    createdAt: TimestampSchema,
+    expiresAt: TimestampSchema,
+  })
+  .strict()
+  .refine((value) => Date.parse(value.expiresAt) > Date.parse(value.createdAt), {
+    message: 'Dependency circuit override expiry must be after creation.',
+    path: ['expiresAt'],
+  });
