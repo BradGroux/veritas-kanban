@@ -590,6 +590,8 @@ function telemetryTitle(event: AnyTelemetryEvent): string {
       return `Agent run error from ${event.agent}`;
     case 'run.tokens':
       return `Token usage recorded for ${event.agent}`;
+    case 'network.egress':
+      return `Network egress ${event.decision} for ${event.agent}`;
     case 'admission.tree_control':
       return `Execution tree ${event.action}`;
     case 'task.status_changed':
@@ -608,6 +610,9 @@ function telemetryDetail(event: AnyTelemetryEvent): string | undefined {
   if ('durationMs' in event && event.durationMs) return formatDuration(event.durationMs);
   if (event.type === 'run.tokens') {
     return `${(event.totalTokens ?? event.inputTokens + event.outputTokens).toLocaleString()} tokens`;
+  }
+  if (event.type === 'network.egress') {
+    return `${event.protocol} ${event.decision}: ${event.reason}`;
   }
   if (event.type === 'task.status_changed') {
     return `${event.previousStatus ?? 'unknown'} -> ${event.status ?? 'unknown'}`;
@@ -635,6 +640,16 @@ function telemetryMetadata(
     metadata.trigger = event.trigger;
     metadata.rootObjectiveKey = event.rootObjectiveKey;
     metadata.unresolvedAttempts = event.unresolvedAttempts ?? null;
+  }
+  if (event.type === 'network.egress') {
+    metadata.gatewayId = event.gatewayId;
+    metadata.runKey = event.runKey;
+    metadata.policyHash = event.policyHash;
+    metadata.hostKey = event.hostKey;
+    metadata.port = event.port;
+    metadata.decision = event.decision;
+    metadata.reason = event.reason;
+    metadata.approvalId = event.approvalId ?? null;
   }
   return metadata;
 }

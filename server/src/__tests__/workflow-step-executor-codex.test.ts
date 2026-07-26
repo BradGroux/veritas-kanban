@@ -505,12 +505,15 @@ describe('WorkflowStepExecutor Codex integration', () => {
       VERITAS_ADMIN_KEY: process.env.VERITAS_ADMIN_KEY,
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       VK_API_URL: process.env.VK_API_URL,
+      VERITAS_EGRESS_UPSTREAM_PROXY: process.env.VERITAS_EGRESS_UPSTREAM_PROXY,
     };
     process.env.GITHUB_TOKEN = 'test-github-token';
     process.env.DATABASE_URL = 'postgres://test-secret';
     process.env.VERITAS_ADMIN_KEY = 'test-admin-key';
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.VK_API_URL = 'http://127.0.0.1:3001';
+    process.env.VERITAS_EGRESS_UPSTREAM_PROXY =
+      'http://proxy-user:proxy-password@proxy.internal:3128';
 
     try {
       const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
@@ -563,6 +566,7 @@ describe('WorkflowStepExecutor Codex integration', () => {
       expect(env?.GITHUB_TOKEN).toBeUndefined();
       expect(env?.DATABASE_URL).toBeUndefined();
       expect(env?.VERITAS_ADMIN_KEY).toBeUndefined();
+      expect(env?.VERITAS_EGRESS_UPSTREAM_PROXY).toBeUndefined();
     } finally {
       for (const [key, value] of Object.entries(originalEnv)) {
         if (value === undefined) {

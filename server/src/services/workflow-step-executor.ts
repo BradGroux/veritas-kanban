@@ -11,6 +11,7 @@ import type {
   AgentConfig,
   AgentHostRoutingDecision,
   ExecutableAgentProvider,
+  NetworkEgressTelemetryEvent,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeManifest,
   RunLaunchPhaseAuthority,
@@ -43,9 +44,17 @@ import { getAgentHostService } from './agent-host-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 import {
   getRunEgressGatewayService,
+  RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY,
   runEgressPolicyRequiresGateway,
+  type RunEgressGatewayApprovalRequest,
+  type RunEgressGatewayApprovalResult,
   type RunEgressGatewayService,
 } from './run-egress-gateway-service.js';
+import {
+  getRunApprovalBrokerService,
+  type RunApprovalBrokerService,
+} from './run-approval-broker-service.js';
+import { getTelemetryService } from './telemetry-service.js';
 import {
   assertProviderRuntimeCapabilities,
   assertProviderRuntimeControl,
@@ -86,6 +95,7 @@ interface WorkflowStepExecutorOptions {
   persistRun?: (run: WorkflowRun) => Promise<void>;
   phaseAuthority?: PhaseLaunchAuthorityService;
   runEgressGateway?: Pick<RunEgressGatewayService, 'start'>;
+  approvalBroker?: Pick<RunApprovalBrokerService, 'request' | 'awaitDecision' | 'cancelAttempt'>;
 }
 
 type WorkflowExecutableProvider = Extract<ExecutableAgentProvider, 'codex-sdk' | 'openclaw'>;
@@ -129,6 +139,10 @@ export class WorkflowStepExecutor {
   private persistRun: (run: WorkflowRun) => Promise<void>;
   private phaseAuthority: PhaseLaunchAuthorityService;
   private runEgressGateway: Pick<RunEgressGatewayService, 'start'>;
+  private approvalBroker: Pick<
+    RunApprovalBrokerService,
+    'request' | 'awaitDecision' | 'cancelAttempt'
+  >;
   private appendCountCache?: Map<string, number>; // Performance: Track append counts to reduce stat() calls
 
   constructor(runsDir?: string, options: WorkflowStepExecutorOptions = {}) {
@@ -143,6 +157,7 @@ export class WorkflowStepExecutor {
     this.persistRun = options.persistRun ?? (async () => undefined);
     this.phaseAuthority = options.phaseAuthority ?? new PhaseLaunchAuthorityService();
     this.runEgressGateway = options.runEgressGateway ?? getRunEgressGatewayService();
+    this.approvalBroker = options.approvalBroker ?? getRunApprovalBrokerService();
   }
 
   /**
@@ -626,6 +641,96 @@ export class WorkflowStepExecutor {
     return `${run.id}:${stepId}:${sequence}`;
   }
 
+  private workflowTaskId(run: WorkflowRun): string {
+    const contextTask = run.context.task as { id?: string } | undefined;
+    return run.taskId ?? contextTask?.id ?? run.id;
+  }
+
+  private workflowProject(run: WorkflowRun): string | undefined {
+    const contextTask = run.context.task as { project?: string } | undefined;
+    return contextTask?.project;
+  }
+
+  private async resolveWorkflowEgressApproval(
+    run: WorkflowRun,
+    step: WorkflowStep,
+    agentId: string,
+    runtimeManifest: ProviderRuntimeManifest,
+    sandboxPolicy: SandboxPolicyDryRunResult,
+    request: RunEgressGatewayApprovalRequest
+  ): Promise<RunEgressGatewayApprovalResult> {
+    const taskId = this.workflowTaskId(run);
+    const attemptId = this.workflowStepAttemptId(run, step.id);
+    const providerRequestId = `egress:${digestRunLaunchValue({
+      gatewayId: request.gatewayId,
+      protocol: request.protocol,
+      host: request.host,
+      port: request.port,
+      method: request.method,
+      path: request.path,
+      policyHash: request.decision.policyHash,
+    }).slice('sha256:'.length, 'sha256:'.length + 32)}`;
+    const approval = await this.approvalBroker.request({
+      workspaceId: 'local',
+      taskId,
+      attemptId,
+      provider: 'codex-sdk',
+      agentId,
+      providerRequestId,
+      requestKind: 'approval',
+      actionClass: 'network',
+      action: `Allow ${request.protocol} egress to ${request.host}:${request.port}`,
+      details: `Blocked by ${request.decision.reason}; method ${request.method ?? 'not available'}.`,
+      resourceScope: [request.host, `${request.protocol}:${request.port}`],
+      workingDirectory: this.expandPath(this.getWorkflowWorkingDirectory(run)),
+      riskClass: 'high',
+      policyReason: request.decision.reason,
+      evidenceRevision: digestRunLaunchValue({
+        runtimeManifestDigest: runtimeManifest.digest,
+        policyHash: sandboxPolicy.effective.networkPolicy?.policyHash,
+      }),
+      mobileSafe: false,
+      exactAction: {
+        protocol: request.protocol,
+        host: request.host,
+        port: request.port,
+        method: request.method,
+        path: request.path,
+        policyHash: request.decision.policyHash,
+        blockedReason: request.decision.reason,
+      },
+    });
+    if (request.signal.aborted) {
+      await this.approvalBroker.cancelAttempt(
+        'local',
+        taskId,
+        attemptId,
+        'Workflow egress gateway stopped.'
+      );
+      return { approvalId: approval.id, approved: false };
+    }
+    try {
+      const resolved = await this.approvalBroker.awaitDecision(approval.id, {
+        signal: request.signal,
+      });
+      return {
+        approvalId: approval.id,
+        approved: resolved.request.status === 'approved',
+      };
+    } catch (error) {
+      if (request.signal.aborted) {
+        await this.approvalBroker.cancelAttempt(
+          'local',
+          taskId,
+          attemptId,
+          'Workflow egress gateway stopped.'
+        );
+        return { approvalId: approval.id, approved: false };
+      }
+      throw error;
+    }
+  }
+
   private recordAgentHostRouting(
     run: WorkflowRun,
     step: WorkflowStep,
@@ -863,11 +968,24 @@ export class WorkflowStepExecutor {
       `Workflow agent ${agentDef?.id || step.agent || step.id}`
     );
     const egressPolicy = sandboxPolicy.effective.networkPolicy;
+    const attemptId = this.workflowStepAttemptId(run, step.id);
+    const taskId = this.workflowTaskId(run);
+    const agentId = step.agent ?? agentDef?.id ?? step.id;
     const egressGateway =
       egressPolicy && runEgressPolicyRequiresGateway(egressPolicy)
         ? await this.runEgressGateway.start({
-            runId: this.workflowStepAttemptId(run, step.id),
+            runId: attemptId,
             policy: egressPolicy,
+            upstreamProxyUrl: process.env[RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY],
+            onApprovalRequired: (request) =>
+              this.resolveWorkflowEgressApproval(
+                run,
+                step,
+                agentId,
+                runtimeManifest,
+                sandboxPolicy,
+                request
+              ),
             onDecision: async (event) => {
               await getGovernanceTraceService().record({
                 kind: 'policy',
@@ -875,7 +993,7 @@ export class WorkflowStepExecutor {
                 title: 'Workflow egress decision',
                 summary: `${event.decision.protocol} request ${event.decision.decision}: ${event.decision.reason}`,
                 subject: {
-                  taskId: run.taskId,
+                  taskId,
                   agentId: step.agent,
                   actionType: 'workflow.network-egress',
                 },
@@ -902,7 +1020,30 @@ export class WorkflowStepExecutor {
                   reason: event.decision.reason,
                   blockedAddressClass: event.decision.blockedAddressClass,
                   approvalEligible: event.decision.approvalEligible,
+                  approvalId: event.decision.approvalId,
+                  policyReason: event.decision.policyReason,
                 },
+              });
+              await getTelemetryService().emit<NetworkEgressTelemetryEvent>({
+                type: 'network.egress',
+                taskId,
+                attemptId,
+                agent: agentId,
+                provider: 'codex-sdk',
+                project: this.workflowProject(run),
+                gatewayId: event.gatewayId,
+                runKey: event.runKey,
+                policyHash: event.decision.policyHash,
+                protocol: event.decision.protocol,
+                hostKey: event.decision.hostKey,
+                port: event.decision.port,
+                method: event.decision.method,
+                decision: event.decision.decision,
+                reason: event.decision.reason,
+                policyReason: event.decision.policyReason,
+                blockedAddressClass: event.decision.blockedAddressClass,
+                approvalEligible: event.decision.approvalEligible,
+                approvalId: event.decision.approvalId,
               });
             },
           })
@@ -912,10 +1053,12 @@ export class WorkflowStepExecutor {
       const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
       const codex = new Codex({
         codexPathOverride,
-        env: {
-          ...buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
-          ...egressGateway?.environment,
-        },
+        env: Object.fromEntries(
+          Object.entries({
+            ...buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
+            ...egressGateway?.environment,
+          }).filter(([key]) => key !== RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY)
+        ),
       });
 
       const sessionKey = step.agent || agentDef?.id || step.id;

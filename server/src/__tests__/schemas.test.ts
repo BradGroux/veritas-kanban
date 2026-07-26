@@ -187,6 +187,7 @@ describe('Common Schemas', () => {
         'run.completed',
         'run.error',
         'run.tokens',
+        'network.egress',
         'admission.tree_control',
       ];
       for (const type of validTypes) {

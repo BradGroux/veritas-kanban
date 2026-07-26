@@ -1177,10 +1177,18 @@ Reusable launch-time sandbox presets for provider execution guardrails.
   rules take precedence, unsafe global allow wildcards fail validation, and a
   deterministic policy digest binds later gateway launch evidence.
 - Selective local-provider policies start an authenticated loopback gateway
-  before provider dispatch. Veritas injects HTTP, HTTPS, and all-proxy variables,
-  clears proxy bypass variables, pins the evaluated DNS address for transport,
-  and stops the gateway with the run. Remote OpenClaw execution fails closed
-  when the preset requires this local gateway.
+  before provider dispatch. Veritas injects HTTP and HTTPS proxy variables plus
+  an authenticated `socks5h` all-proxy listener, clears proxy bypass variables,
+  pins the evaluated DNS address for transport, and stops both listeners with
+  the run. Remote OpenClaw execution fails closed when the preset requires this
+  local gateway.
+- Optional `VERITAS_EGRESS_UPSTREAM_PROXY` routing sends only policy-approved,
+  DNS-pinned destinations through an operator HTTP CONNECT proxy. Credentials
+  stay memory-only and evidence exposes only the upstream mode.
+- Approval-eligible blocks pause at the gateway on a durable exact-action
+  approval. Explicit denies and protected address classes cannot be overridden.
+  Approved requests retain the approval ID in metadata-only governance and
+  `network.egress` telemetry evidence.
 
 **Enforcement:**
 
@@ -1746,7 +1754,7 @@ New endpoints for advanced metrics and visualization (v1.6):
 
 Event-based telemetry system powering dashboard analytics.
 
-- **Event types** — `run.started`, `run.completed`, `run.tokens` for tracking agent execution lifecycle
+- **Event types** — `run.started`, `run.completed`, `run.tokens`, and metadata-only `network.egress` decisions for tracking execution and network policy outcomes
 - **Token tracking** — Input tokens, output tokens, cache tokens, and cost per run
 - **Duration tracking** — Millisecond-precision run duration with 7-day cap validation (604,800,000 ms)
 - **Retention policy** — Configurable retention period (default: 30 days) with automatic cleanup of old events

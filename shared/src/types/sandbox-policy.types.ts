@@ -87,6 +87,7 @@ export interface RunEgressDecisionInput {
 export type RunEgressDecisionReason =
   | 'allowed-by-default'
   | 'allowed-by-host-rule'
+  | 'allowed-by-approval'
   | 'default-deny'
   | 'denied-host'
   | 'method-not-allowed'
@@ -109,6 +110,13 @@ export interface RunEgressDecision {
   matchedRule?: RunEgressHostRule;
   blockedAddressClass?: 'private' | 'loopback' | 'link-local' | 'metadata';
   approvalEligible: boolean;
+  /** Durable approval correlated to this decision without exposing the destination URL. */
+  approvalId?: string;
+  /** Original blocking reason when a scoped approval changed the transport decision. */
+  policyReason?: Exclude<
+    RunEgressDecisionReason,
+    'allowed-by-default' | 'allowed-by-host-rule' | 'allowed-by-approval'
+  >;
 }
 
 export interface RunEgressGatewayEvidence {
@@ -118,7 +126,9 @@ export interface RunEgressGatewayEvidence {
   attributionKey: string;
   policyHash: string;
   state: 'enforced' | 'stopped';
-  protocols: Array<'http' | 'connect' | 'ws'>;
+  protocols: Array<'http' | 'connect' | 'ws' | 'socks5'>;
+  /** Absent on early v1 evidence and interpreted as direct. */
+  upstreamMode?: 'direct' | 'http-connect';
   proxyEnvironmentKeys: Array<
     | 'HTTP_PROXY'
     | 'HTTPS_PROXY'

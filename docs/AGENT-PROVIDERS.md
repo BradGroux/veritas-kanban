@@ -817,10 +817,28 @@ the trace ID.
 Selective network policies for local task and workflow providers start an
 authenticated, run-scoped loopback gateway before dispatch. Durable launch and
 gateway evidence records only the injected proxy key names and policy digest;
-tokens and proxy URLs are never persisted. HTTP, HTTPS CONNECT, and plaintext WebSocket
-transports use the evaluated DNS address, and the gateway is stopped during
-terminal cleanup. OpenClaw is provider-managed and cannot receive this local
-boundary, so a required fine-grained policy blocks its launch.
+tokens and proxy URLs are never persisted. HTTP, HTTPS CONNECT, and plaintext
+WebSocket transports use the evaluated DNS address. `ALL_PROXY` exposes a
+separate authenticated `socks5h` listener with the same host, address, approval,
+and audit policy; encrypted SOCKS tunnels fail closed when method or path
+inspection would be required. Both listeners stop during terminal cleanup.
+OpenClaw is provider-managed and cannot receive this local boundary, so a
+required fine-grained policy blocks its launch.
+
+Operators that require a corporate or audited proxy can set
+`VERITAS_EGRESS_UPSTREAM_PROXY` to an HTTP proxy origin. The gateway evaluates
+the destination first, pins the resolved address, and then opens an upstream
+CONNECT tunnel to that address. Proxy credentials remain memory-only; durable
+evidence records only `upstreamMode: http-connect`.
+
+When a preset enables scoped approvals, an otherwise eligible block creates a
+durable, exact-action network approval and holds the request at the gateway.
+Only an approved request proceeds. Explicit host denies and protected address
+classes are never approval-eligible. Gateway shutdown aborts pending waits.
+Every final decision also emits a `network.egress` telemetry record containing
+the hashed host key, run key, policy digest, protocol, port, decision, reason,
+and approval ID when present. URLs, query strings, headers, bodies, proxy
+credentials, and raw paths are excluded from telemetry.
 
 Local ACP, Claude Code, Codex app-server, Codex CLI, and Hermes processes use a
 version-bound `codex sandbox` wrapper when its credential-free conformance
