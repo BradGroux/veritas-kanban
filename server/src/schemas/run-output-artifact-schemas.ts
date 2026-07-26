@@ -108,3 +108,36 @@ export const RunOutputPreviewSchema: z.ZodType<RunOutputPreview> = z
       .optional(),
   })
   .strict();
+
+const RunOutputArtifactScopeQuerySchema = z
+  .object({
+    runId: IdentifierSchema,
+    attemptId: IdentifierSchema,
+    turnId: IdentifierSchema.optional(),
+  })
+  .strict();
+
+export const RunOutputArtifactHttpQuerySchema = z.discriminatedUnion('operation', [
+  RunOutputArtifactScopeQuerySchema.extend({
+    operation: z.literal('metadata'),
+  }),
+  RunOutputArtifactScopeQuerySchema.extend({
+    operation: z.literal('byte-range'),
+    offset: z.coerce.number().int().nonnegative(),
+    length: z.coerce.number().int().min(1).max(4 * 1024 * 1024),
+  }),
+  RunOutputArtifactScopeQuerySchema.extend({
+    operation: z.literal('line-range'),
+    startLine: z.coerce.number().int().positive(),
+    lineCount: z.coerce.number().int().min(1).max(1_000),
+  }),
+  RunOutputArtifactScopeQuerySchema.extend({
+    operation: z.literal('json-path'),
+    jsonPath: z.string().trim().min(1).max(2_000),
+  }),
+]);
+
+export const RunOutputArtifactDownloadQuerySchema = RunOutputArtifactScopeQuerySchema.extend({
+  offset: z.coerce.number().int().nonnegative().default(0),
+  length: z.coerce.number().int().min(1).max(4 * 1024 * 1024).default(4 * 1024 * 1024),
+}).strict();

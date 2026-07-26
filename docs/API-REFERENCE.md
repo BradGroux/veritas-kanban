@@ -2659,6 +2659,31 @@ attempt logs. Clients should persist `nextCursor` and reconnect with it rather
 than inferring order from timestamps. `sessionId`, `turnId`, and `itemId` are
 separate optional identities and appear only when the provider reports them.
 
+Run payloads above the inline event limit are redacted before being persisted
+as `run-output-artifact/v1`. The event keeps a `run-output-preview/v1` under
+`payload.outputArtifact` with the opaque artifact ID, media/content class,
+original and preview byte counts, truncation reason, state, and allowed query
+operations. No response exposes the host storage path.
+
+Authorized readers query the artifact within the exact workspace, task, run,
+and attempt scope:
+
+```http
+GET /api/agents/TASK-001/output-artifacts/spill_abc123...?runId=attempt_123&attemptId=attempt_123
+GET /api/agents/TASK-001/output-artifacts/spill_abc123...?runId=attempt_123&attemptId=attempt_123&operation=byte-range&offset=0&length=4096
+GET /api/agents/TASK-001/output-artifacts/spill_abc123...?runId=attempt_123&attemptId=attempt_123&operation=line-range&startLine=100&lineCount=50
+GET /api/agents/TASK-001/output-artifacts/spill_abc123...?runId=attempt_123&attemptId=attempt_123&operation=json-path&jsonPath=$.rows[0]
+GET /api/agents/TASK-001/output-artifacts/spill_abc123.../download?runId=attempt_123&attemptId=attempt_123&offset=0&length=4194304
+```
+
+Metadata reads remain available after expiry or quarantine so event references
+do not break silently. Content queries are bounded and rate-limited. Download
+ranges revalidate the stored hash and secret shapes first; a mismatch
+quarantines the body. Invalid UTF-8, binary, and compressed content is
+metadata-only unless an explicit storage policy allows it. Cleanup honors
+active-run leases, removes eligible bodies deterministically, retains
+tombstones, and reports reclaimed bytes.
+
 Stop and message requests must carry the `attemptId` returned by status so a
 delayed control cannot affect a replacement run:
 

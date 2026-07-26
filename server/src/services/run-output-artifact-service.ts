@@ -167,6 +167,23 @@ export class RunOutputArtifactService {
     return metadata;
   }
 
+  async readDownloadRange(
+    lookup: RunOutputArtifactLookup,
+    requesterId: string,
+    offset: number,
+    length: number,
+    now = new Date()
+  ) {
+    const metadata = await this.validateForExport(lookup, now);
+    if (!metadata || metadata.state !== 'available') return null;
+    this.consumeRateLimit(requesterId, metadata.id, now);
+    return this.repository.readRange({
+      ...lookup,
+      offset,
+      length: Math.min(Math.max(length, 1), 4 * 1024 * 1024),
+    });
+  }
+
   private async queryByteRange(
     metadata: RunOutputArtifactMetadata,
     lookup: RunOutputArtifactLookup,
