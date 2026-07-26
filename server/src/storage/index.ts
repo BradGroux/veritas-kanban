@@ -56,6 +56,7 @@ export {
   type WorkspaceCheckpointCaptureInput,
   type WorkspaceCheckpointCommandResult,
   type WorkspaceCheckpointCommandRunner,
+  type WorkspaceCheckpointCurrentInspectionInput,
   type WorkspaceCheckpointListQuery,
   type WorkspaceCheckpointLookup,
   type WorkspaceCheckpointOperationLookup,
