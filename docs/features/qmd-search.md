@@ -2,6 +2,8 @@
 
 Veritas Kanban v4.1 adds QMD-backed retrieval for task/docs search, duplicate detection, and VERITAS chat context. QMD is optional; if it is unavailable, VK falls back to built-in keyword search across markdown files.
 
+Workspace knowledge collections also use QMD when `backend` is `auto` or `qmd`. Veritas materializes current derived pages into hashed, excluded QMD collections under its runtime directory, scopes every query with the documented `-c` flag, and falls back to cited keyword results on any setup, refresh, or query failure. Raw source snapshots are not copied into the QMD projection. Set `VERITAS_QMD_KNOWLEDGE_EMBED=true` to embed changed knowledge projections.
+
 ## Collections
 
 Retrieval searches these collections:

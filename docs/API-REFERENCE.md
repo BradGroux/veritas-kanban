@@ -4819,7 +4819,7 @@ Only administrators can apply or reverse. Send the exact current proposal digest
 
 Apply atomically updates every affected page, proposal state, and append-only activity entry. Reverse requires the applied digest, restores complete prior page records, removes proposal-created pages, and appends reversal activity. Exact retries return the committed state. Blocking contradictions, stale page digests, later conflicting edits, and unsafe graph changes return `409` without partial mutation.
 
-Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind and preserve source citations; derived results carry the citations from their material claims. `backend: "auto"` or `"qmd"` currently returns keyword results with `degraded: true` and an explicit reason because collection data is not yet part of the QMD index.
+Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind and per-result backend and preserve source citations; derived results carry the citations from their material claims. `backend: "auto"` or `"qmd"` projects current derived pages into an isolated, non-default QMD collection and refreshes it only when page digests change. Raw source matches remain keyword-scored. If QMD is unavailable or the requested scope has no derived pages, the response uses `backend: "keyword"`, sets `degraded: true`, and includes a reason.
 
 ```json
 {

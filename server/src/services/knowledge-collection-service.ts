@@ -45,6 +45,10 @@ import {
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteKnowledgeCollectionRepository } from '../storage/sqlite/knowledge-collection-repository.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import {
+  KnowledgeQmdSearchService,
+  type KnowledgeQmdSearchAdapter,
+} from './knowledge-qmd-search-service.js';
 
 const CLASSIFICATION_RANK: Record<KnowledgeClassification, number> = {
   public: 0,
@@ -64,6 +68,7 @@ export interface KnowledgeCollectionServiceOptions {
   filePath?: string;
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
+  qmdSearch?: KnowledgeQmdSearchAdapter;
   now?: () => Date;
 }
 
@@ -82,10 +87,12 @@ export class KnowledgeCollectionService {
   private readonly repository: KnowledgeCollectionRepository;
   private readonly sqliteDatabase?: SqliteDatabase;
   private readonly ownsSqliteDatabase: boolean;
+  private readonly qmdSearch: KnowledgeQmdSearchAdapter;
   private readonly now: () => Date;
 
   constructor(options: KnowledgeCollectionServiceOptions = {}) {
     this.now = options.now ?? (() => new Date());
+    this.qmdSearch = options.qmdSearch ?? new KnowledgeQmdSearchService();
     this.ownsSqliteDatabase = false;
     if (options.repository) {
       this.repository = options.repository;
@@ -553,6 +560,7 @@ export class KnowledgeCollectionService {
       results.push({
         id: source.id,
         kind: 'raw-source',
+        backend: 'keyword',
         title: source.title ?? source.sourceKey,
         snippet: redactKnowledgeSnippet(knowledgeSnippet(searchable, terms)),
         score,
@@ -576,6 +584,7 @@ export class KnowledgeCollectionService {
       results.push({
         id: page.id,
         kind: 'derived-page',
+        backend: 'keyword',
         title: revision.title,
         snippet: redactKnowledgeSnippet(knowledgeSnippet(searchable, terms)),
         score,
@@ -586,6 +595,57 @@ export class KnowledgeCollectionService {
     }
 
     const requestedBackend = parsed.backend ?? 'keyword';
+    if (requestedBackend !== 'keyword' && pages.length > 0) {
+      try {
+        const hits = await this.qmdSearch.search({
+          workspaceId,
+          collectionId,
+          query: parsed.query,
+          limit,
+          pages,
+        });
+        const pagesById = new Map(pages.map((page) => [page.id, page]));
+        const qmdResults = hits.flatMap((hit): KnowledgeSearchResult[] => {
+          const page = pagesById.get(hit.pageId);
+          if (!page) return [];
+          return [
+            {
+              id: page.id,
+              kind: 'derived-page',
+              backend: 'qmd',
+              title: page.current.title,
+              snippet: redactKnowledgeSnippet(
+                hit.snippet || knowledgeSnippet(page.current.markdown, terms)
+              ),
+              score: hit.score,
+              pageId: page.id,
+              stableKey: page.stableKey,
+              citations: uniqueKnowledgeCitations(
+                page.current.claims.flatMap((claim) => claim.citations)
+              ),
+            },
+          ];
+        });
+        return {
+          query: parsed.query,
+          backend: 'qmd',
+          degraded: false,
+          results: rankKnowledgeResults([
+            ...qmdResults,
+            ...results.filter((result) => result.kind === 'raw-source'),
+          ]).slice(0, limit),
+        };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'QMD knowledge search failed.';
+        return {
+          query: parsed.query,
+          backend: 'keyword',
+          degraded: true,
+          reason,
+          results: rankKnowledgeResults(results).slice(0, limit),
+        };
+      }
+    }
     return {
       query: parsed.query,
       backend: 'keyword',
@@ -594,16 +654,9 @@ export class KnowledgeCollectionService {
         ? {}
         : {
             reason:
-              'Knowledge collections are not yet indexed by QMD; keyword search served the request.',
+              'The requested scope has no derived pages eligible for QMD; keyword search served the request.',
           }),
-      results: results
-        .sort(
-          (left, right) =>
-            right.score - left.score ||
-            left.kind.localeCompare(right.kind) ||
-            left.id.localeCompare(right.id)
-        )
-        .slice(0, limit),
+      results: rankKnowledgeResults(results).slice(0, limit),
     };
   }
 
@@ -1057,6 +1110,15 @@ function uniqueKnowledgeCitations(
     seen.add(key);
     return true;
   });
+}
+
+function rankKnowledgeResults(results: KnowledgeSearchResult[]): KnowledgeSearchResult[] {
+  return results.sort(
+    (left, right) =>
+      right.score - left.score ||
+      left.kind.localeCompare(right.kind) ||
+      left.id.localeCompare(right.id)
+  );
 }
 
 function createKnowledgeActivity(
