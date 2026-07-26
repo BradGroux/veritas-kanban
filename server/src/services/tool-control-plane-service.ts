@@ -53,6 +53,14 @@ import {
   type CredentialBrokerService,
 } from './credential-broker-service.js';
 import {
+  defaultDependencyCircuitExecutionService,
+  toolServerDependencyIdentity,
+} from './dependency-circuit-runtime.js';
+import {
+  DependencyCircuitExecutionService,
+  type DependencyCircuitExecutionOptions,
+} from './dependency-circuit-routing-service.js';
+import {
   getRunPhaseAuthorityService,
   type RunPhaseAuthorityService,
 } from './run-phase-authority-service.js';
@@ -64,6 +72,23 @@ const MAX_SCHEMA_BYTES = 128 * 1024;
 const MAX_DISCOVERY_PAGES = 20;
 const MAX_DISCOVERED_TOOLS = 1_000;
 const STDIO_TERMINATION_GRACE_MS = 2_000;
+const dependencyExecutionOptions = {
+  signalsForError: (error: unknown) => {
+    const candidate =
+      error instanceof Error
+        ? (error as Error & { code?: string; status?: number; statusCode?: number })
+        : undefined;
+    return {
+      callerCancelled: candidate?.name === 'AbortError',
+      timedOut:
+        candidate?.name === 'TimeoutError' ||
+        candidate?.code === 'ETIMEDOUT' ||
+        /\\btime(?:d)?\\s*out\\b/i.test(candidate?.message ?? ''),
+      statusCode: candidate?.statusCode ?? candidate?.status,
+      errorCode: candidate?.code,
+    };
+  },
+} satisfies DependencyCircuitExecutionOptions;
 const CREDENTIAL_ENV_KEY_PATTERN =
   /(?:^|_)(?:API_KEYS?|AUTHORIZATION|AUTH_TOKEN|BEARER|BEARER_TOKEN|COOKIE|CREDENTIALS?|DATABASE_URL|DB_URL|PASSWORD|PASS|PRIVATE_KEY|SECRET|SESSION|SESSION_TOKEN|TOKEN|WEBHOOK)(?:_|$)/i;
 
@@ -112,6 +137,7 @@ export interface ToolControlPlaneServiceOptions {
   now?: () => Date;
   environment?: NodeJS.ProcessEnv;
   phaseAuthority?: Pick<RunPhaseAuthorityService, 'getActive' | 'assertScopes' | 'binding'>;
+  dependencyExecution?: DependencyCircuitExecutionService;
 }
 
 let fileRepository: FileToolControlPlaneRepository | undefined;
@@ -138,6 +164,7 @@ export class ToolControlPlaneService {
     RunPhaseAuthorityService,
     'getActive' | 'assertScopes' | 'binding'
   >;
+  private readonly dependencyExecution: DependencyCircuitExecutionService;
   private readonly sessions = new Map<string, Promise<RpcSession>>();
   private readonly validators = new Map<string, ValidateFunction>();
 
@@ -150,6 +177,8 @@ export class ToolControlPlaneService {
     this.credentialBroker = options.credentialBroker ?? getCredentialBrokerService();
     this.now = options.now ?? (() => new Date());
     this.phaseAuthority = options.phaseAuthority ?? getRunPhaseAuthorityService();
+    this.dependencyExecution =
+      options.dependencyExecution ?? defaultDependencyCircuitExecutionService();
   }
 
   async listDefinitions(): Promise<ToolServerDefinition[]> {
@@ -212,38 +241,44 @@ export class ToolControlPlaneService {
     let session: RpcSession | undefined;
     let discovery: ToolServerDiscovery;
     try {
-      session = await this.runtime.open(runtimeDefinition, cwd);
-      const protocolVersion = await initializeSession(
-        session,
-        definition.startupTimeoutMs,
-        definition.version
+      discovery = await this.dependencyExecution.execute(
+        toolServerDependencyIdentity(definition.id),
+        async () => {
+          session = await this.runtime.open(runtimeDefinition, cwd);
+          const protocolVersion = await initializeSession(
+            session,
+            definition.startupTimeoutMs,
+            definition.version
+          );
+          if (cached?.status === 'ready' && !force) return cached;
+          const tools = await listAllTools(session, definition.startupTimeoutMs);
+          const normalizedTools = tools
+            .map((tool) => normalizeDiscoveredTool(tool))
+            .sort((left, right) => left.name.localeCompare(right.name));
+          if (new Set(normalizedTools.map((tool) => tool.name)).size !== normalizedTools.length) {
+            throw new Error('MCP tools/list returned duplicate tool names.');
+          }
+          for (const tool of normalizedTools) {
+            this.validatorFor(tool.inputSchemaDigest, tool.inputSchema);
+          }
+          const payload: ToolServerDiscovery = {
+            schemaVersion: TOOL_DISCOVERY_SCHEMA_VERSION,
+            serverId: definition.id,
+            serverVersion: definition.version,
+            definitionDigest: definition.digest,
+            protocolVersion,
+            status: 'ready',
+            tools: normalizedTools,
+            discoveredAt: this.now().toISOString(),
+            digest: 'sha256:'.padEnd(71, '0'),
+          };
+          return toolServerDiscoverySchema.parse({
+            ...payload,
+            digest: calculateToolDiscoveryDigest(payload),
+          });
+        },
+        dependencyExecutionOptions
       );
-      if (cached?.status === 'ready' && !force) return cached;
-      const tools = await listAllTools(session, definition.startupTimeoutMs);
-      const normalizedTools = tools
-        .map((tool) => normalizeDiscoveredTool(tool))
-        .sort((left, right) => left.name.localeCompare(right.name));
-      if (new Set(normalizedTools.map((tool) => tool.name)).size !== normalizedTools.length) {
-        throw new Error('MCP tools/list returned duplicate tool names.');
-      }
-      for (const tool of normalizedTools) {
-        this.validatorFor(tool.inputSchemaDigest, tool.inputSchema);
-      }
-      const payload: ToolServerDiscovery = {
-        schemaVersion: TOOL_DISCOVERY_SCHEMA_VERSION,
-        serverId: definition.id,
-        serverVersion: definition.version,
-        definitionDigest: definition.digest,
-        protocolVersion,
-        status: 'ready',
-        tools: normalizedTools,
-        discoveredAt: this.now().toISOString(),
-        digest: 'sha256:'.padEnd(71, '0'),
-      };
-      discovery = toolServerDiscoverySchema.parse({
-        ...payload,
-        digest: calculateToolDiscoveryDigest(payload),
-      });
     } catch (error) {
       const payload: ToolServerDiscovery = {
         schemaVersion: TOOL_DISCOVERY_SCHEMA_VERSION,
@@ -588,46 +623,50 @@ export class ToolControlPlaneService {
     let sessionPromise: Promise<RpcSession> | undefined;
     let session: RpcSession | undefined;
     try {
-      let response: unknown;
-      if (credentialBound && credentialAction) {
-        if (!runLaunchManifestDigest) {
-          throw new ConflictError(
-            'Credential-bound tool calls require the server-owned launch manifest digest.'
-          );
-        }
-        response = await this.withCredentialDelivery({
-          request,
-          entry,
-          action: credentialAction,
-          runLaunchManifestDigest,
-          approvalId: approvedRequestId,
-          dispatch: async (credentials) => {
-            session = await this.openSession(definition, cwd, credentials);
-            try {
-              return await session.request(
-                'tools/call',
-                { name: tool.name, arguments: request.arguments },
-                definition.toolTimeoutMs
+      const response = await this.dependencyExecution.execute(
+        toolServerDependencyIdentity(entry.serverId, catalog.provider),
+        async () => {
+          if (credentialBound && credentialAction) {
+            if (!runLaunchManifestDigest) {
+              throw new ConflictError(
+                'Credential-bound tool calls require the server-owned launch manifest digest.'
               );
-            } finally {
-              await session.close().catch(() => undefined);
-              session = undefined;
             }
-          },
-        });
-      } else {
-        sessionPromise = this.sessions.get(sessionKey);
-        if (!sessionPromise) {
-          sessionPromise = this.openSession(definition, cwd);
-          this.sessions.set(sessionKey, sessionPromise);
-        }
-        session = await sessionPromise;
-        response = await session.request(
-          'tools/call',
-          { name: tool.name, arguments: request.arguments },
-          definition.toolTimeoutMs
-        );
-      }
+            return this.withCredentialDelivery({
+              request,
+              entry,
+              action: credentialAction,
+              runLaunchManifestDigest,
+              approvalId: approvedRequestId,
+              dispatch: async (credentials) => {
+                session = await this.openSession(definition, cwd, credentials);
+                try {
+                  return await session.request(
+                    'tools/call',
+                    { name: tool.name, arguments: request.arguments },
+                    definition.toolTimeoutMs
+                  );
+                } finally {
+                  await session.close().catch(() => undefined);
+                  session = undefined;
+                }
+              },
+            });
+          }
+          sessionPromise = this.sessions.get(sessionKey);
+          if (!sessionPromise) {
+            sessionPromise = this.openSession(definition, cwd);
+            this.sessions.set(sessionKey, sessionPromise);
+          }
+          session = await sessionPromise;
+          return session.request(
+            'tools/call',
+            { name: tool.name, arguments: request.arguments },
+            definition.toolTimeoutMs
+          );
+        },
+        dependencyExecutionOptions
+      );
       assertBoundedJson(response, MAX_RPC_BYTES, 'Tool result');
       const resultRecord =
         response && typeof response === 'object' && !Array.isArray(response)
