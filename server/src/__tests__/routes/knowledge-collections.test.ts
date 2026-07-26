@@ -11,6 +11,8 @@ const knowledge = vi.hoisted(() => ({
   registerSource: vi.fn(),
   listSources: vi.fn(),
   getSource: vi.fn(),
+  listPages: vi.fn(),
+  getPage: vi.fn(),
 }));
 
 vi.mock('../../services/knowledge-collection-service.js', () => ({
@@ -126,6 +128,24 @@ describe('knowledge collection routes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual([{ id: 'collection-3' }]);
     expect(knowledge.listCollections).toHaveBeenCalledWith('workspace-a', {
+      id: 'operator-1',
+      role: 'admin',
+    });
+  });
+
+  it('returns bounded derived pages without exposing source content', async () => {
+    knowledge.listPages.mockResolvedValue([
+      { id: 'knowledge_page_1', current: { title: 'One' } },
+      { id: 'knowledge_page_2', current: { title: 'Two' } },
+    ]);
+
+    const response = await request(createApp()).get(
+      `/api/knowledge/collections/${COLLECTION_ID}/pages?page=1&limit=1`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([{ id: 'knowledge_page_1', current: { title: 'One' } }]);
+    expect(knowledge.listPages).toHaveBeenCalledWith('workspace-a', COLLECTION_ID, {
       id: 'operator-1',
       role: 'admin',
     });

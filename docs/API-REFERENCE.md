@@ -1169,11 +1169,11 @@ Three-tier health check system for container orchestration.
 
 Authenticated deep-health responses include `dependencyCircuits.summary`, redacted durable circuit snapshots, and active expiring overrides for provider/model calls, selected agent hosts, MCP servers and tools, outbound integrations, and storage operations. Dependency IDs are opaque, and secret-bearing request and response data is never returned.
 
-| Endpoint                                            | Auth  | Purpose                                                            |
-| --------------------------------------------------- | ----- | ------------------------------------------------------------------ |
-| `POST /health/dependency-circuits/:key/reset`       | Admin | Reset one known circuit with an audited operator reason            |
-| `POST /health/dependency-circuits/:key/override`    | Admin | Create an audited expiring `allow` or `block` override              |
-| `DELETE /health/dependency-circuits/:key/override`  | Admin | Clear the active override for one circuit                           |
+| Endpoint                                           | Auth  | Purpose                                                 |
+| -------------------------------------------------- | ----- | ------------------------------------------------------- |
+| `POST /health/dependency-circuits/:key/reset`      | Admin | Reset one known circuit with an audited operator reason |
+| `POST /health/dependency-circuits/:key/override`   | Admin | Create an audited expiring `allow` or `block` override  |
+| `DELETE /health/dependency-circuits/:key/override` | Admin | Clear the active override for one circuit               |
 
 Reset accepts `{ "reason": "at least 8 characters" }`. Override accepts `{ "mode": "allow" | "block", "reason": "at least 8 characters", "durationSeconds": 60..3600 }`; `allow` bypasses admission without erasing unhealthy circuit evidence, while `block` rejects new work. Unknown reset targets and missing overrides return `404`.
 
@@ -4701,14 +4701,16 @@ so startup reconciliation cannot duplicate a fresh conversation.
 
 Knowledge collections establish a workspace-scoped, immutable source catalog for derived project knowledge. Route access requires `work_product:read` for reads and `work_product:write` for writes. Collection policies then apply the authenticated actor's `admin`, `agent`, or `read-only` role and source-classification ceiling.
 
-| Method | Path                                                   | Description                          |
-| ------ | ------------------------------------------------------ | ------------------------------------ |
-| `GET`  | `/api/knowledge/collections`                           | List collections readable by actor   |
-| `POST` | `/api/knowledge/collections`                           | Create one versioned collection      |
-| `GET`  | `/api/knowledge/collections/:collectionId`             | Read collection metadata             |
-| `GET`  | `/api/knowledge/collections/:collectionId/sources`     | List immutable source revisions      |
-| `POST` | `/api/knowledge/collections/:collectionId/sources`     | Register one source revision         |
-| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId` | Read source metadata          |
+| Method | Path                                                         | Description                        |
+| ------ | ------------------------------------------------------------ | ---------------------------------- |
+| `GET`  | `/api/knowledge/collections`                                 | List collections readable by actor |
+| `POST` | `/api/knowledge/collections`                                 | Create one versioned collection    |
+| `GET`  | `/api/knowledge/collections/:collectionId`                   | Read collection metadata           |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources`           | List immutable source revisions    |
+| `POST` | `/api/knowledge/collections/:collectionId/sources`           | Register one source revision       |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId` | Read source metadata               |
+| `GET`  | `/api/knowledge/collections/:collectionId/pages`             | List derived pages                 |
+| `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`     | Read one cited derived page        |
 
 Collection and source lists accept `page` (default `1`) and `limit` (default `100`, maximum `500`). Pagination metadata is returned through the standard API response envelope.
 
@@ -4753,7 +4755,9 @@ Register an inline snapshot by sending `storage: "content-addressed-blob"` and b
 }
 ```
 
-Repeated source keys create a revision chain rather than replacing prior evidence. REST returns metadata only and does not expose stored source content. Derived pages, ingestion proposals, citation-aware search, promotion, and export are later slices documented in [Knowledge Collections v1](architecture/KNOWLEDGE-COLLECTIONS-V1.md).
+Repeated source keys create a revision chain rather than replacing prior evidence. REST returns metadata only and does not expose stored source content. Reviewed ingestion proposals, citation-aware search, promotion, and export remain later slices documented in [Knowledge Collections v1](architecture/KNOWLEDGE-COLLECTIONS-V1.md).
+
+Derived pages include Markdown, typed metadata, review state, confidence, stable keys and aliases, outgoing links, computed backlinks, bounded revision history, and claim-level citations to immutable source revision IDs. Page list and detail routes are read-only; reviewed ingestion proposals own mutation so generated synthesis cannot bypass the atomic review workflow.
 
 ---
 

@@ -2,9 +2,10 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { KnowledgeCollection, KnowledgeSource } from '@veritas-kanban/shared';
+import type { KnowledgeCollection, KnowledgePage, KnowledgeSource } from '@veritas-kanban/shared';
 import {
   parseKnowledgeCollection,
+  parseKnowledgePage,
   parseKnowledgeSource,
 } from '../schemas/knowledge-collection-schemas.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -17,12 +18,20 @@ import { atomicWriteFile } from './fs-helpers.js';
 const MAX_STORE_BYTES = 256 * 1_024 * 1_024;
 const MAX_COLLECTIONS = 10_000;
 const MAX_SOURCES = 100_000;
+const MAX_PAGES = 100_000;
+export const MAX_KNOWLEDGE_PAGE_BATCH = 5_000;
 
 interface KnowledgeCollectionFileState {
   schemaVersion: 'knowledge-collection-store/v1';
   collections: KnowledgeCollection[];
   sources: KnowledgeSource[];
+  pages: KnowledgePage[];
   blobs: Record<string, string>;
+}
+
+export interface KnowledgePageExpectedState {
+  id: string;
+  digest: string | null;
 }
 
 export interface KnowledgeCollectionRepository {
@@ -41,6 +50,14 @@ export interface KnowledgeCollectionRepository {
     collectionId: string,
     sourceId: string
   ): Promise<Buffer | null>;
+  getPage(workspaceId: string, collectionId: string, pageId: string): Promise<KnowledgePage | null>;
+  listPages(workspaceId: string, collectionId: string): Promise<KnowledgePage[]>;
+  applyPageBatch(
+    workspaceId: string,
+    collectionId: string,
+    pages: KnowledgePage[],
+    expected: KnowledgePageExpectedState[]
+  ): Promise<KnowledgePage[]>;
 }
 
 export function getKnowledgeCollectionStorePath(): string {
@@ -201,6 +218,66 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
     return content;
   }
 
+  async getPage(
+    workspaceId: string,
+    collectionId: string,
+    pageId: string
+  ): Promise<KnowledgePage | null> {
+    return (
+      (await this.readState()).pages.find(
+        (entry) =>
+          entry.workspaceId === workspaceId &&
+          entry.collectionId === collectionId &&
+          entry.id === pageId
+      ) ?? null
+    );
+  }
+
+  async listPages(workspaceId: string, collectionId: string): Promise<KnowledgePage[]> {
+    return (await this.readState()).pages
+      .filter((entry) => entry.workspaceId === workspaceId && entry.collectionId === collectionId)
+      .sort(
+        (left, right) =>
+          left.stableKey.localeCompare(right.stableKey) || left.id.localeCompare(right.id)
+      );
+  }
+
+  async applyPageBatch(
+    workspaceId: string,
+    collectionId: string,
+    candidates: KnowledgePage[],
+    expected: KnowledgePageExpectedState[]
+  ): Promise<KnowledgePage[]> {
+    if (candidates.length === 0 || candidates.length > MAX_KNOWLEDGE_PAGE_BATCH) {
+      throw new ConflictError('Knowledge page batch is empty or exceeds its bounded size.');
+    }
+    const pages = candidates.map(assertKnowledgePageIntegrity);
+    assertPageBatchShape(workspaceId, collectionId, pages, expected);
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const state = await this.readState();
+      this.requireCollection(state, workspaceId, collectionId);
+      assertExpectedPages(state.pages, expected);
+      const candidateIds = new Set(pages.map((page) => page.id));
+      const nextPages = [...state.pages.filter((page) => !candidateIds.has(page.id)), ...pages];
+      if (nextPages.length > MAX_PAGES) {
+        throw new ConflictError('Knowledge collection store reached its page limit.');
+      }
+      validateKnowledgePageReferences(
+        this.requireCollection(state, workspaceId, collectionId),
+        state.sources.filter(
+          (source) => source.workspaceId === workspaceId && source.collectionId === collectionId
+        ),
+        nextPages.filter(
+          (page) => page.workspaceId === workspaceId && page.collectionId === collectionId
+        )
+      );
+      state.pages = nextPages;
+      await this.writeState(state);
+      return pages;
+    });
+  }
+
   private validateSourceContent(source: KnowledgeSource, content: Buffer | null): void {
     if (source.storage === 'content-addressed-blob') {
       if (
@@ -259,11 +336,18 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
       const sources = Array.isArray(parsed.sources)
         ? parsed.sources.map(assertKnowledgeSourceIntegrity)
         : [];
+      const pages = Array.isArray(parsed.pages)
+        ? parsed.pages.map(assertKnowledgePageIntegrity)
+        : [];
       const blobs =
         parsed.blobs && typeof parsed.blobs === 'object' && !Array.isArray(parsed.blobs)
           ? (parsed.blobs as Record<string, string>)
           : {};
-      if (collections.length > MAX_COLLECTIONS || sources.length > MAX_SOURCES) {
+      if (
+        collections.length > MAX_COLLECTIONS ||
+        sources.length > MAX_SOURCES ||
+        pages.length > MAX_PAGES
+      ) {
         throw new ConflictError('Knowledge collection store exceeds its bounded inventory.');
       }
       for (const [digest, encoded] of Object.entries(blobs)) {
@@ -275,10 +359,12 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
           throw new ConflictError('Knowledge collection store contains an invalid blob.');
         }
       }
+      validatePageCollections(collections, sources, pages);
       return {
         schemaVersion: 'knowledge-collection-store/v1',
         collections,
         sources,
+        pages,
         blobs,
       };
     } catch (error) {
@@ -287,6 +373,7 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
           schemaVersion: 'knowledge-collection-store/v1',
           collections: [],
           sources: [],
+          pages: [],
           blobs: {},
         };
       }
@@ -345,4 +432,163 @@ export function assertKnowledgeSourceIntegrity(value: unknown): KnowledgeSource 
     throw new ConflictError('Knowledge source metadata digest is invalid.');
   }
   return source;
+}
+
+export function assertKnowledgePageIntegrity(value: unknown): KnowledgePage {
+  const page = parseKnowledgePage(value);
+  for (const revision of [page.current, ...page.history]) {
+    const { digest, ...payload } = revision;
+    if (
+      digestRunLaunchValue(payload) !== digest ||
+      `sha256:${createHash('sha256').update(revision.markdown).digest('hex')}` !==
+        revision.contentHash
+    ) {
+      throw new ConflictError('Knowledge page revision digest is invalid.');
+    }
+  }
+  const { digest, ...payload } = page;
+  if (digestRunLaunchValue(payload) !== digest) {
+    throw new ConflictError('Knowledge page metadata digest is invalid.');
+  }
+  return page;
+}
+
+export function validateKnowledgePageGraph(pages: KnowledgePage[]): void {
+  const byId = new Map<string, KnowledgePage>();
+  const identities = new Map<string, string>();
+  for (const page of pages) {
+    if (byId.has(page.id)) throw new ConflictError('Knowledge page identity is duplicated.');
+    byId.set(page.id, page);
+    for (const identity of [page.stableKey, ...page.current.aliases]) {
+      const normalized = normalizePageIdentity(identity);
+      const owner = identities.get(normalized);
+      if (owner && owner !== page.id) {
+        throw new ConflictError('Knowledge page stable key or alias is ambiguous.');
+      }
+      identities.set(normalized, page.id);
+    }
+  }
+  const expectedBacklinks = new Map<string, Set<string>>();
+  for (const page of pages) {
+    for (const targetId of page.current.outgoingPageIds) {
+      if (targetId === page.id || !byId.has(targetId)) {
+        throw new ConflictError('Knowledge page link target is invalid.');
+      }
+      const backlinks = expectedBacklinks.get(targetId) ?? new Set<string>();
+      backlinks.add(page.id);
+      expectedBacklinks.set(targetId, backlinks);
+    }
+  }
+  for (const page of pages) {
+    const expected = [...(expectedBacklinks.get(page.id) ?? [])].sort();
+    const actual = [...page.current.backlinkPageIds].sort();
+    if (expected.length !== actual.length || expected.some((id, index) => id !== actual[index])) {
+      throw new ConflictError('Knowledge page backlinks do not match outgoing links.');
+    }
+  }
+}
+
+export function validateKnowledgePageReferences(
+  collection: KnowledgeCollection,
+  sources: KnowledgeSource[],
+  pages: KnowledgePage[]
+): void {
+  const sourceIds = new Set(sources.map((source) => source.id));
+  for (const page of pages) {
+    if (
+      page.workspaceId !== collection.workspaceId ||
+      page.collectionId !== collection.id ||
+      page.history.length + 1 > collection.definition.maxPageVersions
+    ) {
+      throw new ConflictError('Knowledge page scope or version history violates its collection.');
+    }
+    for (const revision of [page.current, ...page.history]) {
+      if (
+        !collection.definition.pageKinds.includes(revision.pageKind) ||
+        collection.definition.requiredMetadata.some((field) => !(field in revision.metadata))
+      ) {
+        throw new ConflictError('Knowledge page metadata violates its collection definition.');
+      }
+      if (
+        revision.claims.some((claim) =>
+          claim.citations.some((citation) => !sourceIds.has(citation.sourceId))
+        )
+      ) {
+        throw new ConflictError('Knowledge page claim cites an unknown source revision.');
+      }
+    }
+  }
+  validateKnowledgePageGraph(pages);
+}
+
+export function assertPageBatchShape(
+  workspaceId: string,
+  collectionId: string,
+  pages: KnowledgePage[],
+  expected: KnowledgePageExpectedState[]
+): void {
+  if (
+    pages.length !== expected.length ||
+    new Set(pages.map((page) => page.id)).size !== pages.length ||
+    new Set(expected.map((entry) => entry.id)).size !== expected.length
+  ) {
+    throw new ConflictError('Knowledge page batch identities are inconsistent.');
+  }
+  const expectedIds = new Set(expected.map((entry) => entry.id));
+  if (
+    pages.some(
+      (page) =>
+        page.workspaceId !== workspaceId ||
+        page.collectionId !== collectionId ||
+        !expectedIds.has(page.id)
+    )
+  ) {
+    throw new ConflictError('Knowledge page batch scope does not match its metadata.');
+  }
+}
+
+export function assertExpectedPages(
+  currentPages: KnowledgePage[],
+  expected: KnowledgePageExpectedState[]
+): void {
+  for (const entry of expected) {
+    const current = currentPages.find((page) => page.id === entry.id);
+    if ((current?.digest ?? null) !== entry.digest) {
+      throw new ConflictError('Knowledge page changed before the atomic batch was applied.');
+    }
+  }
+}
+
+function normalizePageIdentity(value: string): string {
+  return value.trim().toLocaleLowerCase('en-US');
+}
+
+function validatePageCollections(
+  collections: KnowledgeCollection[],
+  sources: KnowledgeSource[],
+  pages: KnowledgePage[]
+): void {
+  const grouped = new Map<string, KnowledgePage[]>();
+  for (const page of pages) {
+    const key = `${page.workspaceId}\0${page.collectionId}`;
+    const collectionPages = grouped.get(key) ?? [];
+    collectionPages.push(page);
+    grouped.set(key, collectionPages);
+  }
+  for (const collectionPages of grouped.values()) {
+    const first = collectionPages[0];
+    const collection = collections.find(
+      (candidate) =>
+        candidate.workspaceId === first.workspaceId && candidate.id === first.collectionId
+    );
+    if (!collection) throw new ConflictError('Knowledge page collection does not exist.');
+    validateKnowledgePageReferences(
+      collection,
+      sources.filter(
+        (source) =>
+          source.workspaceId === collection.workspaceId && source.collectionId === collection.id
+      ),
+      collectionPages
+    );
+  }
 }
