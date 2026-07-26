@@ -579,6 +579,8 @@ to 128 MiB. Payloads are recursively redacted, strings and collections are
 bounded, and payloads larger than 32 KiB are replaced by explicit dropped
 metadata before persistence.
 
+Launch previews expose current redacted provider and selected-host dependency circuit posture. `run.started`, launch-failure, and terminal journal records retain the corresponding `run-dependency-circuit-evidence/v1` snapshot; run telemetry carries compact state counts; and normalized completion results add verified harness evidence for both circuit identities. These records contain opaque dependency IDs and policy/state metrics, never endpoint URLs, request bodies, response bodies, or credentials.
+
 The TypeScript contract is in `shared/src/types/run-event.types.ts`; the
 portable schema is `shared/schemas/run-event-envelope.v1.schema.json`.
 Consumers replay with

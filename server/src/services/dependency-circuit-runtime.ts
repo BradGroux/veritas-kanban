@@ -59,6 +59,18 @@ export function providerDependencyIdentity(
   };
 }
 
+export function agentHostDependencyIdentity(
+  hostId: string,
+  workspaceId = 'local'
+): DependencyIdentity {
+  return {
+    kind: 'agent-host',
+    id: opaqueDependencyId(`agent-host:${hostId}`),
+    workspaceId,
+    hostId: opaqueDependencyId(`host:${hostId}`),
+  };
+}
+
 export function toolServerDependencyIdentity(
   serverId: string,
   provider?: string,

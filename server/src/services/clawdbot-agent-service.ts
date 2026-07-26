@@ -77,6 +77,7 @@ import {
   DEFAULT_ROUTING_CONFIG,
   EXECUTABLE_AGENT_PROVIDERS,
   RUN_LAUNCH_MANIFEST_SCHEMA_VERSION,
+  RUN_DEPENDENCY_CIRCUIT_EVIDENCE_SCHEMA_VERSION,
   ZERO_AGENT_BUDGET_USAGE,
 } from '@veritas-kanban/shared';
 import type {
@@ -112,6 +113,7 @@ import type {
   TaskCompletionBlocker,
   TaskCompletionStatus,
   TaskCompletionVerification,
+  TaskCompletionEvidence,
   TaskEnvelope,
   TaskTerminalSource,
   CompletionResult,
@@ -122,6 +124,8 @@ import type {
   RunLaunchManifestDriftResult,
   RunLaunchManifestOrigin,
   RunLaunchManifestPreview,
+  RunDependencyCircuitEvidence,
+  DependencyCircuitTelemetry,
   RunLaunchRuntime,
   RunLaunchPhaseAuthority,
   PhaseName,
@@ -293,6 +297,7 @@ import {
 } from './phase-transition-service.js';
 import { verifyPhaseCapabilityEvidenceDigest } from './phase-capability-service.js';
 import {
+  agentHostDependencyIdentity,
   defaultDependencyCircuitExecutionService,
   providerDependencyIdentity,
 } from './dependency-circuit-runtime.js';
@@ -538,6 +543,7 @@ interface PendingAgent {
     taskBeforeCompletion: Task;
     completedAttempt: TaskAttempt;
     completionResult: CompletionResult;
+    dependencyCircuits?: RunDependencyCircuitEvidence;
   };
 }
 
@@ -2065,8 +2071,15 @@ export class ClawdbotAgentService {
       parentPhase,
       phaseAuthority: launchPhaseAuthority,
     });
+    const dependencyCircuits = await this.captureDependencyCircuits(
+      provider,
+      launchAgentConfig?.model,
+      taskEnvelope.workspace.workspaceId,
+      manifest.routing.selectedHost
+    );
     return {
       manifest,
+      dependencyCircuits,
       ...(parentAttempt
         ? {
             parentAttemptId: parentAttempt.id,
@@ -2431,6 +2444,12 @@ export class ClawdbotAgentService {
     const runLaunchManifestDrift = parentAttempt?.runLaunchManifest
       ? diffRunLaunchManifests(runLaunchManifest, parentAttempt.runLaunchManifest)
       : undefined;
+    const launchDependencyCircuits = await this.captureDependencyCircuits(
+      provider,
+      launchAgentConfig?.model,
+      taskEnvelope.workspace.workspaceId,
+      runLaunchManifest.routing.selectedHost
+    );
     const runRetry = options.recovery
       ? {
           ...options.recovery,
@@ -2942,6 +2961,7 @@ export class ClawdbotAgentService {
           phaseEvidenceDigest: runLaunchManifest.phase?.evidence.digest,
           phaseIdentity: runLaunchManifest.phase?.evidence.identity,
           worktreeManifestId: taskEnvelope.workspace.worktreeManifestId,
+          dependencyCircuits: launchDependencyCircuits,
         },
         {
           provider,
@@ -3009,6 +3029,7 @@ export class ClawdbotAgentService {
         admissionSource,
         admissionOutcome: queuedClaim ? 'queued-dispatch' : 'admitted',
         harnessSupport: this.harnessTelemetry(harnessSupport),
+        dependencyCircuits: this.dependencyCircuitTelemetry(launchDependencyCircuits),
       });
 
       await this.workspaceExecutionTrust.assertFresh(
@@ -3115,12 +3136,18 @@ export class ClawdbotAgentService {
       };
       await this.admission.assertExecutionTreeLaunchAllowed(executionTree.rootObjectiveId);
       this.assertProviderAdmissionEvidence(providerAdmission, attempt);
-      await this.dependencyExecution.execute(
-        providerDependencyIdentity(
-          provider,
-          launchAgentConfig?.model,
-          taskEnvelope.workspace.workspaceId
-        ),
+      await this.dependencyExecution.executeAll(
+        [
+          providerDependencyIdentity(
+            provider,
+            launchAgentConfig?.model,
+            taskEnvelope.workspace.workspaceId
+          ),
+          agentHostDependencyIdentity(
+            runLaunchManifest.routing.selectedHost,
+            taskEnvelope.workspace.workspaceId
+          ),
+        ],
         () =>
           Promise.resolve(
             adapter.start({
@@ -3142,6 +3169,12 @@ export class ClawdbotAgentService {
       );
     } catch (error: unknown) {
       const startError = error instanceof Error ? error : new Error(String(error));
+      const failedDependencyCircuits = await this.captureDependencyCircuits(
+        provider,
+        launchAgentConfig?.model,
+        taskEnvelope.workspace.workspaceId,
+        runLaunchManifest.routing.selectedHost
+      ).catch(() => undefined);
       await this.releaseAdmission(
         admissionReservation.id,
         'start-failed',
@@ -3154,6 +3187,9 @@ export class ClawdbotAgentService {
         {
           summary: this.redactTraceText(startError.message || `Failed to start ${adapter.label}`),
           phase: 'launch',
+          ...(failedDependencyCircuits
+            ? { dependencyCircuits: failedDependencyCircuits }
+            : {}),
         },
         {
           provider,
@@ -3213,6 +3249,12 @@ export class ClawdbotAgentService {
         error: startError.message || `Failed to start ${adapter.label}`,
         stackTrace: startError.stack,
         harnessSupport: this.harnessTelemetry(harnessSupport, 'launch-failed'),
+        ...(failedDependencyCircuits
+          ? {
+              dependencyCircuits:
+                this.dependencyCircuitTelemetry(failedDependencyCircuits),
+            }
+          : {}),
       });
       const launchCleanupEffects: Array<[string, () => void | Promise<void>]> = [
         [
@@ -3708,10 +3750,27 @@ export class ClawdbotAgentService {
       });
     }
     this.assertPersistedAttemptCompletionBinding(task.id, attempt);
+    const dependencyCircuits = attempt.runLaunchManifest
+      ? await this.captureDependencyCircuits(
+          attempt.runLaunchManifest.providerRuntime.provider,
+          attempt.model,
+          attempt.taskEnvelope.workspace.workspaceId,
+          attempt.runLaunchManifest.routing.selectedHost
+        ).catch((error) => {
+          log.error(
+            { err: error, taskId: task.id, attemptId: attempt.id },
+            'Failed to capture dependency circuit completion evidence'
+          );
+          return undefined;
+        })
+      : undefined;
     const completionResult = await this.providerCompletions.complete({
       task,
       taskEnvelope: attempt.taskEnvelope,
       claim,
+      ...(dependencyCircuits
+        ? { harnessEvidence: this.dependencyCircuitCompletionEvidence(dependencyCircuits) }
+        : {}),
       ...(await this.completionPhaseEvidence(
         task.id,
         attempt.id,
@@ -3749,6 +3808,7 @@ export class ClawdbotAgentService {
         summary: completionResult.summary,
         status: completionResult.status,
         terminalSource: completionResult.terminalSource,
+        ...(dependencyCircuits ? { dependencyCircuits } : {}),
       },
       {
         provider: executableProvider(attempt.provider),
@@ -4038,10 +4098,25 @@ export class ClawdbotAgentService {
           });
         }
         const claim = this.normalizeTerminalClaim(result, result.terminalSource ?? 'process');
+        const dependencyCircuits = await this.captureDependencyCircuits(
+          pending.provider,
+          pending.model,
+          pending.taskEnvelope.workspace.workspaceId,
+          pending.runLaunchManifest.routing.selectedHost
+        ).catch((error) => {
+          log.error(
+            { err: error, taskId, attemptId },
+            'Failed to capture dependency circuit completion evidence'
+          );
+          return undefined;
+        });
         const completionResult = await this.providerCompletions.complete({
           task: taskBeforeCompletion,
           taskEnvelope: pending.taskEnvelope,
           claim,
+          ...(dependencyCircuits
+            ? { harnessEvidence: this.dependencyCircuitCompletionEvidence(dependencyCircuits) }
+            : {}),
           ...(await this.completionPhaseEvidence(
             taskId,
             attemptId,
@@ -4079,9 +4154,11 @@ export class ClawdbotAgentService {
           taskBeforeCompletion,
           completedAttempt,
           completionResult,
+          dependencyCircuits,
         });
       })());
-    const { status, taskBeforeCompletion, completionResult } = preparedCompletion;
+    const { status, taskBeforeCompletion, completionResult, dependencyCircuits } =
+      preparedCompletion;
     const successful = completionResult.status === 'success';
 
     if (pending.provider === 'openclaw' && completionResult.summary) {
@@ -4116,6 +4193,7 @@ export class ClawdbotAgentService {
         status: completionResult.status,
         terminalSource: completionResult.terminalSource,
         durationMs: timing.durationMs,
+        ...(dependencyCircuits ? { dependencyCircuits } : {}),
       },
       {
         provider: pending.provider,
@@ -4219,6 +4297,12 @@ export class ClawdbotAgentService {
               pending.harnessSupport,
               successful ? 'none' : 'run-failed'
             ),
+            ...(dependencyCircuits
+              ? {
+                  dependencyCircuits:
+                    this.dependencyCircuitTelemetry(dependencyCircuits),
+                }
+              : {}),
           }),
       ],
       [
@@ -5212,6 +5296,65 @@ export class ClawdbotAgentService {
 
   private resolveAgentConfig(agents: AgentConfig[], agent: AgentType): AgentConfig | undefined {
     return agents.find((a) => a.type === agent);
+  }
+
+  private async captureDependencyCircuits(
+    provider: string,
+    model: string | undefined,
+    workspaceId: string,
+    selectedHost: string
+  ): Promise<RunDependencyCircuitEvidence> {
+    const [providerCircuit, agentHostCircuit] = await Promise.all([
+      this.dependencyExecution.inspect(
+        providerDependencyIdentity(provider, model, workspaceId)
+      ),
+      this.dependencyExecution.inspect(
+        agentHostDependencyIdentity(selectedHost, workspaceId)
+      ),
+    ]);
+    return {
+      schemaVersion: RUN_DEPENDENCY_CIRCUIT_EVIDENCE_SCHEMA_VERSION,
+      capturedAt: new Date().toISOString(),
+      provider: providerCircuit,
+      agentHost: agentHostCircuit,
+    };
+  }
+
+  private dependencyCircuitTelemetry(
+    evidence: RunDependencyCircuitEvidence
+  ): DependencyCircuitTelemetry {
+    const states = [evidence.provider.state, evidence.agentHost.state];
+    return {
+      provider: evidence.provider.state,
+      agentHost: evidence.agentHost.state,
+      openCount: states.filter((state) => state === 'open').length,
+      halfOpenCount: states.filter((state) => state === 'half-open').length,
+    };
+  }
+
+  private dependencyCircuitCompletionEvidence(
+    evidence: RunDependencyCircuitEvidence
+  ): TaskCompletionEvidence[] {
+    return [
+      {
+        id: 'dependency-circuit-provider',
+        kind: 'other',
+        source: 'harness',
+        summary: `Provider dependency circuit was ${evidence.provider.state} at completion.`,
+        reference: evidence.provider.dependency.id,
+        requirementIds: [],
+        verified: true,
+      },
+      {
+        id: 'dependency-circuit-agent-host',
+        kind: 'other',
+        source: 'harness',
+        summary: `Agent host dependency circuit was ${evidence.agentHost.state} at completion.`,
+        reference: evidence.agentHost.dependency.id,
+        requirementIds: [],
+        verified: true,
+      },
+    ];
   }
 
   async probeProviderRuntime(

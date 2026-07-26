@@ -89,6 +89,18 @@ export class DependencyCircuitRegistryService {
     });
   }
 
+  async inspect(
+    dependency: DependencyIdentity,
+    policy: DependencyCircuitPolicy = DEFAULT_DEPENDENCY_CIRCUIT_POLICY
+  ): Promise<DependencyCircuitSnapshot> {
+    const key = dependencyCircuitKey(dependency);
+    return this.withKey(key, async () => {
+      const breaker = this.getOrCreate(dependency, policy);
+      if (!this.persisted.has(key)) await this.persist(breaker);
+      return breaker.getSnapshot();
+    });
+  }
+
   async reset(key: string): Promise<boolean> {
     return this.withKey(key, async () => {
       const breaker = this.getByKey(key);

@@ -5,6 +5,8 @@ export const DEPENDENCY_CIRCUIT_STATE_SCHEMA_VERSION =
   'dependency-circuit-state/v1' as const;
 export const DEPENDENCY_CIRCUIT_OVERRIDE_SCHEMA_VERSION =
   'dependency-circuit-override/v1' as const;
+export const RUN_DEPENDENCY_CIRCUIT_EVIDENCE_SCHEMA_VERSION =
+  'run-dependency-circuit-evidence/v1' as const;
 
 export const DEPENDENCY_KINDS = [
   'provider',
@@ -220,4 +222,11 @@ export interface DependencyCircuitOverride {
   actorId: string;
   createdAt: string;
   expiresAt: string;
+}
+
+export interface RunDependencyCircuitEvidence {
+  schemaVersion: typeof RUN_DEPENDENCY_CIRCUIT_EVIDENCE_SCHEMA_VERSION;
+  capturedAt: string;
+  provider: DependencyCircuitSnapshot;
+  agentHost: DependencyCircuitSnapshot;
 }
