@@ -13,17 +13,22 @@ import type {
   KnowledgePageClaim,
   KnowledgePageExpectedState,
   KnowledgePageRevision,
+  KnowledgeSearchResponse,
+  KnowledgeSearchResult,
   KnowledgeSource,
   RegisterKnowledgeSourceInput,
+  SearchKnowledgeCollectionInput,
   TransitionKnowledgeIngestionProposalInput,
   UpsertKnowledgePageCandidate,
   UpsertKnowledgePagesInput,
 } from '@veritas-kanban/shared';
+import { redactString } from '../lib/redact.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
 import {
   CreateKnowledgeIngestionProposalBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
+  SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
   UpsertKnowledgePagesBodySchema,
   parseKnowledgeActivityEntry,
@@ -511,6 +516,97 @@ export class KnowledgeCollectionService {
     return this.repository.listKnowledgeActivity(workspaceId, collectionId);
   }
 
+  async searchCollection(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor,
+    input: SearchKnowledgeCollectionInput
+  ): Promise<KnowledgeSearchResponse> {
+    const parsed = SearchKnowledgeCollectionBodySchema.parse(input);
+    await this.requireReadableCollection(workspaceId, collectionId, actor);
+    const terms = knowledgeQueryTerms(parsed.query);
+    const scope = parsed.scope ?? 'all';
+    const limit = parsed.limit ?? 10;
+    const [sources, pages] = await Promise.all([
+      scope === 'derived-pages'
+        ? Promise.resolve([])
+        : this.repository.listSources(workspaceId, collectionId),
+      scope === 'raw-sources'
+        ? Promise.resolve([])
+        : this.repository.listPages(workspaceId, collectionId),
+    ]);
+    const results: KnowledgeSearchResult[] = [];
+
+    for (const source of sources) {
+      const content = await this.repository.readSourceContent(workspaceId, collectionId, source.id);
+      const searchable = [
+        source.title,
+        source.sourceKey,
+        source.uri,
+        source.owner,
+        content?.toString('utf8'),
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const score = scoreKnowledgeText(parsed.query, terms, searchable);
+      if (score === 0) continue;
+      results.push({
+        id: source.id,
+        kind: 'raw-source',
+        title: source.title ?? source.sourceKey,
+        snippet: redactKnowledgeSnippet(knowledgeSnippet(searchable, terms)),
+        score,
+        sourceId: source.id,
+        citations: [{ sourceId: source.id }],
+      });
+    }
+
+    for (const page of pages) {
+      const revision = page.current;
+      const searchable = [
+        revision.title,
+        page.stableKey,
+        ...revision.aliases,
+        ...revision.tags,
+        revision.markdown,
+        ...revision.claims.map((claim) => claim.text),
+      ].join('\n');
+      const score = scoreKnowledgeText(parsed.query, terms, searchable);
+      if (score === 0) continue;
+      results.push({
+        id: page.id,
+        kind: 'derived-page',
+        title: revision.title,
+        snippet: redactKnowledgeSnippet(knowledgeSnippet(searchable, terms)),
+        score,
+        pageId: page.id,
+        stableKey: page.stableKey,
+        citations: uniqueKnowledgeCitations(revision.claims.flatMap((claim) => claim.citations)),
+      });
+    }
+
+    const requestedBackend = parsed.backend ?? 'keyword';
+    return {
+      query: parsed.query,
+      backend: 'keyword',
+      degraded: requestedBackend !== 'keyword',
+      ...(requestedBackend === 'keyword'
+        ? {}
+        : {
+            reason:
+              'Knowledge collections are not yet indexed by QMD; keyword search served the request.',
+          }),
+      results: results
+        .sort(
+          (left, right) =>
+            right.score - left.score ||
+            left.kind.localeCompare(right.kind) ||
+            left.id.localeCompare(right.id)
+        )
+        .slice(0, limit),
+    };
+  }
+
   private async preparePageBatch(
     workspaceId: string,
     collectionId: string,
@@ -911,6 +1007,56 @@ function sameCitationSourceSet(left: KnowledgePageClaim, right: KnowledgePageCla
     leftIds.length === rightIds.length &&
     leftIds.every((sourceId, index) => sourceId === rightIds[index])
   );
+}
+
+function knowledgeQueryTerms(query: string): string[] {
+  return [
+    ...new Set(
+      query
+        .toLocaleLowerCase('en-US')
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((term) => term.length > 1)
+    ),
+  ];
+}
+
+function scoreKnowledgeText(query: string, terms: string[], text: string): number {
+  const normalized = text.toLocaleLowerCase('en-US');
+  const phrase = query.toLocaleLowerCase('en-US');
+  const matches = terms.filter((term) => normalized.includes(term)).length;
+  if (matches === 0) return 0;
+  return Math.min(1, matches / Math.max(terms.length, 1) + (normalized.includes(phrase) ? 0.2 : 0));
+}
+
+function knowledgeSnippet(text: string, terms: string[]): string {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  const normalized = compact.toLocaleLowerCase('en-US');
+  const firstMatch = terms
+    .map((term) => normalized.indexOf(term))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0];
+  const start = Math.max(0, (firstMatch ?? 0) - 80);
+  const end = Math.min(compact.length, start + 320);
+  return `${start > 0 ? '…' : ''}${compact.slice(start, end)}${end < compact.length ? '…' : ''}`;
+}
+
+function redactKnowledgeSnippet(value: string): string {
+  return redactString(value).replace(
+    /\b(api[_-]?key|token|secret|password|authorization|cookie)\b\s*[:=]\s*["']?[^"',\s]+/gi,
+    '$1: [redacted]'
+  );
+}
+
+function uniqueKnowledgeCitations(
+  citations: KnowledgePageClaim['citations']
+): KnowledgePageClaim['citations'] {
+  const seen = new Set<string>();
+  return citations.filter((citation) => {
+    const key = JSON.stringify(citation);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function createKnowledgeActivity(

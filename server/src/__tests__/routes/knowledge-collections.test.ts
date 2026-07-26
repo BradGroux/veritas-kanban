@@ -13,6 +13,7 @@ const knowledge = vi.hoisted(() => ({
   getSource: vi.fn(),
   listPages: vi.fn(),
   getPage: vi.fn(),
+  searchCollection: vi.fn(),
   createIngestionProposal: vi.fn(),
   listIngestionProposals: vi.fn(),
   getIngestionProposal: vi.fn(),
@@ -178,6 +179,35 @@ describe('knowledge collection routes', () => {
       id: 'operator-1',
       role: 'admin',
     });
+  });
+
+  it('searches a collection with authenticated scope and validated backend options', async () => {
+    knowledge.searchCollection.mockResolvedValue({
+      query: 'architecture',
+      backend: 'keyword',
+      degraded: true,
+      reason: 'QMD unavailable',
+      results: [{ id: 'knowledge_page_1', kind: 'derived-page', citations: [] }],
+    });
+    const input = {
+      query: 'architecture',
+      limit: 5,
+      scope: 'derived-pages',
+      backend: 'auto',
+    };
+
+    const response = await request(createApp())
+      .post(`/api/knowledge/collections/${COLLECTION_ID}/search`)
+      .send(input);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ backend: 'keyword', degraded: true });
+    expect(knowledge.searchCollection).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      input
+    );
   });
 
   it('creates, applies, and reverses digest-bound ingestion proposals', async () => {

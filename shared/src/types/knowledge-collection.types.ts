@@ -325,3 +325,30 @@ export interface CreateKnowledgeIngestionProposalInput {
 export interface TransitionKnowledgeIngestionProposalInput {
   proposalDigest: string;
 }
+
+export interface SearchKnowledgeCollectionInput {
+  query: string;
+  limit?: number;
+  scope?: 'all' | 'raw-sources' | 'derived-pages';
+  backend?: 'auto' | 'qmd' | 'keyword';
+}
+
+export interface KnowledgeSearchResult {
+  id: string;
+  kind: 'raw-source' | 'derived-page';
+  title: string;
+  snippet: string;
+  score: number;
+  sourceId?: string;
+  pageId?: string;
+  stableKey?: string;
+  citations: KnowledgeClaimCitation[];
+}
+
+export interface KnowledgeSearchResponse {
+  query: string;
+  backend: 'keyword';
+  degraded: boolean;
+  reason?: string;
+  results: KnowledgeSearchResult[];
+}

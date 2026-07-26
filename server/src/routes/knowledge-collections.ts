@@ -9,6 +9,7 @@ import {
   CreateKnowledgeIngestionProposalBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
+  SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
 } from '../schemas/knowledge-collection-schemas.js';
 import {
@@ -158,6 +159,22 @@ router.get(
     );
     if (!page) throw new NotFoundError('Knowledge page not found.');
     res.json(page);
+  })
+);
+
+router.post(
+  '/:collectionId/search',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const input = parseBody(SearchKnowledgeCollectionBodySchema, req.body);
+    const context = requestContext(req);
+    const result = await getKnowledgeCollectionService().searchCollection(
+      context.workspaceId,
+      collectionId,
+      context.actor,
+      input
+    );
+    res.json(result);
   })
 );
 

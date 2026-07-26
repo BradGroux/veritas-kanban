@@ -708,6 +708,15 @@ export const TransitionKnowledgeIngestionProposalBodySchema = z
   })
   .strict();
 
+export const SearchKnowledgeCollectionBodySchema = z
+  .object({
+    query: z.string().trim().min(1).max(500),
+    limit: z.number().int().min(1).max(50).optional(),
+    scope: z.enum(['all', 'raw-sources', 'derived-pages']).optional(),
+    backend: z.enum(['auto', 'qmd', 'keyword']).optional(),
+  })
+  .strict();
+
 export function parseKnowledgeIngestionProposal(value: unknown): KnowledgeIngestionProposal {
   return KnowledgeIngestionProposalSchema.parse(value) as KnowledgeIngestionProposal;
 }
