@@ -191,6 +191,30 @@ describe('reflection routes', () => {
     });
   });
 
+  it('validates typed wider-promotion input before acceptance', async () => {
+    const res = await request(createApp())
+      .post('/api/reflections/reflection_1/accept')
+      .send({
+        promotionTarget: 'profile',
+        promotion: {
+          target: 'profile',
+          profileId: 'profile_1',
+          capabilitiesToAdd: ['schema-review'],
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockReflectionService.accept).toHaveBeenCalledWith('reflection_1', {
+      reviewedBy: 'brad',
+      promotionTarget: 'profile',
+      promotion: {
+        target: 'profile',
+        profileId: 'profile_1',
+        capabilitiesToAdd: ['schema-review'],
+      },
+    });
+  });
+
   it('rejects candidates without a source identifier', async () => {
     const res = await request(createApp())
       .post('/api/reflections')
