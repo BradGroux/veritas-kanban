@@ -4701,26 +4701,27 @@ so startup reconciliation cannot duplicate a fresh conversation.
 
 Knowledge collections establish a workspace-scoped, immutable source catalog for derived project knowledge. Route access requires `work_product:read` for reads and `work_product:write` for writes. Collection policies then apply the authenticated actor's `admin`, `agent`, or `read-only` role and source-classification ceiling.
 
-| Method | Path                                                                               | Description                        |
-| ------ | ---------------------------------------------------------------------------------- | ---------------------------------- |
-| `GET`  | `/api/knowledge/collections`                                                       | List collections readable by actor |
-| `POST` | `/api/knowledge/collections`                                                       | Create one versioned collection    |
-| `GET`  | `/api/knowledge/collections/:collectionId`                                         | Read collection metadata           |
-| `GET`  | `/api/knowledge/collections/:collectionId/sources`                                 | List immutable source revisions    |
-| `POST` | `/api/knowledge/collections/:collectionId/sources`                                 | Register one source revision       |
-| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata               |
-| `GET`  | `/api/knowledge/collections/:collectionId/pages`                                   | List derived pages                 |
-| `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                           | Read one cited derived page        |
-| `POST` | `/api/knowledge/collections/:collectionId/integrity/lint`                          | Run deterministic integrity lint   |
-| `POST` | `/api/knowledge/collections/:collectionId/search`                                  | Search raw and derived knowledge   |
-| `POST` | `/api/knowledge/collections/:collectionId/search/promotions`                       | Promote selected search results    |
-| `POST` | `/api/knowledge/collections/:collectionId/exports`                                 | Create a cited work product        |
-| `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | List ingestion dry runs            |
-| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | Create an ingestion dry run        |
-| `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read one dry run                   |
-| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`   | Apply atomically                   |
-| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse` | Reverse atomically                 |
-| `GET`  | `/api/knowledge/collections/:collectionId/activity`                                | List ingestion activity            |
+| Method | Path                                                                                 | Description                        |
+| ------ | ------------------------------------------------------------------------------------ | ---------------------------------- |
+| `GET`  | `/api/knowledge/collections`                                                         | List collections readable by actor |
+| `POST` | `/api/knowledge/collections`                                                         | Create one versioned collection    |
+| `GET`  | `/api/knowledge/collections/:collectionId`                                           | Read collection metadata           |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources`                                   | List immutable source revisions    |
+| `POST` | `/api/knowledge/collections/:collectionId/sources`                                   | Register one source revision       |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId`                         | Read source metadata               |
+| `GET`  | `/api/knowledge/collections/:collectionId/pages`                                     | List derived pages                 |
+| `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                             | Read one cited derived page        |
+| `POST` | `/api/knowledge/collections/:collectionId/pages/:pageId/claims/:claimId/transitions` | Transition one material claim      |
+| `POST` | `/api/knowledge/collections/:collectionId/integrity/lint`                            | Run deterministic integrity lint   |
+| `POST` | `/api/knowledge/collections/:collectionId/search`                                    | Search raw and derived knowledge   |
+| `POST` | `/api/knowledge/collections/:collectionId/search/promotions`                         | Promote selected search results    |
+| `POST` | `/api/knowledge/collections/:collectionId/exports`                                   | Create a cited work product        |
+| `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals`                       | List ingestion dry runs            |
+| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals`                       | Create an ingestion dry run        |
+| `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`           | Read one dry run                   |
+| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`     | Apply atomically                   |
+| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse`   | Reverse atomically                 |
+| `GET`  | `/api/knowledge/collections/:collectionId/activity`                                  | List ingestion activity            |
 
 Collection, source, page, proposal, and activity lists accept `page` (default `1`) and `limit` (default `100`, maximum `500`). Pagination metadata is returned through the standard API response envelope.
 
@@ -4844,6 +4845,27 @@ The report counts inspected pages, sources, and claims and returns stable,
 severity-ranked findings for structural, provenance, freshness, and research
 gaps. It contains identifiers but never retained source text. Agent reports are
 limited to resources in the verified launch manifest.
+
+Transition a material claim by supplying compare-and-set page and lifecycle
+evidence:
+
+```json
+{
+  "operationId": "dispute-dispatch-claim",
+  "expectedPageDigest": "sha256:...",
+  "expectedState": "active",
+  "to": "disputed",
+  "reason": "Two retained sources support conflicting interpretations.",
+  "evidenceSourceIds": ["knowledge_source_0123456789abcdef"]
+}
+```
+
+States are `active`, `needs-review`, `disputed`, `superseded`, and `retracted`.
+Agents may flag `needs-review` or `disputed`; administrators finalize other
+transitions. The response is the newly versioned page. Each transition is
+attributed, digest-bound, retained in page history, idempotent for an exact
+retry, and rejected when the page digest, expected state, operation identity,
+or evidence access is stale.
 
 Search one readable collection with a bounded query. `scope` can be `all`, `raw-sources`, or `derived-pages`. Results identify their kind, backend, effective classification, and source citations; derived results carry the citations from their material claims. Confidential and restricted snippets are withheld. `backend: "auto"` or `"qmd"` projects current eligible derived pages into an isolated, non-default QMD collection scoped by workspace, collection, and launch-manifest digest, and refreshes it only when page digests change. Raw source matches remain keyword-scored. If QMD is unavailable or the requested scope has no derived pages, the response uses `backend: "keyword"`, sets `degraded: true`, and includes a reason.
 

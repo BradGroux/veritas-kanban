@@ -13,6 +13,7 @@ import {
   RegisterKnowledgeSourceBodySchema,
   RunKnowledgeIntegrityLintBodySchema,
   SearchKnowledgeCollectionBodySchema,
+  TransitionKnowledgeClaimBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
 } from '../schemas/knowledge-collection-schemas.js';
 import {
@@ -161,6 +162,26 @@ router.get(
       context.actor
     );
     if (!page) throw new NotFoundError('Knowledge page not found.');
+    res.json(page);
+  })
+);
+
+router.post(
+  '/:collectionId/pages/:pageId/claims/:claimId/transitions',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const pageId = parseIdentifier(req.params.pageId);
+    const claimId = parseIdentifier(req.params.claimId);
+    const input = parseBody(TransitionKnowledgeClaimBodySchema, req.body);
+    const context = requestContext(req);
+    const page = await getKnowledgeCollectionService().transitionClaim(
+      context.workspaceId,
+      collectionId,
+      pageId,
+      claimId,
+      context.actor,
+      input
+    );
     res.json(page);
   })
 );

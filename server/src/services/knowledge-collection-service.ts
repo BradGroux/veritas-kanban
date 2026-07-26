@@ -25,6 +25,7 @@ import type {
   RunKnowledgeIntegrityLintInput,
   SearchKnowledgeCollectionInput,
   TransitionKnowledgeIngestionProposalInput,
+  TransitionKnowledgeClaimInput,
   UpsertKnowledgePageCandidate,
   UpsertKnowledgePagesInput,
   WorkProduct,
@@ -40,6 +41,7 @@ import {
   RunKnowledgeIntegrityLintBodySchema,
   SearchKnowledgeCollectionBodySchema,
   TransitionKnowledgeIngestionProposalBodySchema,
+  TransitionKnowledgeClaimBodySchema,
   UpsertKnowledgePagesBodySchema,
   parseKnowledgeActivityEntry,
   parseKnowledgeCollection,
@@ -385,6 +387,132 @@ export class KnowledgeCollectionService {
     return page && (!launchResources || this.pageAllowed(page, sources, launchResources))
       ? page
       : null;
+  }
+
+  async transitionClaim(
+    workspaceId: string,
+    collectionId: string,
+    pageId: string,
+    claimId: string,
+    actor: KnowledgeCollectionActor,
+    input: TransitionKnowledgeClaimInput
+  ): Promise<KnowledgePage> {
+    const parsed = TransitionKnowledgeClaimBodySchema.parse(input);
+    const collection = await this.requireWritableCollection(workspaceId, collectionId, actor);
+    const [page, sources, launchResources] = await Promise.all([
+      this.repository.getPage(workspaceId, collectionId, pageId),
+      this.repository.listSources(workspaceId, collectionId),
+      this.launchResources(actor),
+    ]);
+    if (!page) throw new NotFoundError('Knowledge page not found.');
+    if (launchResources && !this.pageAllowed(page, sources, launchResources)) {
+      throw new ForbiddenError('Knowledge page is not allowed by the run launch manifest.');
+    }
+    if (actor.role !== 'admin' && parsed.to !== 'needs-review' && parsed.to !== 'disputed') {
+      throw new ForbiddenError(
+        'Agents may only flag knowledge claims as needs-review or disputed.'
+      );
+    }
+    const evidenceSourceIds = [...(parsed.evidenceSourceIds ?? [])].sort();
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    if (
+      evidenceSourceIds.some((sourceId) => {
+        const source = sourcesById.get(sourceId);
+        return !source || Boolean(launchResources && !this.sourceAllowed(source, launchResources));
+      })
+    ) {
+      throw new ForbiddenError('Knowledge claim transition evidence is unavailable.');
+    }
+    const operationIdDigest = digestRunLaunchValue(parsed.operationId);
+    const requestDigest = digestRunLaunchValue({
+      workspaceId,
+      collectionId,
+      pageId,
+      claimId,
+      expectedState: parsed.expectedState,
+      to: parsed.to,
+      reason: parsed.reason,
+      evidenceSourceIds,
+    });
+    const priorTransition = [page.current, ...page.history]
+      .flatMap((revision) => revision.claims)
+      .find((claim) => claim.id === claimId)
+      ?.transitions?.find((transition) => transition.operationIdDigest === operationIdDigest);
+    if (priorTransition) {
+      if (priorTransition.requestDigest !== requestDigest) {
+        throw new ConflictError(
+          'Knowledge claim transition identity was reused for changed input.'
+        );
+      }
+      return page;
+    }
+    if (page.digest !== parsed.expectedPageDigest) {
+      throw new ConflictError('Knowledge claim page digest is stale.');
+    }
+    const claim = page.current.claims.find((entry) => entry.id === claimId);
+    if (!claim) throw new NotFoundError('Knowledge claim not found.');
+    const currentState = claim.lifecycleState ?? 'active';
+    if (currentState !== parsed.expectedState) {
+      throw new ConflictError('Knowledge claim lifecycle state is stale.');
+    }
+    const transitionPayload = {
+      from: currentState,
+      to: parsed.to,
+      reason: parsed.reason,
+      evidenceSourceIds,
+      actorId: actor.id,
+      at: this.now().toISOString(),
+      operationIdDigest,
+      requestDigest,
+    };
+    const transition = {
+      ...transitionPayload,
+      digest: digestRunLaunchValue(transitionPayload),
+    };
+    const claims = page.current.claims.map((entry) =>
+      entry.id === claimId
+        ? {
+            ...entry,
+            lifecycleState: parsed.to,
+            transitions: [...(entry.transitions ?? []), transition],
+          }
+        : entry
+    );
+    const revision = createPageRevision(page.current.version + 1, {
+      ...revisionPayloadWithoutIdentity(page.current),
+      claims,
+      operationIdDigest,
+      requestDigest,
+      updatedBy: actor.id,
+      updatedAt: transition.at,
+    });
+    const history = [page.current, ...page.history].slice(
+      0,
+      Math.max(0, collection.definition.maxPageVersions - 1)
+    );
+    const payload = {
+      schemaVersion: 'knowledge-page/v1' as const,
+      id: page.id,
+      workspaceId,
+      collectionId,
+      stableKey: page.stableKey,
+      current: revision,
+      history,
+      createdBy: page.createdBy,
+      createdAt: page.createdAt,
+    };
+    const next = parseKnowledgePage({
+      ...payload,
+      digest: digestRunLaunchValue(payload),
+    });
+    const [committed] = await this.repository.applyPageBatch(
+      workspaceId,
+      collectionId,
+      [next],
+      [{ id: page.id, digest: page.digest }]
+    );
+    if (!committed) throw new ConflictError('Knowledge claim transition was not committed.');
+    return committed;
   }
 
   async createIngestionProposal(
@@ -1163,6 +1291,7 @@ export class KnowledgeCollectionService {
         ? buildCandidateRevisionPayload(
             pageId,
             desired,
+            existing?.current.claims ?? [],
             backlinkPageIds,
             operationIdDigest,
             requestDigest,
@@ -1815,6 +1944,7 @@ function buildCandidateRevisionPayload(
     aliases: string[];
     outgoingPageIds: string[];
   },
+  existingClaims: KnowledgePageClaim[],
   backlinkPageIds: string[],
   operationIdDigest: string,
   requestDigest: string,
@@ -1822,13 +1952,19 @@ function buildCandidateRevisionPayload(
   updatedAt: string
 ): KnowledgePageRevisionPayload {
   const candidate = desired.candidate;
-  const claims: KnowledgePageClaim[] = candidate.claims.map((claim) => ({
-    id: stableId('knowledge_claim', { pageId, claimKey: claim.claimKey }),
-    claimKey: claim.claimKey,
-    text: claim.text,
-    citations: claim.citations,
-    confidence: claim.confidence,
-  }));
+  const existingClaimsByKey = new Map(existingClaims.map((claim) => [claim.claimKey, claim]));
+  const claims: KnowledgePageClaim[] = candidate.claims.map((claim) => {
+    const existing = existingClaimsByKey.get(claim.claimKey);
+    return {
+      id: stableId('knowledge_claim', { pageId, claimKey: claim.claimKey }),
+      claimKey: claim.claimKey,
+      text: claim.text,
+      citations: claim.citations,
+      confidence: claim.confidence,
+      lifecycleState: existing?.lifecycleState ?? 'active',
+      transitions: existing?.transitions ?? [],
+    };
+  });
   return {
     title: candidate.title,
     pageKind: candidate.pageKind,

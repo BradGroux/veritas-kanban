@@ -13,6 +13,7 @@ const knowledge = vi.hoisted(() => ({
   getSource: vi.fn(),
   listPages: vi.fn(),
   getPage: vi.fn(),
+  transitionClaim: vi.fn(),
   runIntegrityLint: vi.fn(),
   searchCollection: vi.fn(),
   createQueryPromotion: vi.fn(),
@@ -238,6 +239,39 @@ describe('knowledge collection routes', () => {
     expect(knowledge.runIntegrityLint).toHaveBeenCalledWith(
       'workspace-a',
       COLLECTION_ID,
+      { id: 'operator-1', role: 'admin' },
+      input
+    );
+  });
+
+  it('transitions a claim with compare-and-set page evidence', async () => {
+    const pageId = 'knowledge_page_0123456789abcdef';
+    const claimId = 'knowledge_claim_0123456789abcdef';
+    const input = {
+      operationId: 'dispute-claim',
+      expectedPageDigest: `sha256:${'a'.repeat(64)}`,
+      expectedState: 'active',
+      to: 'disputed',
+      reason: 'Conflicting retained evidence requires review.',
+      evidenceSourceIds: ['knowledge_source_0123456789abcdef'],
+    };
+    knowledge.transitionClaim.mockResolvedValue({
+      id: pageId,
+      current: { claims: [{ id: claimId, lifecycleState: 'disputed' }] },
+    });
+
+    const response = await request(createApp())
+      .post(
+        `/api/knowledge/collections/${COLLECTION_ID}/pages/${pageId}/claims/${claimId}/transitions`
+      )
+      .send(input);
+
+    expect(response.status).toBe(200);
+    expect(knowledge.transitionClaim).toHaveBeenCalledWith(
+      'workspace-a',
+      COLLECTION_ID,
+      pageId,
+      claimId,
       { id: 'operator-1', role: 'admin' },
       input
     );

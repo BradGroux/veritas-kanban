@@ -155,12 +155,35 @@ export interface KnowledgeClaimCitation {
   excerptHash?: string;
 }
 
+export const KNOWLEDGE_CLAIM_STATES = [
+  'active',
+  'needs-review',
+  'disputed',
+  'superseded',
+  'retracted',
+] as const;
+export type KnowledgeClaimState = (typeof KNOWLEDGE_CLAIM_STATES)[number];
+
+export interface KnowledgeClaimTransition {
+  from: KnowledgeClaimState;
+  to: KnowledgeClaimState;
+  reason: string;
+  evidenceSourceIds: string[];
+  actorId: string;
+  at: string;
+  operationIdDigest: string;
+  requestDigest: string;
+  digest: string;
+}
+
 export interface KnowledgePageClaim {
   id: string;
   claimKey: string;
   text: string;
   citations: KnowledgeClaimCitation[];
   confidence: number;
+  lifecycleState?: KnowledgeClaimState;
+  transitions?: KnowledgeClaimTransition[];
 }
 
 export interface KnowledgePageRevision {
@@ -222,6 +245,15 @@ export interface UpsertKnowledgePageCandidate {
 export interface UpsertKnowledgePagesInput {
   operationId: string;
   pages: UpsertKnowledgePageCandidate[];
+}
+
+export interface TransitionKnowledgeClaimInput {
+  operationId: string;
+  expectedPageDigest: string;
+  expectedState: KnowledgeClaimState;
+  to: KnowledgeClaimState;
+  reason: string;
+  evidenceSourceIds?: string[];
 }
 
 export interface KnowledgePageExpectedState {
