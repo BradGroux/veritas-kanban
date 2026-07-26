@@ -65,6 +65,7 @@ The initial REST surface is mounted at both `/api/v1/knowledge/collections` and 
 | `GET`  | `/knowledge/collections/:collectionId/pages`                                   | List derived pages          |
 | `GET`  | `/knowledge/collections/:collectionId/pages/:pageId`                           | Read a derived page         |
 | `POST` | `/knowledge/collections/:collectionId/search`                                  | Search raw and derived data |
+| `POST` | `/knowledge/collections/:collectionId/search/promotions`                       | Promote selected results    |
 | `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals`                     | List dry runs               |
 | `POST` | `/knowledge/collections/:collectionId/ingestion/proposals`                     | Create a dry run            |
 | `GET`  | `/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read a dry run              |
@@ -82,14 +83,20 @@ For `auto` or `qmd`, current derived page digests produce a Markdown projection 
 
 The response follows the existing search degradation contract. QMD-ranked derived hits identify `backend: "qmd"` while raw-source hits identify `backend: "keyword"`. Missing QMD, refresh/query failure, or a raw-only scope returns cited keyword results with `degraded: true` and an explicit reason.
 
+## Query promotion
+
+Search responses carry an evidence digest over the exact query and bounded result array. A caller can select one or more result IDs and propose new or revised pages without converting the answer directly into durable truth. Promotion validates the unchanged evidence digest, collection membership of raw sources, current identity and exact citations of derived pages, and the selected source set before creating a standard ingestion dry run.
+
+The proposal persists the query, evidence digest, and sorted selected result IDs. Its candidate pages, source IDs, contradictions, review, atomic apply, reversal, attribution, and idempotency all use the same transaction contract as source ingestion. Promotion never adds a second mutation path.
+
 ## Current delivery boundary
 
-This foundation does not yet claim query promotion, cited work-product export, policy-aware content redaction beyond secret-shaped snippets, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited search, and proposal transaction and must not add an alternate source or page store.
+This foundation does not yet claim cited work-product export, policy-aware content redaction beyond secret-shaped snippets, or launch-manifest source restrictions. Those layers must consume the immutable catalog, page graph, cited search, query promotion, and proposal transaction and must not add an alternate source or page store.
 
 The next implementation slices are:
 
-1. cited query promotion through the proposal workflow; and
-2. policy-aware redaction, launch-manifest restrictions, and cited export enforcement.
+1. policy-aware redaction and launch-manifest restrictions; and
+2. cited work-product export enforcement.
 
 ## Code
 

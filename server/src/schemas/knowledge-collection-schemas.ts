@@ -545,6 +545,14 @@ export const KnowledgeIngestionProposalSchema = z
     indexChanges: z.array(KnowledgeIngestionIndexChangeSchema).min(1).max(5_000),
     contradictions: z.array(KnowledgeIngestionContradictionSchema).max(500),
     activityChanges: z.array(KnowledgeIngestionActivityChangeSchema).length(1),
+    queryPromotion: z
+      .object({
+        query: z.string().trim().min(1).max(500),
+        evidenceDigest: digestSchema,
+        selectedResultIds: z.array(identifierSchema).min(1).max(50).refine(uniqueStrings),
+      })
+      .strict()
+      .optional(),
     operationIdDigest: digestSchema,
     requestDigest: digestSchema,
     previewDigest: digestSchema,
@@ -714,6 +722,60 @@ export const SearchKnowledgeCollectionBodySchema = z
     limit: z.number().int().min(1).max(50).optional(),
     scope: z.enum(['all', 'raw-sources', 'derived-pages']).optional(),
     backend: z.enum(['auto', 'qmd', 'keyword']).optional(),
+  })
+  .strict();
+
+const KnowledgeSearchResultSchema = z
+  .object({
+    id: identifierSchema,
+    kind: z.enum(['raw-source', 'derived-page']),
+    backend: z.enum(['qmd', 'keyword']),
+    title: z.string().trim().min(1).max(500),
+    snippet: z.string().max(500),
+    score: z.number().min(0).max(1),
+    sourceId: identifierSchema.optional(),
+    pageId: identifierSchema.optional(),
+    stableKey: stableKeySchema.optional(),
+    citations: z.array(KnowledgeClaimCitationSchema).min(1).max(10_000),
+  })
+  .strict()
+  .superRefine((result, context) => {
+    if (
+      (result.kind === 'raw-source' &&
+        (result.sourceId !== result.id || result.pageId || result.stableKey)) ||
+      (result.kind === 'derived-page' &&
+        (result.pageId !== result.id || !result.stableKey || result.sourceId))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Knowledge search result identity fields must match its kind.',
+      });
+    }
+  });
+
+export const CreateKnowledgeQueryPromotionBodySchema = z
+  .object({
+    operationId: opaqueTextSchema.max(240),
+    evidence: z
+      .object({
+        query: z.string().trim().min(1).max(500),
+        backend: z.enum(['qmd', 'keyword']),
+        degraded: z.boolean(),
+        reason: z.string().trim().min(1).max(2_000).optional(),
+        results: z
+          .array(KnowledgeSearchResultSchema)
+          .min(1)
+          .max(50)
+          .refine(
+            (results) => uniqueStrings(results.map((result) => result.id)),
+            'Knowledge search result identities must be unique.'
+          ),
+        evidenceDigest: digestSchema,
+      })
+      .strict(),
+    selectedResultIds: z.array(identifierSchema).min(1).max(50).refine(uniqueStrings),
+    pages: pageCandidatesSchema,
+    contradictions: z.array(z.object(contradictionShape).strict()).max(500).optional(),
   })
   .strict();
 

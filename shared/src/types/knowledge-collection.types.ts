@@ -284,6 +284,11 @@ export interface KnowledgeIngestionProposal {
   indexChanges: KnowledgeIngestionIndexChange[];
   contradictions: KnowledgeIngestionContradiction[];
   activityChanges: KnowledgeIngestionActivityChange[];
+  queryPromotion?: {
+    query: string;
+    evidenceDigest: string;
+    selectedResultIds: string[];
+  };
   operationIdDigest: string;
   requestDigest: string;
   previewDigest: string;
@@ -352,4 +357,13 @@ export interface KnowledgeSearchResponse {
   degraded: boolean;
   reason?: string;
   results: KnowledgeSearchResult[];
+  evidenceDigest: string;
+}
+
+export interface CreateKnowledgeQueryPromotionInput {
+  operationId: string;
+  evidence: KnowledgeSearchResponse;
+  selectedResultIds: string[];
+  pages: UpsertKnowledgePageCandidate[];
+  contradictions?: KnowledgeIngestionContradictionInput[];
 }

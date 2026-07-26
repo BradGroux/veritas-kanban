@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
   CreateKnowledgeIngestionProposalInput,
+  CreateKnowledgeQueryPromotionInput,
   CreateKnowledgeCollectionInput,
   KnowledgeAccessRole,
   KnowledgeActivityEntry,
@@ -26,6 +27,7 @@ import { redactString } from '../lib/redact.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
 import {
   CreateKnowledgeIngestionProposalBodySchema,
+  CreateKnowledgeQueryPromotionBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
   SearchKnowledgeCollectionBodySchema,
@@ -334,6 +336,16 @@ export class KnowledgeCollectionService {
     actor: KnowledgeCollectionActor,
     input: CreateKnowledgeIngestionProposalInput
   ): Promise<KnowledgeIngestionProposal> {
+    return this.createIngestionProposalInternal(workspaceId, collectionId, actor, input);
+  }
+
+  private async createIngestionProposalInternal(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor,
+    input: CreateKnowledgeIngestionProposalInput,
+    queryPromotion?: KnowledgeIngestionProposal['queryPromotion']
+  ): Promise<KnowledgeIngestionProposal> {
     const parsed = CreateKnowledgeIngestionProposalBodySchema.parse(input);
     await this.requireWritableCollection(workspaceId, collectionId, actor);
     const operationIdDigest = digestRunLaunchValue(parsed.operationId);
@@ -344,6 +356,7 @@ export class KnowledgeCollectionService {
       sourceIds: parsed.sourceIds,
       pages: parsed.pages,
       contradictions: parsed.contradictions ?? [],
+      queryPromotion,
     });
     const proposalId = stableId('knowledge_proposal', {
       workspaceId,
@@ -445,6 +458,7 @@ export class KnowledgeCollectionService {
           pageIds: prepared.afterPages.map((page) => page.id).sort(),
         },
       ],
+      ...(queryPromotion ? { queryPromotion } : {}),
       operationIdDigest,
       requestDigest,
       proposedBy: actor.id,
@@ -626,7 +640,7 @@ export class KnowledgeCollectionService {
             },
           ];
         });
-        return {
+        return finalizeKnowledgeSearchResponse({
           query: parsed.query,
           backend: 'qmd',
           degraded: false,
@@ -634,19 +648,19 @@ export class KnowledgeCollectionService {
             ...qmdResults,
             ...results.filter((result) => result.kind === 'raw-source'),
           ]).slice(0, limit),
-        };
+        });
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'QMD knowledge search failed.';
-        return {
+        return finalizeKnowledgeSearchResponse({
           query: parsed.query,
           backend: 'keyword',
           degraded: true,
           reason,
           results: rankKnowledgeResults(results).slice(0, limit),
-        };
+        });
       }
     }
-    return {
+    return finalizeKnowledgeSearchResponse({
       query: parsed.query,
       backend: 'keyword',
       degraded: requestedBackend !== 'keyword',
@@ -657,7 +671,78 @@ export class KnowledgeCollectionService {
               'The requested scope has no derived pages eligible for QMD; keyword search served the request.',
           }),
       results: rankKnowledgeResults(results).slice(0, limit),
-    };
+    });
+  }
+
+  async createQueryPromotion(
+    workspaceId: string,
+    collectionId: string,
+    actor: KnowledgeCollectionActor,
+    input: CreateKnowledgeQueryPromotionInput
+  ): Promise<KnowledgeIngestionProposal> {
+    const parsed = CreateKnowledgeQueryPromotionBodySchema.parse(input);
+    await this.requireWritableCollection(workspaceId, collectionId, actor);
+    const expectedEvidenceDigest = computeKnowledgeSearchEvidenceDigest(
+      parsed.evidence.query,
+      parsed.evidence.results
+    );
+    if (parsed.evidence.evidenceDigest !== expectedEvidenceDigest) {
+      throw new ConflictError('Knowledge query promotion evidence digest is stale or invalid.');
+    }
+    const selectedIds = new Set(parsed.selectedResultIds);
+    const selectedResults = parsed.evidence.results.filter((result) => selectedIds.has(result.id));
+    if (selectedResults.length !== selectedIds.size) {
+      throw new ConflictError('Knowledge query promotion selects an unknown result.');
+    }
+    const [sources, pages] = await Promise.all([
+      this.repository.listSources(workspaceId, collectionId),
+      this.repository.listPages(workspaceId, collectionId),
+    ]);
+    const sourcesById = new Map(sources.map((source) => [source.id, source]));
+    const pagesById = new Map(pages.map((page) => [page.id, page]));
+    for (const result of selectedResults) {
+      if (result.kind === 'raw-source') {
+        if (!result.sourceId || !sourcesById.has(result.sourceId)) {
+          throw new ConflictError('Knowledge query promotion source evidence is no longer valid.');
+        }
+        continue;
+      }
+      const page = result.pageId ? pagesById.get(result.pageId) : undefined;
+      if (
+        !page ||
+        page.stableKey !== result.stableKey ||
+        !sameKnowledgeCitations(
+          result.citations,
+          uniqueKnowledgeCitations(page.current.claims.flatMap((claim) => claim.citations))
+        )
+      ) {
+        throw new ConflictError('Knowledge query promotion derived evidence is stale.');
+      }
+    }
+    const sourceIds = [
+      ...new Set(
+        selectedResults.flatMap((result) => result.citations.map((citation) => citation.sourceId))
+      ),
+    ].sort();
+    if (sourceIds.length === 0 || sourceIds.some((sourceId) => !sourcesById.has(sourceId))) {
+      throw new ConflictError('Knowledge query promotion citations are no longer valid.');
+    }
+    return this.createIngestionProposalInternal(
+      workspaceId,
+      collectionId,
+      actor,
+      {
+        operationId: parsed.operationId,
+        sourceIds,
+        pages: parsed.pages,
+        contradictions: parsed.contradictions,
+      },
+      {
+        query: parsed.evidence.query,
+        evidenceDigest: parsed.evidence.evidenceDigest,
+        selectedResultIds: [...selectedIds].sort(),
+      }
+    );
   }
 
   private async preparePageBatch(
@@ -1094,10 +1179,12 @@ function knowledgeSnippet(text: string, terms: string[]): string {
 }
 
 function redactKnowledgeSnippet(value: string): string {
-  return redactString(value).replace(
-    /\b(api[_-]?key|token|secret|password|authorization|cookie)\b\s*[:=]\s*["']?[^"',\s]+/gi,
-    '$1: [redacted]'
-  );
+  return redactString(value)
+    .replace(
+      /\b(api[_-]?key|token|secret|password|authorization|cookie)\b\s*[:=]\s*["']?[^"',\s]+/gi,
+      '$1: [redacted]'
+    )
+    .slice(0, 500);
 }
 
 function uniqueKnowledgeCitations(
@@ -1118,6 +1205,36 @@ function rankKnowledgeResults(results: KnowledgeSearchResult[]): KnowledgeSearch
       right.score - left.score ||
       left.kind.localeCompare(right.kind) ||
       left.id.localeCompare(right.id)
+  );
+}
+
+function computeKnowledgeSearchEvidenceDigest(
+  query: string,
+  results: KnowledgeSearchResult[]
+): string {
+  return digestRunLaunchValue({ query, results });
+}
+
+function finalizeKnowledgeSearchResponse(
+  response: Omit<KnowledgeSearchResponse, 'evidenceDigest'>
+): KnowledgeSearchResponse {
+  return {
+    ...response,
+    evidenceDigest: computeKnowledgeSearchEvidenceDigest(response.query, response.results),
+  };
+}
+
+function sameKnowledgeCitations(
+  left: KnowledgePageClaim['citations'],
+  right: KnowledgePageClaim['citations']
+): boolean {
+  const normalize = (citations: KnowledgePageClaim['citations']) =>
+    citations.map((citation) => JSON.stringify(citation)).sort();
+  const normalizedLeft = normalize(left);
+  const normalizedRight = normalize(right);
+  return (
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((citation, index) => citation === normalizedRight[index])
   );
 }
 

@@ -358,6 +358,45 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       results: [expect.objectContaining({ kind: 'derived-page' })],
     });
 
+    const derivedResult = response.results.find((result) => result.kind === 'derived-page');
+    expect(derivedResult).toBeDefined();
+    const promoted = await service.createQueryPromotion(WORKSPACE_ID, collection.id, AGENT, {
+      operationId: 'promote-search-result',
+      evidence: response,
+      selectedResultIds: [derivedResult?.id ?? 'missing'],
+      pages: [
+        pageCandidate('dispatch-overview', source.id, {
+          pageKind: 'overview',
+          title: 'Dispatch overview',
+          markdown: '# Dispatch overview\n\nReviewed dispatch is required.',
+        }),
+      ],
+    });
+    expect(promoted).toMatchObject({
+      state: 'dry-run',
+      queryPromotion: {
+        query: 'reviewed dispatch',
+        evidenceDigest: response.evidenceDigest,
+        selectedResultIds: [derivedResult?.id],
+      },
+    });
+    expect(
+      await service.getPage(WORKSPACE_ID, collection.id, promoted.afterPages[0].id, ADMIN)
+    ).toBeNull();
+    await expect(
+      service.createQueryPromotion(WORKSPACE_ID, collection.id, AGENT, {
+        operationId: 'tampered-promotion',
+        evidence: {
+          ...response,
+          results: response.results.map((result, index) =>
+            index === 0 ? { ...result, snippet: 'Tampered evidence' } : result
+          ),
+        },
+        selectedResultIds: [derivedResult?.id ?? 'missing'],
+        pages: [pageCandidate('tampered-promotion', source.id)],
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+
     const qmdService = await createService(storageType, {
       search: async ({ pages }) => [
         {

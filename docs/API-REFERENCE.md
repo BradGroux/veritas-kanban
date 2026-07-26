@@ -4712,6 +4712,7 @@ Knowledge collections establish a workspace-scoped, immutable source catalog for
 | `GET`  | `/api/knowledge/collections/:collectionId/pages`                                   | List derived pages                 |
 | `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                           | Read one cited derived page        |
 | `POST` | `/api/knowledge/collections/:collectionId/search`                                  | Search raw and derived knowledge   |
+| `POST` | `/api/knowledge/collections/:collectionId/search/promotions`                       | Promote selected search results    |
 | `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | List ingestion dry runs            |
 | `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | Create an ingestion dry run        |
 | `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read one dry run                   |
@@ -4827,6 +4828,52 @@ Search one readable collection with a bounded query. `scope` can be `all`, `raw-
   "limit": 10,
   "scope": "all",
   "backend": "auto"
+}
+```
+
+Every search response includes `evidenceDigest`, computed over the exact query and bounded result set. To retain selected results as durable knowledge, send the unchanged response, selected result IDs, and proposed pages to `/search/promotions`. Veritas rejects a changed digest, unknown selection, missing source revision, or a derived result whose current citations no longer match. A valid request creates the same dry-run ingestion proposal used by source ingestion; it does not mutate pages.
+
+```json
+{
+  "operationId": "promote-dispatch-query",
+  "evidence": {
+    "query": "reviewed dispatch",
+    "backend": "keyword",
+    "degraded": false,
+    "results": [
+      {
+        "id": "knowledge_source_0123456789abcdef",
+        "kind": "raw-source",
+        "backend": "keyword",
+        "title": "Dispatch specification",
+        "snippet": "Reviewed dispatch is required.",
+        "score": 0.9,
+        "sourceId": "knowledge_source_0123456789abcdef",
+        "citations": [{ "sourceId": "knowledge_source_0123456789abcdef" }]
+      }
+    ],
+    "evidenceDigest": "sha256:..."
+  },
+  "selectedResultIds": ["knowledge_source_0123456789abcdef"],
+  "pages": [
+    {
+      "stableKey": "dispatch-overview",
+      "title": "Dispatch overview",
+      "pageKind": "overview",
+      "metadata": { "owner": "platform", "reviewState": "pending" },
+      "markdown": "# Dispatch overview\n\nReviewed dispatch is required.",
+      "claims": [
+        {
+          "claimKey": "reviewed-dispatch",
+          "text": "Reviewed dispatch is required.",
+          "citations": [{ "sourceId": "knowledge_source_0123456789abcdef" }],
+          "confidence": 0.9
+        }
+      ],
+      "reviewState": "review-required",
+      "confidence": 0.9
+    }
+  ]
 }
 ```
 
