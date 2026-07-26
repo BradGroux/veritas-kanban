@@ -3,6 +3,7 @@
 import type { TaskStatus, AgentType } from './task.types.js';
 import type { HarnessSupportFailureClass, HarnessSupportTier } from './provider-runtime.types.js';
 import type { AdmissionLaunchSource } from './admission-control.types.js';
+import type { ExecutionTreeBreakerEvidence } from './execution-tree-budget.types.js';
 
 export type TelemetryEventType =
   | 'task.created'
@@ -12,7 +13,8 @@ export type TelemetryEventType =
   | 'run.started'
   | 'run.completed'
   | 'run.error'
-  | 'run.tokens';
+  | 'run.tokens'
+  | 'admission.tree_control';
 
 /** Base telemetry event - all events extend this */
 export interface TelemetryEvent {
@@ -111,6 +113,18 @@ export interface TokenTelemetryEvent extends TelemetryEvent {
   attemptId?: string;
 }
 
+export interface AdmissionTreeControlTelemetryEvent extends TelemetryEvent {
+  type: 'admission.tree_control';
+  action: 'paused' | 'resumed' | 'cancelled';
+  trigger: 'operator' | 'fan-out-breaker';
+  rootObjectiveKey: string;
+  signals: string[];
+  observed?: ExecutionTreeBreakerEvidence['observed'];
+  queueEntriesCancelled?: number;
+  interruptedAttempts?: number;
+  unresolvedAttempts?: number;
+}
+
 /** Union type for all telemetry events */
 export type AnyTelemetryEvent =
   | TaskTelemetryEvent
@@ -118,7 +132,8 @@ export type AnyTelemetryEvent =
   | RunStartedEvent
   | RunCompletedEvent
   | RunErrorEvent
-  | TokenTelemetryEvent;
+  | TokenTelemetryEvent
+  | AdmissionTreeControlTelemetryEvent;
 
 /** Telemetry configuration */
 export interface TelemetryConfig {

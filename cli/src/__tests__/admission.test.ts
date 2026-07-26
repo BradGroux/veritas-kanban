@@ -238,6 +238,45 @@ describe('vk admission commands', () => {
     output.mockRestore();
   });
 
+  it('resumes an eligible execution tree with a stable idempotency identity', async () => {
+    api.mockResolvedValue({
+      schemaVersion: 'execution-tree-control/v1',
+      rootObjectiveId: 'objective-a',
+      state: 'resumed',
+      resumedAt: '2026-07-25T12:00:00.000Z',
+      resumeReason: 'Operator confirmed pressure cleared.',
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const program = new Command().exitOverride();
+    registerAdmissionCommands(program);
+
+    await program.parseAsync([
+      'node',
+      'vk',
+      'admission',
+      'resume-tree',
+      'objective-a',
+      '--reason',
+      'Operator confirmed pressure cleared.',
+      '--idempotency-key',
+      'resume-execution-tree-123',
+      '--json',
+    ]);
+
+    expect(api).toHaveBeenCalledWith('/api/admission/tree/objective-a/resume', {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: 'Operator confirmed pressure cleared.',
+        idempotencyKey: 'resume-execution-tree-123',
+      }),
+    });
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toMatchObject({
+      state: 'resumed',
+      rootObjectiveId: 'objective-a',
+    });
+    output.mockRestore();
+  });
+
   it('lists the admission queue as JSON with all operator filters preserved', async () => {
     api.mockResolvedValue({
       schemaVersion: 'admission-queue-list/v1',

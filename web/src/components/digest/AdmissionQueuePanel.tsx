@@ -1,22 +1,32 @@
-import { useMemo, type ReactNode } from 'react';
-import { Alert, Badge, Button, Group, Loader, Text } from '@mantine/core';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Alert, Badge, Button, Group, Loader, Modal, Stack, Text, Textarea } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   AlertTriangle,
   ArrowUpRight,
+  Ban,
   Clock3,
   Gauge,
   GitBranch,
   Layers3,
+  Play,
   RefreshCw,
   Route,
 } from 'lucide-react';
 import type {
   AdmissionQueueInspectionEntry,
   AdmissionQueueListResponse,
+  AdmissionReservation,
   AdmissionScope,
 } from '@veritas-kanban/shared';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
-import { useAdmissionQueue } from '@/hooks/useAdmissionQueue';
+import {
+  useAdmissionQueue,
+  useAdmissionQueueCancel,
+  useAdmissionReservations,
+  useAdmissionTreeCancel,
+  useAdmissionTreeResume,
+} from '@/hooks/useAdmissionQueue';
 import { cn } from '@/lib/utils';
 
 interface AdmissionQueuePanelProps {
@@ -32,10 +42,88 @@ interface QueueSummary {
   limitingScopes: Array<[AdmissionScope, number]>;
 }
 
+type AdmissionControlAction = 'cancel-queue' | 'cancel-tree' | 'resume-tree';
+
+interface AdmissionControlTarget {
+  action: AdmissionControlAction;
+  id: string;
+  label: string;
+}
+
+interface AdmissionControlRequest extends AdmissionControlTarget {
+  idempotencyKey: string;
+}
+
 export function AdmissionQueuePanel({ onTaskClick, onWorkflowClick }: AdmissionQueuePanelProps) {
   const queue = useAdmissionQueue();
+  const reservations = useAdmissionReservations();
+  const cancelQueue = useAdmissionQueueCancel();
+  const cancelTree = useAdmissionTreeCancel();
+  const resumeTree = useAdmissionTreeResume();
+  const [controlRequest, setControlRequest] = useState<AdmissionControlRequest | null>(null);
+  const [controlReason, setControlReason] = useState('');
   const data = queue.data;
   const summary = useMemo(() => summarizeQueue(data), [data]);
+  const treeControls = useMemo(
+    () =>
+      (reservations.data?.reservations ?? [])
+        .filter(
+          (reservation) =>
+            reservation.request.executionTree?.edge === 'root' && reservation.executionTreeControl
+        )
+        .sort((left, right) =>
+          (right.executionTreeControl?.recordedAt ?? '').localeCompare(
+            left.executionTreeControl?.recordedAt ?? ''
+          )
+        )
+        .slice(0, 12),
+    [reservations.data]
+  );
+
+  const openControl = (request: AdmissionControlTarget) => {
+    setControlReason('');
+    setControlRequest({
+      ...request,
+      idempotencyKey: `operations:${request.action}:${request.id}:${crypto.randomUUID()}`,
+    });
+  };
+
+  const closeControl = () => {
+    if (cancelQueue.isPending || cancelTree.isPending || resumeTree.isPending) return;
+    setControlRequest(null);
+    setControlReason('');
+  };
+
+  const submitControl = async () => {
+    if (!controlRequest || controlReason.trim().length < 8) return;
+    const input = {
+      idempotencyKey: controlRequest.idempotencyKey,
+      reason: controlReason.trim(),
+    };
+    try {
+      if (controlRequest.action === 'cancel-queue') {
+        await cancelQueue.mutateAsync({ id: controlRequest.id, ...input });
+      } else if (controlRequest.action === 'cancel-tree') {
+        await cancelTree.mutateAsync({ rootObjectiveId: controlRequest.id, ...input });
+      } else {
+        await resumeTree.mutateAsync({ rootObjectiveId: controlRequest.id, ...input });
+      }
+      notifications.show({
+        color: controlRequest.action === 'resume-tree' ? 'teal' : 'orange',
+        title:
+          controlRequest.action === 'resume-tree' ? 'Execution tree resumed' : 'Control recorded',
+        message: controlRequest.label,
+      });
+      setControlRequest(null);
+      setControlReason('');
+    } catch (error) {
+      notifications.show({
+        color: 'red',
+        title: 'Admission control failed',
+        message: errorMessage(error),
+      });
+    }
+  };
 
   if (queue.isLoading && !data) {
     return (
@@ -86,133 +174,188 @@ export function AdmissionQueuePanel({ onTaskClick, onWorkflowClick }: AdmissionQ
   const isPartial = data.pagination.hasMore || data.pagination.snapshotTruncated;
   const isSaturated = data.depth.global.current >= data.depth.global.limit;
   const isStale = queue.isStale || Boolean(queue.error);
+  const controlPending = cancelQueue.isPending || cancelTree.isPending || resumeTree.isPending;
 
   return (
-    <section
-      className={cn(
-        'overflow-hidden rounded-xl border bg-slate-950/60 shadow-sm',
-        isSaturated ? 'border-amber-500/50' : 'border-slate-700/70'
-      )}
-      aria-labelledby="admission-queue-heading"
-    >
-      <div className="border-b border-slate-800 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.12),transparent_42%)] p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <PanelHeading />
-          <Group gap="xs" wrap="wrap" aria-live="polite">
-            <Badge variant="light" color={isStale ? 'yellow' : 'cyan'} tt="none">
-              {isStale ? 'Stale snapshot' : 'Live snapshot'}
-            </Badge>
-            {isSaturated ? (
-              <Badge variant="light" color="orange" tt="none">
-                Saturated
+    <>
+      <section
+        className={cn(
+          'overflow-hidden rounded-xl border bg-slate-950/60 shadow-sm',
+          isSaturated ? 'border-amber-500/50' : 'border-slate-700/70'
+        )}
+        aria-labelledby="admission-queue-heading"
+      >
+        <div className="border-b border-slate-800 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.12),transparent_42%)] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <PanelHeading />
+            <Group gap="xs" wrap="wrap" aria-live="polite">
+              <Badge variant="light" color={isStale ? 'yellow' : 'cyan'} tt="none">
+                {isStale ? 'Stale snapshot' : 'Live snapshot'}
               </Badge>
-            ) : null}
-            {isPartial ? (
-              <Badge variant="light" color="violet" tt="none">
-                Partial view
+              {isSaturated ? (
+                <Badge variant="light" color="orange" tt="none">
+                  Saturated
+                </Badge>
+              ) : null}
+              {isPartial ? (
+                <Badge variant="light" color="violet" tt="none">
+                  Partial view
+                </Badge>
+              ) : null}
+              <Badge variant="outline" color="gray" tt="none">
+                Conditional, no start-time promise
               </Badge>
-            ) : null}
-            <Badge variant="outline" color="gray" tt="none">
-              Conditional, no start-time promise
-            </Badge>
-            <Button
-              variant="subtle"
-              color="gray"
-              size="compact-sm"
-              onClick={() => void queue.refetch()}
-              leftSection={
-                <RefreshCw className={cn('h-3.5 w-3.5', queue.isFetching && 'animate-spin')} />
-              }
+              <Button
+                variant="subtle"
+                color="gray"
+                size="compact-sm"
+                onClick={() => void queue.refetch()}
+                leftSection={
+                  <RefreshCw className={cn('h-3.5 w-3.5', queue.isFetching && 'animate-spin')} />
+                }
+              >
+                Refresh queue
+              </Button>
+            </Group>
+          </div>
+
+          {queue.error ? (
+            <Alert
+              mt="md"
+              color="yellow"
+              variant="light"
+              icon={<AlertTriangle className="h-4 w-4" />}
             >
-              Refresh queue
+              Showing the last available bounded snapshot. Refresh failed:{' '}
+              {errorMessage(queue.error)}
+            </Alert>
+          ) : null}
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_repeat(3,minmax(130px,0.55fr))]">
+            <CapacityRail
+              current={data.depth.global.current}
+              limit={data.depth.global.limit}
+              saturated={isSaturated}
+            />
+            <Signal
+              icon={<Layers3 className="h-4 w-4 text-cyan-300" />}
+              label="Visible waiting"
+              value={String(summary.waiting)}
+              detail={isPartial ? 'bounded subset' : 'complete snapshot'}
+            />
+            <Signal
+              icon={<Route className="h-4 w-4 text-violet-300" />}
+              label="Visible leased"
+              value={String(summary.leased)}
+              detail={isPartial ? 'bounded subset' : 'reserved for dispatch'}
+            />
+            <Signal
+              icon={<Clock3 className="h-4 w-4 text-amber-300" />}
+              label="Oldest visible wait"
+              value={formatAge(summary.oldestWaitingMs)}
+              detail={`${data.pagination.limit}-row bound`}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-5 p-5">
+          <TreeControlPanel
+            reservations={treeControls}
+            loading={reservations.isLoading}
+            onControl={openControl}
+          />
+          <WorkspacePressure data={data} />
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <SignalStrip
+              label="Readiness"
+              empty="No active readiness signals"
+              values={summary.readiness.map(([readiness, count]) => ({
+                label: readableLabel(readiness),
+                value: count,
+              }))}
+            />
+            <SignalStrip
+              label="Limiting scopes"
+              empty="No limiting scope is reported"
+              values={summary.limitingScopes.map(([scope, count]) => ({
+                label: readableLabel(scope),
+                value: count,
+              }))}
+            />
+          </div>
+
+          {data.entries.length === 0 ? (
+            <div
+              className="rounded-lg border border-dashed border-slate-700 px-4 py-10 text-center"
+              role="status"
+            >
+              <Text fw={600}>Admission runway is clear</Text>
+              <Text size="sm" c="dimmed" mt={4}>
+                No queued, requeued, or leased work is visible in this bounded snapshot.
+              </Text>
+            </div>
+          ) : (
+            <QueueTable
+              data={data}
+              onTaskClick={onTaskClick}
+              onWorkflowClick={onWorkflowClick}
+              onControl={openControl}
+            />
+          )}
+
+          <div className="flex flex-col gap-1 border-t border-slate-800 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Snapshot {formatDateTime(data.generatedAt)} · {data.pagination.total} matching entries
+            </span>
+            <span>
+              Position can change with arrivals, capacity, policy checks, retries, and lease expiry.
+            </span>
+          </div>
+        </div>
+      </section>
+      <Modal
+        opened={Boolean(controlRequest)}
+        onClose={closeControl}
+        title={controlTitle(controlRequest?.action)}
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            {controlRequest?.label}
+          </Text>
+          <Textarea
+            label="Operator reason"
+            description="Stored as durable control evidence. Minimum 8 characters."
+            value={controlReason}
+            onChange={(event) => setControlReason(event.currentTarget.value)}
+            minRows={3}
+            maxLength={1_000}
+            autoFocus
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" color="gray" onClick={closeControl} disabled={controlPending}>
+              Keep running
+            </Button>
+            <Button
+              color={controlRequest?.action === 'resume-tree' ? 'teal' : 'orange'}
+              leftSection={
+                controlRequest?.action === 'resume-tree' ? (
+                  <Play className="h-4 w-4" />
+                ) : (
+                  <Ban className="h-4 w-4" />
+                )
+              }
+              loading={controlPending}
+              disabled={controlReason.trim().length < 8}
+              onClick={() => void submitControl()}
+            >
+              {controlRequest?.action === 'resume-tree' ? 'Resume expansion' : 'Record control'}
             </Button>
           </Group>
-        </div>
-
-        {queue.error ? (
-          <Alert
-            mt="md"
-            color="yellow"
-            variant="light"
-            icon={<AlertTriangle className="h-4 w-4" />}
-          >
-            Showing the last available bounded snapshot. Refresh failed: {errorMessage(queue.error)}
-          </Alert>
-        ) : null}
-
-        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_repeat(3,minmax(130px,0.55fr))]">
-          <CapacityRail
-            current={data.depth.global.current}
-            limit={data.depth.global.limit}
-            saturated={isSaturated}
-          />
-          <Signal
-            icon={<Layers3 className="h-4 w-4 text-cyan-300" />}
-            label="Visible waiting"
-            value={String(summary.waiting)}
-            detail={isPartial ? 'bounded subset' : 'complete snapshot'}
-          />
-          <Signal
-            icon={<Route className="h-4 w-4 text-violet-300" />}
-            label="Visible leased"
-            value={String(summary.leased)}
-            detail={isPartial ? 'bounded subset' : 'reserved for dispatch'}
-          />
-          <Signal
-            icon={<Clock3 className="h-4 w-4 text-amber-300" />}
-            label="Oldest visible wait"
-            value={formatAge(summary.oldestWaitingMs)}
-            detail={`${data.pagination.limit}-row bound`}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-5 p-5">
-        <WorkspacePressure data={data} />
-
-        <div className="grid gap-3 lg:grid-cols-2">
-          <SignalStrip
-            label="Readiness"
-            empty="No active readiness signals"
-            values={summary.readiness.map(([readiness, count]) => ({
-              label: readableLabel(readiness),
-              value: count,
-            }))}
-          />
-          <SignalStrip
-            label="Limiting scopes"
-            empty="No limiting scope is reported"
-            values={summary.limitingScopes.map(([scope, count]) => ({
-              label: readableLabel(scope),
-              value: count,
-            }))}
-          />
-        </div>
-
-        {data.entries.length === 0 ? (
-          <div
-            className="rounded-lg border border-dashed border-slate-700 px-4 py-10 text-center"
-            role="status"
-          >
-            <Text fw={600}>Admission runway is clear</Text>
-            <Text size="sm" c="dimmed" mt={4}>
-              No queued, requeued, or leased work is visible in this bounded snapshot.
-            </Text>
-          </div>
-        ) : (
-          <QueueTable data={data} onTaskClick={onTaskClick} onWorkflowClick={onWorkflowClick} />
-        )}
-
-        <div className="flex flex-col gap-1 border-t border-slate-800 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            Snapshot {formatDateTime(data.generatedAt)} · {data.pagination.total} matching entries
-          </span>
-          <span>
-            Position can change with arrivals, capacity, policy checks, retries, and lease expiry.
-          </span>
-        </div>
-      </div>
-    </section>
+        </Stack>
+      </Modal>
+    </>
   );
 }
 
@@ -304,6 +447,139 @@ function Signal({
       </div>
       <div className="mt-2 text-xl font-semibold tabular-nums text-slate-100">{value}</div>
       <div className="mt-0.5 text-xs text-slate-500">{detail}</div>
+    </div>
+  );
+}
+
+function TreeControlPanel({
+  reservations,
+  loading,
+  onControl,
+}: {
+  reservations: AdmissionReservation[];
+  loading: boolean;
+  onControl: (request: AdmissionControlTarget) => void;
+}) {
+  if (loading && reservations.length === 0) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/35 px-3 py-2 text-sm text-slate-500">
+        <Loader size="xs" />
+        Loading execution-tree controls…
+      </div>
+    );
+  }
+  if (reservations.length === 0) return null;
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-slate-200">Execution-tree controls</h3>
+        <span className="text-xs text-slate-500">
+          Latest {reservations.length} durable controls
+        </span>
+      </div>
+      <div className="grid gap-2 xl:grid-cols-2">
+        {reservations.map((reservation) => {
+          const control = reservation.executionTreeControl;
+          if (!control) return null;
+          const rootObjectiveId =
+            reservation.request.executionTree?.rootObjectiveId ?? control.rootObjectiveId;
+          const evidence = control.evidence;
+          return (
+            <div
+              key={reservation.id}
+              className={cn(
+                'rounded-lg border bg-slate-900/45 p-3',
+                control.state === 'paused'
+                  ? 'border-amber-700/60'
+                  : control.state === 'cancelled'
+                    ? 'border-red-900/60'
+                    : 'border-emerald-900/60'
+              )}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4 text-violet-300" />
+                    <span className="font-mono text-sm text-slate-200">
+                      {shortIdentity(rootObjectiveId)}
+                    </span>
+                    <Badge
+                      size="xs"
+                      variant="light"
+                      color={
+                        control.state === 'paused'
+                          ? 'orange'
+                          : control.state === 'cancelled'
+                            ? 'red'
+                            : 'teal'
+                      }
+                      tt="none"
+                    >
+                      {control.state}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {readableLabel(control.trigger)} · {formatDateTime(control.recordedAt)}
+                  </div>
+                </div>
+                <Group gap={4}>
+                  {control.state === 'paused' ? (
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      color="teal"
+                      onClick={() =>
+                        onControl({
+                          action: 'resume-tree',
+                          id: rootObjectiveId,
+                          label: `Resume execution tree ${shortIdentity(rootObjectiveId)}`,
+                        })
+                      }
+                      leftSection={<Play className="h-3 w-3" />}
+                    >
+                      Resume
+                    </Button>
+                  ) : null}
+                  {control.state !== 'cancelled' ? (
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      color="red"
+                      onClick={() =>
+                        onControl({
+                          action: 'cancel-tree',
+                          id: rootObjectiveId,
+                          label: `Cancel execution tree ${shortIdentity(rootObjectiveId)}`,
+                        })
+                      }
+                      leftSection={<Ban className="h-3 w-3" />}
+                    >
+                      Cancel tree
+                    </Button>
+                  ) : null}
+                </Group>
+              </div>
+              {evidence ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-md bg-slate-950/55 p-2 text-xs text-slate-400">
+                    <div className="font-medium text-slate-300">Trigger evidence</div>
+                    <div className="mt-1">{evidence.signals.map(readableLabel).join(', ')}</div>
+                  </div>
+                  <div className="rounded-md bg-slate-950/55 p-2 text-xs text-slate-400">
+                    <div className="font-medium text-slate-300">Tree pressure</div>
+                    <div className="mt-1">
+                      {evidence.observed.descendants}/{evidence.thresholds.maxDescendants}{' '}
+                      descendants · depth {evidence.observed.maxDepth}/
+                      {evidence.thresholds.maxDepth}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -400,10 +676,12 @@ function QueueTable({
   data,
   onTaskClick,
   onWorkflowClick,
+  onControl,
 }: {
   data: AdmissionQueueListResponse;
   onTaskClick?: AdmissionQueuePanelProps['onTaskClick'];
   onWorkflowClick?: AdmissionQueuePanelProps['onWorkflowClick'];
+  onControl: (request: AdmissionControlTarget) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-800">
@@ -435,7 +713,7 @@ function QueueTable({
               Lease / limits
             </th>
             <th className="px-3 py-3 text-right font-medium" scope="col">
-              Open
+              Actions
             </th>
           </tr>
         </thead>
@@ -446,6 +724,7 @@ function QueueTable({
               entry={entry}
               onTaskClick={onTaskClick}
               onWorkflowClick={onWorkflowClick}
+              onControl={onControl}
             />
           ))}
         </tbody>
@@ -458,10 +737,12 @@ function QueueRow({
   entry,
   onTaskClick,
   onWorkflowClick,
+  onControl,
 }: {
   entry: AdmissionQueueInspectionEntry;
   onTaskClick?: AdmissionQueuePanelProps['onTaskClick'];
   onWorkflowClick?: AdmissionQueuePanelProps['onWorkflowClick'];
+  onControl: (request: AdmissionControlTarget) => void;
 }) {
   const tree = entry.navigation.executionTree;
   const taskId = entry.navigation.taskId;
@@ -539,7 +820,39 @@ function QueueRow({
         </div>
       </td>
       <td className="px-3 py-3">
-        <div className="flex justify-end gap-1">
+        <div className="flex max-w-64 flex-wrap justify-end gap-1">
+          <Button
+            size="compact-xs"
+            variant="light"
+            color="orange"
+            onClick={() =>
+              onControl({
+                action: 'cancel-queue',
+                id: entry.id,
+                label: `Cancel queued launch ${entry.id}`,
+              })
+            }
+            leftSection={<Ban className="h-3 w-3" />}
+          >
+            Cancel queue
+          </Button>
+          {tree ? (
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="red"
+              onClick={() =>
+                onControl({
+                  action: 'cancel-tree',
+                  id: tree.rootObjectiveId,
+                  label: `Cancel execution tree ${shortIdentity(tree.rootObjectiveId)}`,
+                })
+              }
+              leftSection={<Ban className="h-3 w-3" />}
+            >
+              Cancel tree
+            </Button>
+          ) : null}
           {taskId && onTaskClick ? (
             <Button
               size="compact-xs"
@@ -675,6 +988,23 @@ function formatDateTime(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function shortIdentity(value: string): string {
+  return value.length <= 24 ? value : `${value.slice(0, 12)}…${value.slice(-8)}`;
+}
+
+function controlTitle(action?: AdmissionControlAction): string {
+  switch (action) {
+    case 'cancel-queue':
+      return 'Cancel queued launch';
+    case 'cancel-tree':
+      return 'Cancel execution tree';
+    case 'resume-tree':
+      return 'Resume execution tree';
+    default:
+      return 'Execution control';
+  }
+}
+
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'The queue snapshot could not be loaded.';
+  return error instanceof Error ? error.message : 'The admission operation could not be completed.';
 }

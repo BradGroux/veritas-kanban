@@ -187,6 +187,7 @@ describe('Common Schemas', () => {
         'run.completed',
         'run.error',
         'run.tokens',
+        'admission.tree_control',
       ];
       for (const type of validTypes) {
         expect(TelemetryEventTypeSchema.parse(type)).toBe(type);
