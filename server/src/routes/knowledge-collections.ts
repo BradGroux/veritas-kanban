@@ -6,8 +6,10 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sendPaginated } from '../middleware/response-envelope.js';
 import {
+  CreateKnowledgeIngestionProposalBodySchema,
   CreateKnowledgeCollectionBodySchema,
   RegisterKnowledgeSourceBodySchema,
+  TransitionKnowledgeIngestionProposalBodySchema,
 } from '../schemas/knowledge-collection-schemas.js';
 import {
   getKnowledgeCollectionService,
@@ -156,6 +158,104 @@ router.get(
     );
     if (!page) throw new NotFoundError('Knowledge page not found.');
     res.json(page);
+  })
+);
+
+router.get(
+  '/:collectionId/ingestion/proposals',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const pagination = parseQuery(paginationSchema, req.query);
+    const context = requestContext(req);
+    const proposals = await getKnowledgeCollectionService().listIngestionProposals(
+      context.workspaceId,
+      collectionId,
+      context.actor
+    );
+    sendPaginated(res, paginate(proposals, pagination), {
+      ...pagination,
+      total: proposals.length,
+    });
+  })
+);
+
+router.post(
+  '/:collectionId/ingestion/proposals',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const input = parseBody(CreateKnowledgeIngestionProposalBodySchema, req.body);
+    const context = requestContext(req);
+    const proposal = await getKnowledgeCollectionService().createIngestionProposal(
+      context.workspaceId,
+      collectionId,
+      context.actor,
+      input
+    );
+    res.status(201).json(proposal);
+  })
+);
+
+router.get(
+  '/:collectionId/ingestion/proposals/:proposalId',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const proposalId = parseIdentifier(req.params.proposalId);
+    const context = requestContext(req);
+    const proposal = await getKnowledgeCollectionService().getIngestionProposal(
+      context.workspaceId,
+      collectionId,
+      proposalId,
+      context.actor
+    );
+    if (!proposal) throw new NotFoundError('Knowledge ingestion proposal not found.');
+    res.json(proposal);
+  })
+);
+
+for (const action of ['apply', 'reverse'] as const) {
+  router.post(
+    `/:collectionId/ingestion/proposals/:proposalId/${action}`,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const collectionId = parseIdentifier(req.params.collectionId);
+      const proposalId = parseIdentifier(req.params.proposalId);
+      const input = parseBody(TransitionKnowledgeIngestionProposalBodySchema, req.body);
+      const context = requestContext(req);
+      const proposal =
+        action === 'apply'
+          ? await getKnowledgeCollectionService().applyIngestionProposal(
+              context.workspaceId,
+              collectionId,
+              proposalId,
+              context.actor,
+              input
+            )
+          : await getKnowledgeCollectionService().reverseIngestionProposal(
+              context.workspaceId,
+              collectionId,
+              proposalId,
+              context.actor,
+              input
+            );
+      res.json(proposal);
+    })
+  );
+}
+
+router.get(
+  '/:collectionId/activity',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const collectionId = parseIdentifier(req.params.collectionId);
+    const pagination = parseQuery(paginationSchema, req.query);
+    const context = requestContext(req);
+    const activity = await getKnowledgeCollectionService().listKnowledgeActivity(
+      context.workspaceId,
+      collectionId,
+      context.actor
+    );
+    sendPaginated(res, paginate(activity, pagination), {
+      ...pagination,
+      total: activity.length,
+    });
   })
 );
 

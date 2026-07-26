@@ -5,6 +5,7 @@ import type {
   CreateKnowledgeCollectionInput,
   RegisterKnowledgeSourceInput,
   UpsertKnowledgePageCandidate,
+  UpsertKnowledgePagesInput,
 } from '@veritas-kanban/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -172,7 +173,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       ADMIN,
       inlineSource({ operationId: 'derived-page-source', content: 'Architecture evidence' })
     );
-    const pages = await service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+    const pages = await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
       operationId: 'derive-architecture-pages',
       pages: [
         pageCandidate('architecture', source.id, {
@@ -222,7 +223,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       ADMIN,
       inlineSource({ operationId: 'bounded-history-source', content: 'Version evidence' })
     );
-    const [first] = await service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+    const [first] = await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
       operationId: 'page-version-1',
       pages: [
         pageCandidate('architecture', source.id, {
@@ -239,9 +240,21 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
         }),
       ],
     };
-    const [second] = await service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, secondInput);
-    const [retried] = await service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, secondInput);
-    const [third] = await service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+    const [second] = await proposeAndApplyPages(
+      service,
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      secondInput
+    );
+    const [retried] = await proposeAndApplyPages(
+      service,
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      secondInput
+    );
+    const [third] = await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
       operationId: 'page-version-3',
       pages: [
         pageCandidate('architecture', source.id, {
@@ -260,7 +273,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     expect(third.history[0].version).toBe(2);
     expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toHaveLength(1);
     await expect(
-      service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+      proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
         ...secondInput,
         pages: [
           pageCandidate('system-design', source.id, {
@@ -282,13 +295,13 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
     );
 
     await expect(
-      service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+      proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
         operationId: 'unknown-citation',
         pages: [pageCandidate('unknown-citation', 'knowledge_source_missing')],
       })
     ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
     await expect(
-      service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+      proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
         operationId: 'unknown-link',
         pages: [
           pageCandidate('unknown-link', source.id, {
@@ -298,7 +311,7 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       })
     ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
     await expect(
-      service.upsertPages(WORKSPACE_ID, collection.id, AGENT, {
+      proposeAndApplyPages(service, WORKSPACE_ID, collection.id, AGENT, {
         operationId: 'agent-approval',
         pages: [
           pageCandidate('agent-approval', source.id, {
@@ -308,6 +321,211 @@ describe.each(['file', 'sqlite'] as const)('%s knowledge collection repository',
       })
     ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
     expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toEqual([]);
+  });
+
+  it('keeps ingestion dry-run, apply, retry, and reverse atomic and attributed', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);
+    const source = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({ operationId: 'proposal-source', content: 'Proposal evidence' })
+    );
+    const proposal = await service.createIngestionProposal(WORKSPACE_ID, collection.id, AGENT, {
+      operationId: 'proposal-lifecycle',
+      sourceIds: [source.id],
+      pages: [
+        pageCandidate('architecture', source.id, {
+          links: ['decision-logging'],
+        }),
+        pageCandidate('decision-logging', source.id, {
+          pageKind: 'decision',
+        }),
+      ],
+    });
+
+    expect(proposal).toMatchObject({
+      state: 'dry-run',
+      revision: 1,
+      pageChanges: [
+        expect.objectContaining({ action: 'create' }),
+        expect.objectContaining({ action: 'create' }),
+      ],
+      activityChanges: [expect.objectContaining({ type: 'knowledge.ingestion.applied' })],
+    });
+    expect(proposal.indexChanges).toHaveLength(2);
+    expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toEqual([]);
+
+    const applied = await service.applyIngestionProposal(
+      WORKSPACE_ID,
+      collection.id,
+      proposal.id,
+      ADMIN,
+      { proposalDigest: proposal.digest }
+    );
+    const appliedRetry = await service.applyIngestionProposal(
+      WORKSPACE_ID,
+      collection.id,
+      proposal.id,
+      ADMIN,
+      { proposalDigest: proposal.digest }
+    );
+
+    expect(applied).toMatchObject({ state: 'applied', revision: 2 });
+    expect(appliedRetry).toEqual(applied);
+    expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toHaveLength(2);
+    expect(await service.listKnowledgeActivity(WORKSPACE_ID, collection.id, ADMIN)).toEqual([
+      expect.objectContaining({
+        proposalId: proposal.id,
+        type: 'knowledge.ingestion.applied',
+        actorId: ADMIN.id,
+      }),
+    ]);
+
+    const reversed = await service.reverseIngestionProposal(
+      WORKSPACE_ID,
+      collection.id,
+      proposal.id,
+      ADMIN,
+      { proposalDigest: applied.digest }
+    );
+    const reversedRetry = await service.reverseIngestionProposal(
+      WORKSPACE_ID,
+      collection.id,
+      proposal.id,
+      ADMIN,
+      { proposalDigest: applied.digest }
+    );
+
+    expect(reversed).toMatchObject({ state: 'reversed', revision: 3 });
+    expect(reversedRetry).toEqual(reversed);
+    expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toEqual([]);
+    expect(await service.listKnowledgeActivity(WORKSPACE_ID, collection.id, ADMIN)).toEqual([
+      expect.objectContaining({ type: 'knowledge.ingestion.reversed' }),
+      expect.objectContaining({ type: 'knowledge.ingestion.applied' }),
+    ]);
+  });
+
+  it('detects stable-claim contradictions and reverses to the exact prior page', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);
+    const firstSource = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({ operationId: 'contradiction-source-1', content: 'Original evidence' })
+    );
+    const [original] = await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'original-derived-page',
+      pages: [pageCandidate('architecture', firstSource.id)],
+    });
+    const secondSource = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({
+        operationId: 'contradiction-source-2',
+        content: 'Revised evidence',
+      })
+    );
+    const proposal = await service.createIngestionProposal(WORKSPACE_ID, collection.id, AGENT, {
+      operationId: 'contradictory-revision',
+      sourceIds: [secondSource.id],
+      pages: [
+        pageCandidate('architecture', secondSource.id, {
+          markdown: '# Architecture\n\nThe architecture changed.',
+          claims: [
+            {
+              claimKey: 'supported-claim',
+              text: 'The revised source supports a different architecture.',
+              citations: [{ sourceId: secondSource.id }],
+              confidence: 0.8,
+            },
+          ],
+        }),
+      ],
+    });
+
+    expect(proposal.contradictions).toEqual([
+      expect.objectContaining({
+        pageIdentity: 'architecture',
+        claimKey: 'supported-claim',
+        severity: 'warning',
+        detectedBy: 'stable-claim-diff',
+      }),
+    ]);
+    const applied = await service.applyIngestionProposal(
+      WORKSPACE_ID,
+      collection.id,
+      proposal.id,
+      ADMIN,
+      { proposalDigest: proposal.digest }
+    );
+    await service.reverseIngestionProposal(WORKSPACE_ID, collection.id, proposal.id, ADMIN, {
+      proposalDigest: applied.digest,
+    });
+
+    expect(await service.getPage(WORKSPACE_ID, collection.id, original.id, ADMIN)).toEqual(
+      original
+    );
+  });
+
+  it('rejects blocking, stale, and non-admin proposal application without partial changes', async () => {
+    const service = await createService(storageType);
+    const collection = await service.createCollection(WORKSPACE_ID, ADMIN, COLLECTION_INPUT);
+    const source = await service.registerSource(
+      WORKSPACE_ID,
+      collection.id,
+      ADMIN,
+      inlineSource({ operationId: 'blocked-proposal-source', content: 'Blocking evidence' })
+    );
+    const blocked = await service.createIngestionProposal(WORKSPACE_ID, collection.id, AGENT, {
+      operationId: 'blocked-proposal',
+      sourceIds: [source.id],
+      pages: [pageCandidate('blocked-page', source.id)],
+      contradictions: [
+        {
+          pageIdentity: 'blocked-page',
+          description: 'The selected sources cannot be reconciled safely.',
+          severity: 'blocking',
+          sourceIds: [source.id],
+        },
+      ],
+    });
+
+    await expect(
+      service.applyIngestionProposal(WORKSPACE_ID, collection.id, blocked.id, AGENT, {
+        proposalDigest: blocked.digest,
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    await expect(
+      service.applyIngestionProposal(WORKSPACE_ID, collection.id, blocked.id, ADMIN, {
+        proposalDigest: blocked.digest,
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+    expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toEqual([]);
+
+    const stale = await service.createIngestionProposal(WORKSPACE_ID, collection.id, AGENT, {
+      operationId: 'stale-proposal',
+      sourceIds: [source.id],
+      pages: [pageCandidate('stale-page', source.id)],
+    });
+    await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
+      operationId: 'external-page-change',
+      pages: [pageCandidate('stale-page', source.id, { markdown: '# External change' })],
+    });
+    const beforeApply = await service.listPages(WORKSPACE_ID, collection.id, ADMIN);
+
+    await expect(
+      service.applyIngestionProposal(WORKSPACE_ID, collection.id, stale.id, ADMIN, {
+        proposalDigest: stale.digest,
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+    expect(await service.listPages(WORKSPACE_ID, collection.id, ADMIN)).toEqual(beforeApply);
+    expect(
+      await service.getIngestionProposal(WORKSPACE_ID, collection.id, stale.id, ADMIN)
+    ).toMatchObject({ state: 'dry-run', revision: 1 });
   });
 });
 
@@ -337,7 +555,7 @@ it('fails closed when a file-backed source blob is corrupted', async () => {
   ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
 });
 
-it('upgrades a source-only SQLite database before storing derived pages', async () => {
+it('upgrades a source-only SQLite database before applying ingestion proposals', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'veritas-knowledge-upgrade-'));
   const databasePath = path.join(root, 'knowledge.db');
   const sourceOnlyDatabase = new SqliteDatabase({
@@ -361,13 +579,32 @@ it('upgrades a source-only SQLite database before storing derived pages', async 
     ADMIN,
     inlineSource({ operationId: 'upgraded-page-source', content: 'Upgrade evidence' })
   );
-  const [page] = await service.upsertPages(WORKSPACE_ID, collection.id, ADMIN, {
+  const [page] = await proposeAndApplyPages(service, WORKSPACE_ID, collection.id, ADMIN, {
     operationId: 'upgraded-derived-page',
     pages: [pageCandidate('upgrade-proof', source.id)],
   });
+  const proposal = await service.createIngestionProposal(WORKSPACE_ID, collection.id, ADMIN, {
+    operationId: 'upgraded-ingestion-proposal',
+    sourceIds: [source.id],
+    pages: [
+      pageCandidate('upgrade-proof', source.id, {
+        markdown: '# Upgrade proof\n\nApplied through migration 32.',
+      }),
+    ],
+  });
+  const applied = await service.applyIngestionProposal(
+    WORKSPACE_ID,
+    collection.id,
+    proposal.id,
+    ADMIN,
+    { proposalDigest: proposal.digest }
+  );
 
   expect(page.current.version).toBe(1);
-  expect(await service.getPage(WORKSPACE_ID, collection.id, page.id, ADMIN)).toEqual(page);
+  expect(applied.state).toBe('applied');
+  expect(
+    (await service.getPage(WORKSPACE_ID, collection.id, page.id, ADMIN))?.current.version
+  ).toBe(2);
 });
 
 async function createService(storageType: 'file' | 'sqlite'): Promise<KnowledgeCollectionService> {
@@ -391,6 +628,32 @@ async function createService(storageType: 'file' | 'sqlite'): Promise<KnowledgeC
     await rm(root, { recursive: true, force: true });
   });
   return service;
+}
+
+async function proposeAndApplyPages(
+  service: KnowledgeCollectionService,
+  workspaceId: string,
+  collectionId: string,
+  actor: KnowledgeCollectionActor,
+  input: UpsertKnowledgePagesInput
+) {
+  const sourceIds = [
+    ...new Set(
+      input.pages.flatMap((page) =>
+        page.claims.flatMap((claim) => claim.citations.map((citation) => citation.sourceId))
+      )
+    ),
+  ];
+  const proposal = await service.createIngestionProposal(workspaceId, collectionId, actor, {
+    ...input,
+    sourceIds,
+  });
+  if (proposal.state === 'dry-run') {
+    await service.applyIngestionProposal(workspaceId, collectionId, proposal.id, ADMIN, {
+      proposalDigest: proposal.digest,
+    });
+  }
+  return proposal.afterPages;
 }
 
 function inlineSource(

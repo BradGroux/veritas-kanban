@@ -2,9 +2,18 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { KnowledgeCollection, KnowledgePage, KnowledgeSource } from '@veritas-kanban/shared';
+import type {
+  KnowledgeActivityEntry,
+  KnowledgeCollection,
+  KnowledgeIngestionProposal,
+  KnowledgePage,
+  KnowledgePageExpectedState,
+  KnowledgeSource,
+} from '@veritas-kanban/shared';
 import {
+  parseKnowledgeActivityEntry,
   parseKnowledgeCollection,
+  parseKnowledgeIngestionProposal,
   parseKnowledgePage,
   parseKnowledgeSource,
 } from '../schemas/knowledge-collection-schemas.js';
@@ -19,6 +28,8 @@ const MAX_STORE_BYTES = 256 * 1_024 * 1_024;
 const MAX_COLLECTIONS = 10_000;
 const MAX_SOURCES = 100_000;
 const MAX_PAGES = 100_000;
+const MAX_PROPOSALS = 100_000;
+const MAX_KNOWLEDGE_ACTIVITY = 100_000;
 export const MAX_KNOWLEDGE_PAGE_BATCH = 5_000;
 
 interface KnowledgeCollectionFileState {
@@ -26,12 +37,21 @@ interface KnowledgeCollectionFileState {
   collections: KnowledgeCollection[];
   sources: KnowledgeSource[];
   pages: KnowledgePage[];
+  proposals: KnowledgeIngestionProposal[];
+  activity: KnowledgeActivityEntry[];
   blobs: Record<string, string>;
 }
 
-export interface KnowledgePageExpectedState {
-  id: string;
-  digest: string | null;
+export interface KnowledgeProposalTransitionBatch {
+  workspaceId: string;
+  collectionId: string;
+  proposalId: string;
+  expectedProposalDigest: string;
+  nextProposal: KnowledgeIngestionProposal;
+  expectedPages: KnowledgePageExpectedState[];
+  upsertPages: KnowledgePage[];
+  deletePageIds: string[];
+  activity: KnowledgeActivityEntry;
 }
 
 export interface KnowledgeCollectionRepository {
@@ -58,6 +78,18 @@ export interface KnowledgeCollectionRepository {
     pages: KnowledgePage[],
     expected: KnowledgePageExpectedState[]
   ): Promise<KnowledgePage[]>;
+  createProposal(candidate: KnowledgeIngestionProposal): Promise<KnowledgeIngestionProposal>;
+  getProposal(
+    workspaceId: string,
+    collectionId: string,
+    proposalId: string
+  ): Promise<KnowledgeIngestionProposal | null>;
+  listProposals(workspaceId: string, collectionId: string): Promise<KnowledgeIngestionProposal[]>;
+  transitionProposal(batch: KnowledgeProposalTransitionBatch): Promise<KnowledgeIngestionProposal>;
+  listKnowledgeActivity(
+    workspaceId: string,
+    collectionId: string
+  ): Promise<KnowledgeActivityEntry[]>;
 }
 
 export function getKnowledgeCollectionStorePath(): string {
@@ -278,6 +310,151 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
     });
   }
 
+  async createProposal(candidate: KnowledgeIngestionProposal): Promise<KnowledgeIngestionProposal> {
+    const proposal = assertKnowledgeIngestionProposalIntegrity(candidate);
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const state = await this.readState();
+      this.requireCollection(state, proposal.workspaceId, proposal.collectionId);
+      const existing = state.proposals.find((entry) => entry.id === proposal.id);
+      if (existing) {
+        if (existing.requestDigest !== proposal.requestDigest) {
+          throw new ConflictError(
+            'Knowledge ingestion operation identity was reused for changed input.'
+          );
+        }
+        return existing;
+      }
+      if (
+        state.proposals.some(
+          (entry) =>
+            entry.workspaceId === proposal.workspaceId &&
+            entry.collectionId === proposal.collectionId &&
+            entry.operationIdDigest === proposal.operationIdDigest
+        )
+      ) {
+        throw new ConflictError('Knowledge ingestion operation identity already exists.');
+      }
+      if (state.proposals.length >= MAX_PROPOSALS) {
+        throw new ConflictError('Knowledge collection store reached its proposal limit.');
+      }
+      validateKnowledgeProposalPlan(
+        this.requireCollection(state, proposal.workspaceId, proposal.collectionId),
+        state.sources.filter(
+          (source) =>
+            source.workspaceId === proposal.workspaceId &&
+            source.collectionId === proposal.collectionId
+        ),
+        state.pages.filter(
+          (page) =>
+            page.workspaceId === proposal.workspaceId && page.collectionId === proposal.collectionId
+        ),
+        proposal
+      );
+      state.proposals.push(proposal);
+      await this.writeState(state);
+      return proposal;
+    });
+  }
+
+  async getProposal(
+    workspaceId: string,
+    collectionId: string,
+    proposalId: string
+  ): Promise<KnowledgeIngestionProposal | null> {
+    return (
+      (await this.readState()).proposals.find(
+        (entry) =>
+          entry.workspaceId === workspaceId &&
+          entry.collectionId === collectionId &&
+          entry.id === proposalId
+      ) ?? null
+    );
+  }
+
+  async listProposals(
+    workspaceId: string,
+    collectionId: string
+  ): Promise<KnowledgeIngestionProposal[]> {
+    return (await this.readState()).proposals
+      .filter((entry) => entry.workspaceId === workspaceId && entry.collectionId === collectionId)
+      .sort(
+        (left, right) =>
+          Date.parse(right.proposedAt) - Date.parse(left.proposedAt) ||
+          left.id.localeCompare(right.id)
+      );
+  }
+
+  async transitionProposal(
+    batch: KnowledgeProposalTransitionBatch
+  ): Promise<KnowledgeIngestionProposal> {
+    const nextProposal = assertKnowledgeIngestionProposalIntegrity(batch.nextProposal);
+    const activity = assertKnowledgeActivityIntegrity(batch.activity);
+    const pages = batch.upsertPages.map(assertKnowledgePageIntegrity);
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const state = await this.readState();
+      const collection = this.requireCollection(state, batch.workspaceId, batch.collectionId);
+      const index = state.proposals.findIndex(
+        (proposal) =>
+          proposal.workspaceId === batch.workspaceId &&
+          proposal.collectionId === batch.collectionId &&
+          proposal.id === batch.proposalId
+      );
+      if (index < 0) throw new ConflictError('Knowledge ingestion proposal does not exist.');
+      const current = state.proposals[index];
+      if (current.digest !== batch.expectedProposalDigest) {
+        throw new ConflictError('Knowledge ingestion proposal changed before transition.');
+      }
+      assertKnowledgeProposalTransition(current, nextProposal, activity, batch);
+      assertExpectedPages(state.pages, batch.expectedPages);
+      const upsertIds = new Set(pages.map((page) => page.id));
+      const deleteIds = new Set(batch.deletePageIds);
+      if (
+        deleteIds.size !== batch.deletePageIds.length ||
+        [...deleteIds].some((id) => upsertIds.has(id))
+      ) {
+        throw new ConflictError('Knowledge ingestion page transition is inconsistent.');
+      }
+      const nextPages = [
+        ...state.pages.filter((page) => !upsertIds.has(page.id) && !deleteIds.has(page.id)),
+        ...pages,
+      ];
+      validateKnowledgePageReferences(
+        collection,
+        state.sources.filter(
+          (source) =>
+            source.workspaceId === batch.workspaceId && source.collectionId === batch.collectionId
+        ),
+        nextPages.filter(
+          (page) =>
+            page.workspaceId === batch.workspaceId && page.collectionId === batch.collectionId
+        )
+      );
+      if (state.activity.length >= MAX_KNOWLEDGE_ACTIVITY) {
+        throw new ConflictError('Knowledge collection store reached its activity limit.');
+      }
+      state.pages = nextPages;
+      state.proposals[index] = nextProposal;
+      state.activity.push(activity);
+      await this.writeState(state);
+      return nextProposal;
+    });
+  }
+
+  async listKnowledgeActivity(
+    workspaceId: string,
+    collectionId: string
+  ): Promise<KnowledgeActivityEntry[]> {
+    return (await this.readState()).activity
+      .filter((entry) => entry.workspaceId === workspaceId && entry.collectionId === collectionId)
+      .sort(
+        (left, right) =>
+          Date.parse(right.createdAt) - Date.parse(left.createdAt) ||
+          left.id.localeCompare(right.id)
+      );
+  }
+
   private validateSourceContent(source: KnowledgeSource, content: Buffer | null): void {
     if (source.storage === 'content-addressed-blob') {
       if (
@@ -339,6 +516,12 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
       const pages = Array.isArray(parsed.pages)
         ? parsed.pages.map(assertKnowledgePageIntegrity)
         : [];
+      const proposals = Array.isArray(parsed.proposals)
+        ? parsed.proposals.map(assertKnowledgeIngestionProposalIntegrity)
+        : [];
+      const activity = Array.isArray(parsed.activity)
+        ? parsed.activity.map(assertKnowledgeActivityIntegrity)
+        : [];
       const blobs =
         parsed.blobs && typeof parsed.blobs === 'object' && !Array.isArray(parsed.blobs)
           ? (parsed.blobs as Record<string, string>)
@@ -346,7 +529,9 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
       if (
         collections.length > MAX_COLLECTIONS ||
         sources.length > MAX_SOURCES ||
-        pages.length > MAX_PAGES
+        pages.length > MAX_PAGES ||
+        proposals.length > MAX_PROPOSALS ||
+        activity.length > MAX_KNOWLEDGE_ACTIVITY
       ) {
         throw new ConflictError('Knowledge collection store exceeds its bounded inventory.');
       }
@@ -365,6 +550,8 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
         collections,
         sources,
         pages,
+        proposals,
+        activity,
         blobs,
       };
     } catch (error) {
@@ -374,6 +561,8 @@ export class FileKnowledgeCollectionRepository implements KnowledgeCollectionRep
           collections: [],
           sources: [],
           pages: [],
+          proposals: [],
+          activity: [],
           blobs: {},
         };
       }
@@ -453,6 +642,47 @@ export function assertKnowledgePageIntegrity(value: unknown): KnowledgePage {
   return page;
 }
 
+export function computeKnowledgeIngestionPreviewDigest(
+  proposal: Omit<KnowledgeIngestionProposal, 'digest' | 'previewDigest'>
+): string {
+  const { state: _state, revision: _revision, transitions: _transitions, ...plan } = proposal;
+  return digestRunLaunchValue(plan);
+}
+
+export function assertKnowledgeIngestionProposalIntegrity(
+  value: unknown
+): KnowledgeIngestionProposal {
+  const proposal = parseKnowledgeIngestionProposal(value);
+  for (const entry of proposal.beforePages) {
+    if (entry.page) assertKnowledgePageIntegrity(entry.page);
+  }
+  for (const page of proposal.afterPages) assertKnowledgePageIntegrity(page);
+  for (const transition of proposal.transitions) {
+    const { digest, ...payload } = transition;
+    if (digestRunLaunchValue(payload) !== digest) {
+      throw new ConflictError('Knowledge ingestion transition digest is invalid.');
+    }
+  }
+  const { digest, previewDigest, ...payload } = proposal;
+  const proposalPayload = { ...payload, previewDigest };
+  if (
+    computeKnowledgeIngestionPreviewDigest(payload) !== previewDigest ||
+    digestRunLaunchValue(proposalPayload) !== digest
+  ) {
+    throw new ConflictError('Knowledge ingestion proposal digest is invalid.');
+  }
+  return proposal;
+}
+
+export function assertKnowledgeActivityIntegrity(value: unknown): KnowledgeActivityEntry {
+  const activity = parseKnowledgeActivityEntry(value);
+  const { digest, ...payload } = activity;
+  if (digestRunLaunchValue(payload) !== digest) {
+    throw new ConflictError('Knowledge activity entry digest is invalid.');
+  }
+  return activity;
+}
+
 export function validateKnowledgePageGraph(pages: KnowledgePage[]): void {
   const byId = new Map<string, KnowledgePage>();
   const identities = new Map<string, string>();
@@ -521,6 +751,38 @@ export function validateKnowledgePageReferences(
   validateKnowledgePageGraph(pages);
 }
 
+export function validateKnowledgeProposalPlan(
+  collection: KnowledgeCollection,
+  sources: KnowledgeSource[],
+  currentPages: KnowledgePage[],
+  proposal: KnowledgeIngestionProposal
+): void {
+  if (
+    proposal.workspaceId !== collection.workspaceId ||
+    proposal.collectionId !== collection.id ||
+    proposal.state !== 'dry-run' ||
+    proposal.revision !== 1 ||
+    proposal.transitions.length !== 0
+  ) {
+    throw new ConflictError('Knowledge ingestion dry-run scope or state is invalid.');
+  }
+  const sourceIds = new Set(sources.map((source) => source.id));
+  if (
+    proposal.sourceIds.some((sourceId) => !sourceIds.has(sourceId)) ||
+    proposal.contradictions.some((contradiction) =>
+      contradiction.sourceIds.some((sourceId) => !sourceIds.has(sourceId))
+    )
+  ) {
+    throw new ConflictError('Knowledge ingestion dry run references an unknown source revision.');
+  }
+  assertExpectedPages(currentPages, proposal.expectedPages);
+  const afterIds = new Set(proposal.afterPages.map((page) => page.id));
+  validateKnowledgePageReferences(collection, sources, [
+    ...currentPages.filter((page) => !afterIds.has(page.id)),
+    ...proposal.afterPages,
+  ]);
+}
+
 export function assertPageBatchShape(
   workspaceId: string,
   collectionId: string,
@@ -561,6 +823,110 @@ export function assertExpectedPages(
 
 function normalizePageIdentity(value: string): string {
   return value.trim().toLocaleLowerCase('en-US');
+}
+
+export function assertKnowledgeProposalTransition(
+  current: KnowledgeIngestionProposal,
+  next: KnowledgeIngestionProposal,
+  activity: KnowledgeActivityEntry,
+  batch: KnowledgeProposalTransitionBatch
+): void {
+  const expectedState =
+    current.state === 'dry-run' ? 'applied' : current.state === 'applied' ? 'reversed' : null;
+  if (
+    !expectedState ||
+    next.state !== expectedState ||
+    next.revision !== current.revision + 1 ||
+    next.id !== current.id ||
+    next.workspaceId !== current.workspaceId ||
+    next.collectionId !== current.collectionId ||
+    next.previewDigest !== current.previewDigest ||
+    next.requestDigest !== current.requestDigest ||
+    next.operationIdDigest !== current.operationIdDigest ||
+    next.transitions.length !== current.transitions.length + 1 ||
+    current.transitions.some(
+      (transition, index) => transition.digest !== next.transitions[index]?.digest
+    )
+  ) {
+    throw new ConflictError('Knowledge ingestion proposal transition is invalid.');
+  }
+  const transition = next.transitions.at(-1);
+  if (
+    !transition ||
+    transition.from !== current.state ||
+    transition.to !== next.state ||
+    transition.fromProposalDigest !== current.digest ||
+    transition.actorId !== activity.actorId ||
+    transition.at !== activity.createdAt ||
+    activity.workspaceId !== current.workspaceId ||
+    activity.collectionId !== current.collectionId ||
+    activity.proposalId !== current.id ||
+    activity.type !==
+      (next.state === 'applied' ? 'knowledge.ingestion.applied' : 'knowledge.ingestion.reversed') ||
+    !sameStringSet(activity.sourceIds, current.sourceIds) ||
+    !sameStringSet(
+      activity.pageIds,
+      current.afterPages.map((page) => page.id)
+    )
+  ) {
+    throw new ConflictError('Knowledge ingestion activity does not match its transition.');
+  }
+  if (
+    next.state === 'applied' &&
+    next.contradictions.some((contradiction) => contradiction.severity === 'blocking')
+  ) {
+    throw new ConflictError('Blocking knowledge contradictions require a replacement proposal.');
+  }
+  const expectedPages =
+    next.state === 'applied'
+      ? current.expectedPages
+      : current.afterPages.map((page) => ({ id: page.id, digest: page.digest }));
+  const upsertPages =
+    next.state === 'applied'
+      ? current.afterPages
+      : current.beforePages
+          .map((entry) => entry.page)
+          .filter((page): page is KnowledgePage => Boolean(page));
+  const deletePageIds =
+    next.state === 'applied'
+      ? []
+      : current.beforePages.filter((entry) => !entry.page).map((entry) => entry.pageId);
+  if (
+    !sameExpectedPages(batch.expectedPages, expectedPages) ||
+    !samePageDigests(batch.upsertPages, upsertPages) ||
+    !sameStringSet(batch.deletePageIds, deletePageIds)
+  ) {
+    throw new ConflictError('Knowledge ingestion page batch does not match its proposal.');
+  }
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    new Set(left).size === left.length &&
+    left.every((value) => right.includes(value))
+  );
+}
+
+function sameExpectedPages(
+  left: KnowledgePageExpectedState[],
+  right: KnowledgePageExpectedState[]
+): boolean {
+  const rightById = new Map(right.map((entry) => [entry.id, entry.digest]));
+  return (
+    left.length === right.length &&
+    new Set(left.map((entry) => entry.id)).size === left.length &&
+    left.every((entry) => rightById.get(entry.id) === entry.digest)
+  );
+}
+
+function samePageDigests(left: KnowledgePage[], right: KnowledgePage[]): boolean {
+  const rightById = new Map(right.map((page) => [page.id, page.digest]));
+  return (
+    left.length === right.length &&
+    new Set(left.map((page) => page.id)).size === left.length &&
+    left.every((page) => rightById.get(page.id) === page.digest)
+  );
 }
 
 function validatePageCollections(

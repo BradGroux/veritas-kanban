@@ -1539,6 +1539,44 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON knowledge_pages(workspace_id, updated_at DESC, id);
     `,
   },
+  {
+    version: 32,
+    name: '0032_knowledge_ingestion_proposals',
+    up: `
+      CREATE TABLE knowledge_ingestion_proposals (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL
+          REFERENCES knowledge_collections(id) ON DELETE CASCADE,
+        operation_id_digest TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('dry-run', 'applied', 'reversed')),
+        proposal_json TEXT NOT NULL,
+        proposed_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (collection_id, operation_id_digest)
+      );
+
+      CREATE INDEX idx_knowledge_ingestion_proposals_collection_state
+        ON knowledge_ingestion_proposals(collection_id, state, proposed_at DESC, id);
+
+      CREATE TABLE knowledge_activity_entries (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL
+          REFERENCES knowledge_collections(id) ON DELETE CASCADE,
+        proposal_id TEXT NOT NULL
+          REFERENCES knowledge_ingestion_proposals(id) ON DELETE CASCADE,
+        type TEXT NOT NULL CHECK (
+          type IN ('knowledge.ingestion.applied', 'knowledge.ingestion.reversed')
+        ),
+        entry_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_knowledge_activity_collection_created
+        ON knowledge_activity_entries(collection_id, created_at DESC, id);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

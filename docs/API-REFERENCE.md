@@ -4701,18 +4701,24 @@ so startup reconciliation cannot duplicate a fresh conversation.
 
 Knowledge collections establish a workspace-scoped, immutable source catalog for derived project knowledge. Route access requires `work_product:read` for reads and `work_product:write` for writes. Collection policies then apply the authenticated actor's `admin`, `agent`, or `read-only` role and source-classification ceiling.
 
-| Method | Path                                                         | Description                        |
-| ------ | ------------------------------------------------------------ | ---------------------------------- |
-| `GET`  | `/api/knowledge/collections`                                 | List collections readable by actor |
-| `POST` | `/api/knowledge/collections`                                 | Create one versioned collection    |
-| `GET`  | `/api/knowledge/collections/:collectionId`                   | Read collection metadata           |
-| `GET`  | `/api/knowledge/collections/:collectionId/sources`           | List immutable source revisions    |
-| `POST` | `/api/knowledge/collections/:collectionId/sources`           | Register one source revision       |
-| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId` | Read source metadata               |
-| `GET`  | `/api/knowledge/collections/:collectionId/pages`             | List derived pages                 |
-| `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`     | Read one cited derived page        |
+| Method | Path                                                                               | Description                        |
+| ------ | ---------------------------------------------------------------------------------- | ---------------------------------- |
+| `GET`  | `/api/knowledge/collections`                                                       | List collections readable by actor |
+| `POST` | `/api/knowledge/collections`                                                       | Create one versioned collection    |
+| `GET`  | `/api/knowledge/collections/:collectionId`                                         | Read collection metadata           |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources`                                 | List immutable source revisions    |
+| `POST` | `/api/knowledge/collections/:collectionId/sources`                                 | Register one source revision       |
+| `GET`  | `/api/knowledge/collections/:collectionId/sources/:sourceId`                       | Read source metadata               |
+| `GET`  | `/api/knowledge/collections/:collectionId/pages`                                   | List derived pages                 |
+| `GET`  | `/api/knowledge/collections/:collectionId/pages/:pageId`                           | Read one cited derived page        |
+| `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | List ingestion dry runs            |
+| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals`                     | Create an ingestion dry run        |
+| `GET`  | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId`         | Read one dry run                   |
+| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/apply`   | Apply atomically                   |
+| `POST` | `/api/knowledge/collections/:collectionId/ingestion/proposals/:proposalId/reverse` | Reverse atomically                 |
+| `GET`  | `/api/knowledge/collections/:collectionId/activity`                                | List ingestion activity            |
 
-Collection and source lists accept `page` (default `1`) and `limit` (default `100`, maximum `500`). Pagination metadata is returned through the standard API response envelope.
+Collection, source, page, proposal, and activity lists accept `page` (default `1`) and `limit` (default `100`, maximum `500`). Pagination metadata is returned through the standard API response envelope.
 
 Create operations are idempotent. The operation identity is persisted only as a digest and cannot be reused with changed input.
 
@@ -4755,9 +4761,62 @@ Register an inline snapshot by sending `storage: "content-addressed-blob"` and b
 }
 ```
 
-Repeated source keys create a revision chain rather than replacing prior evidence. REST returns metadata only and does not expose stored source content. Reviewed ingestion proposals, citation-aware search, promotion, and export remain later slices documented in [Knowledge Collections v1](architecture/KNOWLEDGE-COLLECTIONS-V1.md).
+Repeated source keys create a revision chain rather than replacing prior evidence. REST returns metadata only and does not expose stored source content. Citation-aware search, promotion, and export remain later slices documented in [Knowledge Collections v1](architecture/KNOWLEDGE-COLLECTIONS-V1.md).
 
 Derived pages include Markdown, typed metadata, review state, confidence, stable keys and aliases, outgoing links, computed backlinks, bounded revision history, and claim-level citations to immutable source revision IDs. Page list and detail routes are read-only; reviewed ingestion proposals own mutation so generated synthesis cannot bypass the atomic review workflow.
+
+Create a dry run with selected immutable source revision IDs and one or more page candidates. The response includes complete before and after pages, page and index changes, contradictions, expected digests, and the activity change that apply will append. Creating a proposal does not mutate pages.
+
+```json
+{
+  "operationId": "ingest-readme-2026-07-26",
+  "sourceIds": ["knowledge_source_0123456789abcdef"],
+  "pages": [
+    {
+      "stableKey": "architecture",
+      "title": "Architecture",
+      "pageKind": "concept",
+      "aliases": ["system-design"],
+      "tags": ["product"],
+      "metadata": {
+        "owner": "architecture",
+        "reviewState": "pending"
+      },
+      "markdown": "# Architecture\n\nThe workspace uses a reviewed control plane.",
+      "claims": [
+        {
+          "claimKey": "reviewed-control-plane",
+          "text": "The workspace uses a reviewed control plane.",
+          "citations": [
+            {
+              "sourceId": "knowledge_source_0123456789abcdef",
+              "locator": {
+                "kind": "line-range",
+                "startLine": 10,
+                "endLine": 14
+              }
+            }
+          ],
+          "confidence": 0.92
+        }
+      ],
+      "links": [],
+      "reviewState": "review-required",
+      "confidence": 0.9
+    }
+  ]
+}
+```
+
+Only administrators can apply or reverse. Send the exact current proposal digest:
+
+```json
+{
+  "proposalDigest": "sha256:..."
+}
+```
+
+Apply atomically updates every affected page, proposal state, and append-only activity entry. Reverse requires the applied digest, restores complete prior page records, removes proposal-created pages, and appends reversal activity. Exact retries return the committed state. Blocking contradictions, stale page digests, later conflicting edits, and unsafe graph changes return `409` without partial mutation.
 
 ---
 
