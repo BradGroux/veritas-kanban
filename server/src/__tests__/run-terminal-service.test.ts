@@ -335,6 +335,31 @@ describe('RunTerminalService', () => {
     expect(events.map((event) => event.kind)).toContain('command.detached');
   });
 
+  it('terminates detached jobs when their owning attempt is cleaned up', async () => {
+    const { service, context } = await fixture({ terminationGraceMs: 100 });
+    const started = await service.execute(context, {
+      ...request('setInterval(() => process.stdout.write("detached\\n"), 20)'),
+      startMode: 'foreground',
+    });
+    await service.detach(started.id);
+
+    const results = await service.cleanupAttempt(
+      context.workspaceId,
+      context.taskId,
+      context.attemptId
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      handle: {
+        id: started.id,
+        startMode: 'background',
+        state: 'terminated',
+        signal: 'SIGTERM',
+      },
+    });
+  });
+
   it('reconstructs terminal handles and retained output from the durable journal', async () => {
     const { service, context, journal } = await fixture();
     const started = await service.execute(

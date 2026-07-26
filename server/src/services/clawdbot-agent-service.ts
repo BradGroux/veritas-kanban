@@ -162,6 +162,7 @@ import type {
   ExecutionTreeBudgetPolicy,
   ExecutionTreeEdgeKind,
   ExecutionTreeIdentity,
+  RunTerminalHandle,
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
@@ -209,6 +210,7 @@ import {
   getRunEventJournalService,
   type RunEventJournalService,
 } from './run-event-journal-service.js';
+import { getRunTerminalService, type RunTerminalService } from './run-terminal-service.js';
 import {
   getProviderRunEventMapper,
   type ProviderMappedRunEvent,
@@ -403,6 +405,7 @@ export interface AgentStatus {
   controls: ProviderRuntimeControlSet;
   admissionReservationId?: string;
   executionTree?: ExecutionTreeIdentity;
+  terminals: RunTerminalHandle[];
 }
 
 export interface AgentQueueStatus {
@@ -642,6 +645,10 @@ export class ClawdbotAgentService {
     Partial<Pick<PhaseTransitionService, 'list'>>;
   private runPhaseAuthority: RunPhaseAuthorityService;
   private dependencyExecution: DependencyCircuitExecutionService;
+  private runTerminals: Pick<
+    RunTerminalService,
+    'list' | 'cleanupAttempt' | 'reconcileAttempt'
+  >;
   private logsDir: string;
 
   constructor(
@@ -687,7 +694,11 @@ export class ClawdbotAgentService {
       ReflectionExtractionJobService,
       'enqueue'
     > = getReflectionExtractionJobService(),
-    dependencyExecution: DependencyCircuitExecutionService = defaultDependencyCircuitExecutionService()
+    dependencyExecution: DependencyCircuitExecutionService = defaultDependencyCircuitExecutionService(),
+    runTerminals: Pick<
+      RunTerminalService,
+      'list' | 'cleanupAttempt' | 'reconcileAttempt'
+    > = getRunTerminalService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -718,6 +729,7 @@ export class ClawdbotAgentService {
     this.durableGoalSupervisor = durableGoalSupervisor;
     this.reflectionExtractionJobs = reflectionExtractionJobs;
     this.dependencyExecution = dependencyExecution;
+    this.runTerminals = runTerminals;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -3321,6 +3333,7 @@ export class ClawdbotAgentService {
       controls: providerRuntimeControls(providerRuntimeManifest),
       admissionReservationId: admissionReservation.id,
       executionTree,
+      terminals: this.runTerminals.list(taskEnvelope.workspace.workspaceId, taskId, attemptId),
     };
   }
 
@@ -3777,6 +3790,16 @@ export class ClawdbotAgentService {
         attempt.runLaunchManifest?.phase
       )),
     });
+    await this.runTerminals.reconcileAttempt(
+      attempt.taskEnvelope.workspace.workspaceId,
+      task.id,
+      attempt.id
+    );
+    await this.runTerminals.cleanupAttempt(
+      attempt.taskEnvelope.workspace.workspaceId,
+      task.id,
+      attempt.id
+    );
     const completedAttempt: TaskAttempt = {
       ...attempt,
       status: completionResult.status === 'success' ? 'complete' : 'failed',
@@ -4159,6 +4182,11 @@ export class ClawdbotAgentService {
       })());
     const { status, taskBeforeCompletion, completionResult, dependencyCircuits } =
       preparedCompletion;
+    await this.runTerminals.cleanupAttempt(
+      pending.taskEnvelope.workspace.workspaceId,
+      taskId,
+      attemptId
+    );
     const successful = completionResult.status === 'success';
 
     if (pending.provider === 'openclaw' && completionResult.summary) {
@@ -9311,6 +9339,11 @@ export class ClawdbotAgentService {
       controls: providerRuntimeControls(pending.providerRuntimeManifest),
       admissionReservationId: pending.admissionReservationId,
       executionTree: pending.executionTree,
+      terminals: this.runTerminals.list(
+        pending.taskEnvelope.workspace.workspaceId,
+        taskId,
+        pending.attemptId
+      ),
     };
   }
 

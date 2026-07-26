@@ -427,19 +427,22 @@ export class RunTerminalService {
       taskId: required(taskId, 'taskId'),
       attemptId: required(attemptId, 'attemptId'),
     };
-    const results: RunTerminalTerminationResult[] = [];
-    for (const record of this.records.values()) {
-      if (
-        record.handle.workspaceId !== scope.workspaceId ||
-        record.handle.taskId !== scope.taskId ||
-        record.handle.attemptId !== scope.attemptId ||
-        terminal(record.handle.state)
-      ) {
-        continue;
-      }
-      results.push(await this.terminate(record.handle.id));
-    }
-    return results;
+    const records = [...this.records.values()].filter(
+      (record) =>
+        record.handle.workspaceId === scope.workspaceId &&
+        record.handle.taskId === scope.taskId &&
+        record.handle.attemptId === scope.attemptId
+    );
+    const results = await Promise.all(
+      records.map(async (record) => {
+        if (terminal(record.handle.state)) {
+          await this.awaitJournal(record);
+          return undefined;
+        }
+        return this.terminate(record.handle.id);
+      })
+    );
+    return results.filter((result): result is RunTerminalTerminationResult => result !== undefined);
   }
 
   async reconcileAttempt(

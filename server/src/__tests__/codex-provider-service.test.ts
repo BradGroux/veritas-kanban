@@ -218,6 +218,7 @@ import type { FilesystemSandboxService } from '../services/filesystem-sandbox-se
 import type { SandboxPolicyService } from '../services/sandbox-policy-service.js';
 import type { WorkspaceExecutionTrustService } from '../services/workspace-execution-trust-service.js';
 import type { AdmissionControlService } from '../services/admission-control-service.js';
+import type { RunTerminalService } from '../services/run-terminal-service.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
@@ -266,7 +267,11 @@ function testableService(
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
   > = testWorkspaceExecutionTrust(),
-  admission: AdmissionControlService = testAdmissionControl()
+  admission: AdmissionControlService = testAdmissionControl(),
+  runTerminals: Pick<
+    RunTerminalService,
+    'list' | 'cleanupAttempt' | 'reconcileAttempt'
+  > = testRunTerminals()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -295,10 +300,32 @@ function testableService(
     {
       handleRunCompletion: mockHandleDurableGoalCompletion,
       reconcilePlannedForTask: mockReconcileDurableGoalContinuation,
-    }
+    },
+    undefined,
+    undefined,
+    runTerminals
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testRunTerminals(): Pick<
+  RunTerminalService,
+  'list' | 'cleanupAttempt' | 'reconcileAttempt'
+> {
+  return {
+    list: vi.fn(() => []),
+    cleanupAttempt: vi.fn(async () => []),
+    reconcileAttempt: vi.fn(async (workspaceId, taskId, attemptId) => ({
+      schemaVersion: 'run-terminal-reconciliation/v1',
+      workspaceId,
+      taskId,
+      attemptId,
+      handles: [],
+      recoveredHandleIds: [],
+      interruptedHandleIds: [],
+    })),
+  };
 }
 
 function testAdmissionControl(): AdmissionControlService {
@@ -3114,6 +3141,85 @@ describe('ClawdbotAgentService Codex providers', () => {
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
   });
 
+  it('reports attempt-scoped terminals and cleans them up before completion commits', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const runTerminals = testRunTerminals();
+    const service = testableService(
+      tmpDir,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      runTerminals
+    );
+    const active = await service.startAgent(task.id, 'codex');
+    const handle = {
+      schemaVersion: 'run-terminal-handle/v1' as const,
+      id: 'terminal_status_test',
+      workspaceId: active.taskEnvelope.workspace.workspaceId,
+      taskId: task.id,
+      attemptId: active.attemptId,
+      launchManifestDigest: active.runLaunchManifest.digest,
+      mode: 'pipe' as const,
+      startMode: 'background' as const,
+      state: 'running' as const,
+      commandId: `sha256:${'a'.repeat(64)}`,
+      startedAt: '2026-07-25T12:00:00.000Z',
+      output: {
+        nextCursor: 0,
+        retainedFromCursor: 1,
+        observedBytes: 0,
+        retainedBytes: 0,
+        droppedBytes: 0,
+        truncated: false,
+        volumeCircuitTripped: false,
+      },
+      capabilities: {
+        pipe: 'enforced' as const,
+        pty: 'unsupported' as const,
+        interactiveStdin: 'unsupported' as const,
+        restartReattachment: 'unsupported' as const,
+      },
+    };
+    vi.mocked(runTerminals.list).mockReturnValue([handle]);
+
+    await expect(service.getAgentStatus(task.id)).resolves.toMatchObject({
+      attemptId: active.attemptId,
+      terminals: [{ id: handle.id, attemptId: active.attemptId }],
+    });
+    expect(runTerminals.list).toHaveBeenCalledWith(
+      active.taskEnvelope.workspace.workspaceId,
+      task.id,
+      active.attemptId
+    );
+
+    await service.completeAgent(
+      task.id,
+      { success: true, summary: 'Terminal lifecycle complete.' },
+      {
+        attemptId: active.attemptId,
+        terminalSource: 'process',
+        providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+      }
+    );
+
+    expect(runTerminals.cleanupAttempt).toHaveBeenCalledWith(
+      active.taskEnvelope.workspace.workspaceId,
+      task.id,
+      active.attemptId
+    );
+    const completionWrite = mockUpdateTask.mock.invocationCallOrder.find(
+      (_, index) => mockUpdateTask.mock.calls[index]?.[1]?.attempt?.ended
+    );
+    expect(vi.mocked(runTerminals.cleanupAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+      completionWrite as number
+    );
+  });
+
   it('does not let a competing terminal claim poison an in-flight finalizer', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
@@ -3221,17 +3327,17 @@ describe('ClawdbotAgentService Codex providers', () => {
       return task;
     });
     const revokeRun = vi.fn(async () => 1);
-    const service = new ClawdbotAgentService(
-      undefined,
-      undefined,
-      taskEnvelopes,
-      undefined,
-      new ProviderCompletionService(completionEvidence),
+    const runTerminals = testRunTerminals();
+    const service = testableService(
+      tmpDir,
       { revokeRun },
       undefined,
       undefined,
       undefined,
-      testRunSupervisor()
+      undefined,
+      undefined,
+      undefined,
+      runTerminals
     );
     const provenance = {
       attemptId,
@@ -3259,6 +3365,16 @@ describe('ClawdbotAgentService Codex providers', () => {
     ).toHaveLength(2);
     expect(task.revision).toBe(2);
     expect(task.attempts).toHaveLength(1);
+    expect(runTerminals.reconcileAttempt).toHaveBeenCalledWith(
+      taskEnvelope.workspace.workspaceId,
+      task.id,
+      attemptId
+    );
+    expect(runTerminals.cleanupAttempt).toHaveBeenCalledWith(
+      taskEnvelope.workspace.workspaceId,
+      task.id,
+      attemptId
+    );
     expect(revokeRun).toHaveBeenCalledTimes(2);
     expect(revokeRun).toHaveBeenCalledWith({
       taskId: task.id,
