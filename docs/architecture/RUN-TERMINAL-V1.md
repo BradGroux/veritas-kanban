@@ -9,11 +9,13 @@ The first implementation supports background pipe-mode commands with:
 - one opaque handle bound to workspace, task, attempt, and launch-manifest digest;
 - a manifest-approved executable, relative cwd, and environment-key subset;
 - immediate background return, bounded single/any/all waits, foreground detachment without changing ownership, status inspection, and attempt cleanup;
+- fail-closed ownership persistence before a new handle is returned;
 - redacted byte-bounded stdout/stderr chunks with monotonic cursors, explicit gap metadata, and a total-volume circuit that terminates noisy jobs before they flood the journal;
 - graceful process-group termination followed by bounded forced termination;
-- causal `command.started`, `stream.stdout`, `stream.stderr`, and `command.completed` journal events.
+- causal `command.started`, `command.detached`, `stream.stdout`, `stream.stderr`, and `command.completed` journal events; and
+- bounded handle and retained-output reconstruction from the durable causal journal.
 
-PTY mode, interactive stdin, restart reattachment, external API/CLI/MCP exposure, and persistent handles are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
+PTY mode, interactive stdin, restart reattachment, and external API/CLI/MCP exposure are explicitly unsupported in this slice. Callers receive typed blockers instead of an implicit downgrade.
 
 ## Authority boundary
 
@@ -23,9 +25,9 @@ The child is launched without a shell. On Unix-like systems it owns a detached p
 
 ## Output and replay
 
-Each redacted chunk receives a handle-local cursor. Retention is byte-bounded; when older chunks are dropped, `retainedFromCursor`, `droppedBytes`, `truncated`, and the query page's `gap` flag make the loss explicit. Completion waits for the terminal journal queue, so callers that observe a completed wait can replay the corresponding terminal event.
+Each redacted chunk receives a handle-local cursor. Chunks are capped below the journal spill threshold so the cursor, stream, and content remain directly replayable. Retention is byte-bounded; when older chunks are dropped, `retainedFromCursor`, `droppedBytes`, `truncated`, and the query page's `gap` flag make the loss explicit. Completion waits for successful terminal journal persistence, so callers never receive a durable-completion claim when causal evidence is incomplete.
 
-The in-memory buffer is not restart evidence. Durable handle metadata, platform reattachment, and conservative restart reconciliation remain required before the service can advertise `restartReattachment: enforced`.
+`reconcileAttempt(workspaceId, taskId, attemptId)` replays at most 20,000 system-authored run-terminal events and validates each persisted handle before making it visible. Terminal handles and retained output remain queryable after a service restart. A handle without durable completion evidence is marked `interrupted` and receives a deduplicated `command.completed` reconciliation event. The runtime does not claim that it can inherit stdout/stderr pipes from the prior server process, so `restartReattachment` remains `unsupported` rather than pretending the process is safely controlled.
 
 ## Code
 

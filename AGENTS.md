@@ -273,8 +273,10 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   stdin channel. The current runtime supports background pipe mode with
   manifest-approved executable, cwd, and environment posture, bounded
   cursor-addressable redacted output, bounded single/any/all waits,
-  foreground detachment, and process-group termination. PTY, interactive
-  stdin, and restart reattachment fail closed until their typed controls ship.
+  foreground detachment, process-group termination, and durable journal
+  reconstruction. A dangling handle becomes `interrupted` after restart
+  because inherited pipes cannot be reattached safely. PTY, interactive stdin,
+  and restart reattachment fail closed until their typed controls ship.
 
 ---
 

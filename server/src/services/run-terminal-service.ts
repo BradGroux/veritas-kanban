@@ -5,12 +5,15 @@ import { nanoid } from 'nanoid';
 import {
   RUN_TERMINAL_HANDLE_SCHEMA_VERSION,
   RUN_TERMINAL_OUTPUT_SCHEMA_VERSION,
+  RUN_TERMINAL_RECONCILIATION_SCHEMA_VERSION,
   type RunEventAppendInput,
+  type RunEventEnvelope,
   type RunTerminalCapabilityPosture,
   type RunTerminalExecuteRequest,
   type RunTerminalHandle,
   type RunTerminalOutputChunk,
   type RunTerminalOutputPage,
+  type RunTerminalReconciliationResult,
   type RunTerminalStream,
   type RunTerminalTerminationResult,
   type RunTerminalWaitManyResult,
@@ -18,8 +21,16 @@ import {
 } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { redactString } from '../lib/redact.js';
-import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
-import { RunTerminalExecuteRequestSchema } from '../schemas/run-terminal-schemas.js';
+import {
+  ConflictError,
+  InternalError,
+  NotFoundError,
+  ValidationError,
+} from '../middleware/error-handler.js';
+import {
+  RunTerminalExecuteRequestSchema,
+  RunTerminalHandleSchema,
+} from '../schemas/run-terminal-schemas.js';
 import { realpath } from '../storage/fs-helpers.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import {
@@ -30,10 +41,12 @@ import {
 const log = createLogger('run-terminal-service');
 const DEFAULT_OUTPUT_LIMIT_BYTES = 256 * 1024;
 const DEFAULT_MAXIMUM_OUTPUT_BYTES = 4 * 1024 * 1024;
-const DEFAULT_CHUNK_LIMIT_BYTES = 8 * 1024;
+const MAX_PERSISTED_CHUNK_BYTES = 6 * 1024;
+const DEFAULT_CHUNK_LIMIT_BYTES = MAX_PERSISTED_CHUNK_BYTES;
 const DEFAULT_TERMINATION_GRACE_MS = 5_000;
 const MAX_OUTPUT_PAGE_CHUNKS = 200;
 const MAX_WAIT_MS = 300_000;
+const MAX_RECONCILIATION_EVENTS = 20_000;
 
 const CAPABILITIES: RunTerminalCapabilityPosture = {
   pipe: 'enforced',
@@ -53,7 +66,7 @@ export interface RunTerminalLaunchContext {
 }
 
 export interface RunTerminalServiceOptions {
-  journal?: Pick<RunEventJournalService, 'append'>;
+  journal?: Pick<RunEventJournalService, 'append' | 'list'>;
   now?: () => Date;
   outputLimitBytes?: number;
   maximumOutputBytes?: number;
@@ -61,32 +74,37 @@ export interface RunTerminalServiceOptions {
   terminationGraceMs?: number;
 }
 
-interface RuntimeRecord {
-  context: RunTerminalLaunchContext;
+interface TerminalRecord {
   handle: RunTerminalHandle;
-  child: ChildProcessWithoutNullStreams;
   chunks: RunTerminalOutputChunk[];
   retainedBytes: number;
   droppedBytes: number;
   observedBytes: number;
   nextCursor: number;
+  journalQueue: Promise<void>;
+}
+
+interface RuntimeRecord extends TerminalRecord {
+  context: RunTerminalLaunchContext;
+  child: ChildProcessWithoutNullStreams;
   exit: Promise<void>;
   resolveExit(): void;
-  journalQueue: Promise<void>;
   gracefulSignalAt?: string;
   forceSignalAt?: string;
+  journalFailure?: Error;
   completedEventQueued: boolean;
   volumeCircuitTripped: boolean;
 }
 
 export class RunTerminalService {
-  private readonly journal: Pick<RunEventJournalService, 'append'>;
+  private readonly journal: Pick<RunEventJournalService, 'append' | 'list'>;
   private readonly now: () => Date;
   private readonly outputLimitBytes: number;
   private readonly maximumOutputBytes: number;
   private readonly chunkLimitBytes: number;
   private readonly terminationGraceMs: number;
-  private readonly records = new Map<string, RuntimeRecord>();
+  private readonly records = new Map<string, TerminalRecord>();
+  private readonly recoveredHandleIds = new Set<string>();
 
   constructor(options: RunTerminalServiceOptions = {}) {
     this.journal = options.journal ?? getRunEventJournalService();
@@ -101,7 +119,7 @@ export class RunTerminalService {
       options.chunkLimitBytes,
       DEFAULT_CHUNK_LIMIT_BYTES,
       256,
-      64 * 1024
+      MAX_PERSISTED_CHUNK_BYTES
     );
     if (this.chunkLimitBytes > this.outputLimitBytes) {
       throw new Error('Run terminal chunk limit cannot exceed the output limit.');
@@ -203,16 +221,29 @@ export class RunTerminalService {
     });
     child.once('error', (error) => this.fail(record, error));
     child.once('close', (code, signal) => this.close(record, code, signal));
-    this.appendEvent(record, {
-      kind: 'command.started',
-      payload: {
-        handleId: id,
-        commandId: handle.commandId,
-        mode: request.mode,
-        startMode: request.startMode,
-      },
-      dedupeKey: `run-terminal:${id}:started`,
-    });
+    try {
+      await this.appendEvent(record, {
+        kind: 'command.started',
+        payload: {
+          handleId: id,
+          commandId: handle.commandId,
+          mode: request.mode,
+          startMode: request.startMode,
+          handle: cloneHandle(handle),
+        },
+        dedupeKey: `run-terminal:${id}:started`,
+      });
+    } catch (error) {
+      record.completedEventQueued = true;
+      if (!terminal(record.handle.state)) signalProcessGroup(record.child, 'SIGKILL');
+      await record.exit;
+      this.records.delete(id);
+      log.error(
+        { err: error, handleId: id, attemptId: context.attemptId },
+        'Failed to persist run terminal ownership before returning the handle'
+      );
+      throw new InternalError('Run terminal ownership could not be persisted.');
+    }
     return cloneHandle(record.handle);
   }
 
@@ -220,18 +251,24 @@ export class RunTerminalService {
     return cloneHandle(this.require(handleId).handle);
   }
 
-  list(attemptId: string): RunTerminalHandle[] {
+  list(workspaceId: string, taskId: string, attemptId: string): RunTerminalHandle[] {
+    const scope = {
+      workspaceId: required(workspaceId, 'workspaceId'),
+      taskId: required(taskId, 'taskId'),
+      attemptId: required(attemptId, 'attemptId'),
+    };
     return [...this.records.values()]
-      .filter((record) => record.handle.attemptId === attemptId)
+      .filter(
+        (record) =>
+          record.handle.workspaceId === scope.workspaceId &&
+          record.handle.taskId === scope.taskId &&
+          record.handle.attemptId === scope.attemptId
+      )
       .map((record) => cloneHandle(record.handle))
       .sort((left, right) => left.startedAt.localeCompare(right.startedAt));
   }
 
-  output(
-    handleId: string,
-    afterCursor = 0,
-    limit = MAX_OUTPUT_PAGE_CHUNKS
-  ): RunTerminalOutputPage {
+  output(handleId: string, afterCursor = 0, limit = MAX_OUTPUT_PAGE_CHUNKS): RunTerminalOutputPage {
     if (!Number.isInteger(afterCursor) || afterCursor < 0) {
       throw new ValidationError('Terminal output cursor must be a non-negative integer.');
     }
@@ -264,26 +301,27 @@ export class RunTerminalService {
     assertWaitTimeout(timeoutMs);
     const record = this.require(handleId);
     if (terminal(record.handle.state)) {
-      await record.journalQueue;
+      await this.awaitJournal(record);
       return { completed: true, timedOut: false, handle: cloneHandle(record.handle) };
     }
+    const runtime = this.requireRuntime(handleId);
     if (timeoutMs === 0) {
-      return { completed: false, timedOut: true, handle: cloneHandle(record.handle) };
+      return { completed: false, timedOut: true, handle: cloneHandle(runtime.handle) };
     }
     let timer: NodeJS.Timeout | undefined;
     const timedOut = await Promise.race([
-      record.exit.then(() => false),
+      runtime.exit.then(() => false),
       new Promise<boolean>((resolve) => {
         timer = setTimeout(() => resolve(true), timeoutMs);
         timer.unref();
       }),
     ]);
     if (timer) clearTimeout(timer);
-    if (!timedOut) await record.journalQueue;
+    if (!timedOut) await this.awaitJournal(runtime);
     return {
       completed: !timedOut,
       timedOut,
-      handle: cloneHandle(record.handle),
+      handle: cloneHandle(runtime.handle),
     };
   }
 
@@ -292,13 +330,14 @@ export class RunTerminalService {
     const records = this.requireMany(handleIds);
     const alreadyCompleted = records.find((record) => terminal(record.handle.state));
     if (alreadyCompleted) {
-      await alreadyCompleted.journalQueue;
+      await this.awaitJournal(alreadyCompleted);
       return this.waitManyResult('any', records, false, alreadyCompleted.handle.id);
     }
     if (timeoutMs === 0) return this.waitManyResult('any', records, true);
+    const runtimeRecords = records.map((record) => this.requireRuntime(record.handle.id));
     let timer: NodeJS.Timeout | undefined;
     const selectedHandleId = await Promise.race([
-      ...records.map((record) => record.exit.then(() => record.handle.id)),
+      ...runtimeRecords.map((record) => record.exit.then(() => record.handle.id)),
       new Promise<undefined>((resolve) => {
         timer = setTimeout(() => resolve(undefined), timeoutMs);
         timer.unref();
@@ -306,7 +345,7 @@ export class RunTerminalService {
     ]);
     if (timer) clearTimeout(timer);
     if (selectedHandleId) {
-      await this.require(selectedHandleId).journalQueue;
+      await this.awaitJournal(this.require(selectedHandleId));
       return this.waitManyResult('any', records, false, selectedHandleId);
     }
     return this.waitManyResult('any', records, true);
@@ -317,65 +356,277 @@ export class RunTerminalService {
     const records = this.requireMany(handleIds);
     const pending = records.filter((record) => !terminal(record.handle.state));
     if (pending.length === 0) {
-      await Promise.all(records.map((record) => record.journalQueue));
+      await Promise.all(records.map((record) => this.awaitJournal(record)));
       return this.waitManyResult('all', records, false);
     }
     if (timeoutMs === 0) return this.waitManyResult('all', records, true);
+    const runtimePending = pending.map((record) => this.requireRuntime(record.handle.id));
     let timer: NodeJS.Timeout | undefined;
     const timedOut = await Promise.race([
-      Promise.all(pending.map((record) => record.exit)).then(() => false),
+      Promise.all(runtimePending.map((record) => record.exit)).then(() => false),
       new Promise<boolean>((resolve) => {
         timer = setTimeout(() => resolve(true), timeoutMs);
         timer.unref();
       }),
     ]);
     if (timer) clearTimeout(timer);
-    if (!timedOut) await Promise.all(records.map((record) => record.journalQueue));
+    if (!timedOut) await Promise.all(records.map((record) => this.awaitJournal(record)));
     return this.waitManyResult('all', records, timedOut);
   }
 
-  detach(handleId: string): RunTerminalHandle {
+  async detach(handleId: string): Promise<RunTerminalHandle> {
     const record = this.require(handleId);
     if (record.handle.startMode === 'background') return cloneHandle(record.handle);
     if (terminal(record.handle.state)) {
       throw new ConflictError('A terminal command cannot be detached after it exits.');
     }
-    record.handle.startMode = 'background';
-    this.appendEvent(record, {
-      kind: 'command.detached',
-      payload: {
-        handleId: record.handle.id,
-        commandId: record.handle.commandId,
-      },
-      dedupeKey: `run-terminal:${record.handle.id}:detached`,
-    });
-    return cloneHandle(record.handle);
+    const runtime = this.requireRuntime(handleId);
+    runtime.handle.startMode = 'background';
+    try {
+      await this.appendEvent(runtime, {
+        kind: 'command.detached',
+        payload: {
+          handleId: runtime.handle.id,
+          commandId: runtime.handle.commandId,
+          handle: cloneHandle(runtime.handle),
+        },
+        dedupeKey: `run-terminal:${runtime.handle.id}:detached`,
+      });
+    } catch {
+      runtime.handle.startMode = 'foreground';
+      throw new InternalError('Run terminal detachment could not be persisted.');
+    }
+    return cloneHandle(runtime.handle);
   }
 
   async terminate(handleId: string): Promise<RunTerminalTerminationResult> {
     const record = this.require(handleId);
     if (terminal(record.handle.state)) {
-      return this.terminationResult(record);
+      return { handle: cloneHandle(record.handle) };
     }
-    record.handle.state = 'terminating';
-    record.gracefulSignalAt = this.now().toISOString();
-    signalProcessGroup(record.child, 'SIGTERM');
+    const runtime = this.requireRuntime(handleId);
+    runtime.handle.state = 'terminating';
+    runtime.gracefulSignalAt = this.now().toISOString();
+    signalProcessGroup(runtime.child, 'SIGTERM');
     const graceful = await this.wait(handleId, this.terminationGraceMs);
-    if (!graceful.completed && !terminal(record.handle.state)) {
-      record.forceSignalAt = this.now().toISOString();
-      signalProcessGroup(record.child, 'SIGKILL');
-      await record.exit;
+    if (!graceful.completed && !terminal(runtime.handle.state)) {
+      runtime.forceSignalAt = this.now().toISOString();
+      signalProcessGroup(runtime.child, 'SIGKILL');
+      await runtime.exit;
     }
-    return this.terminationResult(record);
+    return this.terminationResult(runtime);
   }
 
-  async cleanupAttempt(attemptId: string): Promise<RunTerminalTerminationResult[]> {
+  async cleanupAttempt(
+    workspaceId: string,
+    taskId: string,
+    attemptId: string
+  ): Promise<RunTerminalTerminationResult[]> {
+    const scope = {
+      workspaceId: required(workspaceId, 'workspaceId'),
+      taskId: required(taskId, 'taskId'),
+      attemptId: required(attemptId, 'attemptId'),
+    };
     const results: RunTerminalTerminationResult[] = [];
     for (const record of this.records.values()) {
-      if (record.handle.attemptId !== attemptId || terminal(record.handle.state)) continue;
+      if (
+        record.handle.workspaceId !== scope.workspaceId ||
+        record.handle.taskId !== scope.taskId ||
+        record.handle.attemptId !== scope.attemptId ||
+        terminal(record.handle.state)
+      ) {
+        continue;
+      }
       results.push(await this.terminate(record.handle.id));
     }
     return results;
+  }
+
+  async reconcileAttempt(
+    inputWorkspaceId: string,
+    inputTaskId: string,
+    inputAttemptId: string
+  ): Promise<RunTerminalReconciliationResult> {
+    const workspaceId = required(inputWorkspaceId, 'workspaceId');
+    const taskId = required(inputTaskId, 'taskId');
+    const attemptId = required(inputAttemptId, 'attemptId');
+    const projected = new Map<string, TerminalRecord>();
+    let afterSequence = 0;
+    let eventCount = 0;
+
+    for (;;) {
+      const page = await this.journal.list({
+        taskId,
+        attemptId,
+        afterSequence,
+        limit: 500,
+      });
+      for (const event of page.events) {
+        if (event.source.provider !== 'system' || event.source.adapter !== 'run-terminal') {
+          continue;
+        }
+        eventCount += 1;
+        if (eventCount > MAX_RECONCILIATION_EVENTS) {
+          throw new ConflictError('Run terminal reconciliation exceeded its event bound.', {
+            taskId,
+            attemptId,
+            maximumEvents: MAX_RECONCILIATION_EVENTS,
+          });
+        }
+        this.projectReconciliationEvent(projected, event, workspaceId, taskId, attemptId);
+      }
+      if (page.hasMore && page.nextCursor <= afterSequence) {
+        throw new ConflictError('Run terminal reconciliation journal cursor did not advance.', {
+          taskId,
+          attemptId,
+          afterSequence,
+        });
+      }
+      afterSequence = page.nextCursor;
+      if (!page.hasMore) break;
+    }
+
+    const interruptedHandleIds: string[] = [];
+    for (const [handleId, record] of projected) {
+      if (this.records.has(handleId)) continue;
+      if (!terminal(record.handle.state)) {
+        const recordedAt = this.now().toISOString();
+        record.handle.state = 'interrupted';
+        record.handle.endedAt = recordedAt;
+        record.handle.failure =
+          'Run terminal ownership was interrupted because this runtime cannot reattach inherited pipes after a server restart.';
+        record.handle.capabilities.restartReattachment = 'unsupported';
+        await this.journal.append({
+          workspaceId: record.handle.workspaceId,
+          taskId,
+          attemptId,
+          kind: 'command.completed',
+          source: {
+            provider: 'system',
+            adapter: 'run-terminal',
+          },
+          payload: {
+            handleId,
+            commandId: record.handle.commandId,
+            state: record.handle.state,
+            failure: record.handle.failure,
+            output: record.handle.output,
+            reconciledAfterRestart: true,
+            handle: cloneHandle(record.handle),
+          },
+          dedupeKey: `run-terminal:${handleId}:restart-interrupted`,
+        });
+        interruptedHandleIds.push(handleId);
+      }
+      this.records.set(handleId, record);
+      this.recoveredHandleIds.add(handleId);
+    }
+
+    const handles = this.list(workspaceId, taskId, attemptId);
+    return {
+      schemaVersion: RUN_TERMINAL_RECONCILIATION_SCHEMA_VERSION,
+      workspaceId,
+      taskId,
+      attemptId,
+      handles,
+      recoveredHandleIds: handles
+        .map((handle) => handle.id)
+        .filter((handleId) => this.recoveredHandleIds.has(handleId)),
+      interruptedHandleIds: interruptedHandleIds.sort(),
+    };
+  }
+
+  private projectReconciliationEvent(
+    projected: Map<string, TerminalRecord>,
+    event: RunEventEnvelope,
+    workspaceId: string,
+    taskId: string,
+    attemptId: string
+  ): void {
+    if (
+      event.kind === 'command.started' ||
+      event.kind === 'command.detached' ||
+      event.kind === 'command.completed'
+    ) {
+      const handle = parsePersistedHandle(event.payload.handle);
+      if (!handle) return;
+      if (
+        handle.workspaceId !== workspaceId ||
+        handle.taskId !== taskId ||
+        handle.attemptId !== attemptId
+      ) {
+        throw new ConflictError('Persisted run terminal handle scope does not match its journal.', {
+          handleId: handle.id,
+          workspaceId,
+          taskId,
+          attemptId,
+        });
+      }
+      const current = projected.get(handle.id);
+      if (event.kind === 'command.started') {
+        if (terminal(handle.state)) {
+          throw new ConflictError('Persisted run terminal start event is already terminal.', {
+            handleId: handle.id,
+          });
+        }
+      } else {
+        if (!current) return;
+        assertSamePersistedHandleIdentity(current.handle, handle);
+        if (event.kind === 'command.detached' && handle.startMode !== 'background') {
+          throw new ConflictError('Persisted run terminal detach event is not detached.', {
+            handleId: handle.id,
+          });
+        }
+        if (event.kind === 'command.completed' && !terminal(handle.state)) {
+          throw new ConflictError('Persisted run terminal completion event is not terminal.', {
+            handleId: handle.id,
+          });
+        }
+      }
+      projected.set(handle.id, {
+        handle,
+        chunks: current?.chunks ?? [],
+        retainedBytes: handle.output.retainedBytes,
+        droppedBytes: handle.output.droppedBytes,
+        observedBytes: handle.output.observedBytes,
+        nextCursor: Math.max(handle.output.nextCursor + 1, current?.nextCursor ?? 1),
+        journalQueue: Promise.resolve(),
+      });
+      return;
+    }
+    if (event.kind !== 'stream.stdout' && event.kind !== 'stream.stderr') return;
+    const handleId = persistedString(event.payload.handleId);
+    if (!handleId) return;
+    const record = projected.get(handleId);
+    if (!record) return;
+    const chunk = parsePersistedChunk(event);
+    if (!chunk) return;
+    const priorChunk = record.chunks.at(-1);
+    if (priorChunk && chunk.cursor <= priorChunk.cursor) {
+      throw new ConflictError('Persisted run terminal output cursors are not monotonic.', {
+        handleId,
+        cursor: chunk.cursor,
+      });
+    }
+    record.chunks.push(chunk);
+    record.retainedBytes += chunk.byteLength;
+    record.observedBytes += chunk.byteLength;
+    record.nextCursor = Math.max(record.nextCursor, chunk.cursor + 1);
+    while (record.retainedBytes > this.outputLimitBytes && record.chunks.length > 0) {
+      const dropped = record.chunks.shift();
+      if (!dropped) break;
+      record.retainedBytes -= dropped.byteLength;
+      record.droppedBytes += dropped.byteLength;
+    }
+    record.handle.output = {
+      nextCursor: record.nextCursor - 1,
+      retainedFromCursor: record.chunks[0]?.cursor ?? record.nextCursor,
+      observedBytes: record.observedBytes,
+      retainedBytes: record.retainedBytes,
+      droppedBytes: record.droppedBytes,
+      truncated: record.droppedBytes > 0,
+      volumeCircuitTripped: record.handle.output.volumeCircuitTripped,
+    };
   }
 
   private acceptOutput(record: RuntimeRecord, stream: RunTerminalStream, raw: string): void {
@@ -394,10 +645,7 @@ export class RunTerminalService {
       };
       record.chunks.push(chunk);
       record.retainedBytes += byteLength;
-      while (
-        record.retainedBytes > this.outputLimitBytes &&
-        record.chunks.length > 0
-      ) {
+      while (record.retainedBytes > this.outputLimitBytes && record.chunks.length > 0) {
         const dropped = record.chunks.shift();
         if (!dropped) break;
         record.retainedBytes -= dropped.byteLength;
@@ -405,7 +653,7 @@ export class RunTerminalService {
       }
       this.refreshOutputMetadata(record);
       if (!volumeExceeded) {
-        this.appendEvent(record, {
+        void this.appendEvent(record, {
           kind: stream === 'stdout' ? 'stream.stdout' : 'stream.stderr',
           payload: {
             handleId: record.handle.id,
@@ -413,6 +661,7 @@ export class RunTerminalService {
             cursor: chunk.cursor,
             content: chunk.content,
             byteLength: chunk.byteLength,
+            occurredAt: chunk.occurredAt,
           },
           dedupeKey: `run-terminal:${record.handle.id}:output:${chunk.cursor}`,
         });
@@ -421,7 +670,7 @@ export class RunTerminalService {
     if (volumeExceeded) {
       record.volumeCircuitTripped = true;
       this.refreshOutputMetadata(record);
-      this.appendEvent(record, {
+      void this.appendEvent(record, {
         kind: 'run.error',
         payload: {
           handleId: record.handle.id,
@@ -457,11 +706,7 @@ export class RunTerminalService {
     if (signal) record.handle.signal = signal;
     if (record.handle.state !== 'failed') {
       record.handle.state =
-        record.handle.state === 'terminating'
-          ? 'terminated'
-          : code === 0
-            ? 'exited'
-            : 'failed';
+        record.handle.state === 'terminating' ? 'terminated' : code === 0 ? 'exited' : 'failed';
     }
     this.refreshOutputMetadata(record);
     record.resolveExit();
@@ -471,34 +716,42 @@ export class RunTerminalService {
   private appendEvent(
     record: RuntimeRecord,
     event: Pick<RunEventAppendInput, 'kind' | 'payload' | 'dedupeKey'>
-  ): void {
-    record.journalQueue = record.journalQueue
-      .then(async () => {
-        await this.journal.append({
-          workspaceId: record.context.workspaceId,
-          taskId: record.context.taskId,
-          attemptId: record.context.attemptId,
-          kind: event.kind,
-          source: {
-            provider: 'system',
-            adapter: 'run-terminal',
-          },
-          payload: event.payload,
-          dedupeKey: event.dedupeKey,
-        });
-      })
-      .catch((error) => {
-        log.error(
-          { err: error, handleId: record.handle.id, attemptId: record.handle.attemptId },
-          'Failed to append run terminal event'
-        );
+  ): Promise<void> {
+    const pending = record.journalQueue.then(async () => {
+      await this.journal.append({
+        workspaceId: record.context.workspaceId,
+        taskId: record.context.taskId,
+        attemptId: record.context.attemptId,
+        kind: event.kind,
+        source: {
+          provider: 'system',
+          adapter: 'run-terminal',
+        },
+        payload: event.payload,
+        dedupeKey: event.dedupeKey,
       });
+    });
+    record.journalQueue = pending.catch((error) => {
+      record.journalFailure = error instanceof Error ? error : new Error(String(error));
+      log.error(
+        { err: error, handleId: record.handle.id, attemptId: record.handle.attemptId },
+        'Failed to append run terminal event'
+      );
+    });
+    return pending;
+  }
+
+  private async awaitJournal(record: TerminalRecord): Promise<void> {
+    await record.journalQueue;
+    if (isRuntimeRecord(record) && record.journalFailure) {
+      throw new InternalError('Run terminal journal evidence is incomplete.');
+    }
   }
 
   private appendCompletedEvent(record: RuntimeRecord): void {
     if (record.completedEventQueued) return;
     record.completedEventQueued = true;
-    this.appendEvent(record, {
+    void this.appendEvent(record, {
       kind: 'command.completed',
       payload: {
         handleId: record.handle.id,
@@ -510,6 +763,7 @@ export class RunTerminalService {
         output: record.handle.output,
         gracefulSignalAt: record.gracefulSignalAt,
         forceSignalAt: record.forceSignalAt,
+        handle: cloneHandle(record.handle),
       },
       dedupeKey: `run-terminal:${record.handle.id}:completed`,
     });
@@ -527,25 +781,31 @@ export class RunTerminalService {
     };
   }
 
-  private require(handleId: string): RuntimeRecord {
+  private require(handleId: string): TerminalRecord {
     const record = this.records.get(handleId);
     if (!record) throw new NotFoundError('Run terminal handle not found.');
     return record;
   }
 
-  private requireMany(handleIds: string[]): RuntimeRecord[] {
+  private requireRuntime(handleId: string): RuntimeRecord {
+    const record = this.require(handleId);
+    if (!isRuntimeRecord(record)) {
+      throw new ConflictError('Run terminal process ownership is no longer attached.');
+    }
+    return record;
+  }
+
+  private requireMany(handleIds: string[]): TerminalRecord[] {
     const unique = [...new Set(handleIds)];
     if (unique.length === 0 || unique.length > 64 || unique.length !== handleIds.length) {
-      throw new ValidationError(
-        'Terminal multi-wait requires between 1 and 64 unique handles.'
-      );
+      throw new ValidationError('Terminal multi-wait requires between 1 and 64 unique handles.');
     }
     return unique.map((handleId) => this.require(handleId));
   }
 
   private waitManyResult(
     mode: RunTerminalWaitManyResult['mode'],
-    records: RuntimeRecord[],
+    records: TerminalRecord[],
     timedOut: boolean,
     selectedHandleId?: string
   ): RunTerminalWaitManyResult {
@@ -621,9 +881,7 @@ function selectEnvironment(
   for (const key of [...new Set(requestedKeys)].sort()) {
     const value = approved[key];
     if (value === undefined) {
-      throw new ConflictError(
-        `Environment key ${key} is not approved by the run launch manifest.`
-      );
+      throw new ConflictError(`Environment key ${key} is not approved by the run launch manifest.`);
     }
     selected[key] = value;
   }
@@ -663,10 +921,7 @@ function splitUtf8(value: string, maximumBytes: number): string[] {
   return chunks;
 }
 
-function signalProcessGroup(
-  child: ChildProcessWithoutNullStreams,
-  signal: NodeJS.Signals
-): void {
+function signalProcessGroup(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
   if (child.exitCode !== null || child.signalCode !== null) return;
   if (process.platform !== 'win32' && child.pid) {
     try {
@@ -683,6 +938,81 @@ function cloneHandle(handle: RunTerminalHandle): RunTerminalHandle {
   return structuredClone(handle);
 }
 
+function parsePersistedHandle(value: unknown): RunTerminalHandle | null {
+  if (value === undefined) return null;
+  const parsed = RunTerminalHandleSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ConflictError('Persisted run terminal handle is invalid.');
+  }
+  return parsed.data;
+}
+
+function persistedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function assertSamePersistedHandleIdentity(
+  current: RunTerminalHandle,
+  next: RunTerminalHandle
+): void {
+  const currentIdentity = [
+    current.id,
+    current.workspaceId,
+    current.taskId,
+    current.attemptId,
+    current.launchManifestDigest,
+    current.mode,
+    current.commandId,
+    current.processId,
+    current.processGroupId,
+    current.startedAt,
+    current.capabilities,
+  ];
+  const nextIdentity = [
+    next.id,
+    next.workspaceId,
+    next.taskId,
+    next.attemptId,
+    next.launchManifestDigest,
+    next.mode,
+    next.commandId,
+    next.processId,
+    next.processGroupId,
+    next.startedAt,
+    next.capabilities,
+  ];
+  if (JSON.stringify(currentIdentity) !== JSON.stringify(nextIdentity)) {
+    throw new ConflictError('Persisted run terminal handle identity changed during replay.', {
+      handleId: current.id,
+    });
+  }
+}
+
+function parsePersistedChunk(event: RunEventEnvelope): RunTerminalOutputChunk | null {
+  const cursor = event.payload.cursor;
+  const content = persistedString(event.payload.content);
+  if (!Number.isInteger(cursor) || (cursor as number) < 1 || !content) return null;
+  if (Buffer.byteLength(content, 'utf8') > 64 * 1024) {
+    throw new ConflictError('Persisted run terminal output chunk exceeds its byte bound.');
+  }
+  const occurredAtValue = persistedString(event.payload.occurredAt);
+  const occurredAt =
+    occurredAtValue && Number.isFinite(Date.parse(occurredAtValue))
+      ? occurredAtValue
+      : event.receivedAt;
+  return {
+    cursor: cursor as number,
+    stream: event.kind === 'stream.stdout' ? 'stdout' : 'stderr',
+    content,
+    byteLength: Buffer.byteLength(content, 'utf8'),
+    occurredAt,
+  };
+}
+
+function isRuntimeRecord(record: TerminalRecord): record is RuntimeRecord {
+  return 'child' in record;
+}
+
 function emptyOutputMetadata(): RunTerminalHandle['output'] {
   return {
     nextCursor: 0,
@@ -696,7 +1026,7 @@ function emptyOutputMetadata(): RunTerminalHandle['output'] {
 }
 
 function terminal(state: RunTerminalHandle['state']): boolean {
-  return ['exited', 'failed', 'terminated'].includes(state);
+  return ['exited', 'failed', 'terminated', 'interrupted'].includes(state);
 }
 
 function required(value: string, label: string): string {
