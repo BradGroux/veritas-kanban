@@ -1177,10 +1177,11 @@ Reusable launch-time sandbox presets for provider execution guardrails.
   rules take precedence, unsafe global allow wildcards fail validation, and a
   deterministic policy digest binds later gateway launch evidence.
 - Selective local-provider policies start an authenticated loopback gateway
-  before provider dispatch. Veritas injects HTTP, HTTPS, and all-proxy variables,
-  clears proxy bypass variables, pins the evaluated DNS address for transport,
-  and stops the gateway with the run. Remote OpenClaw execution fails closed
-  when the preset requires this local gateway.
+  before provider dispatch. Veritas injects HTTP and HTTPS proxy variables plus
+  an authenticated `socks5h` all-proxy listener, clears proxy bypass variables,
+  pins the evaluated DNS address for transport, and stops both listeners with
+  the run. Remote OpenClaw execution fails closed when the preset requires this
+  local gateway.
 - Approval-eligible blocks pause at the gateway on a durable exact-action
   approval. Explicit denies and protected address classes cannot be overridden.
   Approved requests retain the approval ID in metadata-only governance and

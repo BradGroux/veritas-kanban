@@ -82,10 +82,10 @@ describe('RunEgressGatewayService', () => {
       gatewayId: gateway.gatewayId,
       runKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       attributionKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
-      protocols: ['http', 'connect', 'ws'],
+      protocols: ['http', 'connect', 'ws', 'socks5'],
     });
     expect(JSON.stringify(gateway.evidence)).not.toContain(proxy.password);
-    expect(gateway.environment.ALL_PROXY).toBe(gateway.environment.HTTP_PROXY);
+    expect(gateway.environment.ALL_PROXY).toMatch(/^socks5h:\/\/veritas:/);
     expect(gateway.environment.NO_PROXY).toBe('');
 
     await expect(gateway.stop()).resolves.toMatchObject({
@@ -133,6 +133,41 @@ describe('RunEgressGatewayService', () => {
       `ws://127.0.0.1:${upstreamPort}/socket?secret=not-audited`
     );
     expect(response).toContain('101 Switching Protocols');
+  });
+
+  it('opens an authenticated SOCKS5 tunnel with the same pinned policy decision', async () => {
+    const echo = net.createServer((socket) => socket.pipe(socket));
+    const echoPort = await listen(echo);
+    const audit = vi.fn();
+    const gateway = await startGateway({
+      runId: 'run-egress-socks',
+      onDecision: audit,
+    });
+
+    const tunnel = await connectSocksTunnel(gateway, '127.0.0.1', echoPort);
+    await expect(roundTrip(tunnel, 'through-socks')).resolves.toBe('through-socks');
+    tunnel.destroy();
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decision: expect.objectContaining({
+          protocol: 'socks',
+          decision: 'allow',
+        }),
+      })
+    );
+
+    const restricted = await startGateway({
+      runId: 'run-egress-socks-restricted',
+      allowedMethods: ['GET'],
+    });
+    await expect(connectSocksTunnel(restricted, '127.0.0.1', echoPort)).rejects.toMatchObject({
+      replyCode: 0x02,
+    });
+    await expect(
+      connectSocksTunnel(gateway, '127.0.0.1', echoPort, 'invalid-token')
+    ).rejects.toMatchObject({
+      authStatus: 0x01,
+    });
   });
 
   it('pauses approval-eligible requests and never lets approval override an explicit deny', async () => {
@@ -347,6 +382,56 @@ function roundTrip(socket: Socket, value: string): Promise<string> {
     socket.once('data', (chunk) => resolve(Buffer.from(chunk).toString('utf8')));
     socket.once('error', reject);
     socket.write(value);
+  });
+}
+
+async function connectSocksTunnel(
+  gateway: RunEgressGatewayHandle,
+  host: string,
+  port: number,
+  passwordOverride?: string
+): Promise<Socket> {
+  const proxy = new URL(gateway.environment.ALL_PROXY);
+  const socket = net.connect(Number(proxy.port), proxy.hostname);
+  await new Promise<void>((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('error', reject);
+  });
+  socket.write(Buffer.from([0x05, 0x01, 0x02]));
+  expect(await readSocketBytes(socket, 2)).toEqual(Buffer.from([0x05, 0x02]));
+
+  const username = Buffer.from(proxy.username);
+  const password = Buffer.from(passwordOverride ?? proxy.password);
+  socket.write(
+    Buffer.concat([
+      Buffer.from([0x01, username.length]),
+      username,
+      Buffer.from([password.length]),
+      password,
+    ])
+  );
+  const auth = await readSocketBytes(socket, 2);
+  if (auth[1] !== 0x00) {
+    socket.destroy();
+    throw { authStatus: auth[1] };
+  }
+
+  const address = Buffer.from(host.split('.').map(Number));
+  const portBytes = Buffer.alloc(2);
+  portBytes.writeUInt16BE(port);
+  socket.write(Buffer.concat([Buffer.from([0x05, 0x01, 0x00, 0x01]), address, portBytes]));
+  const reply = await readSocketBytes(socket, 10);
+  if (reply[1] !== 0x00) {
+    socket.destroy();
+    throw { replyCode: reply[1] };
+  }
+  return socket;
+}
+
+function readSocketBytes(socket: Socket, size: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    socket.once('data', (chunk) => resolve(Buffer.from(chunk).subarray(0, size)));
+    socket.once('error', reject);
   });
 }
 

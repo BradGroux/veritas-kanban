@@ -126,7 +126,7 @@ export interface RunEgressGatewayEvidence {
   attributionKey: string;
   policyHash: string;
   state: 'enforced' | 'stopped';
-  protocols: Array<'http' | 'connect' | 'ws'>;
+  protocols: Array<'http' | 'connect' | 'ws' | 'socks5'>;
   proxyEnvironmentKeys: Array<
     | 'HTTP_PROXY'
     | 'HTTPS_PROXY'

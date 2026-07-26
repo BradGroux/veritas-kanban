@@ -4,7 +4,7 @@ import http, {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import net, { type Socket } from 'node:net';
+import net, { type Server as NetServer, type Socket } from 'node:net';
 import { URL } from 'node:url';
 import {
   RUN_EGRESS_GATEWAY_EVIDENCE_SCHEMA_VERSION,
@@ -88,6 +88,7 @@ export interface RunEgressGatewayHandle {
 interface ActiveGateway {
   runId: string;
   server: http.Server;
+  socksServer: NetServer;
   sockets: Set<Socket>;
   evidence: RunEgressGatewayEvidence;
   environment: RunEgressGatewayHandle['environment'];
@@ -141,6 +142,7 @@ export class RunEgressGatewayService {
     const clientSockets = new Set<Socket>();
     const abortController = new AbortController();
     const server = http.createServer();
+    const socksServer = net.createServer();
     server.requestTimeout = requestTimeoutMs;
     server.headersTimeout = requestTimeoutMs;
     server.keepAliveTimeout = Math.min(idleTimeoutMs, requestTimeoutMs);
@@ -169,45 +171,44 @@ export class RunEgressGatewayService {
       void handleUpgrade(context, request, socket as Socket, head);
     });
     server.on('connection', (socket) => {
-      if (clientSockets.size >= maxConnections) {
-        socket.destroy();
+      registerClientSocket(socket, clientSockets, sockets, maxConnections, idleTimeoutMs);
+    });
+    socksServer.on('connection', (socket) => {
+      if (!registerClientSocket(socket, clientSockets, sockets, maxConnections, idleTimeoutMs)) {
         return;
       }
-      clientSockets.add(socket);
-      sockets.add(socket);
-      socket.setTimeout(idleTimeoutMs, () => socket.destroy());
-      socket.once('close', () => {
-        clientSockets.delete(socket);
-        sockets.delete(socket);
-      });
+      void handleSocksConnection(context, socket);
     });
 
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error) => {
-        server.off('listening', onListening);
-        reject(error);
-      };
-      const onListening = () => {
-        server.off('error', onError);
-        resolve();
-      };
-      server.once('error', onError);
-      server.once('listening', onListening);
-      server.listen(0, LOOPBACK_HOST);
-    });
+    await listenLoopback(server);
     const address = server.address();
     if (!address || typeof address === 'string') {
       server.close();
       throw new Error('Run egress gateway did not bind a TCP port.');
     }
+    try {
+      await listenLoopback(socksServer);
+    } catch (error) {
+      server.close();
+      server.closeAllConnections?.();
+      throw error;
+    }
+    const socksAddress = socksServer.address();
+    if (!socksAddress || typeof socksAddress === 'string') {
+      server.close();
+      server.closeAllConnections?.();
+      socksServer.close();
+      throw new Error('Run egress SOCKS gateway did not bind a TCP port.');
+    }
     const proxyUrl = `http://veritas:${encodeURIComponent(token)}@${LOOPBACK_HOST}:${address.port}`;
+    const socksProxyUrl = `socks5h://veritas:${encodeURIComponent(token)}@${LOOPBACK_HOST}:${socksAddress.port}`;
     const environment: ActiveGateway['environment'] = {
       HTTP_PROXY: proxyUrl,
       HTTPS_PROXY: proxyUrl,
-      ALL_PROXY: proxyUrl,
+      ALL_PROXY: socksProxyUrl,
       http_proxy: proxyUrl,
       https_proxy: proxyUrl,
-      all_proxy: proxyUrl,
+      all_proxy: socksProxyUrl,
       NO_PROXY: '',
       no_proxy: '',
     };
@@ -218,7 +219,7 @@ export class RunEgressGatewayService {
       attributionKey: identity('attribution', token),
       policyHash: input.policy.policyHash,
       state: 'enforced',
-      protocols: ['http', 'connect', 'ws'],
+      protocols: ['http', 'connect', 'ws', 'socks5'],
       proxyEnvironmentKeys: [...RUN_EGRESS_PROXY_ENVIRONMENT_KEYS],
       startedAt: this.now().toISOString(),
     };
@@ -226,6 +227,7 @@ export class RunEgressGatewayService {
     const active: ActiveGateway = {
       runId,
       server,
+      socksServer,
       sockets,
       evidence,
       environment,
@@ -263,10 +265,7 @@ export class RunEgressGatewayService {
     this.activeByGatewayId.delete(active.evidence.gatewayId);
     active.abortController.abort(new Error('Run egress gateway stopped.'));
     for (const socket of active.sockets) socket.destroy();
-    await new Promise<void>((resolve) => {
-      active.server.close(() => resolve());
-      active.server.closeAllConnections?.();
-    });
+    await Promise.all([closeServer(active.server), closeServer(active.socksServer)]);
     active.evidence = {
       ...active.evidence,
       state: 'stopped',
@@ -510,6 +509,210 @@ async function handleUpgrade(
   });
 }
 
+async function handleSocksConnection(
+  context: GatewayRequestContext,
+  client: Socket
+): Promise<void> {
+  const reader = new SocketByteReader(client);
+  try {
+    const greeting = await reader.readExactly(2);
+    if (greeting[0] !== 0x05 || greeting[1] === 0) {
+      client.end(Buffer.from([0x05, 0xff]));
+      return;
+    }
+    const methods = await reader.readExactly(greeting[1]);
+    if (!methods.includes(0x02)) {
+      client.end(Buffer.from([0x05, 0xff]));
+      return;
+    }
+    client.write(Buffer.from([0x05, 0x02]));
+
+    const authHeader = await reader.readExactly(2);
+    if (authHeader[0] !== 0x01 || authHeader[1] === 0) {
+      client.end(Buffer.from([0x01, 0x01]));
+      return;
+    }
+    const username = (await reader.readExactly(authHeader[1])).toString('utf8');
+    const passwordLength = (await reader.readExactly(1))[0] ?? 0;
+    if (passwordLength === 0) {
+      client.end(Buffer.from([0x01, 0x01]));
+      return;
+    }
+    const password = (await reader.readExactly(passwordLength)).toString('utf8');
+    if (!safeEqual(username, 'veritas') || !safeEqual(password, context.token)) {
+      client.end(Buffer.from([0x01, 0x01]));
+      return;
+    }
+    client.write(Buffer.from([0x01, 0x00]));
+
+    const requestHeader = await reader.readExactly(4);
+    if (requestHeader[0] !== 0x05 || requestHeader[2] !== 0x00) {
+      endSocks(client, 0x01);
+      return;
+    }
+    if (requestHeader[1] !== 0x01) {
+      endSocks(client, 0x07);
+      return;
+    }
+    const host = await readSocksHost(reader, requestHeader[3] ?? 0);
+    if (!host) {
+      endSocks(client, 0x08);
+      return;
+    }
+    const port = (await reader.readExactly(2)).readUInt16BE(0);
+    const resolution = await context.policyService.resolveAndEvaluate(context.policy, {
+      protocol: 'socks',
+      host,
+      port,
+    });
+    const decision = await withApprovalIdlePause(client, context.idleTimeoutMs, () =>
+      authorizeBlockedRequest(context, {
+        protocol: 'socks',
+        host,
+        port,
+        decision: resolution.decision,
+      })
+    );
+    await audit(context, decision);
+    if (decision.decision === 'block') {
+      endSocks(client, 0x02);
+      return;
+    }
+    const address = resolution.resolvedAddresses[0];
+    if (!address) {
+      endSocks(client, 0x04);
+      return;
+    }
+
+    const upstream = net.connect({
+      host: address,
+      port,
+      family: net.isIP(address),
+    });
+    context.sockets.add(upstream);
+    upstream.setTimeout(context.idleTimeoutMs, () => upstream.destroy());
+    upstream.once('close', () => context.sockets.delete(upstream));
+    await new Promise<void>((resolve, reject) => {
+      upstream.once('connect', resolve);
+      upstream.once('error', reject);
+    });
+    client.write(socksReply(0x00));
+    const remainder = reader.release();
+    client.on('error', () => client.destroy());
+    upstream.on('error', () => client.destroy());
+    if (remainder.length > 0) upstream.write(remainder);
+    client.pipe(upstream);
+    upstream.pipe(client);
+  } catch {
+    reader.release();
+    if (!client.destroyed) endSocks(client, 0x01);
+  }
+}
+
+class SocketByteReader {
+  private buffer = Buffer.alloc(0);
+  private requestedBytes = 0;
+  private resolveRead?: (value: Buffer) => void;
+  private rejectRead?: (error: Error) => void;
+  private released = false;
+
+  constructor(private readonly socket: Socket) {
+    socket.on('data', this.onData);
+    socket.once('close', this.onClose);
+  }
+
+  readExactly(size: number): Promise<Buffer> {
+    if (!Number.isSafeInteger(size) || size < 1 || size > 65_535) {
+      return Promise.reject(new Error('Invalid SOCKS frame length.'));
+    }
+    if (this.released || this.resolveRead) {
+      return Promise.reject(new Error('SOCKS frame reader is unavailable.'));
+    }
+    if (this.buffer.length >= size) return Promise.resolve(this.take(size));
+    this.requestedBytes = size;
+    return new Promise<Buffer>((resolve, reject) => {
+      this.resolveRead = resolve;
+      this.rejectRead = reject;
+    });
+  }
+
+  release(): Buffer {
+    if (this.released) return Buffer.alloc(0);
+    this.released = true;
+    this.socket.off('data', this.onData);
+    this.socket.off('close', this.onClose);
+    const buffered = this.buffer;
+    this.buffer = Buffer.alloc(0);
+    return buffered;
+  }
+
+  private readonly onData = (chunk: Buffer): void => {
+    if (this.released) return;
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    if (this.buffer.length > 65_535) {
+      this.rejectPending(new Error('SOCKS handshake exceeded the supported size.'));
+      this.socket.destroy();
+      return;
+    }
+    if (!this.resolveRead || this.buffer.length < this.requestedBytes) return;
+    const value = this.take(this.requestedBytes);
+    const resolve = this.resolveRead;
+    this.resolveRead = undefined;
+    this.rejectRead = undefined;
+    this.requestedBytes = 0;
+    resolve(value);
+  };
+
+  private readonly onClose = (): void => {
+    this.rejectPending(new Error('SOCKS client disconnected during negotiation.'));
+  };
+
+  private take(size: number): Buffer {
+    const value = this.buffer.subarray(0, size);
+    this.buffer = this.buffer.subarray(size);
+    return value;
+  }
+
+  private rejectPending(error: Error): void {
+    const reject = this.rejectRead;
+    this.resolveRead = undefined;
+    this.rejectRead = undefined;
+    this.requestedBytes = 0;
+    reject?.(error);
+  }
+}
+
+async function readSocksHost(
+  reader: SocketByteReader,
+  addressType: number
+): Promise<string | null> {
+  if (addressType === 0x01) {
+    return [...(await reader.readExactly(4))].join('.');
+  }
+  if (addressType === 0x03) {
+    const length = (await reader.readExactly(1))[0] ?? 0;
+    if (length === 0) return null;
+    return (await reader.readExactly(length)).toString('utf8').toLowerCase();
+  }
+  if (addressType === 0x04) {
+    const address = await reader.readExactly(16);
+    const groups: string[] = [];
+    for (let offset = 0; offset < address.length; offset += 2) {
+      groups.push(address.readUInt16BE(offset).toString(16));
+    }
+    return groups.join(':');
+  }
+  return null;
+}
+
+function socksReply(code: number): Buffer {
+  return Buffer.from([0x05, code, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+}
+
+function endSocks(socket: Socket, code: number): void {
+  if (!socket.destroyed) socket.end(socksReply(code));
+}
+
 async function audit(context: GatewayRequestContext, decision: RunEgressDecision): Promise<void> {
   if (!context.onDecision) return;
   try {
@@ -658,6 +861,50 @@ function rejectSocket(socket: Socket, statusCode: number, reason: string): void 
       '\r\n' +
       JSON.stringify({ error: reason })
   );
+}
+
+function registerClientSocket(
+  socket: Socket,
+  clientSockets: Set<Socket>,
+  sockets: Set<Socket>,
+  maxConnections: number,
+  idleTimeoutMs: number
+): boolean {
+  if (clientSockets.size >= maxConnections) {
+    socket.destroy();
+    return false;
+  }
+  clientSockets.add(socket);
+  sockets.add(socket);
+  socket.setTimeout(idleTimeoutMs, () => socket.destroy());
+  socket.once('close', () => {
+    clientSockets.delete(socket);
+    sockets.delete(socket);
+  });
+  return true;
+}
+
+function listenLoopback(server: http.Server | NetServer): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(0, LOOPBACK_HOST);
+  });
+}
+
+function closeServer(server: http.Server | NetServer): Promise<void> {
+  return new Promise<void>((resolve) => {
+    server.close(() => resolve());
+    if ('closeAllConnections' in server) server.closeAllConnections();
+  });
 }
 
 function boundedDuration(

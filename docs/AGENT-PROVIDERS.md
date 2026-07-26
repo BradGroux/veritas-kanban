@@ -817,10 +817,13 @@ the trace ID.
 Selective network policies for local task and workflow providers start an
 authenticated, run-scoped loopback gateway before dispatch. Durable launch and
 gateway evidence records only the injected proxy key names and policy digest;
-tokens and proxy URLs are never persisted. HTTP, HTTPS CONNECT, and plaintext WebSocket
-transports use the evaluated DNS address, and the gateway is stopped during
-terminal cleanup. OpenClaw is provider-managed and cannot receive this local
-boundary, so a required fine-grained policy blocks its launch.
+tokens and proxy URLs are never persisted. HTTP, HTTPS CONNECT, and plaintext
+WebSocket transports use the evaluated DNS address. `ALL_PROXY` exposes a
+separate authenticated `socks5h` listener with the same host, address, approval,
+and audit policy; encrypted SOCKS tunnels fail closed when method or path
+inspection would be required. Both listeners stop during terminal cleanup.
+OpenClaw is provider-managed and cannot receive this local boundary, so a
+required fine-grained policy blocks its launch.
 
 When a preset enables scoped approvals, an otherwise eligible block creates a
 durable, exact-action network approval and holds the request at the gateway.
