@@ -4,6 +4,8 @@ export const WORKSPACE_CHECKPOINT_CURRENT_STATE_SCHEMA_VERSION =
   'workspace-checkpoint-current-state/v1' as const;
 export const WORKSPACE_CHECKPOINT_REWIND_PREVIEW_SCHEMA_VERSION =
   'workspace-checkpoint-rewind-preview/v1' as const;
+export const WORKSPACE_CHECKPOINT_RETENTION_RESULT_SCHEMA_VERSION =
+  'workspace-checkpoint-retention-result/v1' as const;
 
 export const WORKSPACE_CHECKPOINT_BOUNDARIES = [
   'before-user-turn',
@@ -272,4 +274,18 @@ export interface WorkspaceCheckpointRewindPreview {
   conflicts: WorkspaceCheckpointRewindConflict[];
   estimatedDataLossBytes: number;
   safeForAutomaticRewind: boolean;
+}
+
+export interface WorkspaceCheckpointRetentionResult {
+  schemaVersion: typeof WORKSPACE_CHECKPOINT_RETENTION_RESULT_SCHEMA_VERSION;
+  workspaceId: string;
+  taskId: string;
+  attemptId: string;
+  activeRun: boolean;
+  preservedCheckpointIds: string[];
+  removedCheckpointIds: string[];
+  reclaimedMetadataBytes: number;
+  logicalContentBytesDereferenced: number;
+  contentBlobGcDeferred: true;
+  completedAt: string;
 }

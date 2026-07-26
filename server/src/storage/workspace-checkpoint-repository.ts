@@ -13,6 +13,7 @@ import type {
   WorkspaceCheckpointFile,
   WorkspaceCheckpointFileSource,
   WorkspaceCheckpointPolicy,
+  WorkspaceCheckpointRetentionResult,
 } from '@veritas-kanban/shared';
 import { parseWorkspaceCheckpoint } from '../schemas/workspace-checkpoint-schemas.js';
 import { ConflictError } from '../middleware/error-handler.js';
@@ -81,6 +82,14 @@ export interface WorkspaceCheckpointCurrentInspectionInput {
   maxBytes: number;
 }
 
+export interface WorkspaceCheckpointRetentionInput extends WorkspaceCheckpointListQuery {
+  activeRun: boolean;
+  maxCheckpoints: number;
+  maxLogicalBytes: number;
+  maxAgeSeconds: number;
+  protectedCheckpointIds?: string[];
+}
+
 export interface WorkspaceCheckpointRepository {
   capture(input: WorkspaceCheckpointCaptureInput): Promise<WorkspaceCheckpoint>;
   get(lookup: WorkspaceCheckpointLookup): Promise<WorkspaceCheckpoint | null>;
@@ -89,6 +98,7 @@ export interface WorkspaceCheckpointRepository {
   inspectCurrent(
     input: WorkspaceCheckpointCurrentInspectionInput
   ): Promise<WorkspaceCheckpointCurrentState>;
+  prune(input: WorkspaceCheckpointRetentionInput): Promise<WorkspaceCheckpointRetentionResult>;
 }
 
 export interface WorkspaceCheckpointCommandResult {
@@ -514,6 +524,118 @@ export class FileWorkspaceCheckpointRepository implements WorkspaceCheckpointRep
     return {
       ...payload,
       digest: digestRunLaunchValue(payload),
+    };
+  }
+
+  async prune(
+    input: WorkspaceCheckpointRetentionInput
+  ): Promise<WorkspaceCheckpointRetentionResult> {
+    validateScope(input);
+    if (
+      !Number.isInteger(input.maxCheckpoints) ||
+      input.maxCheckpoints < 0 ||
+      input.maxCheckpoints > 100_000 ||
+      !Number.isInteger(input.maxLogicalBytes) ||
+      input.maxLogicalBytes < 0 ||
+      input.maxLogicalBytes > MAX_POLICY.maxBytes * 100_000 ||
+      !Number.isInteger(input.maxAgeSeconds) ||
+      input.maxAgeSeconds < 1
+    ) {
+      throw new Error('Workspace checkpoint retention policy is invalid.');
+    }
+    const protectedIds = new Set(input.protectedCheckpointIds ?? []);
+    for (const checkpointId of protectedIds) validateIdentifier(checkpointId, 'checkpointId');
+    const parent = this.attemptPath(input);
+    if (!(await this.assertPrivateDirectoryPath(parent, true))) {
+      return {
+        schemaVersion: 'workspace-checkpoint-retention-result/v1',
+        workspaceId: input.workspaceId,
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        activeRun: input.activeRun,
+        preservedCheckpointIds: [],
+        removedCheckpointIds: [],
+        reclaimedMetadataBytes: 0,
+        logicalContentBytesDereferenced: 0,
+        contentBlobGcDeferred: true,
+        completedAt: this.now().toISOString(),
+      };
+    }
+    const entries = (await readdir(parent, { withFileTypes: true }))
+      .filter(
+        (entry) =>
+          entry.isDirectory() && !entry.isSymbolicLink() && entry.name.startsWith('checkpoint_')
+      )
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const checkpoints: WorkspaceCheckpoint[] = [];
+    for (const entry of entries) {
+      const checkpoint = await this.get({
+        workspaceId: input.workspaceId,
+        taskId: input.taskId,
+        attemptId: input.attemptId,
+        checkpointId: entry.name,
+      });
+      if (checkpoint) checkpoints.push(checkpoint);
+    }
+    checkpoints.sort(
+      (left, right) =>
+        Date.parse(right.createdAt) - Date.parse(left.createdAt) || left.id.localeCompare(right.id)
+    );
+    if (input.activeRun) {
+      const parentIds = new Set(
+        checkpoints
+          .map((checkpoint) => checkpoint.parentCheckpointId)
+          .filter((checkpointId): checkpointId is string => Boolean(checkpointId))
+      );
+      const tips = checkpoints.filter((checkpoint) => !parentIds.has(checkpoint.id));
+      for (const checkpoint of tips.length > 0 ? tips : checkpoints.slice(0, 1)) {
+        protectedIds.add(checkpoint.id);
+      }
+    }
+
+    const preserved: WorkspaceCheckpoint[] = [];
+    const removed: WorkspaceCheckpoint[] = [];
+    let retainedLogicalBytes = 0;
+    const cutoff = this.now().getTime() - input.maxAgeSeconds * 1_000;
+    for (const checkpoint of checkpoints) {
+      const required = protectedIds.has(checkpoint.id);
+      const withinAge = Date.parse(checkpoint.createdAt) >= cutoff;
+      const withinCount = preserved.length < input.maxCheckpoints;
+      const withinBytes = retainedLogicalBytes + checkpoint.storedBytes <= input.maxLogicalBytes;
+      if (required || (withinAge && withinCount && withinBytes)) {
+        preserved.push(checkpoint);
+        retainedLogicalBytes += checkpoint.storedBytes;
+      } else {
+        removed.push(checkpoint);
+      }
+    }
+
+    let reclaimedMetadataBytes = 0;
+    for (const checkpoint of removed) {
+      const checkpointPath = this.checkpointPath({ ...checkpoint, checkpointId: checkpoint.id });
+      await this.assertPrivateDirectoryPath(checkpointPath);
+      const metadata = await lstat(path.join(checkpointPath, 'metadata.json'));
+      if (!metadata.isFile() || metadata.isSymbolicLink()) {
+        throw new ConflictError('Workspace checkpoint retention found invalid metadata.');
+      }
+      await rm(checkpointPath, { recursive: true, force: false });
+      reclaimedMetadataBytes += metadata.size;
+    }
+    return {
+      schemaVersion: 'workspace-checkpoint-retention-result/v1',
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      attemptId: input.attemptId,
+      activeRun: input.activeRun,
+      preservedCheckpointIds: preserved.map((checkpoint) => checkpoint.id),
+      removedCheckpointIds: removed.map((checkpoint) => checkpoint.id),
+      reclaimedMetadataBytes,
+      logicalContentBytesDereferenced: removed.reduce(
+        (total, checkpoint) => total + checkpoint.storedBytes,
+        0
+      ),
+      contentBlobGcDeferred: true,
+      completedAt: this.now().toISOString(),
     };
   }
 
