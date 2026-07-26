@@ -147,6 +147,12 @@ describe('SearchService', () => {
       score: 0.92,
       collection: 'tasks-active',
     });
+    expect(execFileMock).toHaveBeenCalledWith(
+      'qmd',
+      ['query', 'semantic search', '--json', '-n', '10', '-c', 'tasks-active'],
+      expect.objectContaining({ cwd: root }),
+      expect.any(Function)
+    );
   });
 
   it('searches telemetry events as agent run results with timeline targets', async () => {

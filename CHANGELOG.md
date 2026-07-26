@@ -188,6 +188,9 @@ change while retaining full release gates.
 
 ### Fixed
 
+- Updated QMD query scoping to pass one documented `-c` flag per collection.
+  Current QMD versions silently ignore the former unknown `--collections`
+  argument, which could broaden a supposedly scoped search (#867).
 - Replaced the desktop-only bottom Chat surface with a bounded dock that opens on
   the right by default and can switch between Right and Bottom without remounting
   the active conversation. Both dimensions are clamped against the live viewport,

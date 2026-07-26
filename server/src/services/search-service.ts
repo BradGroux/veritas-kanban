@@ -249,7 +249,9 @@ class SearchService {
       args.push('--min-score', String(options.minScore));
     }
 
-    args.push('--collections', qmdCollections.join(','));
+    for (const collection of qmdCollections) {
+      args.push('-c', collection);
+    }
 
     const stdout = await this.runQmdCommand(
       args,
