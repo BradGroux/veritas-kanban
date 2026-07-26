@@ -172,4 +172,43 @@ describe('vk goals commands', () => {
     });
     output.mockRestore();
   });
+
+  it('approves and dispatches a bounded conversation rollover', async () => {
+    api.mockResolvedValue({
+      action: 'dispatched',
+      goal: { id: GOAL_ID, revision: 8 },
+      continuation: {
+        id: 'continuation-rollover',
+        kind: 'rollover',
+        state: 'dispatched',
+        resultAttemptId: 'attempt-8',
+      },
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const program = new Command().exitOverride();
+    registerGoalCommands(program);
+
+    await program.parseAsync([
+      'node',
+      'vk',
+      'goals',
+      'rollover',
+      GOAL_ID,
+      '--revision',
+      '7',
+      '--json',
+    ]);
+
+    expect(api).toHaveBeenCalledWith(`/api/goals/${GOAL_ID}/rollover`, {
+      method: 'POST',
+      body: JSON.stringify({
+        expectedRevision: 7,
+      }),
+    });
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toMatchObject({
+      action: 'dispatched',
+      continuation: { kind: 'rollover', resultAttemptId: 'attempt-8' },
+    });
+    output.mockRestore();
+  });
 });

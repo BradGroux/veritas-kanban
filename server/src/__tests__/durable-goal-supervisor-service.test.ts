@@ -3,6 +3,7 @@ import type {
   CompletionResult,
   DurableGoalCompareAndSetInput,
   DurableGoalCompareAndSetResult,
+  DurableGoalContinuationPolicy,
   DurableGoalListQuery,
   DurableGoalRecord,
 } from '@veritas-kanban/shared';
@@ -65,7 +66,7 @@ function services() {
 async function createGoal(
   goals: DurableGoalService,
   options: {
-    continuation?: { mode: 'manual' | 'automatic'; maxTurns?: number };
+    continuation?: DurableGoalContinuationPolicy;
     budgets?: { totalTokens?: number };
   } = {}
 ) {
@@ -184,6 +185,7 @@ describe('DurableGoalSupervisorService', () => {
 
     expect(first.action).toBe('dispatched');
     expect(first.continuation).toMatchObject({
+      kind: 'resume',
       state: 'dispatched',
       sourceAttemptId: 'attempt-1',
       resultAttemptId: 'attempt-2',
@@ -201,6 +203,147 @@ describe('DurableGoalSupervisorService', () => {
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ remainingBudget: { totalTokens: 85 } })
     );
+  });
+
+  it('rolls over to a fresh bounded conversation at the configured token threshold', async () => {
+    const { goals, supervisor } = services();
+    await createGoal(goals, {
+      continuation: {
+        mode: 'automatic',
+        maxTurns: 4,
+        maxRollovers: 2,
+        compactAfterTokens: 10,
+      },
+    });
+    const dispatch = vi.fn().mockResolvedValue({ attemptId: 'attempt-2' });
+
+    const result = await supervisor.handleRunCompletion(
+      {
+        workspaceId: 'workspace-1',
+        taskId: 'task-865',
+        attemptId: 'attempt-1',
+        completion: completion({ evidence: [] }),
+        usage,
+      },
+      dispatch
+    );
+
+    expect(result.action).toBe('dispatched');
+    expect(result.continuation).toMatchObject({
+      kind: 'rollover',
+      state: 'dispatched',
+      sourceAttemptId: 'attempt-1',
+      resultAttemptId: 'attempt-2',
+      admissionIdempotencyKey: `durable-goal:${GOAL_ID}:attempt-1:rollover`,
+    });
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'rollover',
+        message: expect.stringContaining('Start a fresh conversation'),
+      })
+    );
+    expect(dispatch.mock.calls[0][0].message).toContain('Preserve admission controls.');
+    expect(dispatch.mock.calls[0][0].message).toContain('focused-tests');
+    expect(Buffer.byteLength(dispatch.mock.calls[0][0].message, 'utf8')).toBeLessThanOrEqual(
+      18_000
+    );
+  });
+
+  it('waits for explicit rollover approval and then dispatches the persisted handoff', async () => {
+    const { goals, supervisor } = services();
+    await createGoal(goals, {
+      continuation: {
+        mode: 'automatic',
+        maxTurns: 4,
+        maxRollovers: 1,
+        compactAfterTokens: 10,
+        requireApprovalForRollover: true,
+      },
+    });
+    const dispatch = vi.fn().mockResolvedValue({ attemptId: 'attempt-2' });
+    const pending = await supervisor.handleRunCompletion(
+      {
+        workspaceId: 'workspace-1',
+        taskId: 'task-865',
+        attemptId: 'attempt-1',
+        completion: completion({ evidence: [] }),
+        usage,
+      },
+      dispatch
+    );
+
+    expect(pending.action).toBe('awaiting-approval');
+    expect(pending.goal?.state).toBe('awaiting-approval');
+    expect(dispatch).not.toHaveBeenCalled();
+
+    const approved = await supervisor.approveRollover(
+      {
+        goalId: GOAL_ID,
+        expectedRevision: pending.goal?.revision as number,
+        actorId: 'operator-brad',
+      },
+      dispatch
+    );
+
+    expect(approved.action).toBe('dispatched');
+    expect(approved.goal?.state).toBe('active');
+    expect(approved.continuation).toMatchObject({
+      kind: 'rollover',
+      resultAttemptId: 'attempt-2',
+    });
+    expect(approved.goal?.transitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'awaiting-approval',
+          to: 'active',
+          actorId: 'operator-brad',
+        }),
+      ])
+    );
+  });
+
+  it('stops at the configured rollover limit instead of extending context indefinitely', async () => {
+    const { goals, supervisor } = services();
+    await createGoal(goals, {
+      continuation: {
+        mode: 'automatic',
+        maxTurns: 6,
+        maxRollovers: 1,
+        compactAfterTokens: 10,
+      },
+    });
+    const dispatch = vi.fn().mockResolvedValue({ attemptId: 'attempt-2' });
+    const first = await supervisor.handleRunCompletion(
+      {
+        workspaceId: 'workspace-1',
+        taskId: 'task-865',
+        attemptId: 'attempt-1',
+        completion: completion({ evidence: [] }),
+        usage,
+      },
+      dispatch
+    );
+    expect(first.action).toBe('dispatched');
+
+    const second = await supervisor.handleRunCompletion(
+      {
+        workspaceId: 'workspace-1',
+        taskId: 'task-865',
+        attemptId: 'attempt-2',
+        parentAttemptId: 'attempt-1',
+        completion: completion({
+          attemptId: 'attempt-2',
+          idempotencyKey: 'completion-attempt-2',
+          evidence: [],
+        }),
+        usage,
+      },
+      dispatch
+    );
+
+    expect(second.action).toBe('usage-limited');
+    expect(second.goal?.state).toBe('usage-limited');
+    expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
   it('preserves an exact provider blocker without dispatching', async () => {

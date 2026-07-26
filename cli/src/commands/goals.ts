@@ -16,6 +16,18 @@ interface GoalListResponse {
   goals: DurableGoalRecord[];
 }
 
+interface GoalRolloverResponse {
+  action: string;
+  goal?: DurableGoalRecord;
+  continuation?: {
+    id: string;
+    kind: string;
+    state: string;
+    resultAttemptId?: string;
+    queueId?: string;
+  };
+}
+
 type GoalBlockerInput = Omit<DurableGoalBlocker, 'id' | 'recordedAt'> & { id?: string };
 
 const VERIFICATION_KINDS = new Set(['test', 'build', 'artifact', 'operator', 'external', 'other']);
@@ -201,6 +213,32 @@ export function registerGoalCommands(program: Command): void {
         });
         if (options.json) return printJson(goal);
         console.log(chalk.green(`✓ Linked run to goal ${goal.id} at revision ${goal.revision}`));
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  goals
+    .command('rollover <id>')
+    .description('Approve and dispatch one bounded fresh-conversation rollover')
+    .requiredOption('--revision <number>', 'Expected goal revision')
+    .option('--json', 'Output as JSON')
+    .action(async (id, options) => {
+      try {
+        const result = await api<GoalRolloverResponse>(
+          `/api/goals/${encodeURIComponent(id)}/rollover`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              expectedRevision: parsePositiveInteger(options.revision),
+            }),
+          }
+        );
+        if (options.json) return printJson(result);
+        const attempt = result.continuation?.resultAttemptId;
+        console.log(
+          chalk.green(`✓ Goal ${id} rollover ${result.action}${attempt ? ` as ${attempt}` : ''}`)
+        );
       } catch (error) {
         printError(error);
       }

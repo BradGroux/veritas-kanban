@@ -4390,13 +4390,14 @@ Durable goals persist an evidence-gated objective independently of any one
 provider run. Reads require `agent:read`; creation and mutation require
 `admin:manage`. Every endpoint is scoped to the authenticated workspace.
 
-| Method | Path                            | Description                                    |
-| ------ | ------------------------------- | ---------------------------------------------- |
-| `GET`  | `/api/goals`                    | List bounded goals with state and root filters |
-| `POST` | `/api/goals`                    | Create one evidence-gated goal at revision 1   |
-| `GET`  | `/api/goals/:goalId`            | Inspect one goal and its continuation chain    |
-| `POST` | `/api/goals/:goalId/transition` | Apply one compare-and-set state transition     |
-| `POST` | `/api/goals/:goalId/runs`       | Link one task, workflow, or conversation run   |
+| Method | Path                            | Description                                                 |
+| ------ | ------------------------------- | ----------------------------------------------------------- |
+| `GET`  | `/api/goals`                    | List bounded goals with state and root filters              |
+| `POST` | `/api/goals`                    | Create one evidence-gated goal at revision 1                |
+| `GET`  | `/api/goals/:goalId`            | Inspect one goal and its continuation chain                 |
+| `POST` | `/api/goals/:goalId/transition` | Apply one compare-and-set state transition                  |
+| `POST` | `/api/goals/:goalId/runs`       | Link one task, workflow, or conversation run                |
+| `POST` | `/api/goals/:goalId/rollover`   | Approve and dispatch one bounded fresh-conversation handoff |
 
 List filters are repeatable `state`, `rootTaskId`, `rootWorkflowId`, and
 `limit` (1-1000). Goal states are `active`, `paused`, `blocked`,
@@ -4419,6 +4420,7 @@ budget metric names used elsewhere in the runtime.
     "mode": "automatic",
     "maxTurns": 20,
     "maxRollovers": 2,
+    "compactAfterTokens": 120000,
     "requireApprovalForRollover": true
   },
   "completionRequirements": [
@@ -4460,6 +4462,23 @@ launching another provider. Otherwise the same admission idempotency key is
 reused. Failed admission blocks the goal with an actionable reason. Provider
 blockers, missing continuation handles, turn limits, budget limits, and manual
 continuation mode all fail closed instead of creating a hidden retry loop.
+
+When `compactAfterTokens` is reached, or a provider has no verified resume
+handle, the supervisor may plan `kind: "rollover"` only while
+`maxRollovers` has capacity. A rollover starts a fresh provider conversation
+with a bounded handoff containing the objective, constraints, acceptance
+criteria, evidence identifiers, unresolved requirements, recent state
+decisions, prior attempt identities, and cumulative usage. It retains the
+normal parent-attempt, admission, sandbox, phase, launch-manifest, and
+remaining-budget controls without copying transient provider authority.
+
+If `requireApprovalForRollover` is true, the supervisor first transitions the
+goal to `awaiting-approval`. `POST /api/goals/:goalId/rollover` accepts
+`expectedRevision`; the authenticated actor becomes the approver and the
+goal's exact current run becomes the source. The endpoint rejects stale
+revisions, missing current-run evidence, non-active states, and exhausted
+rollover limits. Its planned handoff and admission idempotency key are durable,
+so startup reconciliation cannot duplicate a fresh conversation.
 
 ---
 

@@ -126,6 +126,7 @@ export interface PlanDurableGoalContinuationInput {
   expectedRevision: number;
   sourceTaskId: string;
   sourceAttemptId: string;
+  kind?: DurableGoalContinuationAttempt['kind'];
   message: string;
 }
 
@@ -360,13 +361,22 @@ export class DurableGoalService {
     if (existing) return current;
 
     const timestamp = this.now().toISOString();
-    const suffix = stableContinuationSuffix(id, input.sourceAttemptId);
+    const kind = input.kind ?? 'resume';
+    const suffix = stableContinuationSuffix(
+      id,
+      input.sourceAttemptId,
+      kind === 'resume' ? undefined : kind
+    );
     const continuation: DurableGoalContinuationAttempt = {
       id: `continuation_${suffix}`,
       sourceTaskId: input.sourceTaskId,
       sourceAttemptId: input.sourceAttemptId,
+      kind,
       state: 'planned',
-      admissionIdempotencyKey: `durable-goal:${id}:${input.sourceAttemptId}`,
+      admissionIdempotencyKey:
+        kind === 'resume'
+          ? `durable-goal:${id}:${input.sourceAttemptId}`
+          : `durable-goal:${id}:${input.sourceAttemptId}:${kind}`,
       message: input.message,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -456,13 +466,14 @@ export class DurableGoalService {
   }
 }
 
-function stableContinuationSuffix(goalId: string, sourceAttemptId: string): string {
-  return createHash('sha256')
-    .update(goalId)
-    .update('\0')
-    .update(sourceAttemptId)
-    .digest('hex')
-    .slice(0, 32);
+function stableContinuationSuffix(
+  goalId: string,
+  sourceAttemptId: string,
+  kind?: DurableGoalContinuationAttempt['kind']
+): string {
+  const hash = createHash('sha256').update(goalId).update('\0').update(sourceAttemptId);
+  if (kind) hash.update('\0').update(kind);
+  return hash.digest('hex').slice(0, 32);
 }
 
 function addGoalUsage(left: AgentBudgetUsage, right: AgentBudgetUsage): AgentBudgetUsage {

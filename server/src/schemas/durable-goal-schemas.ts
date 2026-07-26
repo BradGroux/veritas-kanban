@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  DURABLE_GOAL_CONTINUATION_KINDS,
   DURABLE_GOAL_CONTINUATION_MODES,
   DURABLE_GOAL_CONTINUATION_STATES,
   DURABLE_GOAL_SCHEMA_VERSION,
@@ -54,6 +55,7 @@ export const DurableGoalContinuationAttemptSchema = z
     id: IdentifierSchema,
     sourceTaskId: IdentifierSchema,
     sourceAttemptId: IdentifierSchema,
+    kind: z.enum(DURABLE_GOAL_CONTINUATION_KINDS).default('resume'),
     state: z.enum(DURABLE_GOAL_CONTINUATION_STATES),
     admissionIdempotencyKey: IdentifierSchema,
     message: z.string().trim().min(1).max(50_000),

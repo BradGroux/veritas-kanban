@@ -88,10 +88,14 @@ export interface DurableGoalUsageEvent {
 export const DURABLE_GOAL_CONTINUATION_STATES = ['planned', 'dispatched', 'failed'] as const;
 export type DurableGoalContinuationState = (typeof DURABLE_GOAL_CONTINUATION_STATES)[number];
 
+export const DURABLE_GOAL_CONTINUATION_KINDS = ['resume', 'rollover'] as const;
+export type DurableGoalContinuationKind = (typeof DURABLE_GOAL_CONTINUATION_KINDS)[number];
+
 export interface DurableGoalContinuationAttempt {
   id: string;
   sourceTaskId: string;
   sourceAttemptId: string;
+  kind: DurableGoalContinuationKind;
   state: DurableGoalContinuationState;
   admissionIdempotencyKey: string;
   message: string;

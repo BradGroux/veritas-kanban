@@ -676,6 +676,8 @@ vk goals create \
   --root-task task_0123456789abcdef \
   --mode automatic \
   --max-turns 20 \
+  --max-rollovers 2 \
+  --compact-after-tokens 120000 \
   --require-rollover-approval \
   --json
 
@@ -700,6 +702,10 @@ vk goals link-run goal_0123456789abcdef \
   --task task_0123456789abcdef \
   --attempt attempt_0123456789abcdef \
   --conversation conversation_0123456789abcdef \
+  --json
+
+vk goals rollover goal_0123456789abcdef \
+  --revision 6 \
   --json
 ```
 
@@ -727,10 +733,18 @@ idempotency key is reused; an already-created child attempt is linked without a
 duplicate launch.
 
 Manual goals pause after an incomplete run. Automatic goals block when the
-provider has no verified continuation handle or admission fails, and enter
-`usage-limited` or `budget-limited` at their configured boundary. Resume those
-states explicitly after addressing the reported condition; do not build a
-second client-side continuation loop.
+provider has no verified continuation handle and no rollover allowance, or
+when admission fails. They enter `usage-limited` or `budget-limited` at their
+configured boundary. A configured `--compact-after-tokens` threshold starts a
+fresh conversation only while `--max-rollovers` still has capacity. Each
+rollover persists `kind: "rollover"` before dispatch and carries a bounded
+goal contract with objective, constraints, acceptance criteria, verified
+evidence links, remaining requirements, recent state decisions, and aggregate
+usage. If `--require-rollover-approval` is set, the goal enters
+`awaiting-approval`; run `goals rollover` with the current revision to approve
+and dispatch that exact handoff. Resume other limited states explicitly after
+addressing the reported condition; do not build a second client-side
+continuation loop.
 
 ---
 

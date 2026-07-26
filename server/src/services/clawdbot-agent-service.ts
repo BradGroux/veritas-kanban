@@ -587,7 +587,8 @@ export class ClawdbotAgentService {
   private durableGoalSupervisor: Pick<
     DurableGoalSupervisorService,
     'handleRunCompletion' | 'reconcilePlannedForTask'
-  >;
+  > &
+    Partial<Pick<DurableGoalSupervisorService, 'approveRollover'>>;
   private workspaceExecutionTrust: Pick<
     WorkspaceExecutionTrustService,
     'scan' | 'evaluateForLaunch' | 'assertFresh'
@@ -633,7 +634,10 @@ export class ClawdbotAgentService {
     durableGoalSupervisor: Pick<
       DurableGoalSupervisorService,
       'handleRunCompletion' | 'reconcilePlannedForTask'
-    > = getDurableGoalSupervisorService()
+    > &
+      Partial<
+        Pick<DurableGoalSupervisorService, 'approveRollover'>
+      > = getDurableGoalSupervisorService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -4557,34 +4561,76 @@ export class ClawdbotAgentService {
     });
   }
 
+  async rolloverDurableGoal(goalId: string, expectedRevision: number, actorId: string) {
+    const approveRollover = this.durableGoalSupervisor.approveRollover;
+    if (!approveRollover) {
+      throw new ConflictError('Durable goal rollover supervision is unavailable.');
+    }
+    return approveRollover.call(
+      this.durableGoalSupervisor,
+      {
+        goalId,
+        expectedRevision,
+        actorId,
+      },
+      (request) => this.dispatchDurableGoalContinuation(request)
+    );
+  }
+
   private async dispatchDurableGoalContinuation(
     request: DurableGoalContinuationDispatchRequest
   ): Promise<{ attemptId: string; queueId?: string }> {
-    const result = await this.followUpConversation(
-      request.sourceTaskId,
-      request.sourceAttemptId,
-      request.message,
-      {
-        admissionIdempotencyKey: request.admissionIdempotencyKey,
-        budget: request.remainingBudget
-          ? {
-              enabled: true,
-              name: `Durable goal ${request.goal.id} remaining budget`,
-              scope: 'run',
-              limits: request.remainingBudget,
-              hardAction: 'pause',
-            }
-          : undefined,
-        rootTaskId:
-          request.goal.root.kind === 'task'
-            ? request.goal.root.taskId
-            : (request.goal.root.taskId ?? request.sourceTaskId),
-      }
-    );
+    const options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'> = {
+      admissionIdempotencyKey: request.admissionIdempotencyKey,
+      budget: request.remainingBudget
+        ? {
+            enabled: true,
+            name: `Durable goal ${request.goal.id} remaining budget`,
+            scope: 'run',
+            limits: request.remainingBudget,
+            hardAction: 'pause',
+          }
+        : undefined,
+      rootTaskId:
+        request.goal.root.kind === 'task'
+          ? request.goal.root.taskId
+          : (request.goal.root.taskId ?? request.sourceTaskId),
+    };
+    const result =
+      request.kind === 'rollover'
+        ? await this.startDurableGoalRollover(request, options)
+        : await this.followUpConversation(
+            request.sourceTaskId,
+            request.sourceAttemptId,
+            request.message,
+            options
+          );
     return {
       attemptId: result.attemptId,
       ...('queueId' in result ? { queueId: result.queueId } : {}),
     };
+  }
+
+  private async startDurableGoalRollover(
+    request: DurableGoalContinuationDispatchRequest,
+    options: Omit<AgentStartOptions, 'conversation' | 'parentAttemptId'>
+  ): Promise<AgentLaunchStatus> {
+    const source = await this.findAttempt(request.sourceAttemptId);
+    if (!source || !['complete', 'failed'].includes(source.status)) {
+      throw new ConflictError('Durable goal rollover requires a terminal source attempt.', {
+        sourceAttemptId: request.sourceAttemptId,
+        sourceStatus: source?.status,
+      });
+    }
+    return this.startAgent(request.sourceTaskId, source.agent, {
+      ...options,
+      parentAttemptId: source.id,
+      conversation: {
+        mode: 'fresh',
+        intent: 'fresh',
+        message: request.message,
+      },
+    });
   }
 
   private async reconcileDurableGoalContinuations(tasks: Task[]): Promise<void> {

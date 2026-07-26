@@ -9,6 +9,7 @@ import {
 import { asyncHandler } from '../middleware/async-handler.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { clawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import { getDurableGoalService } from '../services/durable-goal-service.js';
 
 const router: RouterType = Router();
@@ -133,6 +134,12 @@ const runLinkSchema = z
     workflowRunId: IdentifierSchema.optional(),
     conversationId: IdentifierSchema.optional(),
     parentAttemptId: IdentifierSchema.optional(),
+  })
+  .strict();
+
+const rolloverSchema = z
+  .object({
+    expectedRevision: z.number().int().positive(),
   })
   .strict();
 
@@ -262,6 +269,21 @@ router.post(
         },
       })
     );
+  })
+);
+
+router.post(
+  '/:goalId/rollover',
+  asyncHandler(async (req, res) => {
+    const { goalId } = parseOrThrow(paramsSchema, req.params);
+    const input = parseOrThrow(rolloverSchema, req.body);
+    const actor = actorFromRequest(req);
+    await requireWorkspaceGoal(goalId, actor.workspaceId);
+    res
+      .status(201)
+      .json(
+        await clawdbotAgentService.rolloverDurableGoal(goalId, input.expectedRevision, actor.id)
+      );
   })
 );
 
