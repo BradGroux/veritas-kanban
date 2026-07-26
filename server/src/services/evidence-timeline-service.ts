@@ -5,7 +5,6 @@ import type {
   Deliverable,
   EvidenceTimelineCitation,
   EvidenceTimelineEvent,
-  EvidenceTimelineEventSource,
   EvidenceTimelineEventType,
   EvidenceTimelineFilters,
   EvidenceTimelineRecap,
@@ -591,6 +590,8 @@ function telemetryTitle(event: AnyTelemetryEvent): string {
       return `Agent run error from ${event.agent}`;
     case 'run.tokens':
       return `Token usage recorded for ${event.agent}`;
+    case 'admission.tree_control':
+      return `Execution tree ${event.action}`;
     case 'task.status_changed':
       return 'Task status changed';
     case 'task.created':
@@ -611,6 +612,11 @@ function telemetryDetail(event: AnyTelemetryEvent): string | undefined {
   if (event.type === 'task.status_changed') {
     return `${event.previousStatus ?? 'unknown'} -> ${event.status ?? 'unknown'}`;
   }
+  if (event.type === 'admission.tree_control') {
+    return event.signals.length > 0
+      ? `${event.trigger}: ${event.signals.join(', ')}`
+      : event.trigger;
+  }
   return undefined;
 }
 
@@ -624,6 +630,12 @@ function telemetryMetadata(
   if ('durationMs' in event) metadata.durationMs = event.durationMs ?? null;
   if ('totalTokens' in event) metadata.totalTokens = event.totalTokens ?? null;
   if ('cost' in event) metadata.cost = event.cost ?? null;
+  if (event.type === 'admission.tree_control') {
+    metadata.action = event.action;
+    metadata.trigger = event.trigger;
+    metadata.rootObjectiveKey = event.rootObjectiveKey;
+    metadata.unresolvedAttempts = event.unresolvedAttempts ?? null;
+  }
   return metadata;
 }
 
