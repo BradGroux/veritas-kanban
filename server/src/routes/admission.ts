@@ -169,6 +169,22 @@ router.post(
   })
 );
 
+router.post(
+  '/tree/:rootObjectiveId/resume',
+  asyncHandler(async (req, res) => {
+    try {
+      const rootObjectiveId = z.string().trim().min(1).max(240).parse(req.params.rootObjectiveId);
+      const input = cancellationSchema.parse(req.body);
+      res.json(await admission.resumeExecutionTree(rootObjectiveId, input));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+  })
+);
+
 router.get(
   '/',
   asyncHandler(async (req, res) => {

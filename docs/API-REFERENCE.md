@@ -4249,9 +4249,32 @@ not be interrupted so operators can reconcile them explicitly. Reusing the
 same idempotency key is safe; a different key conflicts with existing terminal
 ownership. Veritas stores and returns only the key's SHA-256 identity.
 
-Once the root control is recorded, late resume, retry, fallback, workflow-step,
-and child-agent launches fail closed before provider dispatch. The durable
-control survives restart and is visible through the tree summary and
+The fan-out circuit breaker is enabled by default under
+`features.admission.fanOutBreaker`. It evaluates durable descendant count,
+depth, active reservations, queued descendants, capacity pressure, and budget
+pressure before a new tree node is admitted. Defaults are 256 descendants,
+depth 16, 64 active reservations, 64 queued descendants, and 95 percent
+capacity or budget pressure after a tree reaches eight descendants. When a
+threshold is reached, Veritas atomically records a durable paused control on
+the root and returns retryable `EXECUTION_TREE_EXPANSION_PAUSED` evidence.
+Harnesses must stop expanding that root; retrying the same launch cannot bypass
+the control.
+
+Operators can inspect the bounded evidence through the tree summary or
+Operations, clear the reported pressure, and resume with the same strict body:
+
+```http
+POST /api/v1/admission/tree/:rootObjectiveId/resume
+```
+
+Resume returns `409 Conflict` with
+`details.code: "EXECUTION_TREE_RESUME_BLOCKED"` while a breaker signal remains
+unsafe. A successful resume records a durable `resumed` control and accepts new
+nodes without discarding the earlier breaker evidence. Cancellation remains
+terminal: once the root cancellation is recorded, late resume, retry, fallback,
+workflow-step, and child-agent launches fail closed before provider dispatch.
+Paused, resumed, and cancelled controls survive restart and are visible through
+the tree summary, Operations, support bundles, telemetry, and
 `vk admission tree`.
 
 Direct `POST /api/v1/agents/:taskId/start` callers may send an opaque

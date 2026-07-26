@@ -615,6 +615,9 @@ vk admission queue cancel admission_queue_0123456789abcdef \
 vk admission cancel-tree objective_0123456789abcdef \
   --reason "Operator stopped runaway child-agent expansion." \
   --idempotency-key operator-tree-cancel-20260725
+vk admission resume-tree objective_0123456789abcdef \
+  --reason "Operator confirmed fan-out pressure cleared." \
+  --idempotency-key operator-tree-resume-20260725
 ```
 
 `admission list` filters by workspace, task, root task, provider, host, state,
@@ -642,11 +645,20 @@ an ETA or exact start time. Use `--json` for the complete versioned REST shape.
 dispatch and releases its reservation. `admission cancel-tree` records
 cancellation on the root first, drains queued descendants, releases unbound
 reservations, and asks the local supervisor to interrupt verified running
-attempts. Both commands require `admin:manage`, require an operator reason, and
-accept a stable `--idempotency-key` for safe retries. If omitted, the CLI
-generates a new key. Use `--json` to inspect any verified running attempts that
-still require reconciliation. A cancelled root rejects late resume, retry,
-fallback, workflow-step, and child-agent launches before provider dispatch.
+attempts. `admission resume-tree` re-evaluates durable breaker evidence and
+resumes a paused tree only after every blocking signal clears. All three
+commands require `admin:manage`, require an operator reason, and accept a stable
+`--idempotency-key` for safe retries. If omitted, the CLI generates a new key.
+Use `--json` to inspect the complete control or any verified running attempts
+that still require reconciliation. A blocked resume returns
+`EXECUTION_TREE_RESUME_BLOCKED`; do not retry it in a loop without changing the
+reported pressure. A cancelled root rejects late resume, retry, fallback,
+workflow-step, and child-agent launches before provider dispatch.
+
+The Operations admission panel exposes the same controls. Queue rows can cancel
+one pending launch or its entire tree. Durable tree-control cards show bounded
+breaker signals and observed descendant/depth evidence, then allow an
+administrator to resume or cancel the tree with an audited reason.
 
 ---
 

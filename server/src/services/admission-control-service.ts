@@ -20,15 +20,19 @@ import type {
   AdmissionQueueSelectionEvidence,
   AdmissionQueueTarget,
   AdmissionQueuedCancellationResult,
+  AdmissionRequest,
   AdmissionReservation,
   AdmissionReservationClaimOrQueueResult,
   AdmissionReservationListQuery,
   AdmissionReservationRelease,
   AdmissionSettings,
+  AdmissionTreeControlTelemetryEvent,
   AgentBudgetUsage,
   ExecutionTreeBudgetPolicy,
   ExecutionTreeBudgetSummary,
   ExecutionTreeBudgetUsageEvent,
+  ExecutionTreeBreakerEvidence,
+  ExecutionTreeBreakerSignal,
   ExecutionTreeIdentity,
   ExecutionTreeControl,
   AgentType,
@@ -42,6 +46,7 @@ import {
   ADMISSION_REQUEST_SCHEMA_VERSION,
   ADMISSION_RESERVATION_SCHEMA_VERSION,
   DEFAULT_FEATURE_SETTINGS,
+  EXECUTION_TREE_BREAKER_EVIDENCE_SCHEMA_VERSION,
   EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION,
   EXECUTION_TREE_CONTROL_SCHEMA_VERSION,
   ZERO_AGENT_BUDGET_USAGE,
@@ -71,6 +76,7 @@ import {
   scoreAdmissionQueueEntry,
   workspaceKey,
 } from './admission-queue-scheduler.js';
+import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 
 const MAX_CAS_ATTEMPTS = 8;
 const ACTIVE_INSPECTION_SNAPSHOT_LIMIT = 100_000;
@@ -136,6 +142,9 @@ export interface AdmissionControlServiceOptions {
   ownerId?: string;
   hostId?: string;
   processId?: number;
+  treeControlTelemetry?: (
+    event: Omit<AdmissionTreeControlTelemetryEvent, 'id' | 'timestamp'>
+  ) => Promise<void>;
 }
 
 let fileRepository: FileAdmissionReservationRepository | undefined;
@@ -163,6 +172,11 @@ function idempotencyIdentity(idempotencyKey: string): string {
   return `sha256:${createHash('sha256').update(idempotencyKey).digest('hex')}`;
 }
 
+function percentage(used: number, limit: number | undefined): number {
+  if (limit === undefined || limit <= 0) return 0;
+  return Math.min(100_000, Math.round((used / limit) * 10_000) / 100);
+}
+
 export class AdmissionControlService {
   private readonly repositoryOverride?: AdmissionReservationRepository;
   private readonly settingsOverride?: () => Promise<AdmissionSettings>;
@@ -171,6 +185,7 @@ export class AdmissionControlService {
   private readonly ownerId: string;
   private readonly executionHostId: string;
   private readonly processId: number;
+  private readonly treeControlTelemetry?: AdmissionControlServiceOptions['treeControlTelemetry'];
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
   private readonly heartbeatEligible = new Set<string>();
   private readonly queueHeartbeatTimers = new Map<string, NodeJS.Timeout>();
@@ -184,6 +199,7 @@ export class AdmissionControlService {
     this.now = options.now ?? (() => new Date());
     this.processId = options.processId ?? process.pid;
     this.executionHostId = options.hostId ?? defaultExecutionHostId();
+    this.treeControlTelemetry = options.treeControlTelemetry;
     this.ownerId =
       options.ownerId ?? `admission-${this.processId}-${randomUUID().replaceAll('-', '')}`;
   }
@@ -193,10 +209,17 @@ export class AdmissionControlService {
   }
 
   private async settings(): Promise<AdmissionSettings> {
-    const settings = this.settingsOverride
+    const loaded = this.settingsOverride
       ? await this.settingsOverride()
       : ((await this.configService.getFeatureSettings()).admission ??
         DEFAULT_FEATURE_SETTINGS.admission);
+    const settings: AdmissionSettings = {
+      ...loaded,
+      fanOutBreaker: {
+        ...DEFAULT_FEATURE_SETTINGS.admission.fanOutBreaker,
+        ...(loaded as Partial<AdmissionSettings>).fanOutBreaker,
+      },
+    };
     if (settings.heartbeatMs >= settings.leaseMs) {
       throw new ConflictError('Admission heartbeat must be shorter than its lease.', {
         heartbeatMs: settings.heartbeatMs,
@@ -244,9 +267,15 @@ export class AdmissionControlService {
     return (await this.executionTreeRootReservation(rootObjectiveId))?.executionTreeControl ?? null;
   }
 
+  private blocksExecutionTree(
+    control: ExecutionTreeControl | null
+  ): control is ExecutionTreeControl {
+    return control?.state === 'paused' || control?.state === 'cancelled';
+  }
+
   async assertExecutionTreeLaunchAllowed(rootObjectiveId: string): Promise<void> {
     const control = await this.getExecutionTreeControl(rootObjectiveId);
-    if (!control) return;
+    if (!this.blocksExecutionTree(control)) return;
     throw new ConflictError(
       control.state === 'cancelled'
         ? 'Execution tree was cancelled before provider dispatch.'
@@ -259,6 +288,389 @@ export class AdmissionControlService {
         executionTreeControl: control,
       }
     );
+  }
+
+  private fanOutBreakerPolicy(
+    rootObjectiveId: string,
+    settings: AdmissionSettings
+  ): ExecutionTreeBudgetPolicy {
+    return {
+      id: `fan-out-breaker:${createHash('sha256').update(rootObjectiveId).digest('hex').slice(0, 32)}`,
+      scope: 'root-objective',
+      scopeId: rootObjectiveId,
+      name: 'Execution-tree fan-out circuit breaker',
+      limits: { fanOut: settings.fanOutBreaker.maxDescendants + 1 },
+      hardAction: 'pause',
+    };
+  }
+
+  private withFanOutBreakerPolicy(
+    input: AdmissionRequestInput,
+    settings: AdmissionSettings
+  ): ExecutionTreeBudgetPolicy[] | undefined {
+    if (!settings.fanOutBreaker.enabled || !input.executionTree) return input.budgetPolicies;
+    const breaker = this.fanOutBreakerPolicy(input.executionTree.rootObjectiveId, settings);
+    return [...(input.budgetPolicies ?? []).filter((policy) => policy.id !== breaker.id), breaker];
+  }
+
+  private async executionTreeBreakerEvidence(
+    request: AdmissionRequest,
+    settings: AdmissionSettings,
+    prospective: 'active' | 'queued' | 'none'
+  ): Promise<ExecutionTreeBreakerEvidence> {
+    const identity = request.executionTree;
+    if (!identity) throw new Error('Execution-tree breaker evidence requires a tree identity.');
+    const [treeRecords, activeRecords, queueEntries] = await Promise.all([
+      this.repository.list({ rootObjectiveId: identity.rootObjectiveId, limit: 10_000 }),
+      this.repository.list({ states: ['active'], limit: 10_000 }),
+      this.repository.listQueue({
+        states: [...ACTIVE_QUEUE_STATES],
+        limit: ACTIVE_INSPECTION_SNAPSHOT_LIMIT,
+      }),
+    ]);
+    const treeQueueEntries = queueEntries.filter(
+      (entry) =>
+        entry.request.executionTree?.rootObjectiveId === identity.rootObjectiveId &&
+        entry.request.executionTree.edge !== 'root'
+    );
+    const existingNode = treeRecords.some(
+      (record) => record.request.executionTree?.nodeId === identity.nodeId
+    );
+    const existingQueueNode = treeQueueEntries.some(
+      (entry) => entry.request.executionTree?.nodeId === identity.nodeId
+    );
+    const includeCandidate =
+      prospective !== 'none' && !existingNode && !existingQueueNode && identity.edge !== 'root';
+    const prospectiveUsage = includeCandidate
+      ? { ...ZERO_AGENT_BUDGET_USAGE, ...request.budgetRequest }
+      : ZERO_AGENT_BUDGET_USAGE;
+    const descendants = Math.min(
+      100_000,
+      treeRecords
+        .filter((record) => record.request.executionTree?.edge !== 'root')
+        .reduce(
+          (total, record) => total + Math.max(1, record.executionBudget?.requested.fanOut ?? 1),
+          0
+        ) +
+        treeQueueEntries
+          .filter(
+            (entry) =>
+              !treeRecords.some(
+                (record) =>
+                  record.request.executionTree?.nodeId === entry.request.executionTree?.nodeId
+              )
+          )
+          .reduce(
+            (total, entry) => total + Math.max(1, entry.request.budgetRequest?.fanOut ?? 1),
+            0
+          ) +
+        (includeCandidate ? Math.max(1, prospectiveUsage.fanOut) : 0)
+    );
+    const maxDepth = Math.max(
+      identity.depth,
+      ...treeRecords.map((record) => record.request.executionTree?.depth ?? 0),
+      ...treeQueueEntries.map((entry) => entry.request.executionTree?.depth ?? 0)
+    );
+    const activeReservations = Math.min(
+      100_000,
+      treeRecords.filter((record) => record.state === 'active').length +
+        (prospective === 'active' && !existingNode ? 1 : 0)
+    );
+    const queuedDescendants = Math.min(
+      100_000,
+      treeQueueEntries.filter((entry) => entry.state !== 'dispatched').length +
+        (prospective === 'queued' && !existingQueueNode ? 1 : 0)
+    );
+
+    const candidatePolicies = this.policiesFor(request, settings).filter(
+      (policy) => policy.scope !== 'task'
+    );
+    let capacityPressurePercent = 0;
+    for (const policy of candidatePolicies) {
+      const matching = activeRecords.filter((record) =>
+        record.policies.some((candidate) => candidate.id === policy.id)
+      );
+      const used = matching.reduce(
+        (total, record) => ({
+          runSlots: total.runSlots + record.request.requested.runSlots,
+          processSlots: total.processSlots + record.request.requested.processSlots,
+          estimatedMemoryMb: total.estimatedMemoryMb + record.request.requested.estimatedMemoryMb,
+        }),
+        { runSlots: 0, processSlots: 0, estimatedMemoryMb: 0 }
+      );
+      if (prospective === 'active' && !existingNode) {
+        used.runSlots += request.requested.runSlots;
+        used.processSlots += request.requested.processSlots;
+        used.estimatedMemoryMb += request.requested.estimatedMemoryMb;
+      }
+      capacityPressurePercent = Math.max(
+        capacityPressurePercent,
+        percentage(used.runSlots, policy.limits.concurrentRuns),
+        percentage(used.processSlots, policy.limits.processSlots),
+        percentage(used.estimatedMemoryMb, policy.limits.estimatedMemoryMb)
+      );
+    }
+
+    const summary = summarizeExecutionTreeBudget(
+      identity.rootObjectiveId,
+      treeRecords,
+      1,
+      this.now().toISOString()
+    );
+    let budgetPressurePercent = 0;
+    for (const status of summary.policies) {
+      for (const metric of [
+        'inputTokens',
+        'outputTokens',
+        'totalTokens',
+        'costUsd',
+        'toolCalls',
+        'runtimeSeconds',
+        'idleRuntimeSeconds',
+        'retries',
+        'fanOut',
+      ] as const) {
+        const limit = status.policy.limits[metric];
+        budgetPressurePercent = Math.max(
+          budgetPressurePercent,
+          percentage(
+            status.used[metric] + status.reserved[metric] + prospectiveUsage[metric],
+            limit
+          )
+        );
+      }
+    }
+
+    const thresholds = settings.fanOutBreaker;
+    const pressureActive = descendants >= thresholds.pressureActivationDescendants;
+    const resumeEvaluation = prospective === 'none';
+    const signals: ExecutionTreeBreakerSignal[] = [];
+    if (
+      resumeEvaluation
+        ? descendants >= thresholds.maxDescendants
+        : descendants > thresholds.maxDescendants
+    ) {
+      signals.push('descendant-limit');
+    }
+    if (resumeEvaluation ? maxDepth >= thresholds.maxDepth : maxDepth > thresholds.maxDepth) {
+      signals.push('depth-limit');
+    }
+    if (
+      resumeEvaluation
+        ? activeReservations >= thresholds.maxActiveReservations
+        : activeReservations > thresholds.maxActiveReservations
+    ) {
+      signals.push('active-reservation-limit');
+    }
+    if (
+      resumeEvaluation
+        ? queuedDescendants >= thresholds.maxQueuedDescendants
+        : queuedDescendants > thresholds.maxQueuedDescendants
+    ) {
+      signals.push('queued-descendant-limit');
+    }
+    if (pressureActive && capacityPressurePercent >= thresholds.capacityPressurePercent) {
+      signals.push('capacity-pressure');
+    }
+    if (pressureActive && budgetPressurePercent >= thresholds.budgetPressurePercent) {
+      signals.push('budget-pressure');
+    }
+    const recoveryGuidance = [
+      ...(signals.some((signal) =>
+        ['active-reservation-limit', 'capacity-pressure'].includes(signal)
+      )
+        ? ['Wait for verified running descendants to finish or cancel the execution tree.']
+        : []),
+      ...(signals.some((signal) => ['queued-descendant-limit', 'budget-pressure'].includes(signal))
+        ? ['Drain or cancel queued descendants, then inspect the tree before resuming.']
+        : []),
+      ...(signals.some((signal) => ['descendant-limit', 'depth-limit'].includes(signal))
+        ? ['Raise the configured tree limit only after reviewing the expansion plan.']
+        : []),
+      'Resume explicitly after the triggering evidence is below configured thresholds.',
+    ].slice(0, 5);
+    return {
+      schemaVersion: EXECUTION_TREE_BREAKER_EVIDENCE_SCHEMA_VERSION,
+      rootObjectiveId: identity.rootObjectiveId,
+      evaluatedAt: this.now().toISOString(),
+      signals,
+      observed: {
+        descendants,
+        maxDepth,
+        activeReservations,
+        queuedDescendants,
+        capacityPressurePercent,
+        budgetPressurePercent,
+      },
+      thresholds: {
+        maxDescendants: thresholds.maxDescendants,
+        maxDepth: thresholds.maxDepth,
+        maxActiveReservations: thresholds.maxActiveReservations,
+        maxQueuedDescendants: thresholds.maxQueuedDescendants,
+        pressureActivationDescendants: thresholds.pressureActivationDescendants,
+        capacityPressurePercent: thresholds.capacityPressurePercent,
+        budgetPressurePercent: thresholds.budgetPressurePercent,
+      },
+      recoveryGuidance,
+    };
+  }
+
+  private async pauseExecutionTree(
+    rootObjectiveId: string,
+    evidence: ExecutionTreeBreakerEvidence
+  ): Promise<ExecutionTreeControl> {
+    const root = await this.executionTreeRootReservation(rootObjectiveId);
+    if (!root) throw new NotFoundError('Execution tree root reservation not found.');
+    const evidenceIdentity = idempotencyIdentity(
+      `fan-out-breaker:${rootObjectiveId}:${JSON.stringify(evidence.observed)}`
+    );
+    let didPause = false;
+    const updated = await this.mutate(root.id, (current, now) => {
+      const control = current.executionTreeControl;
+      if (control?.state === 'cancelled' || control?.state === 'paused') {
+        didPause = false;
+        return current;
+      }
+      didPause = true;
+      return {
+        ...current,
+        executionTreeControl: {
+          schemaVersion: EXECUTION_TREE_CONTROL_SCHEMA_VERSION,
+          rootObjectiveId,
+          state: 'paused',
+          trigger: 'fan-out-breaker',
+          reason: `Fan-out circuit breaker tripped: ${evidence.signals.join(', ')}.`,
+          idempotencyKey: evidenceIdentity,
+          recordedAt: now.toISOString(),
+          evidence,
+        },
+        updatedAt: now.toISOString(),
+      };
+    });
+    if (!updated.executionTreeControl) {
+      throw new Error('Execution-tree breaker state was not persisted.');
+    }
+    if (didPause && updated.executionTreeControl.state === 'paused') {
+      await this.emitTreeControlTelemetry(updated.executionTreeControl, 'paused');
+    }
+    return updated.executionTreeControl;
+  }
+
+  async resumeExecutionTree(
+    rootObjectiveId: string,
+    input: AdmissionCancellationInput
+  ): Promise<ExecutionTreeControl> {
+    const root = await this.executionTreeRootReservation(rootObjectiveId);
+    if (!root) throw new NotFoundError('Execution tree root reservation not found.');
+    const resumeIdempotencyKey = idempotencyIdentity(input.idempotencyKey.trim());
+    const existing = root.executionTreeControl;
+    if (!existing) {
+      throw new ConflictError('Execution tree does not have a paused circuit breaker.', {
+        rootObjectiveId,
+      });
+    }
+    if (existing.state === 'cancelled') {
+      throw new ConflictError('Cancelled execution trees cannot be resumed.', {
+        rootObjectiveId,
+        executionTreeControl: existing,
+      });
+    }
+    if (existing.state === 'resumed') {
+      if (existing.resumeIdempotencyKey !== resumeIdempotencyKey) {
+        throw new ConflictError('Execution tree resume already has different ownership.', {
+          rootObjectiveId,
+          executionTreeControl: existing,
+        });
+      }
+      return existing;
+    }
+    const settings = await this.settings();
+    const evidence = settings.fanOutBreaker.enabled
+      ? await this.executionTreeBreakerEvidence(root.request, settings, 'none')
+      : null;
+    if (evidence?.signals.length) {
+      throw new ConflictError(
+        'Execution tree still exceeds configured fan-out breaker thresholds.',
+        {
+          code: 'EXECUTION_TREE_RESUME_BLOCKED',
+          evidence,
+        }
+      );
+    }
+    let didResume = false;
+    const resumed = await this.mutate(root.id, (current, now) => {
+      const control = current.executionTreeControl;
+      if (!control) {
+        throw new ConflictError('Execution tree control disappeared during resume.', {
+          rootObjectiveId,
+        });
+      }
+      if (control.state === 'cancelled') {
+        throw new ConflictError('Cancelled execution trees cannot be resumed.', {
+          rootObjectiveId,
+          executionTreeControl: control,
+        });
+      }
+      if (control.state === 'resumed') {
+        didResume = false;
+        if (control.resumeIdempotencyKey !== resumeIdempotencyKey) {
+          throw new ConflictError('Execution tree resume already has different ownership.', {
+            rootObjectiveId,
+            executionTreeControl: control,
+          });
+        }
+        return current;
+      }
+      didResume = true;
+      return {
+        ...current,
+        executionTreeControl: {
+          ...control,
+          state: 'resumed',
+          resumedAt: now.toISOString(),
+          resumeReason: input.reason.trim().slice(0, 1_000),
+          resumeIdempotencyKey,
+        },
+        updatedAt: now.toISOString(),
+      };
+    });
+    if (!resumed.executionTreeControl) {
+      throw new Error('Execution-tree resume evidence was not persisted.');
+    }
+    if (didResume) {
+      await this.emitTreeControlTelemetry(resumed.executionTreeControl, 'resumed');
+    }
+    return resumed.executionTreeControl;
+  }
+
+  private async emitTreeControlTelemetry(
+    control: ExecutionTreeControl,
+    action: AdmissionTreeControlTelemetryEvent['action'],
+    counts: Pick<
+      AdmissionTreeControlTelemetryEvent,
+      'queueEntriesCancelled' | 'interruptedAttempts' | 'unresolvedAttempts'
+    > = {}
+  ): Promise<void> {
+    try {
+      const event: Omit<AdmissionTreeControlTelemetryEvent, 'id' | 'timestamp'> = {
+        type: 'admission.tree_control',
+        action,
+        trigger: control.trigger,
+        rootObjectiveKey: idempotencyIdentity(control.rootObjectiveId),
+        signals: control.evidence?.signals ?? [],
+        ...(control.evidence ? { observed: control.evidence.observed } : {}),
+        ...counts,
+      };
+      if (this.treeControlTelemetry) {
+        await this.treeControlTelemetry(event);
+        return;
+      }
+      if (this.repositoryOverride) return;
+      const { getTelemetryService } = await import('./telemetry-service.js');
+      await getTelemetryService().emit<AdmissionTreeControlTelemetryEvent>(event);
+    } catch {
+      // Durable tree control remains authoritative when optional telemetry is unavailable.
+    }
   }
 
   private blockedTreeDecision(
@@ -296,6 +708,7 @@ export class AdmissionControlService {
       ...settings.defaultRequest,
       ...input.requested,
     };
+    const budgetPolicies = this.withFanOutBreakerPolicy(input, settings);
     const request = {
       schemaVersion: ADMISSION_REQUEST_SCHEMA_VERSION,
       idempotencyKey,
@@ -309,7 +722,7 @@ export class AdmissionControlService {
       ...(input.workflowStepId ? { workflowStepId: input.workflowStepId } : {}),
       ...(input.rootReservationId ? { rootReservationId: input.rootReservationId } : {}),
       ...(input.executionTree ? { executionTree: input.executionTree } : {}),
-      ...(input.budgetPolicies ? { budgetPolicies: input.budgetPolicies } : {}),
+      ...(budgetPolicies ? { budgetPolicies } : {}),
       ...(input.executionTree
         ? {
             budgetRequest: {
@@ -327,8 +740,22 @@ export class AdmissionControlService {
     const initialTreeControl = request.executionTree
       ? await this.getExecutionTreeControl(request.executionTree.rootObjectiveId)
       : null;
-    if (initialTreeControl) {
+    if (this.blocksExecutionTree(initialTreeControl)) {
       return this.blockedTreeDecision(request, initialTreeControl, settings, now);
+    }
+    if (
+      settings.fanOutBreaker.enabled &&
+      request.executionTree &&
+      request.executionTree.edge !== 'root'
+    ) {
+      const evidence = await this.executionTreeBreakerEvidence(request, settings, 'active');
+      if (evidence.signals.length > 0) {
+        const control = await this.pauseExecutionTree(
+          request.executionTree.rootObjectiveId,
+          evidence
+        );
+        return this.blockedTreeDecision(request, control, settings, now);
+      }
     }
     const policies = this.policiesFor(request, settings);
     const impossible = requestExceedsPolicies(request.requested, policies);
@@ -359,12 +786,19 @@ export class AdmissionControlService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
-    const queueTarget: AdmissionQueueTarget | null =
+    const suppliedQueueTarget: AdmissionQueueTarget | null =
       queue && 'target' in queue
         ? queue.target
         : queue
           ? { kind: 'direct', agent: queue.agent }
           : null;
+    const queueTarget: AdmissionQueueTarget | null =
+      suppliedQueueTarget?.kind === 'workflow-root'
+        ? {
+            ...suppliedQueueTarget,
+            budgetPolicyDigest: digestRunLaunchValue(request.budgetPolicies ?? []),
+          }
+        : suppliedQueueTarget;
     const queueable = Boolean(
       queue &&
       queueTarget &&
@@ -408,7 +842,7 @@ export class AdmissionControlService {
     const currentTreeControl = request.executionTree
       ? await this.getExecutionTreeControl(request.executionTree.rootObjectiveId)
       : null;
-    if (currentTreeControl) {
+    if (this.blocksExecutionTree(currentTreeControl)) {
       if (claimed.queueEntry && claimed.queueEntry.state !== 'terminal') {
         const reservationId = claimed.queueEntry.reservationId;
         await this.terminateQueueEntry(
@@ -435,6 +869,45 @@ export class AdmissionControlService {
         );
       }
       return this.blockedTreeDecision(request, currentTreeControl, settings, now);
+    }
+    const breakerPolicyId = request.executionTree
+      ? this.fanOutBreakerPolicy(request.executionTree.rootObjectiveId, settings).id
+      : undefined;
+    if (
+      settings.fanOutBreaker.enabled &&
+      request.executionTree &&
+      request.executionTree.edge !== 'root' &&
+      breakerPolicyId &&
+      claimed.limitingBudgetPolicies?.some((policy) => policy.id === breakerPolicyId)
+    ) {
+      const evidence = await this.executionTreeBreakerEvidence(
+        request,
+        settings,
+        claimed.queueEntry ? 'queued' : 'active'
+      );
+      if (!evidence.signals.includes('descendant-limit')) {
+        evidence.signals.unshift('descendant-limit');
+      }
+      const control = await this.pauseExecutionTree(
+        request.executionTree.rootObjectiveId,
+        evidence
+      );
+      if (claimed.queueEntry && claimed.queueEntry.state !== 'terminal') {
+        await this.terminateQueueEntry(
+          claimed.queueEntry.id,
+          'EXECUTION_TREE_EXPANSION_PAUSED',
+          control.reason,
+          control.idempotencyKey
+        );
+      }
+      if (claimed.record?.state === 'active') {
+        await this.release(
+          claimed.record.id,
+          'reconciled',
+          `fan-out-breaker:${control.idempotencyKey}:${claimed.record.id}`
+        );
+      }
+      return this.blockedTreeDecision(request, control, settings, now);
     }
     if (claimed.queueConflict) {
       return this.decision(
@@ -1117,6 +1590,7 @@ export class AdmissionControlService {
       });
     }
 
+    let didCancel = false;
     const control =
       existing?.state === 'cancelled'
         ? existing
@@ -1124,6 +1598,7 @@ export class AdmissionControlService {
             await this.mutate(root.id, (current, now) => {
               const currentControl = current.executionTreeControl;
               if (currentControl?.state === 'cancelled') {
+                didCancel = false;
                 if (currentControl.idempotencyKey !== idempotencyKey) {
                   throw new ConflictError(
                     'Execution tree cancellation already has different ownership.',
@@ -1135,6 +1610,7 @@ export class AdmissionControlService {
                 }
                 return current;
               }
+              didCancel = true;
               return {
                 ...current,
                 executionTreeControl: {
@@ -1201,7 +1677,7 @@ export class AdmissionControlService {
       reservationsReleased += 1;
     }
 
-    return {
+    const result: AdmissionExecutionTreeCancellationResult = {
       schemaVersion: EXECUTION_TREE_CANCELLATION_SCHEMA_VERSION,
       scope: 'execution-tree',
       idempotencyKey,
@@ -1212,6 +1688,14 @@ export class AdmissionControlService {
       interruptedAttempts: 0,
       runningAttempts,
     };
+    if (didCancel) {
+      await this.emitTreeControlTelemetry(control, 'cancelled', {
+        queueEntriesCancelled,
+        interruptedAttempts: 0,
+        unresolvedAttempts: runningAttempts.length,
+      });
+    }
+    return result;
   }
 
   async bindAttempt(id: string, attemptId: string): Promise<AdmissionReservation> {

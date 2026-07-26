@@ -9,6 +9,7 @@ const admission = vi.hoisted(() => ({
   inspectQueue: vi.fn(),
   inspectQueueEntry: vi.fn(),
   cancelQueuedLaunch: vi.fn(),
+  resumeExecutionTree: vi.fn(),
 }));
 
 const cancelExecutionTree = vi.hoisted(() => vi.fn());
@@ -170,6 +171,25 @@ describe('admission routes', () => {
       .send({ idempotencyKey: 'short', reason: 'too short' });
     expect(invalid.status).toBe(400);
     expect(cancelExecutionTree).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes an eligible execution tree with stable operator identity', async () => {
+    admission.resumeExecutionTree.mockResolvedValue({
+      schemaVersion: 'execution-tree-control/v1',
+      rootObjectiveId: 'objective-a',
+      state: 'resumed',
+    });
+    const app = createApp();
+    const response = await request(app).post('/api/admission/tree/objective-a/resume').send({
+      idempotencyKey: 'resume-execution-tree-123',
+      reason: 'Operator confirmed pressure cleared.',
+    });
+
+    expect(response.status).toBe(200);
+    expect(admission.resumeExecutionTree).toHaveBeenCalledWith('objective-a', {
+      idempotencyKey: 'resume-execution-tree-123',
+      reason: 'Operator confirmed pressure cleared.',
+    });
   });
 
   it('returns a validation error for an invalid reservation identifier', async () => {

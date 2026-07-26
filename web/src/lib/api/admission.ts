@@ -1,7 +1,12 @@
 import type {
+  AdmissionCancellationInput,
+  AdmissionExecutionTreeCancellationResult,
   AdmissionQueueGetResponse,
   AdmissionQueueInspectionQuery,
   AdmissionQueueListResponse,
+  AdmissionQueuedCancellationResult,
+  AdmissionReservation,
+  ExecutionTreeControl,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -28,4 +33,37 @@ export const admissionApi = {
 
   queueEntry: (id: string): Promise<AdmissionQueueGetResponse> =>
     apiFetch<AdmissionQueueGetResponse>(`${API_BASE}/admission/queue/${encodeURIComponent(id)}`),
+
+  reservations: (): Promise<{ generatedAt: string; reservations: AdmissionReservation[] }> =>
+    apiFetch(`${API_BASE}/admission?limit=1000`),
+
+  cancelQueueEntry: (
+    id: string,
+    input: AdmissionCancellationInput
+  ): Promise<AdmissionQueuedCancellationResult> =>
+    apiFetch(`${API_BASE}/admission/queue/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  cancelTree: (
+    rootObjectiveId: string,
+    input: AdmissionCancellationInput
+  ): Promise<AdmissionExecutionTreeCancellationResult> =>
+    apiFetch(`${API_BASE}/admission/tree/${encodeURIComponent(rootObjectiveId)}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  resumeTree: (
+    rootObjectiveId: string,
+    input: AdmissionCancellationInput
+  ): Promise<ExecutionTreeControl> =>
+    apiFetch(`${API_BASE}/admission/tree/${encodeURIComponent(rootObjectiveId)}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
 };

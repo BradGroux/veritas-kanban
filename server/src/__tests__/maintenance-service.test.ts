@@ -209,6 +209,18 @@ describe('MaintenanceService', () => {
             updatedAt: '2026-07-25T00:00:00.000Z',
           },
         ],
+        treeControls: [
+          {
+            rootObjectiveKey: `sha256:${'e'.repeat(64)}`,
+            state: 'paused',
+            trigger: 'fan-out-breaker',
+            recordedAt: '2026-07-25T00:00:00.000Z',
+            signals: ['descendant-limit'],
+            observed: { descendants: 257 },
+            thresholds: { maxDescendants: 256 },
+            recoveryGuidance: ['Inspect the tree before resuming.'],
+          },
+        ],
       })
     );
 
@@ -226,7 +238,10 @@ describe('MaintenanceService', () => {
     ) as { records: Array<Record<string, unknown>> };
     const admissionQueue = JSON.parse(
       await fs.readFile(path.join(bundle.outputPath, 'admission-queue.json'), 'utf-8')
-    ) as { entries: Array<Record<string, unknown>> };
+    ) as {
+      entries: Array<Record<string, unknown>>;
+      treeControls: Array<Record<string, unknown>>;
+    };
     const bundleText = await readDirectoryText(bundle.outputPath);
 
     expect(bundle.redacted).toBe(true);
@@ -252,6 +267,15 @@ describe('MaintenanceService', () => {
       })
     );
     expect(JSON.stringify(admissionQueue)).not.toContain('options');
+    expect(admissionQueue.treeControls).toContainEqual(
+      expect.objectContaining({
+        state: 'paused',
+        trigger: 'fan-out-breaker',
+        signals: ['descendant-limit'],
+      })
+    );
+    expect(JSON.stringify(admissionQueue.treeControls)).not.toContain('objective-a');
+    expect(JSON.stringify(admissionQueue.treeControls)).not.toContain('idempotencyKey');
     expect(manifest.files.find((file) => file.id === 'server')?.path).toContain('[redacted-logs]');
     expect(serverLog).not.toContain('sk_supersecret1234567890');
     expect(summary).not.toContain(root);

@@ -1073,6 +1073,24 @@ child-agent launches fail closed before any provider adapter runs. The command
 reports verified running attempts that the local supervisor could not
 interrupt; those require explicit operator reconciliation.
 
+Veritas also applies one provider-neutral fan-out circuit breaker before every
+tree expansion. The default guard pauses a root at 256 descendants, depth 16,
+64 active reservations, 64 queued descendants, or 95 percent capacity/budget
+pressure once the tree has eight descendants. A paused decision includes
+bounded `execution-tree-breaker-evidence/v1` signals and returns
+`EXECUTION_TREE_EXPANSION_PAUSED`. Codex, Claude Code, Buzz, Grok Build, GitHub
+Copilot, Hermes, OpenClaw, and custom harnesses must treat that outcome as a
+durable stop signal, not transient provider throttling: do not start a local
+retry storm, change providers, or create a fresh root to evade it.
+
+Inspect the root with `vk admission tree <root-objective-id>` or Operations.
+After the reported active, queued, capacity, or budget pressure clears, an
+administrator can run `vk admission resume-tree <root-objective-id> --reason
+<text>`. Veritas re-evaluates the same durable evidence after restart and
+rejects unsafe resumes with `EXECUTION_TREE_RESUME_BLOCKED`. A successful
+resume preserves the breaker history for audit and allows subsequent launches;
+tree cancellation remains terminal.
+
 ## Local And Cloud Profiles
 
 | Profile            | Provider           | Default command                               | Auth / readiness                                             |

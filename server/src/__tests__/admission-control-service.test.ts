@@ -10,7 +10,10 @@ import {
   type ExecutionTreeBudgetPolicy,
   ZERO_AGENT_BUDGET_USAGE,
 } from '@veritas-kanban/shared';
-import { AdmissionControlService } from '../services/admission-control-service.js';
+import {
+  AdmissionControlService,
+  type AdmissionControlServiceOptions,
+} from '../services/admission-control-service.js';
 import { FileAdmissionReservationRepository } from '../storage/admission-reservation-repository.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteAdmissionReservationRepository } from '../storage/sqlite/admission-reservation-repository.js';
@@ -34,6 +37,7 @@ function configuredSettings(
     global?: AdmissionCapacityLimit;
     providers?: AdmissionSettings['providers'];
     queue?: Partial<AdmissionSettings['queue']>;
+    fanOutBreaker?: Partial<AdmissionSettings['fanOutBreaker']>;
   } = {}
 ): AdmissionSettings {
   return {
@@ -44,6 +48,10 @@ function configuredSettings(
       ...DEFAULT_FEATURE_SETTINGS.admission.queue,
       ...overrides.queue,
     },
+    fanOutBreaker: {
+      ...DEFAULT_FEATURE_SETTINGS.admission.fanOutBreaker,
+      ...overrides.fanOutBreaker,
+    },
     heartbeatMs: 20_000,
   };
 }
@@ -51,7 +59,11 @@ function configuredSettings(
 function createService(
   repository: AdmissionReservationRepository,
   settings: AdmissionSettings,
-  options: { now?: () => Date; ownerId?: string } = {}
+  options: {
+    now?: () => Date;
+    ownerId?: string;
+    treeControlTelemetry?: AdmissionControlServiceOptions['treeControlTelemetry'];
+  } = {}
 ): AdmissionControlService {
   const service = new AdmissionControlService({
     repository,
@@ -60,6 +72,7 @@ function createService(
     ownerId: options.ownerId ?? 'owner-a',
     processId: 101,
     now: options.now,
+    treeControlTelemetry: options.treeControlTelemetry,
   });
   services.push(service);
   return service;
@@ -636,6 +649,252 @@ describe.each(['file', 'sqlite'] as const)('%s admission reservation parity', (b
       state: 'dispatched',
       dispatchedAttemptId: 'attempt-tree-drain-child',
     });
+  });
+
+  it('pauses wide trees before the configured descendant boundary can grow', async () => {
+    const repository = await repositoryFor(backend);
+    const treeControlTelemetry = vi.fn().mockResolvedValue(undefined);
+    const service = createService(
+      repository,
+      configuredSettings({
+        fanOutBreaker: {
+          maxDescendants: 2,
+          pressureActivationDescendants: 100,
+        },
+      }),
+      { treeControlTelemetry }
+    );
+    const wideRequest = (taskId: string, nodeId: string, parentNodeId?: string) => ({
+      ...treeRequest(taskId, nodeId, parentNodeId),
+      budgetPolicies: [
+        {
+          ...treePolicy,
+          id: 'budget_wide_breaker',
+          limits: { fanOut: 100 },
+        },
+      ],
+    });
+    await service.admit(wideRequest('task-wide-root', 'node-wide-root'));
+    await service.admit(wideRequest('task-wide-left', 'node-wide-left', 'node-wide-root'));
+    await service.admit(wideRequest('task-wide-right', 'node-wide-right', 'node-wide-root'));
+
+    await expect(
+      service.admit(wideRequest('task-wide-overflow', 'node-wide-overflow', 'node-wide-root'))
+    ).resolves.toMatchObject({
+      outcome: 'retryable-overload',
+      executionTreeControl: {
+        state: 'paused',
+        trigger: 'fan-out-breaker',
+        evidence: {
+          signals: expect.arrayContaining(['descendant-limit']),
+          observed: { descendants: 3 },
+          thresholds: { maxDescendants: 2 },
+        },
+      },
+    });
+    await expect(service.getExecutionTreeSummary('objective-a')).resolves.toMatchObject({
+      control: {
+        state: 'paused',
+        evidence: { observed: { descendants: 3 } },
+      },
+    });
+    expect(treeControlTelemetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'admission.tree_control',
+        action: 'paused',
+        trigger: 'fan-out-breaker',
+        rootObjectiveKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        signals: expect.arrayContaining(['descendant-limit']),
+      })
+    );
+    expect(JSON.stringify(treeControlTelemetry.mock.calls)).not.toContain('objective-a');
+  });
+
+  it('pauses recursive expansion beyond the configured depth', async () => {
+    const repository = await repositoryFor(backend);
+    const service = createService(
+      repository,
+      configuredSettings({
+        fanOutBreaker: {
+          maxDepth: 2,
+          pressureActivationDescendants: 100,
+        },
+      })
+    );
+    await service.admit(treeRequest('task-deep-root', 'node-deep-root'));
+    await service.admit(treeRequest('task-deep-child', 'node-deep-child', 'node-deep-root'));
+    await service.admit(
+      treeRequest('task-deep-grandchild', 'node-deep-grandchild', 'node-deep-child', undefined, {
+        depth: 2,
+      })
+    );
+
+    await expect(
+      service.admit(
+        treeRequest('task-deep-overflow', 'node-deep-overflow', 'node-deep-grandchild', undefined, {
+          depth: 3,
+        })
+      )
+    ).resolves.toMatchObject({
+      outcome: 'retryable-overload',
+      executionTreeControl: {
+        state: 'paused',
+        evidence: {
+          signals: expect.arrayContaining(['depth-limit']),
+          observed: { maxDepth: 3 },
+        },
+      },
+    });
+  });
+
+  it('serializes concurrent children at the atomic fan-out boundary', async () => {
+    const repository = await repositoryFor(backend);
+    const settings = configuredSettings({
+      fanOutBreaker: {
+        maxDescendants: 1,
+        pressureActivationDescendants: 100,
+      },
+    });
+    const left = createService(repository, settings, { ownerId: 'owner-fanout-left' });
+    const right = createService(repository, settings, { ownerId: 'owner-fanout-right' });
+    await left.admit(treeRequest('task-concurrent-root', 'node-concurrent-root'));
+
+    const decisions = await Promise.all([
+      left.admit(
+        treeRequest('task-concurrent-left', 'node-concurrent-left', 'node-concurrent-root')
+      ),
+      right.admit(
+        treeRequest('task-concurrent-right', 'node-concurrent-right', 'node-concurrent-root')
+      ),
+    ]);
+
+    expect(decisions.map((decision) => decision.outcome).sort()).toEqual([
+      'admitted',
+      'retryable-overload',
+    ]);
+    expect(decisions.find((decision) => decision.outcome !== 'admitted')).toMatchObject({
+      executionTreeControl: {
+        state: 'paused',
+        evidence: { signals: expect.arrayContaining(['descendant-limit']) },
+      },
+    });
+    await expect(
+      repository.list({ rootObjectiveId: 'objective-a', states: ['active'] })
+    ).resolves.toHaveLength(2);
+  });
+
+  it('resumes expansion only after recoverable reservation pressure clears', async () => {
+    const repository = await repositoryFor(backend);
+    const settings = configuredSettings({
+      fanOutBreaker: {
+        maxActiveReservations: 2,
+        pressureActivationDescendants: 100,
+      },
+    });
+    const service = createService(repository, settings);
+    const root = await service.admit(treeRequest('task-resume-root', 'node-resume-root'));
+    const child = await service.admit(
+      treeRequest('task-resume-child', 'node-resume-child', 'node-resume-root')
+    );
+    await expect(
+      service.admit(treeRequest('task-resume-paused', 'node-resume-paused', 'node-resume-root'))
+    ).resolves.toMatchObject({
+      outcome: 'retryable-overload',
+      executionTreeControl: {
+        state: 'paused',
+        evidence: { signals: expect.arrayContaining(['active-reservation-limit']) },
+      },
+    });
+
+    const restarted = createService(repository, settings, {
+      ownerId: 'owner-resume-after-restart',
+    });
+    await expect(restarted.getExecutionTreeSummary('objective-a')).resolves.toMatchObject({
+      control: {
+        state: 'paused',
+        evidence: { signals: expect.arrayContaining(['active-reservation-limit']) },
+      },
+    });
+    await expect(
+      restarted.resumeExecutionTree('objective-a', {
+        idempotencyKey: 'resume-pressure-tree-123',
+        reason: 'Operator reviewed the still-active descendants.',
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: {
+        code: 'EXECUTION_TREE_RESUME_BLOCKED',
+      },
+    });
+
+    await service.release(
+      child.reservation?.id as string,
+      'completed',
+      'complete-resume-pressure-child'
+    );
+    const resumed = await restarted.resumeExecutionTree('objective-a', {
+      idempotencyKey: 'resume-pressure-tree-123',
+      reason: 'Operator confirmed reservation pressure cleared.',
+    });
+    expect(resumed).toMatchObject({
+      state: 'resumed',
+      resumeIdempotencyKey: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      resumeReason: 'Operator confirmed reservation pressure cleared.',
+    });
+    expect(JSON.stringify(resumed)).not.toContain('resume-pressure-tree-123');
+    await expect(
+      restarted.admit(treeRequest('task-resume-next', 'node-resume-next', 'node-resume-root'))
+    ).resolves.toMatchObject({ outcome: 'admitted' });
+    await service.release(
+      root.reservation?.id as string,
+      'completed',
+      'complete-resume-pressure-root'
+    );
+  });
+
+  it('bounds sustained concurrent fan-out without growing durable queues or control events', async () => {
+    const repository = await repositoryFor(backend);
+    const treeControlTelemetry = vi.fn().mockResolvedValue(undefined);
+    const service = createService(
+      repository,
+      configuredSettings({
+        fanOutBreaker: {
+          maxDescendants: 16,
+          pressureActivationDescendants: 100,
+        },
+      }),
+      { treeControlTelemetry }
+    );
+    const loadRequest = (taskId: string, nodeId: string, parentNodeId?: string) => ({
+      ...treeRequest(taskId, nodeId, parentNodeId),
+      budgetPolicies: [
+        {
+          ...treePolicy,
+          id: 'budget_bounded_fanout_load',
+          limits: { fanOut: 1_000 },
+        },
+      ],
+    });
+    await service.admit(loadRequest('task-load-root', 'node-load-root'));
+
+    const decisions = await Promise.all(
+      Array.from({ length: 64 }, (_, index) =>
+        service.admit(
+          loadRequest(`task-load-child-${index}`, `node-load-child-${index}`, 'node-load-root')
+        )
+      )
+    );
+
+    expect(decisions.filter((decision) => decision.outcome === 'admitted')).toHaveLength(16);
+    expect(decisions.filter((decision) => decision.outcome === 'retryable-overload')).toHaveLength(
+      48
+    );
+    await expect(repository.list({ rootObjectiveId: 'objective-a' })).resolves.toHaveLength(17);
+    await expect(
+      repository.list({ rootObjectiveId: 'objective-a', states: ['active'] })
+    ).resolves.toHaveLength(17);
+    await expect(repository.listQueue({ limit: 1_000 })).resolves.toHaveLength(0);
+    expect(treeControlTelemetry).toHaveBeenCalledTimes(1);
   });
 
   it('durably queues and atomically claims a saturated direct launch', async () => {

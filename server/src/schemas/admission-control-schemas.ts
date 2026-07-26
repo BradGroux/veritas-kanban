@@ -13,6 +13,7 @@ import {
   ADMISSION_SCOPES,
   CONVERSATION_LAUNCH_INTENTS,
   CONVERSATION_LAUNCH_MODES,
+  EXECUTION_TREE_BREAKER_EVIDENCE_SCHEMA_VERSION,
   EXECUTION_TREE_BUDGET_EVENT_SCHEMA_VERSION,
   EXECUTION_TREE_EDGE_KINDS,
   EXECUTION_TREE_IDENTITY_SCHEMA_VERSION,
@@ -73,13 +74,75 @@ export const ExecutionTreeControlSchema = z
   .object({
     schemaVersion: z.literal(EXECUTION_TREE_CONTROL_SCHEMA_VERSION),
     rootObjectiveId: identifier,
-    state: z.enum(['paused', 'cancelled']),
+    state: z.enum(['paused', 'resumed', 'cancelled']),
     trigger: z.enum(['operator', 'fan-out-breaker']),
     reason: z.string().trim().min(1).max(1_000),
     idempotencyKey: digest,
     recordedAt: z.string().datetime(),
+    evidence: z
+      .object({
+        schemaVersion: z.literal(EXECUTION_TREE_BREAKER_EVIDENCE_SCHEMA_VERSION),
+        rootObjectiveId: identifier,
+        evaluatedAt: z.string().datetime(),
+        signals: z
+          .array(
+            z.enum([
+              'descendant-limit',
+              'depth-limit',
+              'active-reservation-limit',
+              'queued-descendant-limit',
+              'capacity-pressure',
+              'budget-pressure',
+            ])
+          )
+          .min(1)
+          .max(6),
+        observed: z
+          .object({
+            descendants: z.number().int().min(0).max(100_000),
+            maxDepth: z.number().int().min(0).max(10_000),
+            activeReservations: z.number().int().min(0).max(100_000),
+            queuedDescendants: z.number().int().min(0).max(100_000),
+            capacityPressurePercent: z.number().min(0).max(100_000),
+            budgetPressurePercent: z.number().min(0).max(100_000),
+          })
+          .strict(),
+        thresholds: z
+          .object({
+            maxDescendants: z.number().int().min(1).max(100_000),
+            maxDepth: z.number().int().min(1).max(1_000),
+            maxActiveReservations: z.number().int().min(1).max(100_000),
+            maxQueuedDescendants: z.number().int().min(1).max(100_000),
+            pressureActivationDescendants: z.number().int().min(1).max(100_000),
+            capacityPressurePercent: z.number().min(1).max(100),
+            budgetPressurePercent: z.number().min(1).max(100),
+          })
+          .strict(),
+        recoveryGuidance: z.array(z.string().trim().min(1).max(240)).min(1).max(5),
+      })
+      .strict()
+      .optional(),
+    resumedAt: z.string().datetime().optional(),
+    resumeReason: z.string().trim().min(1).max(1_000).optional(),
+    resumeIdempotencyKey: digest.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((control, ctx) => {
+    const hasResumeEvidence = Boolean(
+      control.resumedAt || control.resumeReason || control.resumeIdempotencyKey
+    );
+    if (
+      (control.state === 'resumed' &&
+        (!control.resumedAt || !control.resumeReason || !control.resumeIdempotencyKey)) ||
+      (control.state !== 'resumed' && hasResumeEvidence)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Resumed execution-tree control requires complete resume evidence.',
+        path: ['state'],
+      });
+    }
+  });
 
 export const ExecutionTreeBudgetPolicySchema = z
   .object({

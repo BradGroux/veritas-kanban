@@ -1,9 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { createHash } from 'node:crypto';
 import {
   PHASE_AUTHORITY_DIMENSIONS,
   type AdmissionQueueDepth,
   type AdmissionQueueInspectionEntry,
+  type ExecutionTreeBreakerEvidence,
   type PhaseCapabilityEvidence,
   type MaintenanceCleanupPreviewItem,
   type MaintenanceDebugBundle,
@@ -65,6 +67,17 @@ interface AdmissionQueueDiagnosticExport {
   truncated: boolean;
   depth?: AdmissionQueueDepth;
   entries: AdmissionQueueInspectionEntry[];
+  treeControls?: Array<{
+    rootObjectiveKey: string;
+    state: 'paused' | 'resumed' | 'cancelled';
+    trigger: 'operator' | 'fan-out-breaker';
+    recordedAt: string;
+    resumedAt?: string;
+    signals: string[];
+    observed?: ExecutionTreeBreakerEvidence['observed'];
+    thresholds?: ExecutionTreeBreakerEvidence['thresholds'];
+    recoveryGuidance: string[];
+  }>;
 }
 
 type AdmissionQueueDiagnosticCollector = () => Promise<AdmissionQueueDiagnosticExport>;
@@ -683,15 +696,45 @@ export class MaintenanceService {
 
 async function collectAdmissionQueueDiagnostics(): Promise<AdmissionQueueDiagnosticExport> {
   try {
-    const queue = await getAdmissionControlService().inspectQueue({
-      limit: MAX_ADMISSION_QUEUE_DIAGNOSTICS,
-    });
+    const admission = getAdmissionControlService();
+    const [queue, reservations] = await Promise.all([
+      admission.inspectQueue({
+        limit: MAX_ADMISSION_QUEUE_DIAGNOSTICS,
+      }),
+      admission.list({ limit: 10_000 }),
+    ]);
+    const controls = reservations
+      .filter(
+        (reservation) =>
+          reservation.request.executionTree?.edge === 'root' && reservation.executionTreeControl
+      )
+      .flatMap((reservation) => {
+        const control = reservation.executionTreeControl;
+        if (!control) return [];
+        return {
+          rootObjectiveKey: `sha256:${createHash('sha256')
+            .update(control.rootObjectiveId)
+            .digest('hex')}`,
+          state: control.state,
+          trigger: control.trigger,
+          recordedAt: control.recordedAt,
+          ...(control.resumedAt ? { resumedAt: control.resumedAt } : {}),
+          signals: control.evidence?.signals ?? [],
+          ...(control.evidence ? { observed: control.evidence.observed } : {}),
+          ...(control.evidence ? { thresholds: control.evidence.thresholds } : {}),
+          recoveryGuidance: control.evidence?.recoveryGuidance ?? [],
+        };
+      });
     return {
       generatedAt: queue.generatedAt,
       status: 'ok',
-      truncated: queue.pagination.hasMore || queue.pagination.snapshotTruncated,
+      truncated:
+        queue.pagination.hasMore ||
+        queue.pagination.snapshotTruncated ||
+        controls.length > MAX_ADMISSION_QUEUE_DIAGNOSTICS,
       depth: queue.depth,
       entries: queue.entries,
+      treeControls: controls.slice(0, MAX_ADMISSION_QUEUE_DIAGNOSTICS),
     };
   } catch {
     return {
