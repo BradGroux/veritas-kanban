@@ -127,6 +127,8 @@ export interface RunEgressGatewayEvidence {
   policyHash: string;
   state: 'enforced' | 'stopped';
   protocols: Array<'http' | 'connect' | 'ws' | 'socks5'>;
+  /** Absent on early v1 evidence and interpreted as direct. */
+  upstreamMode?: 'direct' | 'http-connect';
   proxyEnvironmentKeys: Array<
     | 'HTTP_PROXY'
     | 'HTTPS_PROXY'

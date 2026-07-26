@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { PROVIDER_RUNTIME_PROBE_REVISION } from '@veritas-kanban/shared';
 import { EgressPolicyService } from '../services/egress-policy-service.js';
 import { getProviderRuntimeAdapterDefinition } from '../services/provider-runtime-adapter-registry.js';
-import { runEgressPolicyRequiresGateway } from '../services/run-egress-gateway-service.js';
+import {
+  RunEgressGatewayService,
+  runEgressPolicyRequiresGateway,
+} from '../services/run-egress-gateway-service.js';
 
 const policyService = new EgressPolicyService();
 
@@ -93,5 +96,24 @@ describe('run egress launch policy', () => {
     ).toMatchObject({
       state: 'advisory',
     });
+  });
+
+  it('rejects unsupported upstream proxy schemes before binding listeners', async () => {
+    const gateway = new RunEgressGatewayService(policyService);
+    await expect(
+      gateway.start({
+        runId: 'run-invalid-upstream',
+        policy: policyService.compile({
+          defaultEgress: 'deny',
+          allowedHosts: ['api.example.com'],
+          allowedMethods: [],
+          allowedPathPrefixes: [],
+          blockPrivateNetwork: true,
+          blockMetadataEndpoints: true,
+          blockLoopback: true,
+        }),
+        upstreamProxyUrl: 'https://proxy.example.com:8443',
+      })
+    ).rejects.toThrow(/must be an HTTP origin/i);
   });
 });

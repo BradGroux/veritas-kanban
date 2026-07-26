@@ -825,6 +825,12 @@ inspection would be required. Both listeners stop during terminal cleanup.
 OpenClaw is provider-managed and cannot receive this local boundary, so a
 required fine-grained policy blocks its launch.
 
+Operators that require a corporate or audited proxy can set
+`VERITAS_EGRESS_UPSTREAM_PROXY` to an HTTP proxy origin. The gateway evaluates
+the destination first, pins the resolved address, and then opens an upstream
+CONNECT tunnel to that address. Proxy credentials remain memory-only; durable
+evidence records only `upstreamMode: http-connect`.
+
 When a preset enables scoped approvals, an otherwise eligible block creates a
 durable, exact-action network approval and holds the request at the gateway.
 Only an approved request proceeds. Explicit host denies and protected address

@@ -19,6 +19,7 @@ const LOOPBACK_HOST = '127.0.0.1';
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_CONNECTIONS = 64;
+export const RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY = 'VERITAS_EGRESS_UPSTREAM_PROXY' as const;
 export const RUN_EGRESS_PROXY_ENVIRONMENT_KEYS = [
   'HTTP_PROXY',
   'HTTPS_PROXY',
@@ -69,6 +70,8 @@ export interface RunEgressGatewayApprovalResult {
 export interface StartRunEgressGatewayInput {
   runId: string;
   policy: RunEgressPolicy;
+  /** Optional operator-managed HTTP proxy. Credentials remain memory-only. */
+  upstreamProxyUrl?: string;
   requestTimeoutMs?: number;
   idleTimeoutMs?: number;
   maxConnections?: number;
@@ -93,6 +96,7 @@ interface ActiveGateway {
   evidence: RunEgressGatewayEvidence;
   environment: RunEgressGatewayHandle['environment'];
   abortController: AbortController;
+  upstreamKey: string;
   stop(): Promise<RunEgressGatewayEvidence>;
 }
 
@@ -108,10 +112,15 @@ export class RunEgressGatewayService {
   async start(input: StartRunEgressGatewayInput): Promise<RunEgressGatewayHandle> {
     const runId = input.runId.trim();
     if (!runId) throw new ConflictError('Run-scoped egress gateway requires a run id.');
+    const upstream = parseUpstreamProxy(input.upstreamProxyUrl);
+    const upstreamKey = upstream?.key ?? identity('upstream-proxy', 'direct');
     const existing = this.activeByRunId.get(runId);
     if (existing) {
-      if (existing.evidence.policyHash !== input.policy.policyHash) {
-        throw new ConflictError('Run egress gateway already uses a different policy.', {
+      if (
+        existing.evidence.policyHash !== input.policy.policyHash ||
+        existing.upstreamKey !== upstreamKey
+      ) {
+        throw new ConflictError('Run egress gateway already uses a different policy or upstream.', {
           gatewayId: existing.evidence.gatewayId,
           policyHash: existing.evidence.policyHash,
         });
@@ -155,6 +164,7 @@ export class RunEgressGatewayService {
       requestTimeoutMs,
       idleTimeoutMs,
       policyService: this.policyService,
+      upstream,
       onDecision: input.onDecision,
       onApprovalRequired: input.onApprovalRequired,
       signal: abortController.signal,
@@ -220,6 +230,7 @@ export class RunEgressGatewayService {
       policyHash: input.policy.policyHash,
       state: 'enforced',
       protocols: ['http', 'connect', 'ws', 'socks5'],
+      upstreamMode: upstream ? 'http-connect' : 'direct',
       proxyEnvironmentKeys: [...RUN_EGRESS_PROXY_ENVIRONMENT_KEYS],
       startedAt: this.now().toISOString(),
     };
@@ -232,6 +243,7 @@ export class RunEgressGatewayService {
       evidence,
       environment,
       abortController,
+      upstreamKey,
       stop: () => {
         stopPromise ??= this.stopActive(active);
         return stopPromise;
@@ -293,11 +305,19 @@ interface GatewayRequestContext {
   requestTimeoutMs: number;
   idleTimeoutMs: number;
   policyService: EgressPolicyService;
+  upstream?: UpstreamProxy;
   onDecision?: StartRunEgressGatewayInput['onDecision'];
   onApprovalRequired?: StartRunEgressGatewayInput['onApprovalRequired'];
   signal: AbortSignal;
   now: () => Date;
   sockets: Set<Socket>;
+}
+
+interface UpstreamProxy {
+  key: string;
+  host: string;
+  port: number;
+  authorization?: string;
 }
 
 async function handleHttpRequest(
@@ -341,6 +361,14 @@ async function handleHttpRequest(
     rejectHttp(response, 502, 'destination-resolution-failed');
     return;
   }
+  let transport: Awaited<ReturnType<typeof openPinnedTransport>>;
+  try {
+    transport = await openPinnedTransport(context, address, portFor(target, 80));
+  } catch {
+    rejectHttp(response, 502, 'upstream-failure');
+    return;
+  }
+  if (transport.head.length > 0) transport.socket.unshift(transport.head);
   const headers = forwardHeaders(request.headers, target.host, false);
   const upstream = http.request({
     host: address,
@@ -350,10 +378,8 @@ async function handleHttpRequest(
     headers,
     family: net.isIP(address),
     timeout: context.requestTimeoutMs,
-  });
-  upstream.once('socket', (socket) => {
-    context.sockets.add(socket);
-    socket.once('close', () => context.sockets.delete(socket));
+    agent: false,
+    createConnection: () => transport.socket,
   });
   upstream.once('response', (upstreamResponse) => {
     response.writeHead(
@@ -408,26 +434,20 @@ async function handleConnect(
     rejectSocket(client, 502, 'destination-resolution-failed');
     return;
   }
-  const upstream = net.connect({
-    host: address,
-    port: authority.port,
-    family: net.isIP(address),
-  });
-  context.sockets.add(upstream);
-  let connected = false;
-  upstream.setTimeout(context.idleTimeoutMs, () => upstream.destroy());
-  upstream.once('close', () => context.sockets.delete(upstream));
-  upstream.once('connect', () => {
-    connected = true;
-    client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-    if (head.length > 0) upstream.write(head);
-    client.pipe(upstream);
-    upstream.pipe(client);
-  });
-  upstream.once('error', () => {
-    if (connected) client.destroy();
-    else rejectSocket(client, 502, 'upstream-failure');
-  });
+  let transport: Awaited<ReturnType<typeof openPinnedTransport>>;
+  try {
+    transport = await openPinnedTransport(context, address, authority.port);
+  } catch {
+    rejectSocket(client, 502, 'upstream-failure');
+    return;
+  }
+  const upstream = transport.socket;
+  client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+  if (transport.head.length > 0) client.write(transport.head);
+  if (head.length > 0) upstream.write(head);
+  client.pipe(upstream);
+  upstream.pipe(client);
+  upstream.once('error', () => client.destroy());
 }
 
 async function handleUpgrade(
@@ -477,36 +497,28 @@ async function handleUpgrade(
     rejectSocket(client, 502, 'destination-resolution-failed');
     return;
   }
-  const upstream = net.connect({
-    host: address,
-    port: portFor(target, 80),
-    family: net.isIP(address),
-  });
-  context.sockets.add(upstream);
-  let connected = false;
-  upstream.setTimeout(context.idleTimeoutMs, () => upstream.destroy());
-  upstream.once('close', () => context.sockets.delete(upstream));
-  upstream.once('connect', () => {
-    connected = true;
-    upstream.write(
-      `${request.method ?? 'GET'} ${target.pathname}${target.search} HTTP/${request.httpVersion}\r\n`
-    );
-    for (const [name, value] of Object.entries(
-      forwardHeaders(request.headers, target.host, true)
-    )) {
-      for (const item of Array.isArray(value) ? value : [value]) {
-        if (item !== undefined) upstream.write(`${name}: ${item}\r\n`);
-      }
+  let transport: Awaited<ReturnType<typeof openPinnedTransport>>;
+  try {
+    transport = await openPinnedTransport(context, address, portFor(target, 80));
+  } catch {
+    rejectSocket(client, 502, 'upstream-failure');
+    return;
+  }
+  const upstream = transport.socket;
+  upstream.write(
+    `${request.method ?? 'GET'} ${target.pathname}${target.search} HTTP/${request.httpVersion}\r\n`
+  );
+  for (const [name, value] of Object.entries(forwardHeaders(request.headers, target.host, true))) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined) upstream.write(`${name}: ${item}\r\n`);
     }
-    upstream.write('\r\n');
-    if (head.length > 0) upstream.write(head);
-    client.pipe(upstream);
-    upstream.pipe(client);
-  });
-  upstream.once('error', () => {
-    if (connected) client.destroy();
-    else rejectSocket(client, 502, 'upstream-failure');
-  });
+  }
+  upstream.write('\r\n');
+  if (transport.head.length > 0) client.write(transport.head);
+  if (head.length > 0) upstream.write(head);
+  client.pipe(upstream);
+  upstream.pipe(client);
+  upstream.once('error', () => client.destroy());
 }
 
 async function handleSocksConnection(
@@ -584,22 +596,13 @@ async function handleSocksConnection(
       return;
     }
 
-    const upstream = net.connect({
-      host: address,
-      port,
-      family: net.isIP(address),
-    });
-    context.sockets.add(upstream);
-    upstream.setTimeout(context.idleTimeoutMs, () => upstream.destroy());
-    upstream.once('close', () => context.sockets.delete(upstream));
-    await new Promise<void>((resolve, reject) => {
-      upstream.once('connect', resolve);
-      upstream.once('error', reject);
-    });
+    const transport = await openPinnedTransport(context, address, port);
+    const upstream = transport.socket;
     client.write(socksReply(0x00));
     const remainder = reader.release();
     client.on('error', () => client.destroy());
     upstream.on('error', () => client.destroy());
+    if (transport.head.length > 0) client.write(transport.head);
     if (remainder.length > 0) upstream.write(remainder);
     client.pipe(upstream);
     upstream.pipe(client);
@@ -783,6 +786,88 @@ async function withApprovalIdlePause<T>(
   }
 }
 
+async function openPinnedTransport(
+  context: GatewayRequestContext,
+  address: string,
+  port: number
+): Promise<{ socket: Socket; head: Buffer }> {
+  const upstream = context.upstream;
+  const socket = net.connect({
+    host: upstream?.host ?? address,
+    port: upstream?.port ?? port,
+    ...(upstream ? {} : { family: net.isIP(address) }),
+  });
+  context.sockets.add(socket);
+  socket.setTimeout(context.idleTimeoutMs, () => socket.destroy());
+  socket.once('close', () => context.sockets.delete(socket));
+  await new Promise<void>((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('error', reject);
+  });
+  if (!upstream) return { socket, head: Buffer.alloc(0) };
+
+  const authority = formatAuthority(address, port);
+  socket.write(
+    `CONNECT ${authority} HTTP/1.1\r\n` +
+      `Host: ${authority}\r\n` +
+      'Connection: keep-alive\r\n' +
+      (upstream.authorization ? `Proxy-Authorization: ${upstream.authorization}\r\n` : '') +
+      '\r\n'
+  );
+  const response = await readHttpResponseHead(socket);
+  if (response.statusCode !== 200) {
+    socket.destroy();
+    throw new Error(`Upstream proxy rejected CONNECT with status ${response.statusCode}.`);
+  }
+  return { socket, head: response.head };
+}
+
+function readHttpResponseHead(socket: Socket): Promise<{ statusCode: number; head: Buffer }> {
+  return new Promise((resolve, reject) => {
+    let buffer = Buffer.alloc(0);
+    const cleanup = () => {
+      socket.off('data', onData);
+      socket.off('close', onClose);
+      socket.off('error', onError);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error('Upstream proxy disconnected during CONNECT.'));
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onData = (chunk: Buffer) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      if (buffer.length > 16 * 1024) {
+        cleanup();
+        socket.destroy();
+        reject(new Error('Upstream proxy response headers exceeded the supported size.'));
+        return;
+      }
+      const boundary = buffer.indexOf('\r\n\r\n');
+      if (boundary < 0) return;
+      const firstLine = buffer.subarray(0, boundary).toString('latin1').split('\r\n', 1)[0] ?? '';
+      const match = /^HTTP\/1\.[01] ([1-5]\d{2})(?:\s|$)/.exec(firstLine);
+      socket.pause();
+      cleanup();
+      if (!match) {
+        socket.destroy();
+        reject(new Error('Upstream proxy returned an invalid CONNECT response.'));
+        return;
+      }
+      resolve({
+        statusCode: Number(match[1]),
+        head: buffer.subarray(boundary + 4),
+      });
+    };
+    socket.on('data', onData);
+    socket.once('close', onClose);
+    socket.once('error', onError);
+  });
+}
+
 function authenticated(request: IncomingMessage, token: string): boolean {
   const header = request.headers['proxy-authorization'];
   if (typeof header !== 'string') return false;
@@ -795,6 +880,54 @@ function safeEqual(left: string, right: string): boolean {
   const leftDigest = createHash('sha256').update(left).digest();
   const rightDigest = createHash('sha256').update(right).digest();
   return leftDigest.equals(rightDigest);
+}
+
+function parseUpstreamProxy(value: string | undefined): UpstreamProxy | undefined {
+  const source = value?.trim();
+  if (!source) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(source);
+  } catch {
+    throw new ConflictError('Run egress upstream proxy URL is invalid.');
+  }
+  if (
+    parsed.protocol !== 'http:' ||
+    parsed.pathname !== '/' ||
+    parsed.search ||
+    parsed.hash ||
+    !parsed.hostname
+  ) {
+    throw new ConflictError(
+      'Run egress upstream proxy must be an HTTP origin without a path, query, or fragment.'
+    );
+  }
+  const port = parsed.port ? Number.parseInt(parsed.port, 10) : 80;
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new ConflictError('Run egress upstream proxy port is invalid.');
+  }
+  let username: string;
+  let password: string;
+  try {
+    username = decodeURIComponent(parsed.username);
+    password = decodeURIComponent(parsed.password);
+  } catch {
+    throw new ConflictError('Run egress upstream proxy credentials have invalid encoding.');
+  }
+  return {
+    key: identity('upstream-proxy', parsed.toString()),
+    host: parsed.hostname.replace(/^\[|\]$/g, ''),
+    port,
+    ...(username || password
+      ? {
+          authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+        }
+      : {}),
+  };
+}
+
+function formatAuthority(host: string, port: number): string {
+  return `${net.isIP(host) === 6 ? `[${host}]` : host}:${port}`;
 }
 
 function parseProxyUrl(value: string | undefined): URL | null {

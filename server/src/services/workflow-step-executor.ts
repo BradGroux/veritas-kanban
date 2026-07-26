@@ -44,6 +44,7 @@ import { getAgentHostService } from './agent-host-service.js';
 import { getSandboxPolicyService } from './sandbox-policy-service.js';
 import {
   getRunEgressGatewayService,
+  RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY,
   runEgressPolicyRequiresGateway,
   type RunEgressGatewayApprovalRequest,
   type RunEgressGatewayApprovalResult,
@@ -975,6 +976,7 @@ export class WorkflowStepExecutor {
         ? await this.runEgressGateway.start({
             runId: attemptId,
             policy: egressPolicy,
+            upstreamProxyUrl: process.env[RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY],
             onApprovalRequired: (request) =>
               this.resolveWorkflowEgressApproval(
                 run,
@@ -1051,10 +1053,12 @@ export class WorkflowStepExecutor {
       const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
       const codex = new Codex({
         codexPathOverride,
-        env: {
-          ...buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
-          ...egressGateway?.environment,
-        },
+        env: Object.fromEntries(
+          Object.entries({
+            ...buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough),
+            ...egressGateway?.environment,
+          }).filter(([key]) => key !== RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY)
+        ),
       });
 
       const sessionKey = step.agent || agentDef?.id || step.id;

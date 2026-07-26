@@ -535,13 +535,14 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Networking & Security
 
-| Variable          | Default                                           | Description                                                                                                                                                                                  |
-| ----------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TRUST_PROXY`     | —                                                 | Express trust proxy setting for reverse proxy deployments. Common: `1` (single hop), `loopback`. Required for correct rate limiting behind nginx/Caddy/Traefik. `true` is blocked for safety |
-| `CORS_ORIGINS`    | `http://localhost:3000,http://localhost:5173,...` | Comma-separated list of allowed CORS origins                                                                                                                                                 |
-| `RATE_LIMIT_MAX`  | `300`                                             | Max API requests per minute per IP (localhost exempt). Auth endpoints have a stricter 15 req/min limit                                                                                       |
-| `CSP_REPORT_ONLY` | `false`                                           | Use Content-Security-Policy-Report-Only instead of enforcing                                                                                                                                 |
-| `CSP_REPORT_URI`  | —                                                 | URL to receive CSP violation reports                                                                                                                                                         |
+| Variable                        | Default                                           | Description                                                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TRUST_PROXY`                   | —                                                 | Express trust proxy setting for reverse proxy deployments. Common: `1` (single hop), `loopback`. Required for correct rate limiting behind nginx/Caddy/Traefik. `true` is blocked for safety |
+| `VERITAS_EGRESS_UPSTREAM_PROXY` | —                                                 | Optional operator HTTP proxy for policy-approved run egress. The gateway tunnels to the DNS-pinned destination and never persists proxy credentials                                          |
+| `CORS_ORIGINS`                  | `http://localhost:3000,http://localhost:5173,...` | Comma-separated list of allowed CORS origins                                                                                                                                                 |
+| `RATE_LIMIT_MAX`                | `300`                                             | Max API requests per minute per IP (localhost exempt). Auth endpoints have a stricter 15 req/min limit                                                                                       |
+| `CSP_REPORT_ONLY`               | `false`                                           | Use Content-Security-Policy-Report-Only instead of enforcing                                                                                                                                 |
+| `CSP_REPORT_URI`                | —                                                 | URL to receive CSP violation reports                                                                                                                                                         |
 
 ### Prometheus metrics
 

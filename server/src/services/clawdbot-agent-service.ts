@@ -25,6 +25,7 @@ import { getSandboxPolicyService, type SandboxPolicyService } from './sandbox-po
 import {
   getRunEgressGatewayService,
   RUN_EGRESS_PROXY_ENVIRONMENT_KEYS,
+  RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY,
   runEgressPolicyRequiresGateway,
   type RunEgressGatewayApprovalRequest,
   type RunEgressGatewayApprovalResult,
@@ -2970,6 +2971,7 @@ export class ClawdbotAgentService {
           pending.egressGateway = await this.runEgressGateway.start({
             runId: attemptId,
             policy: egressPolicy,
+            upstreamProxyUrl: process.env[RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY],
             onApprovalRequired: (request) =>
               this.resolveRunEgressApproval(
                 task,
@@ -10179,7 +10181,10 @@ export class ClawdbotAgentService {
       Object.entries({
         ...environment,
         ...pending.egressGateway?.environment,
-      }).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+      }).filter(
+        (entry): entry is [string, string] =>
+          entry[0] !== RUN_EGRESS_UPSTREAM_PROXY_ENV_KEY && typeof entry[1] === 'string'
+      )
     );
   }
 

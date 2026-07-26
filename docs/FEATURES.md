@@ -1182,6 +1182,9 @@ Reusable launch-time sandbox presets for provider execution guardrails.
   pins the evaluated DNS address for transport, and stops both listeners with
   the run. Remote OpenClaw execution fails closed when the preset requires this
   local gateway.
+- Optional `VERITAS_EGRESS_UPSTREAM_PROXY` routing sends only policy-approved,
+  DNS-pinned destinations through an operator HTTP CONNECT proxy. Credentials
+  stay memory-only and evidence exposes only the upstream mode.
 - Approval-eligible blocks pause at the gateway on a durable exact-action
   approval. Explicit denies and protected address classes cannot be overridden.
   Approved requests retain the approval ID in metadata-only governance and

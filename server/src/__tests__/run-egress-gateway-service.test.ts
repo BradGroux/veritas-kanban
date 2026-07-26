@@ -170,6 +170,51 @@ describe('RunEgressGatewayService', () => {
     });
   });
 
+  it('uses an operator upstream proxy without exposing its credentials in evidence', async () => {
+    const destination = http.createServer((_request, response) => response.end('via-upstream'));
+    const destinationPort = await listen(destination);
+    const observed: Array<{ authority: string; authorization?: string }> = [];
+    const upstream = http.createServer();
+    upstream.on('connect', (request, clientSocket, head) => {
+      observed.push({
+        authority: request.url ?? '',
+        authorization:
+          typeof request.headers['proxy-authorization'] === 'string'
+            ? request.headers['proxy-authorization']
+            : undefined,
+      });
+      const authority = new URL(`http://${request.url}`);
+      const destinationSocket = net.connect(Number(authority.port), authority.hostname);
+      destinationSocket.once('connect', () => {
+        clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        if (head.length > 0) destinationSocket.write(head);
+        clientSocket.pipe(destinationSocket);
+        destinationSocket.pipe(clientSocket);
+      });
+      destinationSocket.once('error', () => clientSocket.destroy());
+    });
+    const upstreamPort = await listen(upstream);
+    const gateway = await startGateway({
+      runId: 'run-egress-upstream',
+      upstreamProxyUrl: `http://proxy-user:proxy-pass@127.0.0.1:${upstreamPort}`,
+    });
+
+    await expect(
+      proxyRequest(gateway, `http://127.0.0.1:${destinationPort}/`, 'GET')
+    ).resolves.toMatchObject({
+      statusCode: 200,
+      body: 'via-upstream',
+    });
+    expect(observed).toEqual([
+      {
+        authority: `127.0.0.1:${destinationPort}`,
+        authorization: `Basic ${Buffer.from('proxy-user:proxy-pass').toString('base64')}`,
+      },
+    ]);
+    expect(gateway.evidence.upstreamMode).toBe('http-connect');
+    expect(JSON.stringify(gateway.evidence)).not.toContain('proxy-pass');
+  });
+
   it('pauses approval-eligible requests and never lets approval override an explicit deny', async () => {
     const upstream = http.createServer((_request, response) => response.end('approved-egress'));
     const upstreamPort = await listen(upstream);
@@ -248,6 +293,7 @@ async function startGateway(
     allowedMethods?: string[];
     allowedPathPrefixes?: string[];
     allowApprovals?: boolean;
+    upstreamProxyUrl?: string;
     onDecision?: (event: unknown) => void;
     onApprovalRequired?: (
       request: RunEgressGatewayApprovalRequest
@@ -271,6 +317,7 @@ async function startGateway(
     }),
     requestTimeoutMs: 5_000,
     idleTimeoutMs: 5_000,
+    upstreamProxyUrl: overrides.upstreamProxyUrl,
     onDecision: overrides.onDecision,
     onApprovalRequired: overrides.onApprovalRequired,
   });
