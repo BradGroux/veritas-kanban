@@ -717,6 +717,21 @@ derives the transition actor, workspace, verification timestamp, and evidence
 verifier from authenticated context; caller-supplied identity fields are
 rejected. Use `--json` for stable automation output.
 
+`goals get --json` includes the deduplicated `usageEvents`, full
+`continuationChain`, and restart-safe `continuationAttempts`. Automatic goals
+continue only after the prior completion is durable and required evidence,
+blockers, turn limits, and aggregate budgets are evaluated. A continuation is
+persisted as `planned` before it enters the normal admission path, then becomes
+`dispatched` with its attempt or queue identity. On restart, the same admission
+idempotency key is reused; an already-created child attempt is linked without a
+duplicate launch.
+
+Manual goals pause after an incomplete run. Automatic goals block when the
+provider has no verified continuation handle or admission fails, and enter
+`usage-limited` or `budget-limited` at their configured boundary. Resume those
+states explicitly after addressing the reported condition; do not build a
+second client-side continuation loop.
+
 ---
 
 ### Prompt Commands

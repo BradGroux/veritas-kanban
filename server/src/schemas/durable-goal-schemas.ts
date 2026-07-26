@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   DURABLE_GOAL_CONTINUATION_MODES,
+  DURABLE_GOAL_CONTINUATION_STATES,
   DURABLE_GOAL_SCHEMA_VERSION,
   DURABLE_GOAL_STATES,
   type DurableGoalRecord,
@@ -35,6 +36,33 @@ const BudgetUsageSchema = z
     idleRuntimeSeconds: z.number().nonnegative(),
     retries: z.number().nonnegative(),
     fanOut: z.number().nonnegative(),
+  })
+  .strict();
+
+export const DurableGoalUsageEventSchema = z
+  .object({
+    id: IdentifierSchema,
+    taskId: IdentifierSchema,
+    attemptId: IdentifierSchema.optional(),
+    usage: BudgetUsageSchema,
+    recordedAt: IsoTimestampSchema,
+  })
+  .strict();
+
+export const DurableGoalContinuationAttemptSchema = z
+  .object({
+    id: IdentifierSchema,
+    sourceTaskId: IdentifierSchema,
+    sourceAttemptId: IdentifierSchema,
+    state: z.enum(DURABLE_GOAL_CONTINUATION_STATES),
+    admissionIdempotencyKey: IdentifierSchema,
+    message: z.string().trim().min(1).max(50_000),
+    resultAttemptId: IdentifierSchema.optional(),
+    queueId: IdentifierSchema.optional(),
+    errorCode: IdentifierSchema.optional(),
+    errorSummary: BoundedTextSchema.optional(),
+    createdAt: IsoTimestampSchema,
+    updatedAt: IsoTimestampSchema,
   })
   .strict();
 
@@ -99,8 +127,10 @@ export const DurableGoalRecordSchema: z.ZodType<DurableGoalRecord> = z
       .strict(),
     budgets: DurableGoalBudgetLimitsSchema.optional(),
     usage: BudgetUsageSchema,
+    usageEvents: z.array(DurableGoalUsageEventSchema).max(10_000).default([]),
     currentRun: DurableGoalRunLinkSchema.optional(),
     continuationChain: z.array(DurableGoalRunLinkSchema).max(10_000),
+    continuationAttempts: z.array(DurableGoalContinuationAttemptSchema).max(10_000).default([]),
     blockers: z
       .array(
         z
@@ -177,6 +207,39 @@ export const DurableGoalRecordSchema: z.ZodType<DurableGoalRecord> = z
       }
       evidenceIds.add(evidence.evidenceId);
       evidencedRequirements.add(evidence.requirementId);
+    }
+
+    const usageEventIds = new Set<string>();
+    for (const [index, event] of record.usageEvents.entries()) {
+      if (usageEventIds.has(event.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['usageEvents', index, 'id'],
+          message: 'Durable goal usage event IDs must be unique.',
+        });
+      }
+      usageEventIds.add(event.id);
+    }
+
+    const continuationIds = new Set<string>();
+    const continuationAdmissionKeys = new Set<string>();
+    for (const [index, continuation] of record.continuationAttempts.entries()) {
+      if (continuationIds.has(continuation.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['continuationAttempts', index, 'id'],
+          message: 'Durable goal continuation attempt IDs must be unique.',
+        });
+      }
+      if (continuationAdmissionKeys.has(continuation.admissionIdempotencyKey)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['continuationAttempts', index, 'admissionIdempotencyKey'],
+          message: 'Durable goal continuation admission keys must be unique.',
+        });
+      }
+      continuationIds.add(continuation.id);
+      continuationAdmissionKeys.add(continuation.admissionIdempotencyKey);
     }
 
     if (record.state === 'complete') {

@@ -25,6 +25,8 @@ const {
   mockSdkConstructor,
   mockSdkStartThread,
   mockSdkRunStreamed,
+  mockHandleDurableGoalCompletion,
+  mockReconcileDurableGoalContinuation,
 } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockGetConfig: vi.fn(),
@@ -44,6 +46,8 @@ const {
   mockSdkConstructor: vi.fn(),
   mockSdkStartThread: vi.fn(),
   mockSdkRunStreamed: vi.fn(),
+  mockHandleDurableGoalCompletion: vi.fn(),
+  mockReconcileDurableGoalContinuation: vi.fn(),
 }));
 
 vi.mock('child_process', async (importOriginal) => {
@@ -280,7 +284,12 @@ function testableService(
     workspaceExecutionTrust,
     undefined,
     { getCurrent: vi.fn().mockResolvedValue(null) },
-    admission
+    admission,
+    undefined,
+    {
+      handleRunCompletion: mockHandleDurableGoalCompletion,
+      reconcilePlannedForTask: mockReconcileDurableGoalContinuation,
+    }
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
@@ -624,6 +633,8 @@ describe('ClawdbotAgentService Codex providers', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockHandleDurableGoalCompletion.mockResolvedValue({ action: 'not-found' });
+    mockReconcileDurableGoalContinuation.mockResolvedValue({ action: 'not-found' });
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-provider-'));
     task = {
       id: 'task_codex_fixture',
@@ -3054,6 +3065,17 @@ describe('ClawdbotAgentService Codex providers', () => {
     });
     expect(task.attempt?.completionResult?.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(task.attempt?.completionResult?.idempotencyKey).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(mockHandleDurableGoalCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: task.id,
+        attemptId: active.attemptId,
+        completion: expect.objectContaining({
+          status: 'success',
+          summary: 'natural completion won',
+        }),
+      }),
+      expect.any(Function)
+    );
     expect(
       mockUpdateTask.mock.calls.filter(
         ([, update]) =>
@@ -3663,6 +3685,30 @@ describe('ClawdbotAgentService Codex providers', () => {
       runLaunchManifestDigest: active.runLaunchManifest.digest,
       reason: fixture.credentialReason,
     });
+  });
+
+  it('does not schedule generic recovery when a durable goal owns continuation', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    mockHandleDurableGoalCompletion.mockResolvedValue({ action: 'dispatched' });
+    const service = testableService(tmpDir);
+    const active = await service.startAgent(task.id, 'codex');
+
+    await service.completeAgent(
+      task.id,
+      {
+        status: 'partial',
+        summary: 'The durable goal supervisor will continue this objective.',
+      },
+      {
+        attemptId: active.attemptId,
+        terminalSource: 'process',
+        providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+      }
+    );
+
+    expect(mockHandleDurableGoalCompletion).toHaveBeenCalledTimes(1);
+    expect(task.attempt?.runRetry).toBeUndefined();
   });
 
   it('does not enforce a budget evaluation that outlives its active run', async () => {
