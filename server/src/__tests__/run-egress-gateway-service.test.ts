@@ -114,7 +114,7 @@ describe('RunEgressGatewayService', () => {
   it('forwards an allowed plaintext WebSocket upgrade through the same policy boundary', async () => {
     const upstream = http.createServer();
     upstream.on('upgrade', (_request, socket) => {
-      socket.write(
+      socket.end(
         'HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n'
       );
     });
@@ -231,9 +231,23 @@ function connectTunnel(
       path: authority,
       headers: { 'Proxy-Authorization': basicProxyAuthorization(proxy) },
     });
-    request.once('connect', (response, socket) =>
-      resolve({ statusCode: response.statusCode ?? 0, socket })
-    );
+    request.once('connect', (response, socket, head) => {
+      const statusCode = response.statusCode ?? 0;
+      if (statusCode === 200) {
+        resolve({ statusCode, socket });
+        return;
+      }
+      const chunks = head.length > 0 ? [Buffer.from(head)] : [];
+      socket.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      socket.once('end', () =>
+        reject({
+          statusCode,
+          body: Buffer.concat(chunks).toString('utf8'),
+        })
+      );
+      socket.once('error', reject);
+      socket.resume();
+    });
     request.once('response', (response) => {
       const chunks: Buffer[] = [];
       response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
