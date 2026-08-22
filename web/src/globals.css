@@ -98,6 +98,16 @@
   scrollbar-width: thin;
 }
 
+/* Mantine's Tabs root stylesheet (.m_* class) sets display: block and wins the
+   cascade over the Tailwind `flex flex-col` utilities on the same element,
+   which un-constrains the flex-1/min-h-0 overlay scroll panels (issue #935
+   regression after the Mantine migration). Two-class specificity restores the
+   flex column so drawer tab panels clamp and scroll again. */
+.veritas-overlay-surface .mantine-Tabs-root {
+  display: flex;
+  flex-direction: column;
+}
+
 .veritas-overlay-scroll::-webkit-scrollbar {
   width: 0.625rem;
 }
