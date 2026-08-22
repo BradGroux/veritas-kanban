@@ -15,20 +15,24 @@ allowBuilds:
 
 overrides:
   '@babel/core@<7.29.1': 7.29.7
-  '@modelcontextprotocol/sdk>express-rate-limit': 8.5.2
+  '@hono/node-server': '>=1.19.15'
+  '@modelcontextprotocol/sdk>express-rate-limit': 8.6.2
   '@xmldom/xmldom': 0.8.13
-  'brace-expansion@<=5.0.7': 5.0.8
+  'body-parser@<2.3.0': 2.3.0
+  'brace-expansion@<5.0.9': 5.0.9
   'esbuild@<0.28.1': 0.28.1
-  'fast-uri@<3.1.4': 3.1.4
+  'fast-uri@<3.1.5': 3.1.5
   'form-data@<4.0.6': 4.0.6
-  hono: '>=4.12.18'
-  ip-address: '>=10.1.1'
-  'js-yaml@<4.3.0': 4.3.0
-  postcss: '>=8.5.10'
+  hono: '>=4.12.34'
+  ip-address: '>=10.3.1'
+  'js-yaml@<4.3.1': 4.3.1
+  'nanoid@<3.3.18': 3.3.18
+  postcss: '>=8.5.23'
   qs: ^6.14.2
   'uuid@^8.3.0': 11.1.1
   minimatch: '>=10.2.3'
   path-to-regexp: '>=8.4.0'
+  tar: '>=7.5.21'
   tmp: '>=0.2.6'
-  'undici@>=6.0.0 <7.0.0': 6.27.0
-  'undici@>=7.0.0 <8.0.0': 7.28.0
+  'undici@>=6.0.0 <7.0.0': 6.28.0
+  'undici@>=7.0.0 <8.0.0': 7.29.0
