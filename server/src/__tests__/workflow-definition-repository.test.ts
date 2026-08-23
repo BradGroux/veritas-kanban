@@ -47,7 +47,7 @@ describe('FileWorkflowDefinitionRepository', () => {
     await expect(repository.get('alpha')).resolves.toMatchObject({ id: 'alpha' });
     await expect(repository.count()).resolves.toBe(1);
     await expect(repository.listMetadata()).resolves.toEqual([
-      { id: 'alpha', name: 'Workflow alpha', version: 1, description: undefined },
+      { id: 'alpha', name: 'Workflow alpha', version: 1, description: '' },
     ]);
 
     await expect(repository.delete('alpha')).resolves.toBe(true);
@@ -75,7 +75,7 @@ describe('FileWorkflowDefinitionRepository', () => {
     await writeFile(path.join(workflowsDir, 'broken.yml'), ': invalid', 'utf8');
 
     await expect(repository.listMetadata()).resolves.toEqual([
-      { id: 'legacy', name: 'Legacy Workflow', version: 1, description: undefined },
+      { id: 'legacy', name: 'Legacy Workflow', version: 1, description: '' },
     ]);
   });
 

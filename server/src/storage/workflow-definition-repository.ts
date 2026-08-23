@@ -67,7 +67,7 @@ export class FileWorkflowDefinitionRepository {
           id: workflow.id,
           name: workflow.name,
           version: workflow.version,
-          description: workflow.description,
+          description: workflow.description ?? '',
         });
       } catch {
         // Preserve the legacy metadata behavior by skipping unreadable definitions.
