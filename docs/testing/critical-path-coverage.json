@@ -34,6 +34,7 @@
           "src/__tests__/middleware/write-enforcement.integration.test.ts",
           "src/__tests__/openclaw-provider.test.ts",
           "src/__tests__/path-audit.test.ts",
+          "src/__tests__/progress-service.test.ts",
           "src/__tests__/provider-completion-service.test.ts",
           "src/__tests__/provider-launch-credential-plan-service.test.ts",
           "src/__tests__/provider-runtime-adapters.test.ts",

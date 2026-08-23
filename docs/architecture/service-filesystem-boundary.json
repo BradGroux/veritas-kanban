@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 52,
+  "maximumEntries": 51,
   "entries": [
     {
       "path": "server/src/services/agent-health-service.ts",
@@ -169,12 +169,6 @@
       "category": "transient-process-io",
       "owner": "#1189",
       "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/progress-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1186",
-      "rationale": "Coordination-state storage migration is tracked in issue #1186."
     },
     {
       "path": "server/src/services/prompt-registry-service.ts",
