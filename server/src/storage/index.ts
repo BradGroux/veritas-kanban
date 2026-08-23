@@ -60,6 +60,10 @@ export {
   type ReflectionState,
   type ReflectionStateRepository,
 } from './reflection-state-repository.js';
+export {
+  FileWorkflowExecutionFileRepository,
+  type WorkflowExecutionFileRepository,
+} from './workflow-execution-file-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
 export {
