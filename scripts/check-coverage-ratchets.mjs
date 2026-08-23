@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path, { matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 import { coverageExceptionErrors } from './coverage-policy-utils.mjs';
 
@@ -73,9 +75,7 @@ function aggregate(entries) {
 }
 
 function emptyMetrics() {
-  return Object.fromEntries(
-    METRICS.map((metric) => [metric, { total: 0, covered: 0, pct: 0 }])
-  );
+  return Object.fromEntries(METRICS.map((metric) => [metric, { total: 0, covered: 0, pct: 0 }]));
 }
 
 function uncoveredChangedStatements(details, changedLines) {
@@ -90,6 +90,47 @@ function uncoveredChangedStatements(details, changedLines) {
     .filter(([id]) => (details.s?.[id] ?? 0) === 0)
     .map(([, location]) => location.start.line)
     .sort((left, right) => left - right);
+}
+
+export function executableChangedLineNumbers(source, changedLines, previousSource = undefined) {
+  if (changedLines.size === 0) return changedLines;
+  if (previousSource !== undefined) {
+    const compilerOptions = {
+      jsx: ts.JsxEmit.Preserve,
+      module: ts.ModuleKind.ESNext,
+      removeComments: true,
+      target: ts.ScriptTarget.ESNext,
+    };
+    const emitted = ts.transpileModule(source, { compilerOptions, reportDiagnostics: true });
+    const previousEmitted = ts.transpileModule(previousSource, {
+      compilerOptions,
+      reportDiagnostics: true,
+    });
+    const hasErrors = [...(emitted.diagnostics ?? []), ...(previousEmitted.diagnostics ?? [])].some(
+      ({ category }) => category === ts.DiagnosticCategory.Error
+    );
+    if (!hasErrors && emitted.outputText.trim() === previousEmitted.outputText.trim()) {
+      return new Set();
+    }
+  }
+
+  const executableLines = new Set();
+  const sourceFile = ts.createSourceFile(
+    'coverage-source.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.TSX
+  );
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.JSX, source);
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    const start = sourceFile.getLineAndCharacterOfPosition(scanner.getTokenPos()).line + 1;
+    const end = sourceFile.getLineAndCharacterOfPosition(scanner.getTextPos()).line + 1;
+    for (let line = start; line <= end; line += 1) {
+      if (changedLines.has(line)) executableLines.add(line);
+    }
+  }
+  return executableLines;
 }
 
 export function evaluateCoverage(
@@ -221,7 +262,23 @@ export function changedLineNumbersFromBase(repoRoot, baselineRef, changedFiles) 
       ['diff', '--unified=0', '--no-color', `${baselineRef}...HEAD`, '--', file],
       { cwd: repoRoot, encoding: 'utf8' }
     );
-    changedLines.set(file, parseChangedLineNumbers(diff));
+    const parsedLines = parseChangedLineNumbers(diff);
+    if (!/\.[cm]?[jt]sx?$/.test(file)) {
+      changedLines.set(file, parsedLines);
+      continue;
+    }
+    const source = readFileSync(path.join(repoRoot, file), 'utf8');
+    let previousSource;
+    try {
+      previousSource = execFileSync('git', ['show', `${baselineRef}:${file}`], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      previousSource = '';
+    }
+    changedLines.set(file, executableChangedLineNumbers(source, parsedLines, previousSource));
   }
   return changedLines;
 }

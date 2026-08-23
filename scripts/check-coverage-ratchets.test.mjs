@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   evaluateCoverage,
+  executableChangedLineNumbers,
   markdownSummary,
   normalizeCoverageSummary,
   normalizeDetailedCoverage,
@@ -62,6 +63,18 @@ test('extracts added and modified line numbers from zero-context diffs', () => {
     '@@ -4 +4,2 @@\n-old\n+new\n+next\n@@ -10,2 +11 @@\n-old\n-old\n+new\n@@ -20 +21,0 @@\n-old\n'
   );
   assert.deepEqual([...lines], [4, 5, 11]);
+});
+
+test('keeps only executable changed lines and ignores comment-only or type-only edits', () => {
+  const previous = 'const value: OldType = run(\n  input\n);\n';
+  const commentOnly = 'const value: OldType = run(\n  // rationale\n  input\n);\n';
+  assert.deepEqual([...executableChangedLineNumbers(commentOnly, new Set([2]), previous)], []);
+
+  const typeOnly = 'const value: NewType = run(\n  input\n);\n';
+  assert.deepEqual([...executableChangedLineNumbers(typeOnly, new Set([1]), previous)], []);
+
+  const runtimeChange = 'const value: OldType = run(\n  replacement\n);\n';
+  assert.deepEqual([...executableChangedLineNumbers(runtimeChange, new Set([2]), previous)], [2]);
 });
 
 test('aggregates a boundary and accepts its measured floor', () => {
