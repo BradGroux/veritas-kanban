@@ -126,6 +126,19 @@ test('distinguishes added type punctuation from deletion-only runtime edits', ()
   );
 });
 
+test('retains runtime-significant whitespace insertions', () => {
+  const previous = 'const kind = typeofx;\n';
+  const current = 'const kind = typeof x;\n';
+  const diff = '@@ -1 +1 @@\n-const kind = typeofx;\n+const kind = typeof x;\n';
+  const changedLines = parseChangedLineNumbers(diff);
+  const changedSpans = parseChangedLineSpans(diff);
+
+  assert.deepEqual(
+    [...executableChangedLineNumbers(current, changedLines, previous, changedSpans)],
+    [1]
+  );
+});
+
 test('aggregates a boundary and accepts its measured floor', () => {
   const evaluation = evaluateCoverage(policy, {
     server: {

@@ -159,10 +159,6 @@ export function executableChangedLineNumbers(
     false,
     ts.getScriptKindFromFileName(fileName)
   );
-  const languageVariant = /\.[jt]sx$/.test(fileName)
-    ? ts.LanguageVariant.JSX
-    : ts.LanguageVariant.Standard;
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariant, source);
   const spansByLine = new Map(
     [...changedTokenSpans(changedLines, changedSpans, sourceFile)].map(([line, spans]) => [
       line,
@@ -173,20 +169,8 @@ export function executableChangedLineNumbers(
       }),
     ])
   );
-  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
-    const tokenStart = scanner.getTokenPos();
-    const tokenEnd = scanner.getTextPos();
-    for (const [line, spans] of spansByLine) {
-      if (
-        spans.some((span) =>
-          span.start === span.end
-            ? tokenStart <= span.start && tokenEnd >= span.end
-            : tokenStart < span.end && tokenEnd > span.start
-        )
-      ) {
-        executableLines.add(line);
-      }
-    }
+  for (const [line, spans] of spansByLine) {
+    if (spans.length > 0) executableLines.add(line);
   }
   return executableLines;
 }
