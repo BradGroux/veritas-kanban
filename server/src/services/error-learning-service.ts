@@ -14,13 +14,10 @@
 
 import { getTaskService } from './task-service.js';
 import { createLogger } from '../lib/logger.js';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { getLegacyRuntimeDirs, getRuntimeDir } from '../utils/paths.js';
-import { migrateLegacyFiles } from '../utils/migrate-legacy-files.js';
-const DATA_DIR = getRuntimeDir();
-const LEGACY_DATA_DIRS = getLegacyRuntimeDirs();
-let migrationChecked = false;
+import {
+  FileErrorAnalysisRepository,
+  type ErrorAnalysisRepository,
+} from '../storage/error-analysis-repository.js';
 
 const log = createLogger('error-learning');
 
@@ -102,38 +99,10 @@ export interface ErrorLearningStats {
 
 // ─── Service ─────────────────────────────────────────────────────
 
-class ErrorLearningService {
-  private analyses: ErrorAnalysis[] = [];
-  private loaded = false;
-
-  private get storagePath(): string {
-    return path.join(DATA_DIR, 'error-analyses.json');
-  }
-
-  private async ensureLoaded(): Promise<void> {
-    if (!migrationChecked) {
-      migrationChecked = true;
-      await migrateLegacyFiles(
-        LEGACY_DATA_DIRS,
-        DATA_DIR,
-        ['error-analyses.json'],
-        'error analysis'
-      );
-    }
-
-    if (this.loaded) return;
-    try {
-      const data = await fs.readFile(this.storagePath, 'utf-8');
-      this.analyses = JSON.parse(data);
-    } catch {
-      this.analyses = [];
-    }
-    this.loaded = true;
-  }
-
-  private async save(): Promise<void> {
-    await fs.writeFile(this.storagePath, JSON.stringify(this.analyses, null, 2));
-  }
+export class ErrorLearningService {
+  constructor(
+    private readonly repository: ErrorAnalysisRepository = new FileErrorAnalysisRepository()
+  ) {}
 
   /**
    * Submit an error for analysis. Returns a structured analysis.
@@ -143,33 +112,29 @@ class ErrorLearningService {
    * or that can be completed via the API.
    */
   async submitError(context: ErrorContext): Promise<ErrorAnalysis> {
-    await this.ensureLoaded();
-
-    // Check for previous similar errors
-    const previousOccurrences = this.findSimilarErrors(context);
-
-    const analysis: ErrorAnalysis = {
-      id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      context: {
-        ...context,
-        occurredAt: context.occurredAt || new Date().toISOString(),
-      },
-      rootCause: '', // To be filled by analyzing agent
-      summary: `Error in ${context.taskId || 'unknown task'}: ${context.errorMessage.slice(0, 200)}`,
-      severity: this.estimateSeverity(context),
-      optionsConsidered: [],
-      chosenFix: '',
-      preventionSteps: [],
-      tags: this.autoTag(context),
-      relatedTasks: context.taskId ? [context.taskId] : [],
-      isRepeat: previousOccurrences.length > 0,
-      previousOccurrences: previousOccurrences.map((a) => a.id),
-      analyzedAt: new Date().toISOString(),
-      analyzedBy: context.agent,
-    };
-
-    this.analyses.push(analysis);
-    await this.save();
+    const analysis = await this.repository.mutate((analyses) => {
+      const previousOccurrences = this.findSimilarErrors(analyses, context);
+      const created: ErrorAnalysis = {
+        id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        context: {
+          ...context,
+          occurredAt: context.occurredAt || new Date().toISOString(),
+        },
+        rootCause: '',
+        summary: `Error in ${context.taskId || 'unknown task'}: ${context.errorMessage.slice(0, 200)}`,
+        severity: this.estimateSeverity(context),
+        optionsConsidered: [],
+        chosenFix: '',
+        preventionSteps: [],
+        tags: this.autoTag(context),
+        relatedTasks: context.taskId ? [context.taskId] : [],
+        isRepeat: previousOccurrences.length > 0,
+        previousOccurrences: previousOccurrences.map((candidate) => candidate.id),
+        analyzedAt: new Date().toISOString(),
+        analyzedBy: context.agent,
+      };
+      return { analyses: [...analyses, created], result: created };
+    });
 
     // If linked to a task, update the task's lessonsLearned
     if (context.taskId) {
@@ -204,13 +169,21 @@ class ErrorLearningService {
       >
     >
   ): Promise<ErrorAnalysis | null> {
-    await this.ensureLoaded();
-
-    const analysis = this.analyses.find((a) => a.id === id);
+    const analysis = await this.repository.mutate((analyses) => {
+      const index = analyses.findIndex((candidate) => candidate.id === id);
+      if (index === -1) {
+        return { analyses, result: null as ErrorAnalysis | null };
+      }
+      const updated: ErrorAnalysis = {
+        ...analyses[index],
+        ...update,
+        analyzedAt: new Date().toISOString(),
+      };
+      const next = [...analyses];
+      next[index] = updated;
+      return { analyses: next, result: updated as ErrorAnalysis | null };
+    });
     if (!analysis) return null;
-
-    Object.assign(analysis, update, { analyzedAt: new Date().toISOString() });
-    await this.save();
 
     // Update linked task
     if (analysis.relatedTasks.length > 0) {
@@ -225,8 +198,8 @@ class ErrorLearningService {
    * Get a specific analysis.
    */
   async getAnalysis(id: string): Promise<ErrorAnalysis | null> {
-    await this.ensureLoaded();
-    return this.analyses.find((a) => a.id === id) || null;
+    const analyses = await this.repository.read();
+    return analyses.find((analysis) => analysis.id === id) || null;
   }
 
   /**
@@ -239,12 +212,11 @@ class ErrorLearningService {
     agent?: string;
     limit?: number;
   }): Promise<ErrorAnalysis[]> {
-    await this.ensureLoaded();
-
-    let results = [...this.analyses];
+    let results = [...(await this.repository.read())];
 
     if (filters?.taskId) {
-      results = results.filter((a) => a.relatedTasks.includes(filters.taskId!));
+      const taskId = filters.taskId;
+      results = results.filter((analysis) => analysis.relatedTasks.includes(taskId));
     }
     if (filters?.errorType) {
       results = results.filter((a) => a.context.errorType === filters.errorType);
@@ -272,13 +244,13 @@ class ErrorLearningService {
    * Get aggregate statistics about error patterns.
    */
   async getStats(): Promise<ErrorLearningStats> {
-    await this.ensureLoaded();
+    const analyses = await this.repository.read();
 
     const byType: Record<string, number> = {};
     const bySeverity: Record<string, number> = {};
     const preventionCounts: Record<string, number> = {};
 
-    for (const analysis of this.analyses) {
+    for (const analysis of analyses) {
       // By type
       const type = analysis.context.errorType || 'unknown';
       byType[type] = (byType[type] || 0) + 1;
@@ -292,15 +264,15 @@ class ErrorLearningService {
       }
     }
 
-    const repeats = this.analyses.filter((a) => a.isRepeat).length;
-    const repeatRate = this.analyses.length > 0 ? repeats / this.analyses.length : 0;
+    const repeats = analyses.filter((analysis) => analysis.isRepeat).length;
+    const repeatRate = analyses.length > 0 ? repeats / analyses.length : 0;
 
     const topPreventionSteps = Object.entries(preventionCounts)
       .map(([step, count]) => ({ step, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    const recentAnalyses = this.analyses
+    const recentAnalyses = analyses
       .slice(-5)
       .reverse()
       .map((a) => ({
@@ -311,7 +283,7 @@ class ErrorLearningService {
       }));
 
     return {
-      totalAnalyses: this.analyses.length,
+      totalAnalyses: analyses.length,
       byType,
       bySeverity,
       repeatRate: Math.round(repeatRate * 100) / 100,
@@ -325,7 +297,7 @@ class ErrorLearningService {
    * Useful for agents to check "have we seen this before?"
    */
   async searchSimilar(errorMessage: string, limit = 5): Promise<ErrorAnalysis[]> {
-    await this.ensureLoaded();
+    const analyses = await this.repository.read();
 
     // Simple keyword matching — could be replaced with embeddings
     const keywords = errorMessage
@@ -333,7 +305,7 @@ class ErrorLearningService {
       .split(/\s+/)
       .filter((w) => w.length > 3);
 
-    const scored = this.analyses.map((analysis) => {
+    const scored = analyses.map((analysis) => {
       const text =
         `${analysis.context.errorMessage} ${analysis.rootCause} ${analysis.summary}`.toLowerCase();
       const matches = keywords.filter((kw) => text.includes(kw)).length;
@@ -349,9 +321,9 @@ class ErrorLearningService {
 
   // ─── Private Helpers ─────────────────────────────────────────
 
-  private findSimilarErrors(context: ErrorContext): ErrorAnalysis[] {
+  private findSimilarErrors(analyses: ErrorAnalysis[], context: ErrorContext): ErrorAnalysis[] {
     const msg = context.errorMessage.toLowerCase();
-    return this.analyses.filter((a) => {
+    return analyses.filter((a) => {
       const existingMsg = a.context.errorMessage.toLowerCase();
       // Check for significant overlap
       const words = msg.split(/\s+/).filter((w) => w.length > 3);

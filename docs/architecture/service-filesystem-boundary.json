@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 44,
+  "maximumEntries": 43,
   "entries": [
     {
       "path": "server/src/services/agent-health-service.ts",
@@ -61,12 +61,6 @@
       "category": "packaged-readonly-content",
       "owner": "#1188",
       "rationale": "Managed-content storage migration is tracked in issue #1188."
-    },
-    {
-      "path": "server/src/services/error-learning-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1186",
-      "rationale": "Coordination-state storage migration is tracked in issue #1186."
     },
     {
       "path": "server/src/services/external-tracker-service.ts",
