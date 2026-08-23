@@ -14,7 +14,7 @@ Copy/paste prompt templates for AI agents working with Veritas Kanban.
 | ------------------------------------------------ | --------------------------------------- |
 | [sprint-planning.md](sprint-planning.md)         | Break down epics into sprints and tasks |
 | [worker-handoff.md](worker-handoff.md)           | PM → Worker task assignment             |
-| [cross-model-review.md](cross-model-review.md)   | Claude ↔ GPT code review                |
+| [cross-model-review.md](cross-model-review.md)   | Optional independent code review        |
 | [feature-development.md](feature-development.md) | End-to-end feature implementation       |
 | [bug-triage.md](bug-triage.md)                   | Issue investigation and fix             |
 | [research-report.md](research-report.md)         | Deep research deliverable               |

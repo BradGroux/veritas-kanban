@@ -1,10 +1,10 @@
-# Cross-Model Code Review Prompt
+# Optional Independent Code Review Prompt
 
-Use this when a task or configured governance policy explicitly requires an
-opposite-model review.
+Use this when a task or configured governance policy explicitly requests an
+independent review. The reviewer may use any suitable model or human review
+path.
 
-This prompt is optional unless the task, issue owner, release owner, or review
-gate says otherwise.
+This prompt is not part of the default delivery SOP or release gate.
 
 ---
 
@@ -65,4 +65,4 @@ If no issues found, respond: "✅ Code review passed — no issues found."
 
 ## Reference
 
-See RF-002 cross-model audit for validation of this approach (91% accuracy).
+See RF-002 for historical validation of this optional review approach.

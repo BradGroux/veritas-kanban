@@ -1,8 +1,9 @@
-# SOP: Cross-Model Code Review (Claude ↔ GPT)
+# Optional Independent Code Review Playbook
 
-Cross-model review is an optional independent-review workflow. Use it only
-when the task, configured review gate, issue owner, or release owner explicitly
-requires a different model.
+This legacy-path document describes an optional independent-review workflow.
+It is not part of the default delivery SOP or release gate. Use it only when
+the task, configured review gate, issue owner, or release owner explicitly
+requests it.
 
 ---
 
@@ -27,7 +28,7 @@ normal human/CI review path.
    - Type: `code`
    - Sprint/project identical
    - Description includes acceptance criteria + diff link(s)
-3. **Assign to opposite model** (via OpenClaw or other orchestrator):
+3. **Assign an independent reviewer** (human or configured agent):
    ```
    Hey Codex, review PR for task_1234. Checklist below.
    ```
@@ -47,7 +48,8 @@ normal human/CI review path.
    ## Verdict
    Changes required.
    ```
-7. **Audit trail**: Update commit message or PR description with `[author: claude-sonnet-4-5][reviewed-by: gpt-5.1-codex]`.
+7. **Audit trail**: Record the reviewer and outcome in the task or pull request
+   when attribution is required by the configured policy.
 
 ---
 
@@ -68,7 +70,7 @@ Adapt per task type.
 ## Prompt Template (Reviewer)
 
 ```
-You are the cross-model reviewer. The code was authored by <model>. Apply the checklist:
+You are the independent reviewer. Apply the checklist:
 1. Pull latest branch <branch>.
 2. Run tests (if any).
 3. For each issue, note severity (High/Medium/Low/Nit) + file/line + fix suggestion.
@@ -100,16 +102,16 @@ Store in `prompt-registry/cross-model-review.md`.
 
 ## Review Gates (Veritas Kanban Enforcement)
 
-VK's built-in enforcement gates can make this optional workflow a structural
+VK's built-in enforcement gates can make this optional playbook a structural
 requirement for selected workspaces or tasks:
 
-1. **reviewGate** — Blocks task completion unless all four reviewScores (security, reliability, performance, accessibility) are 10. This is the automated enforcement layer that ensures the cross-model review checklist has been completed rigorously.
+1. **reviewGate** — Blocks task completion unless all four reviewScores (security, reliability, performance, accessibility) are 10. This is the automated enforcement layer that ensures the configured review checklist has been completed rigorously.
 
 2. **closingComments** — Requires a substantive review comment (≥20 characters) before task completion. Ensures the reviewer leaves documented findings, not just scores.
 
 3. **How they work together**:
    - Author (Model A) completes code; task remains `in-progress`
-   - Reviewer (Model B) runs the cross-model review checklist
+   - Independent reviewer runs the configured review checklist
    - Reviewer scores all 4 dimensions via the API: `PATCH /api/tasks/{id}` with `reviewScores`
    - Reviewer leaves findings as comments (must be ≥20 chars if closingComments enabled)
    - If reviewGate is enabled, task **cannot** move to `done` until all scores are 10

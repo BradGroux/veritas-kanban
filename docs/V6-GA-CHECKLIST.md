@@ -23,7 +23,9 @@ Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
 - [x] Frozen install, production and full audits, lint and warning budget,
       typecheck, build, workspace tests, Playwright, Mantine QA, CLI/MCP smoke,
       desktop checks, and release validators pass on the consolidated candidate.
-- [ ] The required opposite-model review reports no unresolved blocker.
+- [x] Independent review is owner-directed and is not part of the active
+      6.1.1 release gate; exact local and CI evidence carries the release
+      decision.
 - [ ] The release PR merges and the exact merge is published as annotated
       `v6.1.1` with a live body matching `docs/releases/v6.1.1.md`.
 - [ ] Signed/notarized macOS assets, updater metadata, independent installed-app

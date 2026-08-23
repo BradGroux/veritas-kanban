@@ -14,6 +14,8 @@ tabs migration and completes a security-audited dependency maintenance pass.
 
 ### Changed
 
+- Clarified that independent review is owner-directed and optional rather than
+  a default delivery SOP or release gate (#1156).
 - Updated supported runtime and development dependencies across the workspace,
   including Chalk 6, and refreshed transitive security override floors so both
   production and full dependency audits resolve without known vulnerabilities

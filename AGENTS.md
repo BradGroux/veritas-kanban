@@ -37,7 +37,7 @@ veritas-kanban/
 ├── mcp/             MCP server
 ├── desktop/         Electron desktop wrapper
 ├── docs/            Operator and developer documentation
-├── prompt-registry/ Prompt templates and cross-model review SOPs
+├── prompt-registry/ Prompt templates and optional review workflows
 └── .veritas-kanban/ Runtime data: agent-registry, logs, telemetry
 ```
 
