@@ -1,4 +1,3 @@
-import { mkdir } from 'fs/promises';
 import { join } from 'path';
 import { getDataDir } from '../utils/paths.js';
 import type { ActivityRepository } from '../storage/interfaces.js';
@@ -93,11 +92,6 @@ export class ActivityService {
         maxActivities: this.MAX_ACTIVITIES,
       });
     }
-  }
-
-  private async ensureDir() {
-    const dir = getDataDir();
-    await mkdir(dir, { recursive: true });
   }
 
   /**
@@ -250,7 +244,6 @@ export class ActivityService {
       return;
     }
 
-    await this.ensureDir();
     // Fallback: no-op
   }
 
