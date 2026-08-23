@@ -84,15 +84,12 @@ export class FileDelegationRepository implements DelegationRepository {
   private async readJson<T>(filePath: string, fallback: T, label: string): Promise<T> {
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      handle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-      const [pathStats, stats] = await Promise.all([lstat(filePath), handle.stat()]);
-      if (
-        pathStats.isSymbolicLink() ||
-        pathStats.dev !== stats.dev ||
-        pathStats.ino !== stats.ino
-      ) {
-        throw new Error(`${label} must not use a symbolic link or changed file`);
+      const pathStats = await lstat(filePath);
+      if (pathStats.isSymbolicLink()) {
+        throw new Error(`${label} must not use a symbolic link`);
       }
+      handle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      const stats = await handle.stat();
       if (!stats.isFile() || stats.size > MAX_DELEGATION_BYTES) {
         throw new Error(`${label} must use a bounded regular file`);
       }
