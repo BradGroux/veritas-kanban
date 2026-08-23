@@ -22,6 +22,7 @@ const policy = {
   packages: [
     {
       id: 'server',
+      runner: { testFiles: ['src/__tests__/auth.test.ts'] },
       boundaries: [
         {
           id: 'auth',
@@ -97,7 +98,7 @@ test('requires bounded reviewed exceptions and omits active exceptions', () => {
   withException.packages[0].boundaries[0].exceptions[0].reviewBy = 'never';
   assert.throws(
     () => evaluateCoverage(withException, { server: {} }, '2026-08-23'),
-    /review date is invalid/
+    /reviewBy must be a real YYYY-MM-DD date/
   );
 });
 
@@ -118,6 +119,28 @@ test('rejects a changed critical file without covered executable lines', () => {
       'server/auth changed critical file server/src/middleware/new-auth.ts has no covered lines'
     )
   );
+  assert.ok(
+    uncovered.failures.includes(
+      'server/auth changed critical file server/src/middleware/new-auth.ts requires a governed test change or explicit exception'
+    )
+  );
+  assert.equal(uncovered.results[0].status, 'fail');
+});
+
+test('requires a governed test diff even when an existing critical file has prior coverage', () => {
+  const summary = { server: { 'server/src/middleware/auth.ts': fileCoverage(3, 4) } };
+  const sourceOnly = evaluateCoverage(policy, summary, '2026-08-23', [
+    'server/src/middleware/auth.ts',
+  ]);
+  assert.match(sourceOnly.failures.join('\n'), /requires a governed test change/);
+  assert.equal(sourceOnly.results[0].status, 'fail');
+
+  const withTest = evaluateCoverage(policy, summary, '2026-08-23', [
+    'server/src/middleware/auth.ts',
+    'server/src/__tests__/auth.test.ts',
+  ]);
+  assert.deepEqual(withTest.failures, []);
+  assert.equal(withTest.results[0].status, 'pass');
 });
 
 test('rejects broad and untracked exceptions', () => {

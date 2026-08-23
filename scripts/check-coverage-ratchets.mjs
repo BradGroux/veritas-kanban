@@ -4,13 +4,11 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path, { matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { coverageExceptionErrors } from './coverage-policy-utils.mjs';
+
 const METRICS = ['lines', 'branches', 'functions', 'statements'];
 const POLICY_PATH = 'docs/testing/critical-path-coverage.json';
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
-const TRACKING_ISSUE_PATTERN = /^#\d+$/;
-const GLOB_PATTERN = /[*?[\]{}!]/;
 
 function roundPercent(covered, total) {
   if (total === 0) return 100;
@@ -50,43 +48,21 @@ export function normalizeCoverageSummary(summary, repoRoot) {
   );
 }
 
-function validateException(exception, today) {
-  const normalized = path.posix.normalize(exception.path ?? '');
-  if (
-    !exception.path ||
-    normalized !== exception.path ||
-    normalized.startsWith('../') ||
-    path.posix.isAbsolute(normalized) ||
-    GLOB_PATTERN.test(normalized)
-  ) {
-    throw new Error('Coverage exception path must be one exact repository-relative file.');
-  }
-  if (typeof exception.reason !== 'string' || exception.reason.trim().length < 20) {
-    throw new Error(`Coverage exception reason is too short for ${exception.path}.`);
-  }
-  if (!GITHUB_LOGIN_PATTERN.test(exception.owner ?? '')) {
-    throw new Error(`Coverage exception owner is invalid for ${exception.path}.`);
-  }
-  if (!TRACKING_ISSUE_PATTERN.test(exception.trackingIssue ?? '')) {
-    throw new Error(`Coverage exception tracking issue is invalid for ${exception.path}.`);
-  }
-  if (!ISO_DATE_PATTERN.test(exception.reviewBy ?? '')) {
-    throw new Error(`Coverage exception review date is invalid for ${exception.path}.`);
-  }
-  const reviewDate = new Date(`${exception.reviewBy}T00:00:00.000Z`);
-  if (
-    Number.isNaN(reviewDate.valueOf()) ||
-    reviewDate.toISOString().slice(0, 10) !== exception.reviewBy
-  ) {
-    throw new Error(`Coverage exception review date is invalid for ${exception.path}.`);
-  }
-  const maximum = new Date(`${today}T00:00:00.000Z`);
-  maximum.setUTCDate(maximum.getUTCDate() + 90);
-  if (exception.reviewBy < today || exception.reviewBy > maximum.toISOString().slice(0, 10)) {
-    throw new Error(
-      `Coverage exception for ${exception.path} must be reviewed within the next 90 days.`
-    );
-  }
+function validateException(exception, label, today) {
+  const errors = coverageExceptionErrors(exception, label, today);
+  if (errors.length > 0) throw new Error(errors.join('\n'));
+}
+
+function changedGovernedTest(packagePolicy, changedFiles) {
+  const exactTests = new Set(
+    (packagePolicy.runner?.testFiles ?? []).map(
+      (testFile) => `${packagePolicy.id}/${testFile}`
+    )
+  );
+  const triggerPatterns = packagePolicy.runner?.triggerPatterns ?? [];
+  return changedFiles.some(
+    (file) => exactTests.has(file) || triggerPatterns.some((pattern) => matchesGlob(file, pattern))
+  );
 }
 
 function aggregate(entries) {
@@ -115,14 +91,18 @@ export function evaluateCoverage(
   for (const packagePolicy of policy.packages) {
     const summary = summaries[packagePolicy.id];
     if (!summary) continue;
+    const hasChangedGovernedTest = changedGovernedTest(packagePolicy, changedFiles);
 
     for (const boundary of packagePolicy.boundaries) {
+      const failureCountBeforeBoundary = failures.length;
       const exceptions = boundary.exceptions ?? [];
-      for (const exception of exceptions) validateException(exception, today);
+      for (const exception of exceptions) {
+        validateException(exception, `${packagePolicy.id}/${boundary.id}`, today);
+      }
 
       const entries = Object.entries(summary).filter(([file]) => {
         const included = boundary.include.some((pattern) => matchesGlob(file, pattern));
-        const excepted = exceptions.some((exception) => matchesGlob(file, exception.path));
+        const excepted = exceptions.some((exception) => file === exception.path);
         return included && !excepted;
       });
 
@@ -155,6 +135,11 @@ export function evaluateCoverage(
             `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no covered lines`
           );
         }
+        if (!hasChangedGovernedTest) {
+          failures.push(
+            `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} requires a governed test change or explicit exception`
+          );
+        }
       }
 
       results.push({
@@ -164,7 +149,7 @@ export function evaluateCoverage(
         files: entries.map(([file]) => file).sort(),
         metrics,
         thresholds: boundary.thresholds,
-        status: regressions.length === 0 ? 'pass' : 'fail',
+        status: failures.length === failureCountBeforeBoundary ? 'pass' : 'fail',
       });
     }
   }

@@ -4,50 +4,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { coverageExceptionErrors } from './coverage-policy-utils.mjs';
+
 const EXPECTED_PACKAGES = ['server', 'web', 'cli', 'mcp', 'desktop'];
 const METRICS = ['lines', 'branches', 'functions', 'statements'];
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
-const TRACKING_ISSUE_PATTERN = /^#\d+$/;
 const GLOB_PATTERN = /[*?[\]{}!]/;
-
-function isValidIsoDate(value) {
-  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
-}
-
-function validateException(exception, fullId, errors, today) {
-  const normalized = path.posix.normalize(exception.path ?? '');
-  if (
-    !exception.path ||
-    normalized !== exception.path ||
-    normalized.startsWith('../') ||
-    path.posix.isAbsolute(normalized) ||
-    GLOB_PATTERN.test(normalized)
-  ) {
-    errors.push(`${fullId} exception path must be one exact repository-relative file`);
-  }
-  if (typeof exception.reason !== 'string' || exception.reason.trim().length < 20) {
-    errors.push(`${fullId} exception reason must contain at least 20 characters`);
-  }
-  if (!GITHUB_LOGIN_PATTERN.test(exception.owner ?? '')) {
-    errors.push(`${fullId} exception owner must be a GitHub login`);
-  }
-  if (!TRACKING_ISSUE_PATTERN.test(exception.trackingIssue ?? '')) {
-    errors.push(`${fullId} exception must reference a tracking issue such as #123`);
-  }
-  if (!isValidIsoDate(exception.reviewBy)) {
-    errors.push(`${fullId} exception reviewBy must be a real YYYY-MM-DD date`);
-    return;
-  }
-  const maximum = new Date(`${today}T00:00:00.000Z`);
-  maximum.setUTCDate(maximum.getUTCDate() + 90);
-  if (exception.reviewBy < today || exception.reviewBy > maximum.toISOString().slice(0, 10)) {
-    errors.push(`${fullId} exception reviewBy must be today or within the next 90 days`);
-  }
-}
 
 export function compareCoveragePolicy(current, baseline) {
   const errors = [];
@@ -77,6 +39,13 @@ export function compareCoveragePolicy(current, baseline) {
         }
       }
     }
+    for (const field of ['testFiles', 'triggerPatterns']) {
+      for (const input of baselinePackage.runner?.[field] ?? []) {
+        if (!currentPackage.runner?.[field]?.includes(input)) {
+          errors.push(`${baselinePackage.id} cannot remove governed runner ${field} input ${input}`);
+        }
+      }
+    }
   }
   return errors;
 }
@@ -92,7 +61,7 @@ export function validateCoveragePolicy({
   const errors = [];
   const packageIds = policy.packages?.map(({ id }) => id) ?? [];
   const coverageJob = workflow.match(
-    /(?:^|\n)  critical-path-coverage:\n[\s\S]*?(?=\n  [a-zA-Z0-9_-]+:\n|$)/
+    /(?:^|\n) {2}critical-path-coverage:\n[\s\S]*?(?=\n {2}[a-zA-Z0-9_-]+:\n|$)/
   )?.[0];
 
   if (policy.schemaVersion !== 'critical-path-coverage/v1') {
@@ -109,8 +78,8 @@ export function validateCoveragePolicy({
 
   const boundaryIds = new Set();
   for (const packagePolicy of policy.packages ?? []) {
-    if (!packagePolicy.report?.endsWith('/coverage-summary.json')) {
-      errors.push(`${packagePolicy.id} must declare a machine-readable coverage summary`);
+    if (packagePolicy.report !== `coverage/${packagePolicy.id}/coverage-summary.json`) {
+      errors.push(`${packagePolicy.id} must use its canonical machine-readable coverage summary`);
     }
     for (const testFile of packagePolicy.runner?.testFiles ?? []) {
       if (
@@ -140,7 +109,7 @@ export function validateCoveragePolicy({
         }
       }
       for (const exception of boundary.exceptions ?? []) {
-        validateException(exception, fullId, errors, today);
+        errors.push(...coverageExceptionErrors(exception, fullId, today));
       }
     }
   }
@@ -181,6 +150,16 @@ export function validateCoveragePolicy({
     if (!config.includes("'src/**/*.d.ts'")) {
       errors.push(`${packageId} coverage must exclude type declarations`);
     }
+    for (const pattern of [
+      'src/**/__fixtures__/**',
+      'src/**/fixtures/**',
+      'src/**/generated/**',
+      'src/**/*.generated.*',
+      'src/**/types.ts',
+      'src/types/**/*.ts',
+    ]) {
+      if (!config.includes(pattern)) errors.push(`${packageId} coverage must exclude ${pattern}`);
+    }
   }
   for (const packageId of ['server', 'web']) {
     if (
@@ -201,17 +180,25 @@ function readBaselinePolicy(repoRoot) {
   if (!COMMIT_SHA_PATTERN.test(baselineRef)) {
     throw new Error('COVERAGE_BASE_REF must be a hexadecimal commit ID.');
   }
+  execFileSync('git', ['cat-file', '-e', `${baselineRef}^{commit}`], {
+    cwd: repoRoot,
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  let baselineText;
   try {
-    return JSON.parse(
-      execFileSync('git', ['show', `${baselineRef}:docs/testing/critical-path-coverage.json`], {
+    baselineText = execFileSync(
+      'git',
+      ['show', `${baselineRef}:docs/testing/critical-path-coverage.json`],
+      {
         cwd: repoRoot,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
-      })
+      }
     );
   } catch {
     return undefined;
   }
+  return JSON.parse(baselineText);
 }
 
 async function main(repoRoot = process.cwd()) {

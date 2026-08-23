@@ -34,7 +34,17 @@ const valid = {
   configs: Object.fromEntries(
     ['server', 'web', 'cli', 'mcp', 'desktop'].map((id) => [
       id,
-      "provider: 'v8'\nall: true\n'src/**/*.d.ts'",
+      [
+        "provider: 'v8'",
+        'all: true',
+        "'src/**/*.d.ts'",
+        "'src/**/__fixtures__/**'",
+        "'src/**/fixtures/**'",
+        "'src/**/generated/**'",
+        "'src/**/*.generated.*'",
+        "'src/**/types.ts'",
+        "'src/types/**/*.ts'",
+      ].join('\n'),
     ])
   ),
 };
@@ -70,14 +80,22 @@ test('requires the coverage job itself to fetch the comparison base', () => {
 test('rejects lowered floors, removed boundaries, and narrowed governed scope', () => {
   const baseline = globalThis.structuredClone(valid.policy);
   const lowered = globalThis.structuredClone(valid.policy);
+  lowered.packages[0].report = 'coverage/fabricated/coverage-summary.json';
+  lowered.packages[0].runner.testFiles = [];
   lowered.packages[0].boundaries[0].thresholds.lines = 49;
   lowered.packages[0].boundaries[0].include = [];
   lowered.packages[1].boundaries = [];
 
   const errors = compareCoveragePolicy(lowered, baseline).join('\n');
   assert.match(errors, /server\/critical lines threshold cannot decrease/);
+  assert.match(errors, /cannot remove governed runner testFiles input/);
   assert.match(errors, /cannot remove governed include pattern/);
   assert.match(errors, /coverage boundary web\/critical cannot be removed/);
+
+  assert.match(
+    validateCoveragePolicy({ ...valid, policy: lowered, baselinePolicy: baseline }).join('\n'),
+    /canonical machine-readable coverage summary/
+  );
 });
 
 test('requires exact, tracked, short-lived coverage exceptions', () => {

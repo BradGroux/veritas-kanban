@@ -11,7 +11,7 @@
       "id": "server",
       "report": "coverage/server/coverage-summary.json",
       "runner": {
-        "maxWorkers": 2,
+        "maxWorkers": 1,
         "extraArgs": ["--hookTimeout=20000", "--testTimeout=30000"],
         "testFiles": [
           "src/__tests__/acp-stdio-provider.test.ts",

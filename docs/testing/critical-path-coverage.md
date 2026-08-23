@@ -11,7 +11,7 @@ pnpm test:coverage
 ```
 
 The command builds `@veritas-kanban/shared`, then runs each applicable workspace from its own
-working directory. It uses two Vitest workers for the import-heavy server boundary suite and at
+working directory. It uses one Vitest worker for the lock-sensitive server boundary suite and at
 most four elsewhere. This preserves package-specific path and timeout behavior while collecting
 V8 coverage for `server`, `web`, `cli`, `mcp`, and `desktop`. Server and web execute the governed
 critical-path test files listed exactly in the policy; the smaller CLI, MCP, and desktop suites run completely. Live provider and MCP integration opt-ins are removed from the coverage process environment. The ordinary
@@ -34,8 +34,9 @@ Git.
 The initial floors were measured on 2026-08-23 with Node 22-compatible Vitest 4.1.11 and V8. A
 floor is the exact measured percentage, not a rounded repository target. Any lower line, branch,
 function, or statement result fails the gate. CI checks out complete Git history and compares the
-policy with the event's base commit, so removing boundaries, narrowing include patterns, or
-lowering a floor fails even when the edited policy would otherwise pass.
+policy with the event's base commit, so removing boundaries or runner inputs, redirecting a
+report, narrowing include patterns, or lowering a floor fails even when the edited policy would
+otherwise pass.
 
 | Package | Boundary                  |  Lines | Branches | Functions | Statements |
 | ------- | ------------------------- | -----: | -------: | --------: | ---------: |
@@ -64,13 +65,17 @@ Broad source patterns in the policy automatically include new files in governed 
 workspace coverage uses `all: true`, an untested critical file contributes zero coverage and
 drops its boundary. CI additionally rejects every changed governed source file with no executable
 coverage entry or zero covered lines, so stronger coverage elsewhere cannot hide new untested code.
+Every changed governed source file must also be paired with a changed governed test file in the
+same package or an explicit reviewed exception. This prevents historical coverage elsewhere in an
+existing file from satisfying the new-code test requirement by itself.
 The authentication boundary includes server Zod schemas and the shared authoritative API
 permission map in addition to middleware and redaction code.
 
 ## Exclusions and reviewed exceptions
 
-Generated output, test files, fixtures, declaration files, and the SQLite test helper are excluded
-consistently in workspace Vitest configs. Production source is not globally excluded.
+Generated output, test files, fixture directories, declaration files, type-only `types.ts` modules,
+and the SQLite test helper are excluded consistently in workspace Vitest configs. Production
+runtime source is not globally excluded.
 
 If a critical source file cannot be tested immediately, add a narrow `exceptions` entry to its
 boundary with all four fields:
