@@ -371,6 +371,7 @@ jobs:
 
             pnpm --filter "$package_filter" exec vitest related \
               --run \
+              --maxWorkers=4 \
               --passWithNoTests \
               "${extra_args[@]}" \
               "${related_files[@]}"
@@ -476,6 +477,8 @@ jobs:
             echo "- Selection reason: $SELECTION_REASON"
             echo "- Workflow checkout SHA: \`$GITHUB_SHA\`"
             echo "- Current job status: \`$CURRENT_JOB_STATUS\`"
+            echo "- Unit-test workspaces: \`server, web, cli, mcp\`"
+            echo "- Workspace workers: \`4 maximum per Vitest project\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record full-tier skip

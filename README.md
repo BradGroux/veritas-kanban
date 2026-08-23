@@ -837,7 +837,7 @@ pnpm build      # Production build
 pnpm typecheck  # TypeScript strict check
 pnpm lint       # ESLint
 pnpm lint:budget # ESLint with current warning budget
-pnpm test       # Unit tests (Vitest)
+pnpm test       # Canonical unit gate (server, web, CLI, MCP)
 pnpm test:e2e   # E2E tests (Playwright)
 pnpm test:load:smoke # k6 API smoke test
 pnpm validate:release # Release readiness checks

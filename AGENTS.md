@@ -58,9 +58,9 @@ pnpm build
 pnpm dev
 
 # Tests
-pnpm test                       # Vitest across server, web, mcp, cli
-pnpm test:unit                  # Per-workspace tests sequentially
-pnpm test:e2e                   # Playwright end-to-end
+pnpm test                       # Canonical sequential workspace unit gate
+pnpm test:unit                  # Shared build, then server, web, CLI, and MCP
+pnpm test:e2e                   # Playwright end-to-end, zero retries
 
 # Type check (builds shared first)
 pnpm typecheck

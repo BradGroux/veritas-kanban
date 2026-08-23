@@ -305,11 +305,18 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
   pnpm test
   ```
 
+  This is the canonical unit gate. It builds the shared package, then runs the
+  server, web, CLI, and MCP suites sequentially with at most four Vitest workers
+  per project. The final line reports PASS, FAIL, or NOT RUN for every workspace.
+
 - **End-to-end tests** use [Playwright](https://playwright.dev/):
 
   ```bash
   pnpm test:e2e
   ```
+
+  Playwright does not retry failures. Screenshots and traces from the first
+  failure are retained in `test-results/` and uploaded by Scheduled QA.
 
 - **Load smoke tests** use [k6](https://k6.io/):
 
@@ -329,16 +336,16 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 
 ### CI tiers
 
-| Trigger                                                                                                     | Stable checks                                                   | Scope                                                                                                   |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Documentation-only pull request or merge                                                                    | Static gates; unit-test jobs record skip decisions              | No workspace unit suite                                                                                 |
-| Ordinary code pull request                                                                                  | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Vitest `related` coverage for affected server, web, CLI, or MCP workspaces                              |
-| Ordinary code merge to `main`                                                                               | Default static gates plus `Changed Tests`                       | Related coverage limited to affected workspaces                                                         |
-| Pull request with `ci:full`, or a CI selector/workflow control change                                      | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and exact dual-storage parity                        |
-| Merge whose reviewed head already passed `Workspace Unit Tests`                                             | Static gates; both unit-test tiers record skip decisions        | Reuses exact successful head evidence when that head is an ancestor of the merge commit                 |
-| Nightly 08:00 UTC or manual `CI` dispatch with `test_scope=full`                                            | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                                                  |
-| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha`                                      | Static gates plus the selected unit-test tier                   | Classifies `base_sha...HEAD` (or `HEAD^...HEAD`) and stays focused unless CI controls changed            |
-| Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                                                |
+| Trigger                                                                                                     | Stable checks                                                   | Scope                                                                                         |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Documentation-only pull request or merge                                                                    | Static gates; unit-test jobs record skip decisions              | No workspace unit suite                                                                       |
+| Ordinary code pull request                                                                                  | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Vitest `related` coverage for affected server, web, CLI, or MCP workspaces                    |
+| Ordinary code merge to `main`                                                                               | Default static gates plus `Changed Tests`                       | Related coverage limited to affected workspaces                                               |
+| Pull request with `ci:full`, or a CI selector/workflow control change                                       | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and exact dual-storage parity              |
+| Merge whose reviewed head already passed `Workspace Unit Tests`                                             | Static gates; both unit-test tiers record skip decisions        | Reuses exact successful head evidence when that head is an ancestor of the merge commit       |
+| Nightly 08:00 UTC or manual `CI` dispatch with `test_scope=full`                                            | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                                        |
+| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha`                                      | Static gates plus the selected unit-test tier                   | Classifies `base_sha...HEAD` (or `HEAD^...HEAD`) and stays focused unless CI controls changed |
+| Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                                      |
 
 `Select Test Scope` is the decision record for each run. Its summary names the
 event, exact base/head range, changed-path count, selected tier, affected

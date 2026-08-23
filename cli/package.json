@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
+    "test": "vitest run --maxWorkers=4",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

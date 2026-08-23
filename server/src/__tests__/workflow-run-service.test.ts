@@ -96,6 +96,7 @@ describe('WorkflowRunService', () => {
   });
 
   afterEach(async () => {
+    service.dispose();
     vi.clearAllMocks();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
@@ -423,6 +424,17 @@ describe('WorkflowRunService', () => {
       ],
     });
     expect(mockExecuteStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears owned recovery timers before test storage is removed', () => {
+    service.scheduleWorkflowRecovery('run_timer_cleanup', 'step-1', {
+      state: 'scheduled',
+      notBefore: '2999-01-01T00:00:00.000Z',
+    });
+
+    expect(service.scheduledWorkflowRecoveryTimers.size).toBe(1);
+    service.dispose();
+    expect(service.scheduledWorkflowRecoveryTimers.size).toBe(0);
   });
 
   it('blocks a restarted workflow when a launched recovery cannot be proven terminal', async () => {

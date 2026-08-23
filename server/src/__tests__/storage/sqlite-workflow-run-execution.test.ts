@@ -80,10 +80,12 @@ describe('SQLite workflow run execution', () => {
   let fixture: TestSqliteDatabase;
   let testRoot: string;
   let workflowService: WorkflowService;
+  let runServices: Array<{ dispose(): void }>;
 
   beforeEach(async () => {
     fixture = createTestSqliteDatabase();
     fixture.database.open();
+    runServices = [];
     testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-sqlite-workflow-execution-'));
     workflowService = new WorkflowService({
       workflowsDir: path.join(testRoot, 'storage', 'workflows'),
@@ -95,6 +97,7 @@ describe('SQLite workflow run execution', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
+    for (const runService of runServices) runService.dispose();
     fixture.cleanup();
     await fs.rm(testRoot, { recursive: true, force: true });
   });
@@ -109,6 +112,7 @@ describe('SQLite workflow run execution', () => {
       sqliteDatabase: fixture.database,
       workflowService,
     });
+    runServices.push(runService);
     const counts: Record<string, number> = {};
 
     await workflowService.saveWorkflow(definition);
@@ -183,6 +187,7 @@ describe('SQLite workflow run execution', () => {
       workflowService,
       admission,
     });
+    runServices.push(first, second);
     const recovery: RunRecoveryRecord = {
       schemaVersion: 'run-recovery/v1',
       rootRunId: 'run_root',

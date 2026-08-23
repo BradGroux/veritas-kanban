@@ -95,14 +95,12 @@ describe('StatusHistoryService', () => {
     });
 
     it('should calculate duration from previous entry', async () => {
+      let nowMs = Date.parse('2026-08-23T15:00:00.000Z');
+      service = new StatusHistoryService({ historyFile, now: () => new Date(nowMs) });
       await service.logStatusChange('idle', 'working');
-
-      // Wait a small amount for timestamp difference
-      await new Promise((r) => setTimeout(r, 50));
-
+      nowMs += 50;
       const second = await service.logStatusChange('working', 'idle');
-      expect(second.durationMs).toBeDefined();
-      expect(second.durationMs!).toBeGreaterThan(0);
+      expect(second.durationMs).toBe(50);
     });
 
     it('should include subAgentCount when provided', async () => {
