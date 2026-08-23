@@ -9,8 +9,8 @@
  * delegates to `getSystemHealthService().getStatus()` so the aggregation
  * logic is reusable and unit-testable.
  */
-import fs from 'fs/promises';
 import { createLogger } from '../lib/logger.js';
+import { checkRuntimeDiskSpace, checkRuntimeStorageAccess } from '../storage/runtime-health.js';
 import { getAgentRegistryService } from './agent-registry-service.js';
 import { getMetricsService } from './metrics/index.js';
 import type {
@@ -20,31 +20,10 @@ import type {
   AgentSignal,
   OperationsSignal,
 } from '@veritas-kanban/shared';
-import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('system-health-service');
 
 // ─── Helpers ──────────────────────────────────────────────────
-
-async function checkStorage(): Promise<boolean> {
-  try {
-    await fs.access(getRuntimeDir(), fs.constants.R_OK | fs.constants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function checkDisk(): Promise<boolean> {
-  try {
-    const stats = await fs.statfs(getRuntimeDir());
-    const freeBytes = stats.bfree * stats.bsize;
-    const MIN_FREE_BYTES = 100 * 1024 * 1024; // 100 MB
-    return freeBytes >= MIN_FREE_BYTES;
-  } catch {
-    return false;
-  }
-}
 
 function checkMemory(): boolean {
   const mem = process.memoryUsage();
@@ -150,7 +129,10 @@ export class SystemHealthService {
    * scoped health queries; the current implementation is global.
    */
   async getStatus(_filters?: { projectId?: string; agentId?: string }): Promise<HealthStatus> {
-    const [storage, disk] = await Promise.all([checkStorage(), checkDisk()]);
+    const [storage, disk] = await Promise.all([
+      checkRuntimeStorageAccess(),
+      checkRuntimeDiskSpace(),
+    ]);
     const memory = checkMemory();
 
     const system = buildSystemSignal(storage, disk, memory);

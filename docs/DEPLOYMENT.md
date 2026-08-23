@@ -620,7 +620,21 @@ In Docker, `DATA_DIR=/app/data`. Tasks live under `/app/data/tasks` and all runt
 lives under `/app/data/.veritas-kanban`; no persistent state is written to `/app` or
 `/app/server` outside that volume.
 
-**Auth state persistence fix (v3.1.1):** Runtime config/state files (including `security.json`) now always live under `${DATA_DIR}/.veritas-kanban`. On startup, Veritas Kanban will automatically migrate any legacy runtime files it finds in container-only paths (for example, `/app/.veritas-kanban` or `/app/server/.veritas-kanban`) into the Docker volume.
+**Auth state persistence fix (v3.1.1):** Runtime config/state files (including `security.json`) now always live under `${DATA_DIR}/.veritas-kanban`. On startup, Veritas Kanban automatically migrates legacy runtime files it can see at container-only paths (for example, `/app/.veritas-kanban` or `/app/server/.veritas-kanban`) into the Docker volume. A replaced container cannot see data left in an old container layer or an unmounted legacy volume.
+
+If the old runtime state is in a named volume, mount that volume read-only at its former path for one startup. For example, add the legacy mount temporarily to your Compose service:
+
+```yaml
+services:
+  veritas-kanban:
+    volumes:
+      - kanban-data:/app/data
+      - legacy-veritas-config:/app/.veritas-kanban:ro
+```
+
+Start the service, verify the expected files now exist under
+`/app/data/.veritas-kanban`, then remove the legacy mount from Compose. The migration is
+copy-only: it does not delete the legacy source, and an existing destination file wins.
 
 If you upgraded from an older image and already lost auth state, you can recover by copying `security.json` from a still-running/old container (if available) into the volume:
 
@@ -696,7 +710,7 @@ docker compose down
 docker run --rm \
   -v kanban-data:/data \
   -v $(pwd):/backup \
-  alpine sh -c "rm -rf /data/* && tar xzf /backup/veritas-backup-20260129.tar.gz -C /data"
+  alpine sh -c 'set -eu; archive=/backup/veritas-backup-20260129.tar.gz; test -d /data; test "$(readlink -f /data)" = /data; test -r "$archive"; tar tzf "$archive" >/dev/null; find /data -mindepth 1 -delete; tar xzf "$archive" -C /data'
 
 # Restart
 docker compose up -d
