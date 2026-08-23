@@ -8,6 +8,7 @@ import {
   normalizeCoverageSummary,
   normalizeDetailedCoverage,
   parseChangedLineNumbers,
+  parseChangedLineSpans,
   parseSelectedPackages,
 } from './check-coverage-ratchets.mjs';
 
@@ -75,6 +76,25 @@ test('keeps only executable changed lines and ignores comment-only or type-only 
 
   const runtimeChange = 'const value: OldType = run(\n  replacement\n);\n';
   assert.deepEqual([...executableChangedLineNumbers(runtimeChange, new Set([2]), previous)], [2]);
+});
+
+test('ignores type-only tokens when the same file also changes runtime behavior', () => {
+  const previous = 'type Input = OldType;\nconst value = run(input);\n';
+  const current = 'type Input = NewType;\nconst value = run(replacement);\n';
+  const diff = [
+    '@@ -1,2 +1,2 @@',
+    '-type Input = OldType;',
+    '-const value = run(input);',
+    '+type Input = NewType;',
+    '+const value = run(replacement);',
+  ].join('\n');
+  const changedLines = parseChangedLineNumbers(diff);
+  const changedSpans = parseChangedLineSpans(diff);
+
+  assert.deepEqual(
+    [...executableChangedLineNumbers(current, changedLines, previous, changedSpans)],
+    [2]
+  );
 });
 
 test('aggregates a boundary and accepts its measured floor', () => {

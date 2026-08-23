@@ -92,7 +92,71 @@ function uncoveredChangedStatements(details, changedLines) {
     .sort((left, right) => left - right);
 }
 
-export function executableChangedLineNumbers(source, changedLines, previousSource = undefined) {
+function typeOnlyRanges(sourceFile) {
+  const ranges = [];
+  const add = (start, end) => ranges.push({ start, end });
+  const visit = (node) => {
+    if (
+      ts.isTypeNode(node) ||
+      ts.isInterfaceDeclaration(node) ||
+      ts.isTypeAliasDeclaration(node) ||
+      ts.isTypeParameterDeclaration(node) ||
+      (ts.canHaveModifiers(node) &&
+        ts.getModifiers(node)?.some(({ kind }) => kind === ts.SyntaxKind.DeclareKeyword))
+    ) {
+      add(node.getStart(sourceFile), node.end);
+      return;
+    }
+    if (
+      (ts.isImportClause(node) || ts.isImportSpecifier(node) || ts.isExportDeclaration(node)) &&
+      node.isTypeOnly
+    ) {
+      add(node.getStart(sourceFile), node.end);
+      return;
+    }
+    if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node)) {
+      add(node.expression.end, node.end);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return ranges;
+}
+
+function changedTokenSpans(changedLines, changedSpans, sourceFile) {
+  const lineStarts = sourceFile.getLineStarts();
+  return new Map(
+    [...changedLines].flatMap((line) => {
+      if (line < 1 || line > lineStarts.length) return [];
+      const lineStart = lineStarts[line - 1];
+      const nextLineStart = lineStarts[line] ?? sourceFile.text.length;
+      const lineLength = sourceFile.text
+        .slice(lineStart, nextLineStart)
+        .replace(/[\r\n]+$/, '').length;
+      const spans = changedSpans.get(line) ?? [{ start: 0, end: Number.POSITIVE_INFINITY }];
+      return [
+        [
+          line,
+          spans.map(({ start, end }) => ({
+            start: lineStart + Math.min(start, lineLength),
+            end:
+              end === Number.POSITIVE_INFINITY
+                ? Number.POSITIVE_INFINITY
+                : lineStart + Math.min(end, lineLength),
+          })),
+        ],
+      ];
+    })
+  );
+}
+
+export function executableChangedLineNumbers(
+  source,
+  changedLines,
+  previousSource = undefined,
+  changedSpans = new Map(),
+  fileName = 'coverage-source.ts'
+) {
   if (changedLines.size === 0) return changedLines;
   if (previousSource !== undefined) {
     const compilerOptions = {
@@ -101,9 +165,14 @@ export function executableChangedLineNumbers(source, changedLines, previousSourc
       removeComments: true,
       target: ts.ScriptTarget.ESNext,
     };
-    const emitted = ts.transpileModule(source, { compilerOptions, reportDiagnostics: true });
+    const emitted = ts.transpileModule(source, {
+      compilerOptions,
+      fileName,
+      reportDiagnostics: true,
+    });
     const previousEmitted = ts.transpileModule(previousSource, {
       compilerOptions,
+      fileName,
       reportDiagnostics: true,
     });
     const hasErrors = [...(emitted.diagnostics ?? []), ...(previousEmitted.diagnostics ?? [])].some(
@@ -116,18 +185,27 @@ export function executableChangedLineNumbers(source, changedLines, previousSourc
 
   const executableLines = new Set();
   const sourceFile = ts.createSourceFile(
-    'coverage-source.tsx',
+    fileName,
     source,
     ts.ScriptTarget.Latest,
     false,
-    ts.ScriptKind.TSX
+    ts.getScriptKindFromFileName(fileName)
   );
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.JSX, source);
+  const languageVariant = /\.[jt]sx$/.test(fileName)
+    ? ts.LanguageVariant.JSX
+    : ts.LanguageVariant.Standard;
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariant, source);
+  const spansByLine = changedTokenSpans(changedLines, changedSpans, sourceFile);
+  const typeRanges = typeOnlyRanges(sourceFile);
   for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
-    const start = sourceFile.getLineAndCharacterOfPosition(scanner.getTokenPos()).line + 1;
-    const end = sourceFile.getLineAndCharacterOfPosition(scanner.getTextPos()).line + 1;
-    for (let line = start; line <= end; line += 1) {
-      if (changedLines.has(line)) executableLines.add(line);
+    const tokenStart = scanner.getTokenPos();
+    const tokenEnd = scanner.getTextPos();
+    const isTypeOnly = typeRanges.some(({ start, end }) => tokenStart >= start && tokenEnd <= end);
+    if (isTypeOnly) continue;
+    for (const [line, spans] of spansByLine) {
+      if (spans.some((span) => tokenStart < span.end && tokenEnd > span.start)) {
+        executableLines.add(line);
+      }
     }
   }
   return executableLines;
@@ -263,6 +341,7 @@ export function changedLineNumbersFromBase(repoRoot, baselineRef, changedFiles) 
       { cwd: repoRoot, encoding: 'utf8' }
     );
     const parsedLines = parseChangedLineNumbers(diff);
+    const parsedSpans = parseChangedLineSpans(diff);
     if (!/\.[cm]?[jt]sx?$/.test(file)) {
       changedLines.set(file, parsedLines);
       continue;
@@ -278,7 +357,10 @@ export function changedLineNumbersFromBase(repoRoot, baselineRef, changedFiles) 
     } catch {
       previousSource = '';
     }
-    changedLines.set(file, executableChangedLineNumbers(source, parsedLines, previousSource));
+    changedLines.set(
+      file,
+      executableChangedLineNumbers(source, parsedLines, previousSource, parsedSpans, file)
+    );
   }
   return changedLines;
 }
@@ -291,6 +373,55 @@ export function parseChangedLineNumbers(diff) {
     for (let line = start; line < start + count; line += 1) lines.add(line);
   }
   return lines;
+}
+
+export function parseChangedLineSpans(diff) {
+  const spans = new Map();
+  const diffLines = diff.split('\n');
+  for (let index = 0; index < diffLines.length; index += 1) {
+    const header = diffLines[index].match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    if (!header) continue;
+    let newLine = Number(header[3]);
+    const removed = [];
+    const added = [];
+    for (index += 1; index < diffLines.length && !diffLines[index].startsWith('@@ '); index += 1) {
+      const line = diffLines[index];
+      if (line.startsWith('-')) removed.push(line.slice(1));
+      if (line.startsWith('+')) {
+        added.push({ line: newLine, text: line.slice(1) });
+        newLine += 1;
+      }
+    }
+    index -= 1;
+    for (let addedIndex = 0; addedIndex < added.length; addedIndex += 1) {
+      const current = added[addedIndex];
+      const previous = removed.length === added.length ? removed[addedIndex] : undefined;
+      if (previous === undefined) {
+        spans.set(current.line, [{ start: 0, end: current.text.length }]);
+        continue;
+      }
+      let start = 0;
+      while (
+        start < previous.length &&
+        start < current.text.length &&
+        previous[start] === current.text[start]
+      ) {
+        start += 1;
+      }
+      let previousEnd = previous.length;
+      let currentEnd = current.text.length;
+      while (
+        previousEnd > start &&
+        currentEnd > start &&
+        previous[previousEnd - 1] === current.text[currentEnd - 1]
+      ) {
+        previousEnd -= 1;
+        currentEnd -= 1;
+      }
+      spans.set(current.line, [{ start, end: currentEnd }]);
+    }
+  }
+  return spans;
 }
 
 export function markdownSummary(evaluation, longTermTarget) {
