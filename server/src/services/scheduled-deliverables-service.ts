@@ -6,8 +6,8 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { FileScheduledDeliverablesStore } from '../storage/scheduled-deliverables-repository.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteScheduledDeliverablesRepository } from '../storage/sqlite/scheduled-deliverables-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
@@ -100,8 +100,7 @@ export class ScheduledDeliverablesService {
   private deliverables: Deliverable[] = [];
   private runs: DeliverableRun[] = [];
   private loaded = false;
-  private readonly deliverablesFile: string;
-  private readonly runsFile: string;
+  private readonly fileStore: FileScheduledDeliverablesStore | null;
   private readonly runRetentionLimit: number;
   private readonly repository: SqliteScheduledDeliverablesRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
@@ -109,9 +108,9 @@ export class ScheduledDeliverablesService {
 
   constructor(options: ScheduledDeliverablesServiceOptions = {}) {
     const dataDir = options.dataDir ?? DATA_DIR;
-    this.deliverablesFile =
+    const deliverablesFile =
       options.deliverablesFile ?? path.join(dataDir, 'scheduled-deliverables.json');
-    this.runsFile = options.runsFile ?? path.join(dataDir, 'deliverable-runs.json');
+    const runsFile = options.runsFile ?? path.join(dataDir, 'deliverable-runs.json');
     this.runRetentionLimit = options.runRetentionLimit ?? 500;
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
@@ -122,6 +121,9 @@ export class ScheduledDeliverablesService {
       this.ownsSqliteDatabase = !options.sqliteDatabase;
       this.sqliteDatabase.open();
       this.repository = new SqliteScheduledDeliverablesRepository(this.sqliteDatabase);
+      this.fileStore = null;
+    } else {
+      this.fileStore = new FileScheduledDeliverablesStore(deliverablesFile, runsFile);
     }
   }
 
@@ -138,21 +140,10 @@ export class ScheduledDeliverablesService {
       return;
     }
 
-    try {
-      const data = await fs.readFile(this.deliverablesFile, 'utf-8');
-      this.deliverables = JSON.parse(data);
-    } catch {
-      this.deliverables = [];
-    }
-    try {
-      const data = await fs.readFile(this.runsFile, 'utf-8');
-      this.runs = JSON.parse(data);
-      // Keep only last 500 runs
-      if (this.runs.length > this.runRetentionLimit) {
-        this.runs = this.runs.slice(-this.runRetentionLimit);
-      }
-    } catch {
-      this.runs = [];
+    this.deliverables = await this.getFileStore().loadDeliverables();
+    this.runs = await this.getFileStore().loadRuns();
+    if (this.runs.length > this.runRetentionLimit) {
+      this.runs = this.runs.slice(-this.runRetentionLimit);
     }
     this.loaded = true;
   }
@@ -163,8 +154,7 @@ export class ScheduledDeliverablesService {
       return;
     }
 
-    await fs.mkdir(path.dirname(this.deliverablesFile), { recursive: true });
-    await fs.writeFile(this.deliverablesFile, JSON.stringify(this.deliverables, null, 2));
+    await this.getFileStore().saveDeliverables(this.deliverables);
   }
 
   private async saveRuns(): Promise<void> {
@@ -173,8 +163,7 @@ export class ScheduledDeliverablesService {
       return;
     }
 
-    await fs.mkdir(path.dirname(this.runsFile), { recursive: true });
-    await fs.writeFile(this.runsFile, JSON.stringify(this.runs, null, 2));
+    await this.getFileStore().saveRuns(this.runs);
   }
 
   /**
@@ -403,6 +392,11 @@ export class ScheduledDeliverablesService {
   }
 
   // ─── Private ─────────────────────────────────────────────────
+
+  private getFileStore(): FileScheduledDeliverablesStore {
+    if (!this.fileStore) throw new Error('File scheduled deliverables store is unavailable');
+    return this.fileStore;
+  }
 
   private describeSchedule(schedule: DeliverableSchedule, cronExpr?: string): string {
     switch (schedule) {
