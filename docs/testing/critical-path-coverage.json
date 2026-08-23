@@ -55,6 +55,7 @@
           "src/__tests__/schemas.test.ts",
           "src/__tests__/security-legacy-runtime.test.ts",
           "src/__tests__/shared-api-permissions.test.ts",
+          "src/__tests__/status-history-repository.test.ts",
           "src/__tests__/sqlite-journal-ownership-policy.test.ts",
           "src/__tests__/sqlite-maintenance-bootstrap.test.ts",
           "src/__tests__/sqlite-portability-service.test.ts",
