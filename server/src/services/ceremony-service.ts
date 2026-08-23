@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import type {
@@ -21,24 +20,24 @@ import {
   getGovernanceTraceService,
   type GovernanceTraceService,
 } from './governance-trace-service.js';
-import { withFileLock } from './file-lock.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
-import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
+import { validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import {
+  FileCeremonyStateRepository,
+  InMemoryCeremonyStateRepository,
+  type CeremonyState,
+  type CeremonyStateRepository,
+} from '../storage/ceremony-state-repository.js';
 
 const MAX_REQUIREMENTS = 1000;
-
-interface CeremonyState {
-  version: 1;
-  requirements: CeremonyRequirement[];
-  updatedAt: string;
-}
 
 export interface CeremonyServiceOptions {
   storageDir?: string;
   persist?: boolean;
   audit?: (event: AuditEvent) => Promise<void>;
   governanceTraceService?: GovernanceTraceService;
+  repository?: CeremonyStateRepository;
 }
 
 export interface CeremonyListFilters {
@@ -83,24 +82,27 @@ function dueInHours(hours: number): string {
 }
 
 export class CeremonyService {
-  private readonly storageDir: string;
-  private readonly persist: boolean;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private readonly governanceTraceService: GovernanceTraceService;
-  private loaded = false;
-  private state: CeremonyState = this.emptyState();
+  private readonly repository: CeremonyStateRepository;
 
   constructor(options: CeremonyServiceOptions = {}) {
-    this.storageDir = options.storageDir ?? path.join(getRuntimeDir(), 'ceremonies');
-    this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.audit = options.audit ?? auditLog;
     this.governanceTraceService = options.governanceTraceService ?? getGovernanceTraceService();
+    const persist = options.persist ?? process.env.VITEST !== 'true';
+    this.repository =
+      options.repository ??
+      (persist
+        ? new FileCeremonyStateRepository(
+            options.storageDir ?? path.join(getRuntimeDir(), 'ceremonies')
+          )
+        : new InMemoryCeremonyStateRepository());
   }
 
   async list(filters: CeremonyListFilters = {}): Promise<CeremonyRequirement[]> {
-    await this.ensureLoaded();
+    const state = await this.repository.read();
     const limit = Math.max(1, Math.min(Math.floor(filters.limit ?? 100), MAX_REQUIREMENTS));
-    return this.state.requirements
+    return state.requirements
       .filter((requirement) => !filters.status || requirement.status === filters.status)
       .filter((requirement) => !filters.kind || requirement.kind === filters.kind)
       .filter((requirement) => !filters.taskId || requirement.target.taskId === filters.taskId)
@@ -109,10 +111,6 @@ export class CeremonyService {
   }
 
   async create(input: CreateCeremonyRequirementInput): Promise<CeremonyRequirement> {
-    await this.ensureLoaded();
-    const existing = this.findOpenRequirement(input.kind, input.target.taskId, input.target.runId);
-    if (existing) return existing;
-
     const timestamp = nowIso();
     const requirement: CeremonyRequirement = {
       id: `ceremony_${Date.now()}_${nanoid(6)}`,
@@ -131,12 +129,24 @@ export class CeremonyService {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-
-    this.state.requirements.push(requirement);
-    if (this.state.requirements.length > MAX_REQUIREMENTS) {
-      this.state.requirements = this.state.requirements.slice(-MAX_REQUIREMENTS);
-    }
-    await this.saveState();
+    let selected = requirement;
+    await this.repository.update((state) => {
+      const existing = this.findOpenRequirement(
+        state,
+        input.kind,
+        input.target.taskId,
+        input.target.runId
+      );
+      if (existing) {
+        selected = existing;
+        return state;
+      }
+      return {
+        ...state,
+        requirements: [...state.requirements, requirement].slice(-MAX_REQUIREMENTS),
+      };
+    });
+    if (selected !== requirement) return selected;
     await this.auditChange('ceremony.created', requirement);
     return requirement;
   }
@@ -146,50 +156,60 @@ export class CeremonyService {
     input: CompleteCeremonyRequirementInput
   ): Promise<CeremonyRequirement> {
     validatePathSegment(id);
-    await this.ensureLoaded();
-    const requirement = this.findById(id);
-    if (!requirement) throw new NotFoundError('Ceremony requirement not found');
-    if (requirement.status !== 'pending') {
-      throw new ConflictError('Ceremony requirement is not pending');
-    }
-
     const timestamp = nowIso();
-    requirement.status = 'completed';
-    requirement.completedAt = timestamp;
-    requirement.completedBy = input.completedBy;
-    requirement.updatedAt = timestamp;
-    requirement.artifacts = [
-      ...requirement.artifacts,
-      ...(input.artifacts ?? []).map<CeremonyArtifact>((artifact) => ({
-        ...artifact,
-        createdAt: artifact.createdAt ?? timestamp,
-      })),
-    ];
-    requirement.actionItems = [
-      ...requirement.actionItems,
-      ...(input.actionItems ?? []).map<CeremonyActionItem>((item) => ({
-        ...item,
-        createdAt: item.createdAt ?? timestamp,
-      })),
-    ];
-
-    await this.saveState();
-    await this.auditChange('ceremony.completed', requirement);
-    return requirement;
+    let completed: CeremonyRequirement | undefined;
+    await this.repository.update((state) => {
+      const requirement = this.findById(state, id);
+      if (!requirement) throw new NotFoundError('Ceremony requirement not found');
+      if (requirement.status !== 'pending') {
+        throw new ConflictError('Ceremony requirement is not pending');
+      }
+      const completedRequirement: CeremonyRequirement = {
+        ...requirement,
+        status: 'completed',
+        completedAt: timestamp,
+        completedBy: input.completedBy,
+        updatedAt: timestamp,
+        artifacts: [
+          ...requirement.artifacts,
+          ...(input.artifacts ?? []).map<CeremonyArtifact>((artifact) => ({
+            ...artifact,
+            createdAt: artifact.createdAt ?? timestamp,
+          })),
+        ],
+        actionItems: [
+          ...requirement.actionItems,
+          ...(input.actionItems ?? []).map<CeremonyActionItem>((item) => ({
+            ...item,
+            createdAt: item.createdAt ?? timestamp,
+          })),
+        ],
+      };
+      completed = completedRequirement;
+      return {
+        ...state,
+        requirements: state.requirements.map((candidate) =>
+          candidate.id === id ? completedRequirement : candidate
+        ),
+      };
+    });
+    if (!completed) throw new NotFoundError('Ceremony requirement not found');
+    await this.auditChange('ceremony.completed', completed);
+    return completed;
   }
 
   async evaluateTaskCompletion(
     task: Task,
     enforcement?: Partial<EnforcementSettings>
   ): Promise<CeremonyEvaluationResult> {
-    await this.ensureLoaded();
+    const state = await this.repository.read();
     const required: CeremonyRequirement[] = [];
 
     const designMode = enforcement?.ceremonyDesignReview ?? 'off';
     if (
       designMode !== 'off' &&
       this.taskNeedsDesignReview(task) &&
-      !this.hasCompletedRequirement('design_review', task.id)
+      !this.hasCompletedRequirement(state, 'design_review', task.id)
     ) {
       required.push(
         await this.create({
@@ -208,7 +228,7 @@ export class CeremonyService {
     if (
       retroMode !== 'off' &&
       this.taskNeedsFailureRetrospective(task) &&
-      !this.hasCompletedRequirement('failure_retrospective', task.id)
+      !this.hasCompletedRequirement(state, 'failure_retrospective', task.id)
     ) {
       required.push(
         await this.create({
@@ -309,11 +329,12 @@ export class CeremonyService {
   }
 
   private findOpenRequirement(
+    state: CeremonyState,
     kind: CeremonyKind,
     taskId?: string,
     runId?: string
   ): CeremonyRequirement | undefined {
-    return this.state.requirements.find(
+    return state.requirements.find(
       (requirement) =>
         requirement.kind === kind &&
         requirement.status === 'pending' &&
@@ -322,8 +343,13 @@ export class CeremonyService {
     );
   }
 
-  private hasCompletedRequirement(kind: CeremonyKind, taskId?: string, runId?: string): boolean {
-    return this.state.requirements.some(
+  private hasCompletedRequirement(
+    state: CeremonyState,
+    kind: CeremonyKind,
+    taskId?: string,
+    runId?: string
+  ): boolean {
+    return state.requirements.some(
       (requirement) =>
         requirement.kind === kind &&
         requirement.status === 'completed' &&
@@ -332,52 +358,8 @@ export class CeremonyService {
     );
   }
 
-  private findById(id: string): CeremonyRequirement | undefined {
-    return this.state.requirements.find((requirement) => requirement.id === id);
-  }
-
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return;
-    if (!this.persist) {
-      this.loaded = true;
-      return;
-    }
-
-    await fs.mkdir(this.storageDir, { recursive: true });
-    try {
-      const raw = await fs.readFile(this.statePath, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<CeremonyState>;
-      this.state = {
-        version: 1,
-        requirements: Array.isArray(parsed.requirements)
-          ? (parsed.requirements as CeremonyRequirement[])
-          : [],
-        updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : nowIso(),
-      };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-      this.state = this.emptyState();
-    }
-    this.loaded = true;
-  }
-
-  private async saveState(): Promise<void> {
-    this.state.updatedAt = nowIso();
-    if (!this.persist) return;
-    await fs.mkdir(this.storageDir, { recursive: true });
-    await withFileLock(this.statePath, async () => {
-      await fs.writeFile(this.statePath, JSON.stringify(this.state, null, 2), 'utf-8');
-    });
-  }
-
-  private get statePath(): string {
-    const filePath = path.join(this.storageDir, 'requirements.json');
-    ensureWithinBase(this.storageDir, filePath);
-    return filePath;
-  }
-
-  private emptyState(): CeremonyState {
-    return { version: 1, requirements: [], updatedAt: nowIso() };
+  private findById(state: CeremonyState, id: string): CeremonyRequirement | undefined {
+    return state.requirements.find((requirement) => requirement.id === id);
   }
 
   private async auditChange(action: string, requirement: CeremonyRequirement): Promise<void> {
