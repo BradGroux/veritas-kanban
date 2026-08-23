@@ -62,6 +62,10 @@ export function findSecurityWorkflowViolations(content) {
   }
 
   const gitleaksJob = yamlBlock(content, 'gitleaks', 2);
+  const gitleaksJobEnvironment = yamlBlock(gitleaksJob, 'env', 4);
+  if (/\$\{\{\s*runner\./.test(gitleaksJobEnvironment)) {
+    violations.push('runner context must not be used in job-level environment values');
+  }
   const gitleaksPermissions = normalizedPermissionLines(yamlBlock(gitleaksJob, 'permissions', 4));
   if (
     gitleaksPermissions.length !== 1 ||

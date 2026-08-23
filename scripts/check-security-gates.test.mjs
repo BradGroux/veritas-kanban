@@ -47,12 +47,16 @@ jobs:
   codeql:
     steps:
       - uses: github/codeql-action/init@v4
+  gitleaks:
+    env:
+      GITLEAKS_BIN: \${{ runner.temp }}/gitleaks
 `),
     [
       'security workflow must run for pull requests, main pushes, and a schedule',
       'top-level workflow permissions must be contents: read only',
       'CodeQL job must grant only contents: read and security-events: write',
       'CodeQL init and analyze actions must both be present',
+      'runner context must not be used in job-level environment values',
       'gitleaks job must run pnpm check:gitleaks with contents: read permission',
     ]
   );
