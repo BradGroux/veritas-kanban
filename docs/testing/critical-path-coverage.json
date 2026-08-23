@@ -35,6 +35,7 @@
           "src/__tests__/filesystem-sandbox-service.test.ts",
           "src/__tests__/harness-support-profile-schemas.test.ts",
           "src/__tests__/hermes-provider.test.ts",
+          "src/__tests__/lifecycle-hooks-repository.test.ts",
           "src/__tests__/log-redaction.test.ts",
           "src/__tests__/middleware/auth.test.ts",
           "src/__tests__/middleware/write-enforcement.integration.test.ts",

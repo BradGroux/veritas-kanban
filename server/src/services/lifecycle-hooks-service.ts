@@ -15,14 +15,16 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
+import {
+  FileLifecycleHooksRepository,
+  type LifecycleHooksRepository,
+} from '../storage/lifecycle-hooks-repository.js';
 import { getLegacyRuntimeDirs, getRuntimeDir } from '../utils/paths.js';
 import { migrateLegacyFiles } from '../utils/migrate-legacy-files.js';
 import { getOutboundIntegrationService } from './outbound-integration-service.js';
 const DATA_DIR = getRuntimeDir();
 const LEGACY_DATA_DIRS = getLegacyRuntimeDirs();
-let migrationChecked = false;
+let migrationPromise: Promise<void> | null = null;
 
 const log = createLogger('lifecycle-hooks');
 
@@ -163,17 +165,17 @@ const BUILT_IN_HOOKS: Omit<HookConfig, 'id' | 'createdAt' | 'updatedAt'>[] = [
 // ─── Service ─────────────────────────────────────────────────────
 
 class LifecycleHooksService {
-  private hooks: HookConfig[] = [];
-  private executions: HookExecution[] = [];
-  private loaded = false;
-
   // Hook handlers — extensible
   private handlers = new Map<
     HookAction,
     (hook: HookConfig, context: HookContext) => Promise<void>
   >();
 
-  constructor() {
+  constructor(
+    private readonly repository: LifecycleHooksRepository = new FileLifecycleHooksRepository(
+      DATA_DIR
+    )
+  ) {
     // Register built-in handlers
     this.handlers.set('log_activity', async (_hook, ctx) => {
       log.info({ taskId: ctx.taskId, event: ctx.newStatus }, 'Activity logged');
@@ -238,71 +240,42 @@ class LifecycleHooksService {
     });
   }
 
-  private get storagePath(): string {
-    return path.join(DATA_DIR, 'lifecycle-hooks.json');
-  }
+  private async ensureReady(): Promise<void> {
+    migrationPromise ??= migrateLegacyFiles(
+      LEGACY_DATA_DIRS,
+      DATA_DIR,
+      ['lifecycle-hooks.json', 'hook-executions.json'],
+      'lifecycle hook'
+    );
+    try {
+      await migrationPromise;
+    } catch (error) {
+      migrationPromise = null;
+      throw error;
+    }
 
-  private get executionsPath(): string {
-    return path.join(DATA_DIR, 'hook-executions.json');
-  }
-
-  private async ensureLoaded(): Promise<void> {
-    if (!migrationChecked) {
-      migrationChecked = true;
-      await migrateLegacyFiles(
-        LEGACY_DATA_DIRS,
-        DATA_DIR,
-        ['lifecycle-hooks.json', 'hook-executions.json'],
-        'lifecycle hook'
+    if ((await this.repository.readHooks()) === null) {
+      const now = new Date().toISOString();
+      await this.repository.updateHooks(
+        (hooks) =>
+          hooks ??
+          BUILT_IN_HOOKS.map((hook, index) => ({
+            ...hook,
+            id: `hook_builtin_${index}`,
+            createdAt: now,
+            updatedAt: now,
+          }))
       );
     }
-
-    if (this.loaded) return;
-
-    try {
-      const data = await fs.readFile(this.storagePath, 'utf-8');
-      this.hooks = JSON.parse(data);
-    } catch {
-      // Initialize with built-in hooks
-      const now = new Date().toISOString();
-      this.hooks = BUILT_IN_HOOKS.map((h, i) => ({
-        ...h,
-        id: `hook_builtin_${i}`,
-        createdAt: now,
-        updatedAt: now,
-      }));
-      await this.saveHooks();
-    }
-
-    try {
-      const data = await fs.readFile(this.executionsPath, 'utf-8');
-      this.executions = JSON.parse(data);
-      // Keep only last 500 executions
-      if (this.executions.length > 500) {
-        this.executions = this.executions.slice(-500);
-      }
-    } catch {
-      this.executions = [];
-    }
-
-    this.loaded = true;
-  }
-
-  private async saveHooks(): Promise<void> {
-    await fs.writeFile(this.storagePath, JSON.stringify(this.hooks, null, 2));
-  }
-
-  private async saveExecutions(): Promise<void> {
-    await fs.writeFile(this.executionsPath, JSON.stringify(this.executions, null, 2));
   }
 
   /**
    * Fire hooks for a lifecycle event.
    */
   async fireEvent(event: LifecycleEvent, context: HookContext): Promise<HookExecution[]> {
-    await this.ensureLoaded();
+    await this.ensureReady();
 
-    const matchingHooks = this.hooks
+    const matchingHooks = ((await this.repository.readHooks()) ?? [])
       .filter((h) => h.enabled && h.event === event)
       .filter((h) => {
         if (
@@ -356,12 +329,13 @@ class LifecycleHooksService {
       }
 
       execution.durationMs = Date.now() - start;
-      this.executions.push(execution);
       results.push(execution);
     }
 
     if (results.length > 0) {
-      await this.saveExecutions();
+      await this.repository.updateExecutions((executions) =>
+        [...executions, ...results].slice(-500)
+      );
       log.info(
         { event, taskId: context.taskId, hooksRun: results.length },
         'Lifecycle event fired'
@@ -378,9 +352,9 @@ class LifecycleHooksService {
     event?: LifecycleEvent;
     enabledOnly?: boolean;
   }): Promise<HookConfig[]> {
-    await this.ensureLoaded();
+    await this.ensureReady();
 
-    let results = [...this.hooks];
+    let results = [...((await this.repository.readHooks()) ?? [])];
     if (options?.event) results = results.filter((h) => h.event === options.event);
     if (options?.enabledOnly) results = results.filter((h) => h.enabled);
 
@@ -401,7 +375,7 @@ class LifecycleHooksService {
     config?: Record<string, unknown>;
     order?: number;
   }): Promise<HookConfig> {
-    await this.ensureLoaded();
+    await this.ensureReady();
 
     const hook: HookConfig = {
       id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -419,8 +393,7 @@ class LifecycleHooksService {
       updatedAt: new Date().toISOString(),
     };
 
-    this.hooks.push(hook);
-    await this.saveHooks();
+    await this.repository.updateHooks((hooks) => [...(hooks ?? []), hook]);
     return hook;
   }
 
@@ -442,35 +415,36 @@ class LifecycleHooksService {
       >
     >
   ): Promise<HookConfig | null> {
-    await this.ensureLoaded();
+    await this.ensureReady();
 
-    const hook = this.hooks.find((h) => h.id === id);
-    if (!hook) return null;
-
-    Object.assign(hook, update, { updatedAt: new Date().toISOString() });
-    await this.saveHooks();
-    return hook;
+    let updatedHook: HookConfig | null = null;
+    await this.repository.updateHooks((hooks) =>
+      (hooks ?? []).map((hook) => {
+        if (hook.id !== id) return hook;
+        updatedHook = { ...hook, ...update, updatedAt: new Date().toISOString() };
+        return updatedHook;
+      })
+    );
+    return updatedHook;
   }
 
   /**
    * Delete a custom hook (built-in hooks can only be disabled).
    */
   async deleteHook(id: string): Promise<boolean> {
-    await this.ensureLoaded();
+    await this.ensureReady();
 
-    const hook = this.hooks.find((h) => h.id === id);
-    if (!hook) return false;
-    if (hook.builtIn) {
-      // Just disable it
-      hook.enabled = false;
-      hook.updatedAt = new Date().toISOString();
-      await this.saveHooks();
-      return true;
-    }
-
-    this.hooks = this.hooks.filter((h) => h.id !== id);
-    await this.saveHooks();
-    return true;
+    let deleted = false;
+    await this.repository.updateHooks((hooks) =>
+      (hooks ?? []).flatMap((hook) => {
+        if (hook.id !== id) return [hook];
+        deleted = true;
+        return hook.builtIn
+          ? [{ ...hook, enabled: false, updatedAt: new Date().toISOString() }]
+          : [];
+      })
+    );
+    return deleted;
   }
 
   /**
@@ -481,9 +455,9 @@ class LifecycleHooksService {
     taskId?: string;
     limit?: number;
   }): Promise<HookExecution[]> {
-    await this.ensureLoaded();
+    await this.ensureReady();
 
-    let results = [...this.executions];
+    let results = (await this.repository.readExecutions()).slice(-500);
     if (filters?.hookId) results = results.filter((e) => e.hookId === filters.hookId);
     if (filters?.taskId) results = results.filter((e) => e.taskId === filters.taskId);
 
