@@ -46,13 +46,25 @@ export class LocalConflictWorkspaceRepository implements ConflictWorkspaceReposi
 
     const filePath = await this.resolveCanonicalPath(workspaceRoot, relativePath);
     await withFileLock(filePath, async () => {
-      let handle: Awaited<ReturnType<typeof open>> | undefined;
+      let inspectionHandle: Awaited<ReturnType<typeof open>> | undefined;
       try {
-        handle = await open(filePath, constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0));
-        const stats = await handle.stat();
-        if (!stats.isFile()) {
+        inspectionHandle = await open(
+          filePath,
+          constants.O_RDONLY | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0)
+        );
+        if (!(await inspectionHandle.stat()).isFile()) {
           throw new Error('Conflict content must use a regular file');
         }
+      } finally {
+        await inspectionHandle?.close();
+      }
+
+      let handle: Awaited<ReturnType<typeof open>> | undefined;
+      try {
+        handle = await open(
+          filePath,
+          constants.O_WRONLY | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0)
+        );
         await handle.truncate(0);
         await handle.writeFile(content, { encoding: 'utf8' });
       } finally {
