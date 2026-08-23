@@ -53,6 +53,22 @@ GitHub secret scanning and push protection should remain enabled for the
 repository. The tracked-file guard complements those services because generic
 password and recovery-key hashes may not match provider-specific signatures.
 
+## CI Supply Chain Integrity
+
+Every external GitHub Action and reusable workflow reference must use a full
+40-character commit SHA followed by a readable release comment. Local actions
+under `./.github/actions/` are reviewed with the repository and do not need a
+remote revision. Docker actions must use a complete SHA-256 image digest.
+
+The same policy is enforced locally and in CI:
+
+```bash
+pnpm check:actions-pinned
+```
+
+Dependabot retains the `github-actions` ecosystem entry so reviewed updates can
+advance both the immutable commit and its release comment.
+
 ## Scope
 
 This policy applies to:

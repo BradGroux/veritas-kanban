@@ -35,6 +35,7 @@
     "lint:report": "node scripts/lint-warning-budget.mjs --all-rules",
     "lint:fix": "eslint . --fix",
     "check:delivery-cadence": "node --test scripts/check-delivery-cadence.test.mjs && node scripts/check-delivery-cadence.mjs",
+    "check:actions-pinned": "node --test scripts/check-actions-pinned.test.mjs && node scripts/check-actions-pinned.mjs",
     "check:vite-native-config": "pnpm --filter @veritas-kanban/web exec vite build --configLoader native && vitest run --configLoader native web/src/lib/__tests__/client-policy.test.ts",
     "check:pnpm-settings": "node scripts/check-pnpm-settings.mjs",
     "check:security-artifacts": "node scripts/check-security-artifacts.mjs",
