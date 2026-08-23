@@ -8,8 +8,6 @@
  * Extends the basic hook-service with sophisticated quality gate logic.
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { createLogger } from '../lib/logger.js';
 import { getOutboundIntegrationService } from './outbound-integration-service.js';
 import type { Task, TaskStatus } from '@veritas-kanban/shared';
@@ -22,7 +20,7 @@ import type {
   TransitionValidationResult,
 } from '@veritas-kanban/shared';
 import { DEFAULT_TRANSITION_HOOKS_CONFIG } from '@veritas-kanban/shared';
-import { getRuntimeDir } from '../utils/paths.js';
+import { FileTransitionHooksConfigRepository } from '../storage/transition-hooks-config-repository.js';
 
 const log = createLogger('transition-hooks');
 
@@ -30,45 +28,29 @@ const log = createLogger('transition-hooks');
 // Configuration Storage
 // ---------------------------------------------------------------------------
 
-const CONFIG_PATH = path.join(getRuntimeDir(), 'transition-hooks.json');
-
-let cachedConfig: TransitionHooksConfig | null = null;
+const configRepository = new FileTransitionHooksConfigRepository();
 
 /**
  * Load transition hooks configuration from disk.
  */
 export async function loadTransitionHooksConfig(): Promise<TransitionHooksConfig> {
-  if (cachedConfig) {
-    return cachedConfig;
-  }
-
-  try {
-    const content = await fs.readFile(CONFIG_PATH, 'utf-8');
-    cachedConfig = JSON.parse(content) as TransitionHooksConfig;
+  const config = await configRepository.read();
+  if (config) {
     log.info(
-      { enabled: cachedConfig.enabled, ruleCount: cachedConfig.rules.length },
+      { enabled: config.enabled, ruleCount: config.rules.length },
       'Loaded transition hooks config'
     );
-    return cachedConfig;
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      // File doesn't exist, use defaults
-      cachedConfig = { ...DEFAULT_TRANSITION_HOOKS_CONFIG };
-      log.info('Using default transition hooks config');
-      return cachedConfig;
-    }
-    throw err;
+    return config;
   }
+  log.info('Using default transition hooks config');
+  return { ...DEFAULT_TRANSITION_HOOKS_CONFIG };
 }
 
 /**
  * Save transition hooks configuration to disk.
  */
 export async function saveTransitionHooksConfig(config: TransitionHooksConfig): Promise<void> {
-  const dir = path.dirname(CONFIG_PATH);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
-  cachedConfig = config;
+  await configRepository.write(config);
   log.info(
     { enabled: config.enabled, ruleCount: config.rules.length },
     'Saved transition hooks config'
@@ -96,7 +78,7 @@ export async function updateTransitionHooksConfig(
  * Clear the cached configuration (for testing).
  */
 export function clearConfigCache(): void {
-  cachedConfig = null;
+  // Retained for API compatibility. Configuration reads are no longer cached.
 }
 
 // ---------------------------------------------------------------------------
@@ -142,9 +124,10 @@ function taskMatchesFilters(
 export async function findApplicableRules(
   fromStatus: TaskStatus | undefined,
   toStatus: TaskStatus,
-  task: Pick<Task, 'project' | 'type'>
+  task: Pick<Task, 'project' | 'type'>,
+  loadedConfig?: TransitionHooksConfig
 ): Promise<TransitionRule[]> {
-  const config = await getTransitionHooksConfig();
+  const config = loadedConfig ?? (await getTransitionHooksConfig());
 
   if (!config.enabled) {
     return [];
@@ -259,7 +242,7 @@ export async function validateTransition(
   }
 
   // Find applicable rules
-  const rules = await findApplicableRules(fromStatus, toStatus, task);
+  const rules = await findApplicableRules(fromStatus, toStatus, task, config);
 
   // Collect all gates from applicable rules
   const allGates: TransitionGate[] = [];
@@ -462,7 +445,7 @@ export async function executePostTransitionActions(
   }
 
   // Find applicable rules
-  const rules = await findApplicableRules(fromStatus, toStatus, task);
+  const rules = await findApplicableRules(fromStatus, toStatus, task, config);
 
   // Collect all actions from applicable rules
   const allActions: TransitionAction[] = [];
