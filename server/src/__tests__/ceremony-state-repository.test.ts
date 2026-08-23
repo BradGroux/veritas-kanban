@@ -3,7 +3,10 @@ import { lstat, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import type { CeremonyRequirement } from '@veritas-kanban/shared';
 import { CeremonyService } from '../services/ceremony-service.js';
-import { FileCeremonyStateRepository } from '../storage/ceremony-state-repository.js';
+import {
+  FileCeremonyStateRepository,
+  InMemoryCeremonyStateRepository,
+} from '../storage/ceremony-state-repository.js';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -149,5 +152,20 @@ describe('FileCeremonyStateRepository', () => {
         requirements: [{ ...requirement('large'), reason: 'x'.repeat(16 * 1024 * 1024) }],
       }))
     ).rejects.toThrow(/16 MiB/i);
+  });
+});
+
+describe('InMemoryCeremonyStateRepository', () => {
+  it('reads and updates transient ceremony state', async () => {
+    const repository = new InMemoryCeremonyStateRepository();
+    await repository.update((state) => ({
+      ...state,
+      requirements: [requirement('memory')],
+    }));
+
+    await expect(repository.read()).resolves.toMatchObject({
+      version: 1,
+      requirements: [requirement('memory')],
+    });
   });
 });
