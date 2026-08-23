@@ -1,7 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
 import { createLogger } from '../lib/logger.js';
-import { getRuntimeDir } from '../utils/paths.js';
+import { FileProgressRepository, type ProgressRepository } from '../storage/progress-repository.js';
 
 const log = createLogger('progress-service');
 
@@ -10,24 +8,10 @@ const log = createLogger('progress-service');
  * Stores markdown files in .veritas-kanban/progress/<task-id>.md
  */
 export class ProgressService {
-  private progressDir: string;
+  private readonly repository: ProgressRepository;
 
-  constructor(progressDir?: string) {
-    this.progressDir = progressDir || path.join(getRuntimeDir(), 'progress');
-  }
-
-  /**
-   * Ensure the progress directory exists
-   */
-  private async ensureDirectory(): Promise<void> {
-    await fs.mkdir(this.progressDir, { recursive: true });
-  }
-
-  /**
-   * Get the file path for a task's progress file
-   */
-  private getProgressPath(taskId: string): string {
-    return path.join(this.progressDir, `${taskId}.md`);
+  constructor(progressDir?: string, repository?: ProgressRepository) {
+    this.repository = repository ?? new FileProgressRepository(progressDir || undefined);
   }
 
   /**
@@ -36,15 +20,10 @@ export class ProgressService {
    */
   async getProgress(taskId: string): Promise<string | null> {
     try {
-      const filepath = this.getProgressPath(taskId);
-      const content = await fs.readFile(filepath, 'utf-8');
-      log.debug({ taskId }, 'Progress file read');
+      const content = await this.repository.get(taskId);
+      if (content !== null) log.debug({ taskId }, 'Progress file read');
       return content;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        // No progress file exists yet — that's fine
-        return null;
-      }
       log.error({ err: error, taskId }, 'Failed to read progress file');
       throw error;
     }
@@ -54,11 +33,8 @@ export class ProgressService {
    * Update (overwrite) progress content for a task
    */
   async updateProgress(taskId: string, content: string): Promise<void> {
-    await this.ensureDirectory();
-    const filepath = this.getProgressPath(taskId);
-
     try {
-      await fs.writeFile(filepath, content, 'utf-8');
+      await this.repository.set(taskId, content);
       log.debug({ taskId }, 'Progress file updated');
     } catch (error) {
       log.error({ err: error, taskId }, 'Failed to update progress file');
@@ -72,45 +48,15 @@ export class ProgressService {
    * Section format: ## Section Name
    */
   async appendProgress(taskId: string, section: string, content: string): Promise<void> {
-    await this.ensureDirectory();
-
-    const existingContent = (await this.getProgress(taskId)) || '';
-    const sectionHeader = `## ${section}`;
-    const appendText = `\n${content.trim()}\n`;
-
-    let updatedContent: string;
-
-    if (existingContent.includes(sectionHeader)) {
-      // Section exists — find it and append after the header
-      const lines = existingContent.split('\n');
-      const sectionIndex = lines.findIndex((line) => line.trim() === sectionHeader);
-
-      if (sectionIndex !== -1) {
-        // Find the next section header or end of file
-        let endIndex = lines.length;
-        for (let i = sectionIndex + 1; i < lines.length; i++) {
-          if (lines[i].startsWith('## ')) {
-            endIndex = i;
-            break;
-          }
-        }
-
-        // Insert content before the next section
-        lines.splice(endIndex, 0, appendText.trim());
-        updatedContent = lines.join('\n');
-      } else {
-        // Shouldn't happen, but fallback to appending at end
-        updatedContent = `${existingContent}\n${sectionHeader}${appendText}`;
-      }
-    } else {
-      // Section doesn't exist — create it at the end
-      updatedContent = existingContent
-        ? `${existingContent.trim()}\n\n${sectionHeader}${appendText}`
-        : `${sectionHeader}${appendText}`;
+    try {
+      await this.repository.update(taskId, (existingContent) =>
+        this.appendToSection(existingContent ?? '', section, content)
+      );
+      log.debug({ taskId, section }, 'Progress appended to section');
+    } catch (error) {
+      log.error({ err: error, taskId, section }, 'Failed to append progress');
+      throw error;
     }
-
-    await this.updateProgress(taskId, updatedContent);
-    log.debug({ taskId, section }, 'Progress appended to section');
   }
 
   /**
@@ -118,17 +64,37 @@ export class ProgressService {
    */
   async deleteProgress(taskId: string): Promise<void> {
     try {
-      const filepath = this.getProgressPath(taskId);
-      await fs.unlink(filepath);
+      await this.repository.delete(taskId);
       log.debug({ taskId }, 'Progress file deleted');
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        // File doesn't exist — that's fine
-        return;
-      }
       log.error({ err: error, taskId }, 'Failed to delete progress file');
       throw error;
     }
+  }
+
+  private appendToSection(existingContent: string, section: string, content: string): string {
+    const sectionHeader = `## ${section}`;
+    const appendText = `\n${content.trim()}\n`;
+
+    if (!existingContent.includes(sectionHeader)) {
+      return existingContent
+        ? `${existingContent.trim()}\n\n${sectionHeader}${appendText}`
+        : `${sectionHeader}${appendText}`;
+    }
+
+    const lines = existingContent.split('\n');
+    const sectionIndex = lines.findIndex((line) => line.trim() === sectionHeader);
+    if (sectionIndex === -1) return `${existingContent}\n${sectionHeader}${appendText}`;
+
+    let endIndex = lines.length;
+    for (let index = sectionIndex + 1; index < lines.length; index += 1) {
+      if (lines[index].startsWith('## ')) {
+        endIndex = index;
+        break;
+      }
+    }
+    lines.splice(endIndex, 0, appendText.trim());
+    return lines.join('\n');
   }
 }
 

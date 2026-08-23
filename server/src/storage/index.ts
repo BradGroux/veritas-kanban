@@ -39,6 +39,7 @@ export type {
   StorageProvider,
 } from './interfaces.js';
 export { LocalWorkspaceFileRepository } from './workspace-file-repository.js';
+export { FileProgressRepository, type ProgressRepository } from './progress-repository.js';
 export {
   FileWorkspaceExecutionTrustRepository,
   InMemoryWorkspaceExecutionTrustRepository,
