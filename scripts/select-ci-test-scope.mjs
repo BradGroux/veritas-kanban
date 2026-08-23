@@ -1,15 +1,25 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import path from 'node:path';
+import path, { matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const WORKSPACE_NAMES = ['server', 'web', 'cli', 'mcp', 'desktop'];
+const COVERAGE_POLICY = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL('../docs/testing/critical-path-coverage.json', import.meta.url)),
+    'utf8'
+  )
+);
+const WORKSPACE_NAMES = COVERAGE_POLICY.packages.map(({ id }) => id);
 
 const FULL_SUITE_PATH_PATTERNS = [
   /^\.github\/workflows\//,
   /^scripts\/select-ci-test-scope(?:\.test)?\.mjs$/,
   /^scripts\/verify-full-suite-job-evidence(?:\.test)?\.mjs$/,
+  /^scripts\/(?:run-coverage|check-coverage-(?:policy|ratchets))(?:\.test)?\.mjs$/,
+  /^docs\/testing\/critical-path-coverage\.json$/,
+  /^(?:server|web|cli|mcp|desktop)\/vitest\.config\.ts$/,
 ];
 
 const ALL_WORKSPACE_PATH_PATTERNS = [
@@ -21,6 +31,19 @@ const ALL_WORKSPACE_PATH_PATTERNS = [
   /^(?:vitest|playwright|electron\.vite)\.config\.[cm]?[jt]s$/,
   /^tsconfig(?:\.[^/]+)?\.json$/,
 ];
+
+const CRITICAL_COVERAGE_PATHS = Object.fromEntries(
+  COVERAGE_POLICY.packages.map((packagePolicy) => [
+    packagePolicy.id,
+    [
+      ...packagePolicy.boundaries.flatMap(({ include }) => include),
+      ...(packagePolicy.runner?.testFiles ?? []).map(
+        (testFile) => `${packagePolicy.id}/${testFile}`
+      ),
+      ...(packagePolicy.runner?.triggerPatterns ?? []),
+    ],
+  ])
+);
 
 const DOCUMENTATION_PATH_PATTERNS = [
   /\.md$/i,
@@ -71,6 +94,17 @@ export function affectedWorkspaces(files) {
   }
 
   return WORKSPACE_NAMES.filter((name) => selected.has(name));
+}
+
+export function coverageWorkspaces(files, scope = 'focused') {
+  if (scope === 'full') return [...WORKSPACE_NAMES];
+  if (scope === 'none') return [];
+
+  return WORKSPACE_NAMES.filter((workspace) =>
+    files.some((file) =>
+      CRITICAL_COVERAGE_PATHS[workspace].some((pattern) => matchesGlob(file, pattern))
+    )
+  );
 }
 
 export function classifyCiTestScope({
@@ -124,7 +158,7 @@ export function classifyCiTestScope({
       scope: 'none',
       packages: [],
       files,
-      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and ${evidence}.`,
+      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and Critical Path Coverage, and ${evidence}.`,
     };
   }
 
@@ -167,11 +201,7 @@ export function classifyCiTestScope({
     };
   }
 
-  if (
-    files.every(
-      (file) => isDocumentationPath(file) || isDependencyFreeScopeControlPath(file)
-    )
-  ) {
+  if (files.every((file) => isDocumentationPath(file) || isDependencyFreeScopeControlPath(file))) {
     return {
       scope: 'none',
       packages: [],
@@ -257,11 +287,14 @@ function parseLabels(value) {
   }
 }
 
-function githubOutputLines(result, input) {
+export function githubOutputLines(result, input) {
   const diffRange = diffRangeFor(input.baseSha, input.headSha, input.eventName);
+  const coveragePackages = coverageWorkspaces(result.files, result.scope);
   return [
     `scope=${result.scope}`,
     `packages=${result.packages.join(',')}`,
+    `coverage_packages=${coveragePackages.join(',')}`,
+    `base_sha=${input.baseSha}`,
     `diff_range=${diffRange}`,
     `reason=${result.reason}`,
   ].join('\n');

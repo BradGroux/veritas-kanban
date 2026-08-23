@@ -4,7 +4,9 @@ import test from 'node:test';
 import {
   affectedWorkspaces,
   classifyCiTestScope,
+  coverageWorkspaces,
   diffRangeFor,
+  githubOutputLines,
   isDependencyFreeScopeControlPath,
   isDocumentationPath,
   requiresFullSuite,
@@ -38,10 +40,7 @@ test('dependency-free cadence controls do not trigger workspace unit tests', () 
 test('cadence controls do not widen a focused workspace change', () => {
   const result = classifyCiTestScope({
     eventName: 'pull_request',
-    changedFiles: [
-      'scripts/check-delivery-cadence.mjs',
-      'server/src/routes/tasks.ts',
-    ],
+    changedFiles: ['scripts/check-delivery-cadence.mjs', 'server/src/routes/tasks.ts'],
   });
 
   assert.equal(result.scope, 'focused');
@@ -56,6 +55,31 @@ test('selects affected workspaces for ordinary code changes', () => {
 
   assert.equal(result.scope, 'focused');
   assert.deepEqual(result.packages, ['server', 'web']);
+});
+
+test('selects coverage only for changed critical boundaries and all packages for full scope', () => {
+  const files = [
+    'server/src/storage/file-storage.ts',
+    'web/src/components/Board.tsx',
+    'mcp/src/tools/tasks.ts',
+  ];
+
+  assert.deepEqual(coverageWorkspaces(files), ['server', 'mcp']);
+  assert.deepEqual(coverageWorkspaces(files, 'none'), []);
+  assert.deepEqual(coverageWorkspaces(files, 'full'), ['server', 'web', 'cli', 'mcp', 'desktop']);
+});
+
+test('reruns coverage when governed tests, schemas, or shared permissions change', () => {
+  assert.deepEqual(
+    coverageWorkspaces([
+      'server/src/__tests__/provider-completion-service.test.ts',
+      'server/src/schemas/auth-schemas.ts',
+      'shared/src/utils/api-permissions.ts',
+      'web/src/__tests__/useWebSocket.test.ts',
+      'mcp/src/__tests__/task-tools.test.ts',
+    ]),
+    ['server', 'web', 'mcp']
+  );
 });
 
 test('ci:full overrides a documentation-only pull request', () => {
@@ -73,6 +97,10 @@ test('selects the full suite only for CI control paths', () => {
     '.github/workflows/ci.yml',
     'scripts/select-ci-test-scope.mjs',
     'scripts/verify-full-suite-job-evidence.mjs',
+    'scripts/run-coverage.mjs',
+    'scripts/check-coverage-policy.test.mjs',
+    'docs/testing/critical-path-coverage.json',
+    'web/vitest.config.ts',
   ];
 
   for (const file of paths) {
@@ -246,4 +274,15 @@ test('uses two-dot push ranges, three-dot review ranges, and rejects non-SHAs', 
     () => diffRangeFor('--output=/tmp/unsafe', head, 'workflow_dispatch'),
     /hexadecimal commit IDs/
   );
+});
+
+test('exports the resolved base SHA for downstream coverage gates', () => {
+  const baseSha = 'a'.repeat(40);
+  const headSha = 'b'.repeat(40);
+  const output = githubOutputLines(
+    { scope: 'focused', packages: ['server'], files: [], reason: 'test' },
+    { baseSha, headSha, eventName: 'workflow_dispatch' }
+  );
+
+  assert.match(output, new RegExp(`^base_sha=${baseSha}$`, 'm'));
 });

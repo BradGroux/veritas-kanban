@@ -1,0 +1,262 @@
+{
+  "schemaVersion": "critical-path-coverage/v1",
+  "longTermTarget": {
+    "lines": 80,
+    "branches": 80,
+    "functions": 80,
+    "statements": 80
+  },
+  "packages": [
+    {
+      "id": "server",
+      "report": "coverage/server/coverage-summary.json",
+      "runner": {
+        "maxWorkers": 1,
+        "extraArgs": ["--hookTimeout=20000", "--testTimeout=30000"],
+        "testFiles": [
+          "src/__tests__/acp-stdio-provider.test.ts",
+          "src/__tests__/admission-control-service.test.ts",
+          "src/__tests__/claude-code-provider.smoke.test.ts",
+          "src/__tests__/claude-code-provider.test.ts",
+          "src/__tests__/codex-app-server-provider.smoke.test.ts",
+          "src/__tests__/codex-app-server-provider.test.ts",
+          "src/__tests__/codex-env.test.ts",
+          "src/__tests__/codex-provider-service.test.ts",
+          "src/__tests__/communication-adapter-schemas.test.ts",
+          "src/__tests__/context-provider-health-service.test.ts",
+          "src/__tests__/credential-broker-service.test.ts",
+          "src/__tests__/enforcement.test.ts",
+          "src/__tests__/filesystem-sandbox-service.test.ts",
+          "src/__tests__/harness-support-profile-schemas.test.ts",
+          "src/__tests__/hermes-provider.test.ts",
+          "src/__tests__/log-redaction.test.ts",
+          "src/__tests__/middleware/auth.test.ts",
+          "src/__tests__/middleware/write-enforcement.integration.test.ts",
+          "src/__tests__/openclaw-provider.test.ts",
+          "src/__tests__/path-audit.test.ts",
+          "src/__tests__/provider-completion-service.test.ts",
+          "src/__tests__/provider-launch-credential-plan-service.test.ts",
+          "src/__tests__/provider-runtime-adapters.test.ts",
+          "src/__tests__/provider-runtime-capability-service.test.ts",
+          "src/__tests__/provider-runtime-control-service.test.ts",
+          "src/__tests__/provider-runtime-manifest-service.test.ts",
+          "src/__tests__/provider-task-envelope-renderer.test.ts",
+          "src/__tests__/routes/admin-governance-auth.test.ts",
+          "src/__tests__/routes/auth.test.ts",
+          "src/__tests__/routes/credential-broker.test.ts",
+          "src/__tests__/routes/sqlite-journal-maintenance.test.ts",
+          "src/__tests__/routes/v1-permission-guards.test.ts",
+          "src/__tests__/run-launch-manifest-service.test.ts",
+          "src/__tests__/run-recovery-policy-service.test.ts",
+          "src/__tests__/run-supervisor-service.test.ts",
+          "src/__tests__/schemas.test.ts",
+          "src/__tests__/shared-api-permissions.test.ts",
+          "src/__tests__/sqlite-journal-ownership-policy.test.ts",
+          "src/__tests__/sqlite-maintenance-bootstrap.test.ts",
+          "src/__tests__/sqlite-portability-service.test.ts",
+          "src/__tests__/storage/dual-storage-parity.test.ts",
+          "src/__tests__/storage/file-storage.test.ts",
+          "src/__tests__/storage/sqlite-audit-policy-repositories.test.ts",
+          "src/__tests__/storage/sqlite-chat-repositories.test.ts",
+          "src/__tests__/storage/sqlite-config-repositories.test.ts",
+          "src/__tests__/storage/sqlite-dashboard-metrics.test.ts",
+          "src/__tests__/storage/sqlite-database.test.ts",
+          "src/__tests__/storage/sqlite-governance-repositories.test.ts",
+          "src/__tests__/storage/sqlite-identity-repository.test.ts",
+          "src/__tests__/storage/sqlite-notification-repositories.test.ts",
+          "src/__tests__/storage/sqlite-operational-repositories.test.ts",
+          "src/__tests__/storage/sqlite-performance.test.ts",
+          "src/__tests__/storage/sqlite-provenance-repository.test.ts",
+          "src/__tests__/storage/sqlite-scheduled-deliverables-repository.test.ts",
+          "src/__tests__/storage/sqlite-storage.test.ts",
+          "src/__tests__/storage/sqlite-task-repository.test.ts",
+          "src/__tests__/storage/sqlite-work-products.test.ts",
+          "src/__tests__/storage/sqlite-workflow-repositories.test.ts",
+          "src/__tests__/storage/sqlite-workflow-run-execution.test.ts",
+          "src/__tests__/task-service-sqlite.test.ts",
+          "src/__tests__/work-product-run-launch-manifest.test.ts",
+          "src/__tests__/work-product-schemas.test.ts",
+          "src/__tests__/workflow-run-service.test.ts",
+          "src/__tests__/workflow-step-executor-codex.test.ts",
+          "src/__tests__/workflow-step-executor-openclaw.test.ts",
+          "src/storage/sqlite/database.test.ts",
+          "src/storage/sqlite/filesystem-posture.test.ts"
+        ]
+      },
+      "boundaries": [
+        {
+          "id": "dispatch-runtime",
+          "description": "Provider dispatch, persisted runtime evidence, workflow execution, completion, and recovery.",
+          "include": [
+            "server/src/services/clawdbot-agent-service.ts",
+            "server/src/services/*provider*.ts",
+            "server/src/services/workflow-run-service.ts",
+            "server/src/services/workflow-step-executor.ts",
+            "server/src/services/run-launch-manifest-service.ts",
+            "server/src/services/run-recovery-policy-service.ts",
+            "server/src/services/run-supervisor-service.ts"
+          ],
+          "thresholds": {
+            "lines": 64.97,
+            "branches": 57.48,
+            "functions": 70.22,
+            "statements": 63.67
+          }
+        },
+        {
+          "id": "auth-validation-redaction",
+          "description": "Authentication, authorization, validation, path containment, environment allowlists, and redaction.",
+          "include": [
+            "server/src/middleware/auth.ts",
+            "server/src/middleware/local-agent-capability.ts",
+            "server/src/middleware/validate.ts",
+            "server/src/middleware/workflow-auth.ts",
+            "server/src/config/security.ts",
+            "server/src/lib/redact.ts",
+            "server/src/utils/codex-env.ts",
+            "server/src/utils/hermes-env.ts",
+            "server/src/utils/paths.ts",
+            "server/src/utils/sanitize.ts",
+            "server/src/schemas/**/*.ts",
+            "shared/src/utils/api-permissions.ts"
+          ],
+          "thresholds": {
+            "lines": 57.58,
+            "branches": 52.85,
+            "functions": 50.91,
+            "statements": 56.89
+          }
+        },
+        {
+          "id": "storage-locks-migrations",
+          "description": "File and SQLite repositories, locks, migrations, and storage containment.",
+          "include": ["server/src/storage/**/*.ts"],
+          "thresholds": {
+            "lines": 39.51,
+            "branches": 34.11,
+            "functions": 46.9,
+            "statements": 38.73
+          }
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "report": "coverage/web/coverage-summary.json",
+      "runner": {
+        "extraArgs": ["--testTimeout=15000"],
+        "testFiles": [
+          "src/__tests__/api-helpers.test.ts",
+          "src/__tests__/api-no-raw-fetch.test.ts",
+          "src/__tests__/api-tasks.test.ts",
+          "src/__tests__/archive-backlog-mantine.test.tsx",
+          "src/__tests__/auth-guard.test.tsx",
+          "src/__tests__/auth-screens-mantine.test.tsx",
+          "src/__tests__/use-task-sync-admission.test.ts",
+          "src/__tests__/useTasks-patchCache.test.ts",
+          "src/__tests__/useRealtimeAgentStatus.test.ts",
+          "src/__tests__/useWebSocket.test.ts"
+        ]
+      },
+      "boundaries": [
+        {
+          "id": "api-auth-realtime",
+          "description": "API envelopes, authentication/session behavior, critical task mutations, and realtime reconciliation.",
+          "include": [
+            "web/src/lib/api/**/*.ts",
+            "web/src/hooks/useAuth.tsx",
+            "web/src/hooks/useIdentity.tsx",
+            "web/src/hooks/useWebSocket.ts",
+            "web/src/hooks/useTaskSync.ts",
+            "web/src/hooks/useTasks.ts",
+            "web/src/hooks/useBacklog.ts",
+            "web/src/contexts/WebSocketContext.tsx",
+            "web/src/lib/client-policy.ts",
+            "web/src/lib/sanitize.ts"
+          ],
+          "thresholds": {
+            "lines": 37.74,
+            "branches": 34.36,
+            "functions": 28.67,
+            "statements": 36.79
+          }
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "report": "coverage/cli/coverage-summary.json",
+      "runner": {
+        "triggerPatterns": ["cli/src/**/*.test.ts"]
+      },
+      "boundaries": [
+        {
+          "id": "api-compatibility",
+          "description": "CLI API envelopes and critical agent, admission, task, SQLite, and diagnostic commands.",
+          "include": [
+            "cli/src/utils/api.ts",
+            "cli/src/commands/agents.ts",
+            "cli/src/commands/admission.ts",
+            "cli/src/commands/tasks.ts",
+            "cli/src/commands/sqlite.ts",
+            "cli/src/commands/doctor.ts"
+          ],
+          "thresholds": {
+            "lines": 52.07,
+            "branches": 44.53,
+            "functions": 65.45,
+            "statements": 51.02
+          }
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "report": "coverage/mcp/coverage-summary.json",
+      "runner": {
+        "triggerPatterns": ["mcp/src/**/*.test.ts"]
+      },
+      "boundaries": [
+        {
+          "id": "api-tool-contracts",
+          "description": "MCP API failure envelopes and task, agent, project, sprint, and control-plane tools.",
+          "include": ["mcp/src/utils/api.ts", "mcp/src/tools/**/*.ts"],
+          "thresholds": {
+            "lines": 52.39,
+            "branches": 43.67,
+            "functions": 60,
+            "statements": 51.44
+          }
+        }
+      ]
+    },
+    {
+      "id": "desktop",
+      "report": "coverage/desktop/coverage-summary.json",
+      "runner": {
+        "triggerPatterns": ["desktop/src/**/*.test.ts"]
+      },
+      "boundaries": [
+        {
+          "id": "preload-ipc-trust",
+          "description": "Preload exposure, IPC bridge contracts, navigation, secrets, updates, and process supervision.",
+          "include": [
+            "desktop/src/preload/index.ts",
+            "desktop/src/shared/desktop-bridge-contracts.ts",
+            "desktop/src/main/bridge.ts",
+            "desktop/src/main/navigation.ts",
+            "desktop/src/main/secrets.ts",
+            "desktop/src/main/updates.ts",
+            "desktop/src/main/process-supervisor.ts"
+          ],
+          "thresholds": {
+            "lines": 66.24,
+            "branches": 66.54,
+            "functions": 54.86,
+            "statements": 65.5
+          }
+        }
+      ]
+    }
+  ]
+}

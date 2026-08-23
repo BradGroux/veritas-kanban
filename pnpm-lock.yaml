@@ -47,6 +47,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ^8.67.0
         version: 8.67.0(eslint@10.8.1(jiti@2.7.0))(typescript@6.0.3)
+      '@vitest/coverage-v8':
+        specifier: ^4.1.11
+        version: 4.1.11(vitest@4.1.11)
       concurrently:
         specifier: ^10.0.5
         version: 10.0.5
