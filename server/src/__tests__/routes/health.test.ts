@@ -39,8 +39,7 @@ describe('Health Routes', () => {
 
   beforeEach(async () => {
     // Create a temp data directory for testing
-    const uniqueSuffix = Math.random().toString(36).substring(7);
-    testDataDir = path.join(os.tmpdir(), `veritas-health-test-${uniqueSuffix}`);
+    testDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-health-test-'));
     testRuntimeDir = path.join(testDataDir, '.veritas-kanban');
     await fs.mkdir(testRuntimeDir, { recursive: true });
 
