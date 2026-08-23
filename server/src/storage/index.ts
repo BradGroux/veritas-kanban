@@ -64,6 +64,12 @@ export {
   FileWorkflowExecutionFileRepository,
   type WorkflowExecutionFileRepository,
 } from './workflow-execution-file-repository.js';
+export {
+  FileWorkflowRunRepository,
+  type WorkflowRunFilters,
+  type WorkflowRunMetadata,
+  type WorkflowRunRepository,
+} from './workflow-run-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
 export {

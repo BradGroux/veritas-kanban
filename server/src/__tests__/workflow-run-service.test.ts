@@ -665,6 +665,74 @@ describe('WorkflowRunService', () => {
     ]);
   });
 
+  it('validates human-gate approval and rejection state before mutation', async () => {
+    const repository = (service as any).repository;
+    const persist = async (id: string, overrides: Record<string, any> = {}) => {
+      await repository.save(
+        {
+          id,
+          workflowId: 'wf-1',
+          workflowVersion: 3,
+          status: 'blocked',
+          context: {},
+          steps: [],
+          startedAt: '2026-08-23T00:00:00.000Z',
+          revision: 1,
+          ...overrides,
+        },
+        0
+      );
+    };
+
+    await expect(
+      service.approveGateStep('run_1111111111_missing', 'gate-1', 'operator')
+    ).rejects.toThrow(/not found/);
+    await persist('run_1111111111_running', { status: 'running' });
+    await expect(
+      service.approveGateStep('run_1111111111_running', 'gate-1', 'operator')
+    ).rejects.toThrow(/is not blocked/);
+    await persist('run_1111111111_nogate');
+    await expect(
+      service.approveGateStep('run_1111111111_nogate', 'gate-1', 'operator')
+    ).rejects.toThrow(/not blocked at a human gate/);
+    await persist('run_1111111111_wronggate', {
+      context: { _gateBlock: { stepId: 'gate-2' } },
+    });
+    await expect(
+      service.approveGateStep('run_1111111111_wronggate', 'gate-1', 'operator')
+    ).rejects.toThrow(/blocked at gate/);
+    await persist('run_1111111111_nostep', {
+      context: { _gateBlock: { stepId: 'gate-1' } },
+    });
+    await expect(
+      service.approveGateStep('run_1111111111_nostep', 'gate-1', 'operator')
+    ).rejects.toThrow(/Step gate-1 not found/);
+
+    await expect(
+      service.rejectGateStep('run_1111111111_rejectmissing', 'gate-1', 'operator')
+    ).rejects.toThrow(/not found/);
+    await persist('run_1111111111_rejectrunning', { status: 'running' });
+    await expect(
+      service.rejectGateStep('run_1111111111_rejectrunning', 'gate-1', 'operator')
+    ).rejects.toThrow(/is not blocked/);
+    await persist('run_1111111111_rejectnogate');
+    await expect(
+      service.rejectGateStep('run_1111111111_rejectnogate', 'gate-1', 'operator')
+    ).rejects.toThrow(/not blocked at a human gate/);
+    await persist('run_1111111111_rejectwrong', {
+      context: { _gateBlock: { stepId: 'gate-2' } },
+    });
+    await expect(
+      service.rejectGateStep('run_1111111111_rejectwrong', 'gate-1', 'operator')
+    ).rejects.toThrow(/blocked at gate/);
+    await persist('run_1111111111_rejectnostep', {
+      context: { _gateBlock: { stepId: 'gate-1' } },
+    });
+    await expect(
+      service.rejectGateStep('run_1111111111_rejectnostep', 'gate-1', 'operator')
+    ).rejects.toThrow(/Step gate-1 not found/);
+  });
+
   it('rejects invalid ids, missing workflows, invalid metadata reads, and incompatible agent escalation', async () => {
     await expect(service.getRun('../bad')).rejects.toThrow(/illegal path characters/);
     await expect(service.getRun('run_invalid')).rejects.toThrow(/format is invalid/);
