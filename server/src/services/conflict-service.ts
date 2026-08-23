@@ -1,9 +1,10 @@
 import { simpleGit, SimpleGit } from 'simple-git';
-import fs from 'fs/promises';
-import path from 'path';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
-import { ensureWithinBase } from '../utils/sanitize.js';
+import {
+  LocalConflictWorkspaceRepository,
+  type ConflictWorkspaceRepository,
+} from '../storage/conflict-workspace-repository.js';
 
 export interface ConflictFile {
   path: string;
@@ -37,10 +38,14 @@ export interface ResolveResult {
 export class ConflictService {
   private configService: ConfigService;
   private taskService: TaskService;
+  private workspaceFiles: ConflictWorkspaceRepository;
 
-  constructor() {
+  constructor(
+    workspaceFiles: ConflictWorkspaceRepository = new LocalConflictWorkspaceRepository()
+  ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
+    this.workspaceFiles = workspaceFiles;
   }
 
   private expandPath(p: string): string {
@@ -78,25 +83,12 @@ export class ConflictService {
     const { git, workDir } = await this.getWorkingDir(taskId);
 
     // Check for rebase in progress
-    const rebaseDir = path.join(workDir, '.git', 'rebase-merge');
-    const rebaseApplyDir = path.join(workDir, '.git', 'rebase-apply');
-    // Intentionally silent catches: fs.access throws if path doesn't exist — false means not present
+    // A missing path means the corresponding Git operation is not in progress.
     const rebaseInProgress =
-      (await fs
-        .access(rebaseDir)
-        .then(() => true)
-        .catch(() => false)) ||
-      (await fs
-        .access(rebaseApplyDir)
-        .then(() => true)
-        .catch(() => false));
+      (await this.workspaceFiles.exists(workDir, '.git/rebase-merge')) ||
+      (await this.workspaceFiles.exists(workDir, '.git/rebase-apply'));
 
-    // Check for merge in progress (intentionally silent: false means no MERGE_HEAD)
-    const mergeHead = path.join(workDir, '.git', 'MERGE_HEAD');
-    const mergeInProgress = await fs
-      .access(mergeHead)
-      .then(() => true)
-      .catch(() => false);
+    const mergeInProgress = await this.workspaceFiles.exists(workDir, '.git/MERGE_HEAD');
 
     // Get status to find conflicted files
     const status = await git.status();
@@ -116,8 +108,7 @@ export class ConflictService {
   async getFileConflict(taskId: string, filePath: string): Promise<ConflictFile> {
     const { git, workDir } = await this.getWorkingDir(taskId);
 
-    const fullPath = ensureWithinBase(workDir, path.join(workDir, filePath));
-    const content = await fs.readFile(fullPath, 'utf-8');
+    const content = await this.workspaceFiles.readText(workDir, filePath);
 
     // Parse conflict markers
     const markers = this.parseConflictMarkers(content);
@@ -214,13 +205,11 @@ export class ConflictService {
     manualContent?: string
   ): Promise<ResolveResult> {
     const { git, workDir } = await this.getWorkingDir(taskId);
-    const fullPath = ensureWithinBase(workDir, path.join(workDir, filePath));
-
     if (resolution === 'manual') {
       if (!manualContent) {
         throw new Error('Manual content required for manual resolution');
       }
-      await fs.writeFile(fullPath, manualContent, 'utf-8');
+      await this.workspaceFiles.writeText(workDir, filePath, manualContent);
     } else if (resolution === 'ours') {
       // Checkout our version
       await git.checkout(['--ours', filePath]);
