@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   affectedWorkspaces,
   classifyCiTestScope,
+  coverageWorkspaces,
   diffRangeFor,
   isDependencyFreeScopeControlPath,
   isDocumentationPath,
@@ -38,10 +39,7 @@ test('dependency-free cadence controls do not trigger workspace unit tests', () 
 test('cadence controls do not widen a focused workspace change', () => {
   const result = classifyCiTestScope({
     eventName: 'pull_request',
-    changedFiles: [
-      'scripts/check-delivery-cadence.mjs',
-      'server/src/routes/tasks.ts',
-    ],
+    changedFiles: ['scripts/check-delivery-cadence.mjs', 'server/src/routes/tasks.ts'],
   });
 
   assert.equal(result.scope, 'focused');
@@ -56,6 +54,18 @@ test('selects affected workspaces for ordinary code changes', () => {
 
   assert.equal(result.scope, 'focused');
   assert.deepEqual(result.packages, ['server', 'web']);
+});
+
+test('selects coverage only for changed critical boundaries and all packages for full scope', () => {
+  const files = [
+    'server/src/storage/file-storage.ts',
+    'web/src/components/Board.tsx',
+    'mcp/src/tools/tasks.ts',
+  ];
+
+  assert.deepEqual(coverageWorkspaces(files), ['server', 'mcp']);
+  assert.deepEqual(coverageWorkspaces(files, 'none'), []);
+  assert.deepEqual(coverageWorkspaces(files, 'full'), ['server', 'web', 'cli', 'mcp', 'desktop']);
 });
 
 test('ci:full overrides a documentation-only pull request', () => {
@@ -73,6 +83,10 @@ test('selects the full suite only for CI control paths', () => {
     '.github/workflows/ci.yml',
     'scripts/select-ci-test-scope.mjs',
     'scripts/verify-full-suite-job-evidence.mjs',
+    'scripts/run-coverage.mjs',
+    'scripts/check-coverage-policy.test.mjs',
+    'docs/testing/critical-path-coverage.json',
+    'web/vitest.config.ts',
   ];
 
   for (const file of paths) {

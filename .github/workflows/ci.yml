@@ -62,6 +62,7 @@ jobs:
       packages: ${{ steps.scope.outputs.packages }}
       diff_range: ${{ steps.scope.outputs.diff_range }}
       reason: ${{ steps.scope.outputs.reason }}
+      coverage_packages: ${{ steps.scope.outputs.coverage_packages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -500,6 +501,72 @@ jobs:
             echo
             echo "- Decision: skipped the complete suite because scope is \`$SELECTED_SCOPE\`."
             echo "- Selection reason: $SELECTION_REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─── Critical-path Coverage ─────────────────────────────────────
+  critical-path-coverage:
+    name: Critical Path Coverage
+    needs: select-tests
+    if: >-
+      always() &&
+      (
+        github.event_name != 'pull_request' ||
+        !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
+        github.event.label.name == 'ci:full'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a successful scope decision
+        env:
+          SELECTOR_RESULT: ${{ needs.select-tests.result }}
+        run: |
+          if [[ "$SELECTOR_RESULT" != "success" ]]; then
+            echo "::error::Select Test Scope did not complete successfully"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.select-tests.outputs.coverage_packages != ''
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        if: needs.select-tests.outputs.coverage_packages != ''
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        if: needs.select-tests.outputs.coverage_packages != ''
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        if: needs.select-tests.outputs.coverage_packages != ''
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify coverage policy
+        if: needs.select-tests.outputs.coverage_packages != ''
+        run: pnpm check:coverage-policy
+
+      - name: Measure and ratchet critical paths
+        if: needs.select-tests.outputs.coverage_packages != ''
+        env:
+          COVERAGE_PACKAGES: ${{ needs.select-tests.outputs.coverage_packages }}
+        run: pnpm test:coverage --packages "$COVERAGE_PACKAGES"
+
+      - name: Upload coverage reports
+        if: needs.select-tests.outputs.coverage_packages != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: critical-path-coverage-${{ github.sha }}
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record coverage skip
+        if: needs.select-tests.outputs.coverage_packages == ''
+        run: |
+          {
+            echo "### Critical-path coverage ratchets"
+            echo
+            echo "No governed critical-path package changed in this verification scope."
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ─── Build ───────────────────────────────────────────────────────

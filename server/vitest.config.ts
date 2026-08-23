@@ -8,7 +8,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/__tests__/**', 'src/scripts/**'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/__tests__/**',
+        'src/scripts/**',
+        'src/storage/sqlite/test-helpers.ts',
+      ],
       all: true,
     },
   },

@@ -14,5 +14,11 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     globals: false,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/*.d.ts', 'src/**/__tests__/**'],
+      all: true,
+    },
   },
 });

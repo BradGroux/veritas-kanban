@@ -10,6 +10,9 @@ const FULL_SUITE_PATH_PATTERNS = [
   /^\.github\/workflows\//,
   /^scripts\/select-ci-test-scope(?:\.test)?\.mjs$/,
   /^scripts\/verify-full-suite-job-evidence(?:\.test)?\.mjs$/,
+  /^scripts\/(?:run-coverage|check-coverage-(?:policy|ratchets))(?:\.test)?\.mjs$/,
+  /^docs\/testing\/critical-path-coverage\.json$/,
+  /^(?:server|web|cli|mcp|desktop)\/vitest\.config\.ts$/,
 ];
 
 const ALL_WORKSPACE_PATH_PATTERNS = [
@@ -21,6 +24,33 @@ const ALL_WORKSPACE_PATH_PATTERNS = [
   /^(?:vitest|playwright|electron\.vite)\.config\.[cm]?[jt]s$/,
   /^tsconfig(?:\.[^/]+)?\.json$/,
 ];
+
+const CRITICAL_COVERAGE_PATH_PATTERNS = {
+  server: [
+    /^server\/src\/middleware\//,
+    /^server\/src\/storage\//,
+    /^server\/src\/config\/security\.ts$/,
+    /^server\/src\/lib\/redact\.ts$/,
+    /^server\/src\/utils\/(?:codex-env|hermes-env|paths|sanitize)\.ts$/,
+    /^server\/src\/services\/(?:.*provider.*|clawdbot-agent-service|workflow-run-service|workflow-step-executor|run-launch-manifest-service|run-recovery-policy-service|run-supervisor-service)\.ts$/,
+  ],
+  web: [
+    /^web\/src\/lib\/api\//,
+    /^web\/src\/lib\/(?:client-policy|sanitize)\.ts$/,
+    /^web\/src\/hooks\/use(?:Auth|Identity|WebSocket|TaskSync|Tasks|Backlog)\.tsx?$/,
+    /^web\/src\/contexts\/WebSocketContext\.tsx$/,
+  ],
+  cli: [
+    /^cli\/src\/utils\/api\.ts$/,
+    /^cli\/src\/commands\/(?:agents|admission|tasks|sqlite|doctor)\.ts$/,
+  ],
+  mcp: [/^mcp\/src\/utils\/api\.ts$/, /^mcp\/src\/tools\//],
+  desktop: [
+    /^desktop\/src\/preload\/index\.ts$/,
+    /^desktop\/src\/shared\/desktop-bridge-contracts\.ts$/,
+    /^desktop\/src\/main\/(?:bridge|navigation|secrets|updates|process-supervisor)\.ts$/,
+  ],
+};
 
 const DOCUMENTATION_PATH_PATTERNS = [
   /\.md$/i,
@@ -71,6 +101,17 @@ export function affectedWorkspaces(files) {
   }
 
   return WORKSPACE_NAMES.filter((name) => selected.has(name));
+}
+
+export function coverageWorkspaces(files, scope = 'focused') {
+  if (scope === 'full') return [...WORKSPACE_NAMES];
+  if (scope === 'none') return [];
+
+  return WORKSPACE_NAMES.filter((workspace) =>
+    files.some((file) =>
+      CRITICAL_COVERAGE_PATH_PATTERNS[workspace].some((pattern) => pattern.test(file))
+    )
+  );
 }
 
 export function classifyCiTestScope({
@@ -167,11 +208,7 @@ export function classifyCiTestScope({
     };
   }
 
-  if (
-    files.every(
-      (file) => isDocumentationPath(file) || isDependencyFreeScopeControlPath(file)
-    )
-  ) {
+  if (files.every((file) => isDocumentationPath(file) || isDependencyFreeScopeControlPath(file))) {
     return {
       scope: 'none',
       packages: [],
@@ -259,9 +296,11 @@ function parseLabels(value) {
 
 function githubOutputLines(result, input) {
   const diffRange = diffRangeFor(input.baseSha, input.headSha, input.eventName);
+  const coveragePackages = coverageWorkspaces(result.files, result.scope);
   return [
     `scope=${result.scope}`,
     `packages=${result.packages.join(',')}`,
+    `coverage_packages=${coveragePackages.join(',')}`,
     `diff_range=${diffRange}`,
     `reason=${result.reason}`,
   ].join('\n');

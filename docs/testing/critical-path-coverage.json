@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "critical-path-coverage/v1",
+  "longTermTarget": {
+    "lines": 80,
+    "branches": 80,
+    "functions": 80,
+    "statements": 80
+  },
+  "packages": [
+    {
+      "id": "server",
+      "report": "coverage/server/coverage-summary.json",
+      "boundaries": [
+        {
+          "id": "dispatch-runtime",
+          "description": "Provider dispatch, persisted runtime evidence, workflow execution, completion, and recovery.",
+          "include": [
+            "server/src/services/clawdbot-agent-service.ts",
+            "server/src/services/*provider*.ts",
+            "server/src/services/workflow-run-service.ts",
+            "server/src/services/workflow-step-executor.ts",
+            "server/src/services/run-launch-manifest-service.ts",
+            "server/src/services/run-recovery-policy-service.ts",
+            "server/src/services/run-supervisor-service.ts"
+          ],
+          "thresholds": {
+            "lines": 64.97,
+            "branches": 57.48,
+            "functions": 70.22,
+            "statements": 63.67
+          }
+        },
+        {
+          "id": "auth-validation-redaction",
+          "description": "Authentication, authorization, validation, path containment, environment allowlists, and redaction.",
+          "include": [
+            "server/src/middleware/auth.ts",
+            "server/src/middleware/local-agent-capability.ts",
+            "server/src/middleware/validate.ts",
+            "server/src/middleware/workflow-auth.ts",
+            "server/src/config/security.ts",
+            "server/src/lib/redact.ts",
+            "server/src/utils/codex-env.ts",
+            "server/src/utils/hermes-env.ts",
+            "server/src/utils/paths.ts",
+            "server/src/utils/sanitize.ts"
+          ],
+          "thresholds": {
+            "lines": 62.84,
+            "branches": 60.11,
+            "functions": 61.86,
+            "statements": 61.79
+          }
+        },
+        {
+          "id": "storage-locks-migrations",
+          "description": "File and SQLite repositories, locks, migrations, and storage containment.",
+          "include": ["server/src/storage/**/*.ts"],
+          "thresholds": {
+            "lines": 39.51,
+            "branches": 34.11,
+            "functions": 46.9,
+            "statements": 38.73
+          }
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "report": "coverage/web/coverage-summary.json",
+      "boundaries": [
+        {
+          "id": "api-auth-realtime",
+          "description": "API envelopes, authentication/session behavior, critical task mutations, and realtime reconciliation.",
+          "include": [
+            "web/src/lib/api/**/*.ts",
+            "web/src/hooks/useAuth.tsx",
+            "web/src/hooks/useIdentity.tsx",
+            "web/src/hooks/useWebSocket.ts",
+            "web/src/hooks/useTaskSync.ts",
+            "web/src/hooks/useTasks.ts",
+            "web/src/hooks/useBacklog.ts",
+            "web/src/contexts/WebSocketContext.tsx",
+            "web/src/lib/client-policy.ts",
+            "web/src/lib/sanitize.ts"
+          ],
+          "thresholds": {
+            "lines": 37.74,
+            "branches": 34.36,
+            "functions": 28.67,
+            "statements": 36.79
+          }
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "report": "coverage/cli/coverage-summary.json",
+      "boundaries": [
+        {
+          "id": "api-compatibility",
+          "description": "CLI API envelopes and critical agent, admission, task, SQLite, and diagnostic commands.",
+          "include": [
+            "cli/src/utils/api.ts",
+            "cli/src/commands/agents.ts",
+            "cli/src/commands/admission.ts",
+            "cli/src/commands/tasks.ts",
+            "cli/src/commands/sqlite.ts",
+            "cli/src/commands/doctor.ts"
+          ],
+          "thresholds": {
+            "lines": 52.07,
+            "branches": 44.53,
+            "functions": 65.45,
+            "statements": 51.02
+          }
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "report": "coverage/mcp/coverage-summary.json",
+      "boundaries": [
+        {
+          "id": "api-tool-contracts",
+          "description": "MCP API failure envelopes and task, agent, project, sprint, and control-plane tools.",
+          "include": ["mcp/src/utils/api.ts", "mcp/src/tools/**/*.ts"],
+          "thresholds": {
+            "lines": 52.39,
+            "branches": 43.67,
+            "functions": 60,
+            "statements": 51.44
+          }
+        }
+      ]
+    },
+    {
+      "id": "desktop",
+      "report": "coverage/desktop/coverage-summary.json",
+      "boundaries": [
+        {
+          "id": "preload-ipc-trust",
+          "description": "Preload exposure, IPC bridge contracts, navigation, secrets, updates, and process supervision.",
+          "include": [
+            "desktop/src/preload/index.ts",
+            "desktop/src/shared/desktop-bridge-contracts.ts",
+            "desktop/src/main/bridge.ts",
+            "desktop/src/main/navigation.ts",
+            "desktop/src/main/secrets.ts",
+            "desktop/src/main/updates.ts",
+            "desktop/src/main/process-supervisor.ts"
+          ],
+          "thresholds": {
+            "lines": 66.24,
+            "branches": 66.54,
+            "functions": 54.86,
+            "statements": 65.5
+          }
+        }
+      ]
+    }
+  ]
+}

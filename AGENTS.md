@@ -60,6 +60,7 @@ pnpm dev
 # Tests
 pnpm test                       # Canonical sequential workspace unit gate
 pnpm test:unit                  # Shared build, then server, web, CLI, and MCP
+pnpm test:coverage              # Critical-path V8 coverage, HTML/JSON reports, and ratchets
 pnpm test:e2e                   # Playwright end-to-end, zero retries
 
 # Type check (builds shared first)
@@ -72,6 +73,7 @@ pnpm lint:fix
 # Smoke checks
 pnpm check:actions-pinned       # Rejects mutable external GitHub Action references
 pnpm check:pnpm-settings        # Validates package manager fields match this file
+pnpm check:coverage-policy      # Validates coverage policy, configs, CI, and regression tests
 pnpm check:delivery-cadence     # Prevents verification and review policy drift
 pnpm check:security-gates       # Validates CodeQL/gitleaks workflow and exact suppressions
 pnpm check:gitleaks             # Scans reviewed tree and proves new-secret detection
