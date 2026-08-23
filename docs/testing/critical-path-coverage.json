@@ -41,6 +41,7 @@
           "src/__tests__/provider-runtime-control-service.test.ts",
           "src/__tests__/provider-runtime-manifest-service.test.ts",
           "src/__tests__/provider-task-envelope-renderer.test.ts",
+          "src/__tests__/reflection-extraction-job-service.test.ts",
           "src/__tests__/runtime-paths.test.ts",
           "src/__tests__/routes/admin-governance-auth.test.ts",
           "src/__tests__/routes/auth.test.ts",
