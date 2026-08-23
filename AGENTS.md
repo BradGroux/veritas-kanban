@@ -70,6 +70,7 @@ pnpm lint
 pnpm lint:fix
 
 # Smoke checks
+pnpm check:actions-pinned       # Rejects mutable external GitHub Action references
 pnpm check:pnpm-settings        # Validates package manager fields match this file
 pnpm check:delivery-cadence     # Prevents verification and review policy drift
 pnpm check:vite-native-config   # Loads web build and test configs with Vite's native loader

@@ -1,3 +1,4 @@
 pnpm check:security-artifacts
+pnpm check:actions-pinned
 node scripts/check-delivery-cadence.mjs
 npx lint-staged
