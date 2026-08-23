@@ -26,9 +26,9 @@ Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
 - [x] Independent review is owner-directed and is not part of the active
       6.1.1 release gate; exact local and CI evidence carries the release
       decision.
-- [ ] The release PR merges and the exact merge is published as annotated
+- [x] The release PR merges and the exact merge is published as annotated
       `v6.1.1` with a live body matching `docs/releases/v6.1.1.md`.
-- [ ] Signed/notarized macOS assets, updater metadata, independent installed-app
+- [x] Signed/notarized macOS assets, updater metadata, independent installed-app
       readiness, and the Homebrew cask are published and verified.
 
 ## Historical 6.1.0 Completed Release Gate
@@ -81,11 +81,9 @@ pnpm validate:release -- --version 6.1.1 --docker-build
 
 ## Distribution And Post-Publication
 
-Publish only after every pre-publication 6.1.1 gate above is checked. The canonical
-GitHub body is `docs/releases/v6.1.1.md`; post-publication validation must run
-`pnpm validate:release -- --version 6.1.1 --github --repo BradGroux/veritas-kanban`.
-Update the Homebrew cask only from the independently verified published ZIP
-checksum.
+All 6.1.1 publication gates are complete. The live GitHub body matches
+`docs/releases/v6.1.1.md`; the post-publication release validator passes; and
+the Homebrew cask uses the independently verified published ZIP checksum.
 
 ## Historical 6.0.2 Source And Scope
 
