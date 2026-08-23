@@ -13,6 +13,7 @@ describe('DelegationService', () => {
   let repoDir: string;
   let workDir: string;
   let oldCwd: string;
+  let oldDataDir: string | undefined;
   let service: any;
 
   beforeEach(async () => {
@@ -21,6 +22,8 @@ describe('DelegationService', () => {
     workDir = path.join(repoDir, 'server');
     await fs.mkdir(workDir, { recursive: true });
     oldCwd = process.cwd();
+    oldDataDir = process.env.DATA_DIR;
+    process.env.DATA_DIR = repoDir;
     process.chdir(workDir);
     const mod = await import('../services/delegation-service.js');
     service = new mod.DelegationService();
@@ -28,6 +31,8 @@ describe('DelegationService', () => {
 
   afterEach(async () => {
     process.chdir(oldCwd);
+    if (oldDataDir === undefined) delete process.env.DATA_DIR;
+    else process.env.DATA_DIR = oldDataDir;
     await fs.rm(repoDir, { recursive: true, force: true });
     vi.clearAllMocks();
   });
