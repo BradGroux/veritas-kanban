@@ -253,7 +253,7 @@ BoardKit Orchestrator inspired us here: keep prompts, skills, and guidelines in 
 prompt-registry/
 ├── sprint-planning.md      # Break epics into sprints
 ├── worker-handoff.md       # PM → Worker assignment
-├── cross-model-review.md   # Claude ↔ GPT review gate
+├── cross-model-review.md   # Optional independent review
 ├── feature-development.md  # E2E feature implementation
 ├── bug-triage.md           # Investigation and fix
 ├── research-report.md      # Deep research deliverable

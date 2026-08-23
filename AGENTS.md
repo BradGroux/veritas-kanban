@@ -6,7 +6,7 @@
 > Harness-specific supplements (for example `CLAUDE.md`) extend, never duplicate or contradict,
 > these rules. See `docs/AGENTS-TEMPLATE.md` for the managed-run and external-agent protocols.
 >
-> **Version:** 6.1.0
+> **Version:** 6.1.1
 > **Freshness policy:** update within two working days of any toolchain or architecture change.
 > Stale fields (package manager, Node version, provider list, test commands) are caught by
 > `pnpm check:pnpm-settings` and the smoke-test CI job.
@@ -37,7 +37,7 @@ veritas-kanban/
 ├── mcp/             MCP server
 ├── desktop/         Electron desktop wrapper
 ├── docs/            Operator and developer documentation
-├── prompt-registry/ Prompt templates and cross-model review SOPs
+├── prompt-registry/ Prompt templates and optional review workflows
 └── .veritas-kanban/ Runtime data: agent-registry, logs, telemetry
 ```
 

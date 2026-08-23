@@ -239,7 +239,7 @@ export const TaskCard = memo(function TaskCard({
       }
     : undefined;
 
-  const handleClick = () => {
+  const activateCard = () => {
     if (isCurrentlyDragging || isDragging) return;
     setTooltipDismissed(true);
     if (isSelecting) {
@@ -249,6 +249,17 @@ export const TaskCard = memo(function TaskCard({
     onClick?.();
   };
 
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest('a, button, input, select, textarea, [role="button"], [role="combobox"]')
+    ) {
+      return;
+    }
+    activateCard();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (dragEnabled && e.key === ' ') {
       listeners?.onKeyDown?.(e);
@@ -256,7 +267,7 @@ export const TaskCard = memo(function TaskCard({
     }
     if (e.key === 'Enter' || (!dragEnabled && e.key === ' ')) {
       e.preventDefault();
-      handleClick();
+      activateCard();
     }
   };
 

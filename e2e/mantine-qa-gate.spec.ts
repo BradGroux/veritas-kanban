@@ -582,7 +582,7 @@ test.describe('v5 Mantine migration QA gate', () => {
     await assertMobileTouchTargets(page);
     await assertNoLegacyPrimitiveSlots(page);
     await attachViewportScreenshot(page, testInfo, 'mobile-task-detail', 'dark');
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Close task details' }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 });
 
     await page.getByRole('button', { name: 'Mobile settings', exact: true }).click();

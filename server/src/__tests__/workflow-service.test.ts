@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -70,6 +70,23 @@ describe('WorkflowService', () => {
     expect((await service.loadWorkflow('demo-workflow'))?.name).toBe('Demo Workflow');
     service.clearCache();
     expect((await service.loadWorkflow('demo-workflow'))?.name).toBe('Changed Name');
+  });
+
+  it('waits for directory creation before the first file operation', async () => {
+    const nestedDir = path.join(tmpDir, 'not-created-yet');
+    const originalMkdir = fs.mkdir.bind(fs);
+    const mkdirSpy = vi.spyOn(fs, 'mkdir').mockImplementationOnce(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return originalMkdir(...args);
+    });
+
+    try {
+      const freshService = new WorkflowService(nestedDir);
+      await expect(freshService.saveWorkflow(workflow() as any)).resolves.toBeUndefined();
+      await expect(fs.access(path.join(nestedDir, 'demo-workflow.yml'))).resolves.toBeUndefined();
+    } finally {
+      mkdirSpy.mockRestore();
+    }
   });
 
   it('lists workflow definitions and metadata from valid workflow files', async () => {

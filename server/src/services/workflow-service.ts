@@ -33,6 +33,7 @@ export class WorkflowService {
   private readonly repository: SqliteWorkflowDefinitionRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
+  private readonly directoriesReady: Promise<void>;
 
   constructor(options: string | WorkflowServiceOptions = {}) {
     const resolvedOptions = typeof options === 'string' ? { workflowsDir: options } : options;
@@ -50,7 +51,9 @@ export class WorkflowService {
     }
 
     if (!this.repository) {
-      this.ensureDirectories();
+      this.directoriesReady = this.ensureDirectories();
+    } else {
+      this.directoriesReady = Promise.resolve();
     }
   }
 
@@ -98,6 +101,8 @@ export class WorkflowService {
       return workflow;
     }
 
+    await this.directoriesReady;
+
     const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
 
     try {
@@ -136,6 +141,8 @@ export class WorkflowService {
       return workflows;
     }
 
+    await this.directoriesReady;
+
     const files = await fs.readdir(this.workflowsDir).catch(() => []);
     const workflows: WorkflowDefinition[] = [];
 
@@ -165,6 +172,8 @@ export class WorkflowService {
       log.info({ count: metadata.length }, 'Listed workflow metadata');
       return metadata;
     }
+
+    await this.directoriesReady;
 
     const files = await fs.readdir(this.workflowsDir).catch(() => []);
     const metadata: Array<Pick<WorkflowDefinition, 'id' | 'name' | 'version' | 'description'>> = [];
@@ -216,6 +225,8 @@ export class WorkflowService {
       return;
     }
 
+    await this.directoriesReady;
+
     const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
 
     // Check if this is a new workflow (not an update)
@@ -254,6 +265,8 @@ export class WorkflowService {
       log.info({ workflowId: normalizedId }, 'Workflow deleted');
       return;
     }
+
+    await this.directoriesReady;
 
     const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
     await fs.unlink(filePath);
@@ -398,6 +411,8 @@ export class WorkflowService {
       return this.repository.getAcl(workflowId);
     }
 
+    await this.directoriesReady;
+
     const aclPath = path.join(this.workflowsDir, '.acl.json');
 
     try {
@@ -419,6 +434,8 @@ export class WorkflowService {
       log.info({ workflowId: acl.workflowId }, 'Workflow ACL saved');
       return;
     }
+
+    await this.directoriesReady;
 
     const aclPath = path.join(this.workflowsDir, '.acl.json');
 
@@ -447,6 +464,8 @@ export class WorkflowService {
       log.info({ event }, 'Workflow audit event logged');
       return;
     }
+
+    await this.directoriesReady;
 
     const auditPath = path.join(this.workflowsDir, '.audit.jsonl');
     const line = JSON.stringify(event) + '\n';
