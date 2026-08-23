@@ -92,37 +92,6 @@ function uncoveredChangedStatements(details, changedLines) {
     .sort((left, right) => left - right);
 }
 
-function typeOnlyRanges(sourceFile) {
-  const ranges = [];
-  const add = (start, end) => ranges.push({ start, end });
-  const visit = (node) => {
-    if (
-      ts.isTypeNode(node) ||
-      ts.isInterfaceDeclaration(node) ||
-      ts.isTypeAliasDeclaration(node) ||
-      ts.isTypeParameterDeclaration(node) ||
-      (ts.canHaveModifiers(node) &&
-        ts.getModifiers(node)?.some(({ kind }) => kind === ts.SyntaxKind.DeclareKeyword))
-    ) {
-      add(node.getStart(sourceFile), node.end);
-      return;
-    }
-    if (
-      (ts.isImportClause(node) || ts.isImportSpecifier(node) || ts.isExportDeclaration(node)) &&
-      node.isTypeOnly
-    ) {
-      add(node.getStart(sourceFile), node.end);
-      return;
-    }
-    if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node)) {
-      add(node.expression.end, node.end);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return ranges;
-}
-
 function changedTokenSpans(changedLines, changedSpans, sourceFile) {
   const lineStarts = sourceFile.getLineStarts();
   return new Map(
@@ -137,17 +106,35 @@ function changedTokenSpans(changedLines, changedSpans, sourceFile) {
       return [
         [
           line,
-          spans.map(({ start, end }) => ({
+          spans.map(({ start, end, replacement = '' }) => ({
             start: lineStart + Math.min(start, lineLength),
             end:
               end === Number.POSITIVE_INFINITY
                 ? Number.POSITIVE_INFINITY
                 : lineStart + Math.min(end, lineLength),
+            replacement,
           })),
         ],
       ];
     })
   );
+}
+
+function transpiledRuntime(source, fileName) {
+  const result = ts.transpileModule(source, {
+    compilerOptions: {
+      jsx: ts.JsxEmit.Preserve,
+      module: ts.ModuleKind.ESNext,
+      removeComments: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+    fileName,
+    reportDiagnostics: true,
+  });
+  const hasErrors = (result.diagnostics ?? []).some(
+    ({ category }) => category === ts.DiagnosticCategory.Error
+  );
+  return hasErrors ? undefined : result.outputText.trim();
 }
 
 export function executableChangedLineNumbers(
@@ -158,29 +145,10 @@ export function executableChangedLineNumbers(
   fileName = 'coverage-source.ts'
 ) {
   if (changedLines.size === 0) return changedLines;
+  const emitted = transpiledRuntime(source, fileName);
   if (previousSource !== undefined) {
-    const compilerOptions = {
-      jsx: ts.JsxEmit.Preserve,
-      module: ts.ModuleKind.ESNext,
-      removeComments: true,
-      target: ts.ScriptTarget.ESNext,
-    };
-    const emitted = ts.transpileModule(source, {
-      compilerOptions,
-      fileName,
-      reportDiagnostics: true,
-    });
-    const previousEmitted = ts.transpileModule(previousSource, {
-      compilerOptions,
-      fileName,
-      reportDiagnostics: true,
-    });
-    const hasErrors = [...(emitted.diagnostics ?? []), ...(previousEmitted.diagnostics ?? [])].some(
-      ({ category }) => category === ts.DiagnosticCategory.Error
-    );
-    if (!hasErrors && emitted.outputText.trim() === previousEmitted.outputText.trim()) {
-      return new Set();
-    }
+    const previousEmitted = transpiledRuntime(previousSource, fileName);
+    if (emitted !== undefined && emitted === previousEmitted) return new Set();
   }
 
   const executableLines = new Set();
@@ -195,15 +163,27 @@ export function executableChangedLineNumbers(
     ? ts.LanguageVariant.JSX
     : ts.LanguageVariant.Standard;
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariant, source);
-  const spansByLine = changedTokenSpans(changedLines, changedSpans, sourceFile);
-  const typeRanges = typeOnlyRanges(sourceFile);
+  const spansByLine = new Map(
+    [...changedTokenSpans(changedLines, changedSpans, sourceFile)].map(([line, spans]) => [
+      line,
+      spans.filter((span) => {
+        if (emitted === undefined || span.end === Number.POSITIVE_INFINITY) return true;
+        const reverted = `${source.slice(0, span.start)}${span.replacement}${source.slice(span.end)}`;
+        return transpiledRuntime(reverted, fileName) !== emitted;
+      }),
+    ])
+  );
   for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
     const tokenStart = scanner.getTokenPos();
     const tokenEnd = scanner.getTextPos();
-    const isTypeOnly = typeRanges.some(({ start, end }) => tokenStart >= start && tokenEnd <= end);
-    if (isTypeOnly) continue;
     for (const [line, spans] of spansByLine) {
-      if (spans.some((span) => tokenStart < span.end && tokenEnd > span.start)) {
+      if (
+        spans.some((span) =>
+          span.start === span.end
+            ? tokenStart <= span.start && tokenEnd >= span.end
+            : tokenStart < span.end && tokenEnd > span.start
+        )
+      ) {
         executableLines.add(line);
       }
     }
@@ -397,7 +377,7 @@ export function parseChangedLineSpans(diff) {
       const current = added[addedIndex];
       const previous = removed.length === added.length ? removed[addedIndex] : undefined;
       if (previous === undefined) {
-        spans.set(current.line, [{ start: 0, end: current.text.length }]);
+        spans.set(current.line, [{ start: 0, end: current.text.length, replacement: '' }]);
         continue;
       }
       let start = 0;
@@ -418,7 +398,13 @@ export function parseChangedLineSpans(diff) {
         previousEnd -= 1;
         currentEnd -= 1;
       }
-      spans.set(current.line, [{ start, end: currentEnd }]);
+      spans.set(current.line, [
+        {
+          start,
+          end: currentEnd,
+          replacement: previous.slice(start, previousEnd),
+        },
+      ]);
     }
   }
   return spans;
