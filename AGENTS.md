@@ -78,6 +78,7 @@ pnpm check:delivery-cadence     # Prevents verification and review policy drift
 pnpm check:security-gates       # Validates CodeQL/gitleaks workflow and exact suppressions
 pnpm check:gitleaks             # Scans reviewed tree and proves new-secret detection
 pnpm check:vite-native-config   # Loads web build and test configs with Vite's native loader
+pnpm check:service-filesystem-boundary # Prevents new direct filesystem imports in services
 pnpm test:ci-scope              # Validates path-aware CI test selection
 pnpm smoke:cli-mcp              # CLI ↔ MCP compatibility smoke test
 pnpm test:buzz:compatibility    # Credential-free composed Buzz release gate

@@ -289,6 +289,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check service filesystem boundary
+        run: pnpm check:service-filesystem-boundary
+
       - name: Build shared (dependency for typecheck)
         run: pnpm --filter @veritas-kanban/shared build
 
