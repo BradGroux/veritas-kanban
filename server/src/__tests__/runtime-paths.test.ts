@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { getProjectRoot, getRuntimeDir, getStorageRoot } from '../utils/paths.js';
+import { getDocsDir, getProjectRoot, getRuntimeDir, getStorageRoot } from '../utils/paths.js';
 import { migrateLegacyRuntimeState } from '../utils/migrate-legacy-runtime.js';
 
 describe('runtime storage contract', () => {
@@ -16,6 +16,7 @@ describe('runtime storage contract', () => {
 
     expect(getStorageRoot()).toBe('/app/data');
     expect(getRuntimeDir()).toBe('/app/data/.veritas-kanban');
+    expect(getDocsDir()).toBe('/app/data/docs');
   });
 
   it('uses VERITAS_DATA_DIR as the storage root when DATA_DIR is absent', () => {
