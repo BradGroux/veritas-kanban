@@ -51,6 +51,11 @@ export {
 } from './ceremony-state-repository.js';
 export { FileDelegationRepository, type DelegationRepository } from './delegation-repository.js';
 export {
+  FileErrorAnalysisRepository,
+  InMemoryErrorAnalysisRepository,
+  type ErrorAnalysisRepository,
+} from './error-analysis-repository.js';
+export {
   LocalConflictWorkspaceRepository,
   type ConflictWorkspaceRepository,
 } from './conflict-workspace-repository.js';
