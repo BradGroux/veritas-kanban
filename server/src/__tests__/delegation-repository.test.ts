@@ -1,8 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { DelegationApproval, DelegationSettings } from '@veritas-kanban/shared';
 import { FileDelegationRepository } from '../storage/delegation-repository.js';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
 
 function settings(delegateAgent: string): DelegationSettings {
   return {
@@ -88,6 +93,19 @@ describe('FileDelegationRepository', () => {
 
     await mkdir(path.join(runtimeDir, 'delegation-log.json'));
     await expect(repository.readLog()).rejects.toThrow(/bounded regular file/i);
+  });
+
+  it('rejects state replaced after its file handle is opened', async () => {
+    await repository.writeSettings(settings('TARS'));
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    vi.mocked(lstat).mockImplementationOnce(async (filePath) => {
+      const stats = await actual.lstat(filePath);
+      return Object.assign(Object.create(Object.getPrototypeOf(stats)), stats, {
+        ino: stats.ino + 1,
+      });
+    });
+
+    await expect(repository.readSettings()).rejects.toThrow(/changed file/i);
   });
 
   it('rejects symbolic-link directories and oversized state', async () => {
