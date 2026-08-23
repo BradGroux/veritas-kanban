@@ -167,6 +167,35 @@ test('treats line-count-only statement formatting as one runtime-neutral hunk', 
   );
 });
 
+test('treats equal-line-count statement formatting as one runtime-neutral hunk', () => {
+  const previous = [
+    'const value = run(input);',
+    'const other = use(input);',
+    'const result = keep(original);',
+  ].join('\n');
+  const current = [
+    'const value = run(',
+    'input); const other = use(input);',
+    'const result = keep(replacement);',
+  ].join('\n');
+  const diff = [
+    '@@ -1,3 +1,3 @@',
+    '-const value = run(input);',
+    '-const other = use(input);',
+    '-const result = keep(original);',
+    '+const value = run(',
+    '+input); const other = use(input);',
+    '+const result = keep(replacement);',
+  ].join('\n');
+  const changedLines = parseChangedLineNumbers(diff);
+  const changedSpans = parseChangedLineSpans(diff);
+
+  assert.deepEqual(
+    [...executableChangedLineNumbers(current, changedLines, previous, changedSpans)],
+    [3]
+  );
+});
+
 test('aggregates a boundary and accepts its measured floor', () => {
   const evaluation = evaluateCoverage(policy, {
     server: {

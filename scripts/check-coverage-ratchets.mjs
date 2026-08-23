@@ -171,19 +171,46 @@ export function executableChangedLineNumbers(
       spanGroups.set(key, group);
     }
   }
+  const revertedRuntime = (spans) => {
+    if (emitted === undefined || spans.some(({ end }) => end === Number.POSITIVE_INFINITY)) {
+      return undefined;
+    }
+    let reverted = source;
+    for (const span of [...spans].sort((left, right) => right.start - left.start)) {
+      reverted = `${reverted.slice(0, span.start)}${span.replacement}${reverted.slice(span.end)}`;
+    }
+    return transpiledRuntime(reverted, fileName);
+  };
   for (const spans of spanGroups.values()) {
-    let runtimeChanged =
-      emitted === undefined || spans.some(({ end }) => end === Number.POSITIVE_INFINITY);
-    if (!runtimeChanged && spans.every(({ end }) => end !== Number.POSITIVE_INFINITY)) {
-      let reverted = source;
-      for (const span of [...spans].sort((left, right) => right.start - left.start)) {
-        reverted = `${reverted.slice(0, span.start)}${span.replacement}${reverted.slice(span.end)}`;
+    const previousRuntime = revertedRuntime(spans);
+    if (previousRuntime !== undefined && previousRuntime === emitted) continue;
+    let selected = spans;
+    if (previousRuntime !== undefined && spans.length > 1) {
+      let candidatesEvaluated = 0;
+      const candidateLimit = 256;
+      for (let size = 1; size <= spans.length && candidatesEvaluated < candidateLimit; size += 1) {
+        const matches = [];
+        const visit = (start, candidate) => {
+          if (candidatesEvaluated >= candidateLimit) return;
+          if (candidate.length === size) {
+            candidatesEvaluated += 1;
+            if (revertedRuntime(candidate) === previousRuntime) matches.push([...candidate]);
+            return;
+          }
+          for (let index = start; index < spans.length; index += 1) {
+            candidate.push(spans[index]);
+            visit(index + 1, candidate);
+            candidate.pop();
+          }
+        };
+        visit(0, []);
+        if (matches.length > 0) {
+          selected = [...new Set(matches.flat())];
+          break;
+        }
       }
-      runtimeChanged = transpiledRuntime(reverted, fileName) !== emitted;
     }
-    if (runtimeChanged) {
-      for (const span of spans) spansByLine.get(span.line)?.push(span);
-    }
+    for (const span of selected) spansByLine.get(span.line)?.push(span);
   }
   for (const [line, spans] of spansByLine) {
     if (spans.length > 0) executableLines.add(line);
@@ -411,6 +438,7 @@ export function parseChangedLineSpans(diff) {
           start,
           end: currentEnd,
           replacement: previous.slice(start, previousEnd),
+          group: hunkGroup,
         },
       ]);
     }

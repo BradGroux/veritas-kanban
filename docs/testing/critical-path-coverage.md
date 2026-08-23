@@ -70,6 +70,9 @@ Every added or modified executable statement in governed source must be covered 
 suite or carry an explicit reviewed exception. The gate reads the base-to-head diff alongside the
 statement-level V8 report, so historical coverage elsewhere in an existing file cannot satisfy the
 new-code test requirement. Comments and type-only edits do not manufacture executable statements.
+Ambiguous mixed rewrites fail closed: if an unequal-line hunk combines runtime-neutral formatting
+with a runtime change and cannot be separated safely, all changed lines in that hunk require
+coverage. This favors enforcement over guessing and bounds the classification work per hunk.
 The authentication boundary includes server Zod schemas and the shared authoritative API
 permission map in addition to middleware and redaction code.
 
