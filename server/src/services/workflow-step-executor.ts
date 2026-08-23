@@ -3,7 +3,6 @@
  * Executes workflow steps through provider-specific agent adapters.
  */
 
-import fs from 'fs/promises';
 import path from 'path';
 import sanitizeFilename from 'sanitize-filename';
 import yaml from 'yaml';
@@ -66,6 +65,10 @@ import {
   type PhaseLaunchParentSnapshot,
 } from './phase-launch-authority-service.js';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
+import {
+  FileWorkflowExecutionFileRepository,
+  type WorkflowExecutionFileRepository,
+} from '../storage/workflow-execution-file-repository.js';
 
 const log = createLogger('workflow-step-executor');
 
@@ -96,6 +99,7 @@ interface WorkflowStepExecutorOptions {
   phaseAuthority?: PhaseLaunchAuthorityService;
   runEgressGateway?: Pick<RunEgressGatewayService, 'start'>;
   approvalBroker?: Pick<RunApprovalBrokerService, 'request' | 'awaitDecision' | 'cancelAttempt'>;
+  executionFiles?: WorkflowExecutionFileRepository;
 }
 
 type WorkflowExecutableProvider = Extract<ExecutableAgentProvider, 'codex-sdk' | 'openclaw'>;
@@ -143,7 +147,7 @@ export class WorkflowStepExecutor {
     RunApprovalBrokerService,
     'request' | 'awaitDecision' | 'cancelAttempt'
   >;
-  private appendCountCache?: Map<string, number>; // Performance: Track append counts to reduce stat() calls
+  private executionFiles: WorkflowExecutionFileRepository;
 
   constructor(runsDir?: string, options: WorkflowStepExecutorOptions = {}) {
     this.runsDir = runsDir || getWorkflowRunsDir();
@@ -158,6 +162,8 @@ export class WorkflowStepExecutor {
     this.phaseAuthority = options.phaseAuthority ?? new PhaseLaunchAuthorityService();
     this.runEgressGateway = options.runEgressGateway ?? getRunEgressGatewayService();
     this.approvalBroker = options.approvalBroker ?? getRunApprovalBrokerService();
+    this.executionFiles =
+      options.executionFiles ?? new FileWorkflowExecutionFileRepository(this.runsDir);
   }
 
   /**
@@ -1345,15 +1351,10 @@ export class WorkflowStepExecutor {
       throw new Error(`Invalid run ID: ${runId}`);
     }
 
-    const outputDir = path.join(this.runsDir, safeRunId, 'step-outputs');
-    await fs.mkdir(outputDir, { recursive: true });
-
     const candidate = filename || `${stepId}.md`;
     const safeName = sanitizeFilename(candidate) || `${stepId}.md`;
-    const outputPath = path.join(outputDir, safeName);
-
     const content = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
-    await fs.writeFile(outputPath, content, 'utf-8');
+    const outputPath = await this.executionFiles.writeStepOutput(safeRunId, safeName, content);
 
     log.info({ runId, stepId, outputPath }, 'Step output saved');
     return outputPath;
@@ -2021,17 +2022,7 @@ export class WorkflowStepExecutor {
       throw new Error(`Invalid run ID: ${runId}`);
     }
 
-    const progressPath = path.join(this.runsDir, safeRunId, 'progress.md');
-
-    try {
-      const content = await fs.readFile(progressPath, 'utf-8');
-      return content;
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-        return null; // File doesn't exist yet
-      }
-      throw err;
-    }
+    return this.executionFiles.readProgress(safeRunId);
   }
 
   /**
@@ -2044,44 +2035,17 @@ export class WorkflowStepExecutor {
       throw new Error(`Invalid run ID: ${runId}`);
     }
 
-    const progressPath = path.join(this.runsDir, safeRunId, 'progress.md');
     const timestamp = new Date().toISOString();
 
-    // Performance: Check progress file size before appending (cap at 10MB)
-    // Only check size periodically to avoid repeated stat() calls
-    const MAX_PROGRESS_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    const SIZE_CHECK_INTERVAL = 5; // Check every 5 appends
-
-    // Use a cache to track append count per run (avoids repeated stat calls)
-    if (!this.appendCountCache) {
-      this.appendCountCache = new Map<string, number>();
-    }
-
-    const appendCount = (this.appendCountCache.get(runId) || 0) + 1;
-    this.appendCountCache.set(runId, appendCount);
-
-    // Only check file size periodically
-    if (appendCount % SIZE_CHECK_INTERVAL === 0) {
-      try {
-        const stats = await fs.stat(progressPath);
-        if (stats.size > MAX_PROGRESS_FILE_SIZE) {
-          log.warn(
-            { runId, fileSize: stats.size, appends: appendCount },
-            'Progress file exceeds size limit — skipping append'
-          );
-          return; // Skip appending if file is too large
-        }
-      } catch (err: unknown) {
-        // File doesn't exist yet — that's fine
-        if (!(err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT')) {
-          throw err;
-        }
-      }
-    }
-
     const entry = `## Step: ${stepId} (${timestamp})\n\n${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}\n\n---\n\n`;
-
-    await fs.appendFile(progressPath, entry, 'utf-8');
+    const result = await this.executionFiles.appendProgress(safeRunId, entry);
+    if (!result.appended) {
+      log.warn(
+        { runId, fileSize: result.size },
+        'Progress file exceeds size limit — skipping append'
+      );
+      return;
+    }
 
     log.info({ runId, stepId }, 'Progress file updated');
   }

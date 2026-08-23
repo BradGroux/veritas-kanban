@@ -200,6 +200,30 @@ describe('WorkflowStepExecutor OpenClaw integration', () => {
     expect(output).not.toContain('Implement OpenClaw adapter');
   });
 
+  it('continues when the bounded progress file rejects an append', async () => {
+    adapter.spawn.mockResolvedValue({
+      sessionKey: 'oc_session_progress_limit',
+      runId: 'oc_run_progress_limit',
+      status: 'completed',
+      output: 'STATUS: done\nOUTPUT: Completed without progress append',
+    });
+    const executionFiles = {
+      writeStepOutput: vi.fn().mockResolvedValue(path.join(tmpDir, 'implement.md')),
+      readProgress: vi.fn().mockResolvedValue(null),
+      appendProgress: vi.fn().mockResolvedValue({ appended: false, size: 10 * 1024 * 1024 }),
+    };
+    const executor = new WorkflowStepExecutor(tmpDir, {
+      openClawAdapter: adapter,
+      runtimeManifestResolver,
+      executionFiles,
+    });
+
+    await expect(executor.executeStep(createStep(), createRun())).resolves.toMatchObject({
+      output: expect.stringContaining('Completed without progress append'),
+    });
+    expect(executionFiles.appendProgress).toHaveBeenCalledOnce();
+  });
+
   it('does not require token telemetry for runtime-only workflow budgets', async () => {
     adapter.spawn.mockResolvedValue({
       sessionKey: 'oc_session_runtime_budget',
