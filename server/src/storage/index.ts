@@ -49,6 +49,12 @@ export {
   FileLifecycleHooksRepository,
   type LifecycleHooksRepository,
 } from './lifecycle-hooks-repository.js';
+export {
+  FileSchedulerStateRepository,
+  type SchedulerItemState,
+  type SchedulerState,
+  type SchedulerStateRepository,
+} from './scheduler-state-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
 export {
