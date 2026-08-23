@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import { StatusHistoryService } from '../services/status-history-service.js';
 
 describe('StatusHistoryService', () => {
@@ -15,7 +14,7 @@ describe('StatusHistoryService', () => {
 
   beforeEach(async () => {
     const suffix = Math.random().toString(36).substring(7);
-    testDir = path.join(os.tmpdir(), `veritas-test-status-history-${suffix}`);
+    testDir = path.join(process.cwd(), `.veritas-test-status-history-${suffix}`);
     const configDir = path.join(testDir, '.veritas-kanban');
     await fs.mkdir(configDir, { recursive: true });
     historyFile = path.join(configDir, 'status-history.json');

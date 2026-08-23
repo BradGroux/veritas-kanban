@@ -40,6 +40,7 @@ export type {
 } from './interfaces.js';
 export { LocalWorkspaceFileRepository } from './workspace-file-repository.js';
 export { FileProgressRepository, type ProgressRepository } from './progress-repository.js';
+export { FileStatusHistoryStore } from './status-history-repository.js';
 export {
   FileWorkspaceExecutionTrustRepository,
   InMemoryWorkspaceExecutionTrustRepository,
