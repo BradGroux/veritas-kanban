@@ -20,8 +20,9 @@ import type {
 import { ForbiddenError } from '../middleware/error-handler.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkProductRepository } from '../storage/sqlite/work-product-repository.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+const DATA_DIR = getRuntimeDir();
 const DEFAULT_VERSION_LIMIT = 25;
 
 interface WorkProductFileState {

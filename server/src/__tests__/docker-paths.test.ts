@@ -73,6 +73,10 @@ describe('paths: Docker DATA_DIR support', () => {
     expect(paths.getTasksActiveDir()).toBe('/app/data/tasks/active');
     expect(paths.getTasksArchiveDir()).toBe('/app/data/tasks/archive');
     expect(paths.getRuntimeDir()).toBe('/app/data/.veritas-kanban');
+    expect(paths.getLegacyRuntimeDirs()).toEqual(
+      expect.arrayContaining(['/app/data', '/app/.veritas-kanban', '/app/server/.veritas-kanban'])
+    );
+    expect(paths.getLegacyRuntimeDirs()).not.toContain('/app/data/.veritas-kanban');
   });
 
   it('TaskService defaults to DATA_DIR-backed task directories when set', async () => {

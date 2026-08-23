@@ -29,7 +29,7 @@ describe('SystemHealthService', () => {
     mockList.mockReturnValue([]);
     mockGetRunMetrics.mockResolvedValue({ runs: 0, successRate: 1, failures: 0, errors: 0 });
     process.env.DATA_DIR = 'data';
-    await fs.mkdir(path.join(tmpDir, 'data'), { recursive: true });
+    await fs.mkdir(path.join(tmpDir, 'data', '.veritas-kanban'), { recursive: true });
   });
 
   afterEach(async () => {

@@ -7,17 +7,19 @@ import { PromptRegistryService } from '../services/prompt-registry-service.js';
 
 describe('PromptRegistryService', () => {
   let tmpDir: string;
-  let cwdSpy: any;
+  let oldDataDir: string | undefined;
   let service: PromptRegistryService;
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prompt-registry-'));
-    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+    oldDataDir = process.env.DATA_DIR;
+    process.env.DATA_DIR = tmpDir;
     service = new PromptRegistryService();
   });
 
   afterEach(async () => {
-    cwdSpy.mockRestore();
+    if (oldDataDir === undefined) delete process.env.DATA_DIR;
+    else process.env.DATA_DIR = oldDataDir;
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 

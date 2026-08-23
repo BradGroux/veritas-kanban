@@ -20,6 +20,7 @@ import { readFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getRuntimeDir } from './utils/paths.js';
 import { createLogger } from './lib/logger.js';
 import { v1Router } from './routes/v1/index.js';
 import { agentService } from './routes/agents.js';
@@ -553,7 +554,7 @@ async function reconcileCredentialLeases(context: 'startup' | 'periodic'): Promi
 // prevent the process from briefly accepting requests against partial state.
 async function initializeServices(): Promise<void> {
   // 1. Backup + integrity checks on the data directory
-  const dataDir = process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+  const dataDir = getRuntimeDir();
   let backupPath = '';
   try {
     backupPath = await createBackup(dataDir);

@@ -12,7 +12,7 @@ describe('pdf-report-service', () => {
     testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-report-service-'));
     dataDir = path.join(testRoot, '.veritas-kanban');
     await fs.mkdir(dataDir, { recursive: true });
-    process.env.DATA_DIR = dataDir;
+    process.env.DATA_DIR = testRoot;
 
     vi.resetModules();
     ({ getPdfReportService } = await import('../services/pdf-report-service.js'));

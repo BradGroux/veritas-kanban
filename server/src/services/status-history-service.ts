@@ -6,6 +6,7 @@ import { withFileLock } from './file-lock.js';
 import type { StatusHistoryRepository } from '../storage/interfaces.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteStatusHistoryRepository } from '../storage/sqlite/status-history-repository.js';
+import { getRuntimeDir } from '../utils/paths.js';
 const log = createLogger('status-history-service');
 
 export type AgentStatusState = 'idle' | 'working' | 'thinking' | 'sub-agent' | 'error';
@@ -59,8 +60,7 @@ export class StatusHistoryService {
 
   constructor(options: StatusHistoryServiceOptions = {}) {
     this.now = options.now ?? (() => new Date());
-    this.historyFile =
-      options.historyFile || join(process.cwd(), '.veritas-kanban', 'status-history.json');
+    this.historyFile = options.historyFile || join(getRuntimeDir(), 'status-history.json');
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 

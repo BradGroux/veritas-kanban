@@ -19,7 +19,7 @@ import {
   rename,
 } from '../storage/fs-helpers.js';
 import { createLogger } from '../lib/logger.js';
-import { getRuntimeDir } from '../utils/paths.js';
+import { getLegacyRuntimeDirs, getRuntimeDir } from '../utils/paths.js';
 import type { ProviderRuntimeManifest } from '@veritas-kanban/shared';
 import { parseProviderRuntimeManifest } from '../schemas/provider-runtime-manifest-schemas.js';
 
@@ -176,7 +176,7 @@ class AgentRegistryService {
   private agents: Map<string, RegisteredAgent> = new Map();
   private dataDir: string;
   private filePath: string;
-  private legacyFilePath: string;
+  private legacyFilePaths: string[];
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
   private lastBusyAtByAgent: Map<string, number> = new Map();
   private taskSyncFlapGuardMs: number;
@@ -196,9 +196,8 @@ class AgentRegistryService {
   constructor() {
     this.dataDir = getRuntimeDir();
     this.filePath = path.join(this.dataDir, 'agent-registry.json');
-    this.legacyFilePath = path.join(
-      process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban'),
-      'agent-registry.json'
+    this.legacyFilePaths = getLegacyRuntimeDirs().map((dir) =>
+      path.join(dir, 'agent-registry.json')
     );
     this.taskSyncFlapGuardMs = getTaskSyncFlapGuardMs();
     this.migrateLegacyRegistry();
@@ -573,19 +572,18 @@ class AgentRegistryService {
   }
 
   private migrateLegacyRegistry(): void {
-    if (this.legacyFilePath === this.filePath) return;
-
-    if (existsSync(this.legacyFilePath) && !existsSync(this.filePath)) {
+    for (const legacyFilePath of this.legacyFilePaths) {
+      if (!existsSync(legacyFilePath) || existsSync(this.filePath)) continue;
       try {
         const dir = path.dirname(this.filePath);
         if (!existsSync(dir)) {
           mkdirSync(dir, { recursive: true });
         }
 
-        const data = readFileSync(this.legacyFilePath, 'utf-8');
+        const data = readFileSync(legacyFilePath, 'utf-8');
         writeFileSync(this.filePath, data, 'utf-8');
         log.info(
-          { from: this.legacyFilePath, to: this.filePath },
+          { from: legacyFilePath, to: this.filePath },
           'Migrated agent registry data to the runtime directory'
         );
       } catch (err) {

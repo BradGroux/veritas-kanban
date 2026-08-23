@@ -15,7 +15,8 @@ import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import sanitizeHtml from 'sanitize-html';
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+import { getReportsOutputDir, getRuntimeDir } from '../utils/paths.js';
+const DATA_DIR = getRuntimeDir();
 
 const log = createLogger('pdf-reports');
 
@@ -399,7 +400,7 @@ class PdfReportService {
   }
 
   private get outputDir(): string {
-    return path.join(DATA_DIR, '..', 'docs', 'reports');
+    return getReportsOutputDir();
   }
 
   private async ensureLoaded(): Promise<void> {

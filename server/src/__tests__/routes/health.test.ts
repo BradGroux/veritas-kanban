@@ -29,6 +29,7 @@ import {
 describe('Health Routes', () => {
   let app: express.Express;
   let testDataDir: string;
+  let testRuntimeDir: string;
   let originalDataDir: string | undefined;
   let originalSqlitePath: string | undefined;
   let originalStorage: string | undefined;
@@ -38,12 +39,12 @@ describe('Health Routes', () => {
 
   beforeEach(async () => {
     // Create a temp data directory for testing
-    const uniqueSuffix = Math.random().toString(36).substring(7);
-    testDataDir = path.join(os.tmpdir(), `veritas-health-test-${uniqueSuffix}`);
-    await fs.mkdir(testDataDir, { recursive: true });
+    testDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-health-test-'));
+    testRuntimeDir = path.join(testDataDir, '.veritas-kanban');
+    await fs.mkdir(testRuntimeDir, { recursive: true });
 
     // Write a valid tasks.json
-    await fs.writeFile(path.join(testDataDir, 'tasks.json'), JSON.stringify([]));
+    await fs.writeFile(path.join(testRuntimeDir, 'tasks.json'), JSON.stringify([]));
 
     // Set DATA_DIR env var
     originalDataDir = process.env.DATA_DIR;
@@ -138,7 +139,7 @@ describe('Health Routes', () => {
 
     it('should return ok when tasks.json does not exist', async () => {
       // Remove tasks.json — fresh install scenario
-      await fs.unlink(path.join(testDataDir, 'tasks.json'));
+      await fs.unlink(path.join(testRuntimeDir, 'tasks.json'));
 
       const res = await request(app).get('/health/ready');
 
@@ -148,7 +149,7 @@ describe('Health Routes', () => {
 
     it('should return 503 when tasks.json is corrupt', async () => {
       // Write invalid JSON to tasks.json
-      await fs.writeFile(path.join(testDataDir, 'tasks.json'), '{invalid json!!!');
+      await fs.writeFile(path.join(testRuntimeDir, 'tasks.json'), '{invalid json!!!');
 
       const res = await request(app).get('/health/ready');
 
@@ -254,7 +255,7 @@ describe('Health Routes', () => {
         expect(res.body.node.version).toBe(process.version);
         expect(res.body.node.platform).toBe(process.platform);
         expect(res.body.dataDirectory).toBeDefined();
-        expect(res.body.dataDirectory.path).toBe(testDataDir);
+        expect(res.body.dataDirectory.path).toBe(testRuntimeDir);
         expect(res.body.dataDirectory.sizeBytes).toBeTypeOf('number');
         expect(res.body.sqlite).toMatchObject({
           databaseLocation: 'configured',

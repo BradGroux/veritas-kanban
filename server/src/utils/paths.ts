@@ -96,6 +96,34 @@ export function getRuntimeDir(): string {
 }
 
 /**
+ * Runtime directories used by older releases.
+ *
+ * Older services disagreed about whether DATA_DIR/VERITAS_DATA_DIR named the
+ * storage root or the runtime directory, and some resolved from either the
+ * process cwd or its parent. Keep that compatibility knowledge here so service
+ * code never reconstructs legacy paths itself.
+ */
+export function getLegacyRuntimeDirs(): string[] {
+  const current = getRuntimeDir();
+  const candidates = [
+    process.env.DATA_DIR,
+    process.env.VERITAS_DATA_DIR,
+    path.join(getProjectRoot(), '.veritas-kanban'),
+    path.join(process.cwd(), '.veritas-kanban'),
+    path.join(process.cwd(), '..', '.veritas-kanban'),
+  ];
+
+  return [
+    ...new Set(
+      candidates
+        .filter((candidate): candidate is string => Boolean(candidate?.trim()))
+        .map((candidate) => path.resolve(candidate))
+        .filter((candidate) => candidate !== current)
+    ),
+  ];
+}
+
+/**
  * Historical name used throughout the codebase. Aliased here for clarity
  * in services that conceptually think in terms of a "data dir".
  */
@@ -185,6 +213,11 @@ export function getReportsConfigDir(): string {
 export function getReportsOutputDir(): string {
   // Keep historical layout: sibling docs/reports directory to .veritas-kanban
   return path.join(getStorageRoot(), 'docs', 'reports');
+}
+
+/** Directory for operator-facing Markdown documentation. */
+export function getDocsDir(): string {
+  return path.join(getStorageRoot(), 'docs');
 }
 
 // ---------------------------------------------------------------------------

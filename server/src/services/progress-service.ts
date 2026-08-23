@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../lib/logger.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('progress-service');
 
@@ -12,8 +13,7 @@ export class ProgressService {
   private progressDir: string;
 
   constructor(progressDir?: string) {
-    // Default to .veritas-kanban/progress/ relative to project root
-    this.progressDir = progressDir || path.join(process.cwd(), '.veritas-kanban', 'progress');
+    this.progressDir = progressDir || path.join(getRuntimeDir(), 'progress');
   }
 
   /**

@@ -20,9 +20,9 @@ import type {
 import { fileExists } from '../storage/fs-helpers.js';
 import { validatePathSegment } from '../utils/sanitize.js';
 import { withFileLock } from './file-lock.js';
+import { getBroadcastsDir } from '../utils/paths.js';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
-const BROADCASTS_DIR = path.join(DATA_DIR, 'broadcasts');
+const BROADCASTS_DIR = getBroadcastsDir();
 
 const log = createLogger('broadcast-storage');
 

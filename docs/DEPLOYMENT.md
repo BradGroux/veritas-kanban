@@ -434,18 +434,15 @@ sends API requests to `/kanban/api/...`.
 > or the equivalent changes to `vite.config.ts`, `web/src/lib/config.ts`, and
 > `web/src/lib/api/helpers.ts`.
 
-**Docker volumes for sub-path:** When using Docker with sub-path deployment, ensure both
-the task data and the config directory are on persistent volumes:
+**Docker volumes for sub-path:** One volume at `DATA_DIR` persists tasks and runtime state:
 
 ```yaml
 volumes:
-  - kanban-data:/app/data # Task files
-  - kanban-config:/app/.veritas-kanban # Config, sprints, enforcement gates
+  - kanban-data:/app/data # tasks/ plus .veritas-kanban/
 ```
 
-Without a config volume, settings (enforcement gates, transition hooks, sprints) are lost
-on every container rebuild because `.veritas-kanban/` lives on the overlay filesystem, not
-on the data volume.
+Do not mount a second volume at `/app/.veritas-kanban`; that is a legacy location used only
+as a read-only source during startup migration.
 
 ### systemd Service
 
@@ -554,16 +551,16 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Data & Storage
 
-| Variable                   | Default                                      | Description                                                                |
-| -------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
-| `VERITAS_DATA_DIR`         | `.veritas-kanban` (relative to project root) | Directory for config, logs, and internal data                              |
-| `DATA_DIR`                 | `/app/data` (Docker only)                    | Mapped data directory inside the Docker container                          |
-| `VERITAS_STORAGE`          | `file`                                       | Selects `file` or `sqlite` storage                                         |
-| `VERITAS_SQLITE_PATH`      | Runtime `veritas.db`                         | SQLite database override; must resolve to verified durable local storage   |
-| `VERITAS_SQLITE_TOPOLOGY`  | —                                            | Set explicitly to `single-host` before compatibility/override maintenance  |
-| `VERITAS_SQLITE_HOST_ID`   | —                                            | Stable unique host binding for SQLite compatibility ownership policy       |
-| `TELEMETRY_RETENTION_DAYS` | `30`                                         | Days to keep telemetry event files before deletion                         |
-| `TELEMETRY_COMPRESS_DAYS`  | `7`                                          | Days after which NDJSON telemetry files are gzip-compressed (0 = disabled) |
+| Variable                   | Default                   | Description                                                                |
+| -------------------------- | ------------------------- | -------------------------------------------------------------------------- |
+| `VERITAS_DATA_DIR`         | Project root when unset   | Storage root used when `DATA_DIR` is unset                                 |
+| `DATA_DIR`                 | `/app/data` (Docker only) | Preferred storage root; takes precedence over `VERITAS_DATA_DIR`           |
+| `VERITAS_STORAGE`          | `file`                    | Selects `file` or `sqlite` storage                                         |
+| `VERITAS_SQLITE_PATH`      | Runtime `veritas.db`      | SQLite database override; must resolve to verified durable local storage   |
+| `VERITAS_SQLITE_TOPOLOGY`  | —                         | Set explicitly to `single-host` before compatibility/override maintenance  |
+| `VERITAS_SQLITE_HOST_ID`   | —                         | Stable unique host binding for SQLite compatibility ownership policy       |
+| `TELEMETRY_RETENTION_DAYS` | `30`                      | Days to keep telemetry event files before deletion                         |
+| `TELEMETRY_COMPRESS_DAYS`  | `7`                       | Days after which NDJSON telemetry files are gzip-compressed (0 = disabled) |
 
 ### Integration
 
@@ -619,9 +616,25 @@ wscat -c "ws://localhost:3001/ws?api_key=<api-key>"
 | `.veritas-kanban/worktree-manifests/` | Durable worktree ownership, base, lifecycle, and override evidence |
 | `.veritas-kanban/agent-requests/`     | Pending AI agent requests                                          |
 
-In Docker, the `DATA_DIR` environment variable maps to `/app/data` by default inside the container.
+In Docker, `DATA_DIR=/app/data`. Tasks live under `/app/data/tasks` and all runtime state
+lives under `/app/data/.veritas-kanban`; no persistent state is written to `/app` or
+`/app/server` outside that volume.
 
-**Auth state persistence fix (v3.1.1):** Runtime config/state files (including `security.json`) now always live under `${DATA_DIR}/.veritas-kanban`. On startup, Veritas Kanban will automatically migrate any legacy runtime files it finds in container-only paths (for example, `/app/.veritas-kanban` or `/app/server/.veritas-kanban`) into the Docker volume.
+**Auth state persistence fix (v3.1.1):** Runtime config/state files (including `security.json`) now always live under `${DATA_DIR}/.veritas-kanban`. On startup, Veritas Kanban automatically migrates legacy runtime files it can see at container-only paths (for example, `/app/.veritas-kanban` or `/app/server/.veritas-kanban`) into the Docker volume. A replaced container cannot see data left in an old container layer or an unmounted legacy volume.
+
+If the old runtime state is in a named volume, mount that volume read-only at its former path for one startup. For example, add the legacy mount temporarily to your Compose service:
+
+```yaml
+services:
+  veritas-kanban:
+    volumes:
+      - kanban-data:/app/data
+      - legacy-veritas-config:/app/.veritas-kanban:ro
+```
+
+Start the service, verify the expected files now exist under
+`/app/data/.veritas-kanban`, then remove the legacy mount from Compose. The migration is
+copy-only: it does not delete the legacy source, and an existing destination file wins.
 
 If you upgraded from an older image and already lost auth state, you can recover by copying `security.json` from a still-running/old container (if available) into the volume:
 
@@ -697,7 +710,7 @@ docker compose down
 docker run --rm \
   -v kanban-data:/data \
   -v $(pwd):/backup \
-  alpine sh -c "rm -rf /data/* && tar xzf /backup/veritas-backup-20260129.tar.gz -C /data"
+  alpine sh -c 'set -eu; archive=/backup/veritas-backup-20260129.tar.gz; test -d /data; test "$(readlink -f /data)" = /data; test -r "$archive"; tar tzf "$archive" >/dev/null; find /data -mindepth 1 -delete; tar xzf "$archive" -C /data'
 
 # Restart
 docker compose up -d
