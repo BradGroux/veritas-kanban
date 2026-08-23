@@ -45,6 +45,10 @@ export {
   FileTransitionHooksConfigRepository,
   type TransitionHooksConfigRepository,
 } from './transition-hooks-config-repository.js';
+export {
+  FileLifecycleHooksRepository,
+  type LifecycleHooksRepository,
+} from './lifecycle-hooks-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
 export {
