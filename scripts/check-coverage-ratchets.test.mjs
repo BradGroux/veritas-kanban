@@ -139,6 +139,34 @@ test('retains runtime-significant whitespace insertions', () => {
   );
 });
 
+test('treats line-count-only statement formatting as one runtime-neutral hunk', () => {
+  const previous = ['const value = run(input);', '', 'const result = keep(original);'].join('\n');
+  const current = [
+    'const value = run(',
+    '  input',
+    ');',
+    '',
+    'const result = keep(replacement);',
+  ].join('\n');
+  const diff = [
+    '@@ -1 +1,3 @@',
+    '-const value = run(input);',
+    '+const value = run(',
+    '+  input',
+    '+);',
+    '@@ -3 +5 @@',
+    '-const result = keep(original);',
+    '+const result = keep(replacement);',
+  ].join('\n');
+  const changedLines = parseChangedLineNumbers(diff);
+  const changedSpans = parseChangedLineSpans(diff);
+
+  assert.deepEqual(
+    [...executableChangedLineNumbers(current, changedLines, previous, changedSpans)],
+    [5]
+  );
+});
+
 test('aggregates a boundary and accepts its measured floor', () => {
   const evaluation = evaluateCoverage(policy, {
     server: {

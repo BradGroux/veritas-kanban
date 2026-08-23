@@ -106,13 +106,14 @@ function changedTokenSpans(changedLines, changedSpans, sourceFile) {
       return [
         [
           line,
-          spans.map(({ start, end, replacement = '' }) => ({
+          spans.map(({ start, end, replacement = '', group }) => ({
             start: lineStart + Math.min(start, lineLength),
             end:
               end === Number.POSITIVE_INFINITY
                 ? Number.POSITIVE_INFINITY
                 : lineStart + Math.min(end, lineLength),
             replacement,
+            group,
           })),
         ],
       ];
@@ -159,16 +160,31 @@ export function executableChangedLineNumbers(
     false,
     ts.getScriptKindFromFileName(fileName)
   );
-  const spansByLine = new Map(
-    [...changedTokenSpans(changedLines, changedSpans, sourceFile)].map(([line, spans]) => [
-      line,
-      spans.filter((span) => {
-        if (emitted === undefined || span.end === Number.POSITIVE_INFINITY) return true;
-        const reverted = `${source.slice(0, span.start)}${span.replacement}${source.slice(span.end)}`;
-        return transpiledRuntime(reverted, fileName) !== emitted;
-      }),
-    ])
-  );
+  const absoluteSpans = changedTokenSpans(changedLines, changedSpans, sourceFile);
+  const spansByLine = new Map([...absoluteSpans].map(([line]) => [line, []]));
+  const spanGroups = new Map();
+  for (const [line, spans] of absoluteSpans) {
+    for (const span of spans) {
+      const key = span.group ?? Symbol('changed-span');
+      const group = spanGroups.get(key) ?? [];
+      group.push({ ...span, line });
+      spanGroups.set(key, group);
+    }
+  }
+  for (const spans of spanGroups.values()) {
+    let runtimeChanged =
+      emitted === undefined || spans.some(({ end }) => end === Number.POSITIVE_INFINITY);
+    if (!runtimeChanged && spans.every(({ end }) => end !== Number.POSITIVE_INFINITY)) {
+      let reverted = source;
+      for (const span of [...spans].sort((left, right) => right.start - left.start)) {
+        reverted = `${reverted.slice(0, span.start)}${span.replacement}${reverted.slice(span.end)}`;
+      }
+      runtimeChanged = transpiledRuntime(reverted, fileName) !== emitted;
+    }
+    if (runtimeChanged) {
+      for (const span of spans) spansByLine.get(span.line)?.push(span);
+    }
+  }
   for (const [line, spans] of spansByLine) {
     if (spans.length > 0) executableLines.add(line);
   }
@@ -345,6 +361,7 @@ export function parseChangedLineSpans(diff) {
   for (let index = 0; index < diffLines.length; index += 1) {
     const header = diffLines[index].match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
     if (!header) continue;
+    const hunkGroup = `hunk-${index}`;
     let newLine = Number(header[3]);
     const removed = [];
     const added = [];
@@ -361,7 +378,14 @@ export function parseChangedLineSpans(diff) {
       const current = added[addedIndex];
       const previous = removed.length === added.length ? removed[addedIndex] : undefined;
       if (previous === undefined) {
-        spans.set(current.line, [{ start: 0, end: current.text.length, replacement: '' }]);
+        spans.set(current.line, [
+          {
+            start: 0,
+            end: current.text.length,
+            replacement: addedIndex === 0 ? removed.join('\n') : '',
+            group: hunkGroup,
+          },
+        ]);
         continue;
       }
       let start = 0;
