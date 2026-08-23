@@ -5,115 +5,39 @@
  * delegate task approval authority to a designated agent.
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { nanoid } from 'nanoid';
 import { createLogger } from '../lib/logger.js';
-import { withFileLock } from './file-lock.js';
 import type { DelegationSettings, DelegationScope, TaskPriority } from '@veritas-kanban/shared';
-import type { DelegationApproval, DelegationLog } from '@veritas-kanban/shared';
-import { getRuntimeDir } from '../utils/paths.js';
+import type { DelegationApproval } from '@veritas-kanban/shared';
+import {
+  FileDelegationRepository,
+  type DelegationRepository,
+} from '../storage/delegation-repository.js';
 
 const log = createLogger('delegation');
 
-// Storage paths
-const DELEGATION_DIR = getRuntimeDir();
-const SETTINGS_FILE = path.join(DELEGATION_DIR, 'delegation.json');
-const LOG_FILE = path.join(DELEGATION_DIR, 'delegation-log.json');
-
 export class DelegationService {
-  private settings: DelegationSettings | null = null;
-  private log: DelegationLog = { approvals: [] };
-  private settingsLoaded = false;
-  private logLoaded = false;
-
-  constructor() {
-    this.ensureDir();
-  }
-
-  private async ensureDir(): Promise<void> {
-    await fs.mkdir(DELEGATION_DIR, { recursive: true });
-  }
+  constructor(private readonly repository: DelegationRepository = new FileDelegationRepository()) {}
 
   /**
    * Load delegation settings from disk
    */
   private async loadSettings(): Promise<DelegationSettings | null> {
-    if (this.settingsLoaded && this.settings) {
-      // Check if delegation has expired
-      if (this.settings.enabled && new Date(this.settings.expires) < new Date()) {
-        log.info({ expires: this.settings.expires }, 'Delegation has expired, auto-disabling');
-        this.settings.enabled = false;
-        await this.saveSettings();
-        // Could emit WebSocket event here
-      }
-      return this.settings;
+    const settings = await this.repository.readSettings();
+    if (settings?.enabled && new Date(settings.expires) < new Date()) {
+      log.info({ expires: settings.expires }, 'Delegation expired on load, disabling');
+      return this.repository.updateSettings((current) => {
+        if (
+          current?.enabled &&
+          current.createdAt === settings.createdAt &&
+          current.expires === settings.expires
+        ) {
+          return { ...current, enabled: false };
+        }
+        return current;
+      });
     }
-
-    try {
-      const content = await fs.readFile(SETTINGS_FILE, 'utf-8');
-      this.settings = JSON.parse(content) as DelegationSettings;
-      this.settingsLoaded = true;
-
-      // Check expiry on load
-      if (this.settings.enabled && new Date(this.settings.expires) < new Date()) {
-        log.info({ expires: this.settings.expires }, 'Delegation expired on load, disabling');
-        this.settings.enabled = false;
-        await this.saveSettings();
-      }
-
-      return this.settings;
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
-        this.settingsLoaded = true;
-        return null;
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Save delegation settings to disk
-   */
-  private async saveSettings(): Promise<void> {
-    await this.ensureDir();
-    await withFileLock(SETTINGS_FILE, async () => {
-      const content = JSON.stringify(this.settings, null, 2);
-      await fs.writeFile(SETTINGS_FILE, content, 'utf-8');
-    });
-  }
-
-  /**
-   * Load delegation log from disk
-   */
-  private async loadLog(): Promise<DelegationLog> {
-    if (this.logLoaded) return this.log;
-
-    try {
-      const content = await fs.readFile(LOG_FILE, 'utf-8');
-      this.log = JSON.parse(content) as DelegationLog;
-      this.logLoaded = true;
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
-        this.log = { approvals: [] };
-        this.logLoaded = true;
-      } else {
-        throw err;
-      }
-    }
-
-    return this.log;
-  }
-
-  /**
-   * Save delegation log to disk
-   */
-  private async saveLog(): Promise<void> {
-    await this.ensureDir();
-    await withFileLock(LOG_FILE, async () => {
-      const content = JSON.stringify(this.log, null, 2);
-      await fs.writeFile(LOG_FILE, content, 'utf-8');
-    });
+    return settings;
   }
 
   /**
@@ -136,7 +60,7 @@ export class DelegationService {
   }): Promise<DelegationSettings> {
     const now = new Date().toISOString();
 
-    this.settings = {
+    const settings: DelegationSettings = {
       enabled: true,
       delegateAgent: params.delegateAgent,
       expires: params.expires,
@@ -147,29 +71,28 @@ export class DelegationService {
       createdBy: params.createdBy,
     };
 
-    await this.saveSettings();
+    await this.repository.writeSettings(settings);
 
     log.info(
       {
-        delegateAgent: this.settings.delegateAgent,
-        expires: this.settings.expires,
-        scope: this.settings.scope,
+        delegateAgent: settings.delegateAgent,
+        expires: settings.expires,
+        scope: settings.scope,
       },
       'Delegation enabled'
     );
 
-    return this.settings;
+    return settings;
   }
 
   /**
    * Revoke delegation immediately
    */
   async revokeDelegation(): Promise<boolean> {
-    const current = await this.loadSettings();
+    const current = await this.repository.updateSettings((settings) =>
+      settings ? { ...settings, enabled: false } : null
+    );
     if (!current) return false;
-
-    this.settings = { ...current, enabled: false };
-    await this.saveSettings();
 
     log.info({ delegateAgent: current.delegateAgent }, 'Delegation revoked');
     return true;
@@ -213,8 +136,9 @@ export class DelegationService {
       }
     }
 
-    if (delegation.excludeTags && task.tags) {
-      const excluded = task.tags.find((tag) => delegation.excludeTags!.includes(tag));
+    const excludedTags = delegation.excludeTags;
+    if (excludedTags && task.tags) {
+      const excluded = task.tags.find((tag) => excludedTags.includes(tag));
       if (excluded) {
         return { allowed: false, reason: `Task has excluded tag: ${excluded}` };
       }
@@ -256,8 +180,6 @@ export class DelegationService {
     taskTitle: string;
     agent: string;
   }): Promise<DelegationApproval> {
-    await this.loadLog();
-
     const delegation = await this.loadSettings();
     const delegationRef = delegation
       ? `${delegation.delegateAgent}_${delegation.createdAt}`
@@ -273,14 +195,9 @@ export class DelegationService {
       originalDelegation: delegationRef,
     };
 
-    this.log.approvals.push(approval);
-
-    // Keep only last 1000 approvals
-    if (this.log.approvals.length > 1000) {
-      this.log.approvals = this.log.approvals.slice(-1000);
-    }
-
-    await this.saveLog();
+    await this.repository.updateLog((delegationLog) => ({
+      approvals: [...delegationLog.approvals, approval].slice(-1000),
+    }));
 
     log.info(
       { taskId: params.taskId, agent: params.agent, delegationRef },
@@ -298,9 +215,8 @@ export class DelegationService {
     agent?: string;
     limit?: number;
   }): Promise<DelegationApproval[]> {
-    await this.loadLog();
-
-    let approvals = [...this.log.approvals];
+    const delegationLog = await this.repository.readLog();
+    let approvals = [...delegationLog.approvals];
 
     if (params?.taskId) {
       approvals = approvals.filter((a) => a.taskId === params.taskId);
