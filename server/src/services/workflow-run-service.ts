@@ -64,9 +64,10 @@ const log = createLogger('workflow-run');
 
 /** Default maximum cross-step reroutes per run before exhaustion policy fires (#780) */
 const MAX_REROUTES_DEFAULT = 10;
+type WorkflowRecoveryTimer = ReturnType<typeof setTimeout>;
 const scheduledWorkflowRecoveries = new Map<
   string,
-  { stepId: string; timer: ReturnType<typeof setTimeout> }
+  { stepId: string; timer: WorkflowRecoveryTimer; ownerTimers: Set<WorkflowRecoveryTimer> }
 >();
 const RUN_ID_PATTERN = /^run_\d{10,}_[a-zA-Z0-9_-]{6,}$/;
 const WORKFLOW_ADMISSION_ID_PREFIX = 'workflow';
@@ -113,6 +114,7 @@ class WorkflowRunChangedError extends ConflictError {
 }
 
 export class WorkflowRunService {
+  private readonly scheduledWorkflowRecoveryTimers = new Set<WorkflowRecoveryTimer>();
   private runsDir: string;
   private workflowService: ReturnType<typeof getWorkflowService>;
   private stepExecutor: WorkflowStepExecutor;
@@ -2220,20 +2222,27 @@ export class WorkflowRunService {
     const delay = Math.max(0, Math.min(2_147_483_647, notBefore - Date.now()));
     const timer = setTimeout(() => {
       const scheduled = scheduledWorkflowRecoveries.get(runId);
-      if (!scheduled || scheduled.stepId !== stepId) return;
+      if (!scheduled || scheduled.stepId !== stepId || scheduled.timer !== timer) return;
       scheduledWorkflowRecoveries.delete(runId);
+      scheduled.ownerTimers.delete(scheduled.timer);
       void this.resumeScheduledWorkflowRecovery(runId, stepId).catch((error) => {
         log.error({ err: error, runId, stepId }, 'Scheduled workflow recovery failed');
       });
     }, delay);
     timer.unref?.();
-    scheduledWorkflowRecoveries.set(runId, { stepId, timer });
+    this.scheduledWorkflowRecoveryTimers.add(timer);
+    scheduledWorkflowRecoveries.set(runId, {
+      stepId,
+      timer,
+      ownerTimers: this.scheduledWorkflowRecoveryTimers,
+    });
   }
 
   private clearScheduledWorkflowRecovery(runId: string, expectedStepId?: string): void {
     const scheduled = scheduledWorkflowRecoveries.get(runId);
     if (!scheduled || (expectedStepId && scheduled.stepId !== expectedStepId)) return;
     clearTimeout(scheduled.timer);
+    scheduled.ownerTimers.delete(scheduled.timer);
     scheduledWorkflowRecoveries.delete(runId);
   }
 
@@ -2845,6 +2854,15 @@ export class WorkflowRunService {
   }
 
   dispose(): void {
+    for (const timer of this.scheduledWorkflowRecoveryTimers) {
+      clearTimeout(timer);
+    }
+    for (const [runId, scheduled] of scheduledWorkflowRecoveries) {
+      if (scheduled.ownerTimers === this.scheduledWorkflowRecoveryTimers) {
+        scheduledWorkflowRecoveries.delete(runId);
+      }
+    }
+    this.scheduledWorkflowRecoveryTimers.clear();
     if (this.ownsSqliteDatabase) {
       this.sqliteDatabase?.close();
     }

@@ -44,6 +44,7 @@ export interface StatusHistoryServiceOptions {
   storageType?: 'file' | 'sqlite';
   sqliteDatabase?: SqliteDatabase;
   sqliteConnectionOptions?: SqliteConnectionOptions;
+  now?: () => Date;
 }
 
 export class StatusHistoryService {
@@ -54,8 +55,10 @@ export class StatusHistoryService {
   private repository: StatusHistoryRepository | null = null;
   private sqliteDatabase: SqliteDatabase | null = null;
   private ownsSqliteDatabase = false;
+  private readonly now: () => Date;
 
   constructor(options: StatusHistoryServiceOptions = {}) {
+    this.now = options.now ?? (() => new Date());
     this.historyFile =
       options.historyFile || join(process.cwd(), '.veritas-kanban', 'status-history.json');
     const storageType =
@@ -139,7 +142,7 @@ export class StatusHistoryService {
 
     await this.initPromise;
 
-    const now = new Date();
+    const now = this.now();
     const timestamp = now.toISOString();
 
     // Calculate duration of previous status
@@ -151,7 +154,7 @@ export class StatusHistoryService {
     }
 
     const entry: StatusHistoryEntry = {
-      id: `status_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `status_${now.getTime()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp,
       previousStatus,
       newStatus,
@@ -209,7 +212,7 @@ export class StatusHistoryService {
       return this.repository.getDailySummary(date);
     }
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || this.now().toISOString().split('T')[0];
     const startOfDay = new Date(`${targetDate}T00:00:00.000Z`);
     const endOfDay = new Date(`${targetDate}T23:59:59.999Z`);
 
@@ -237,7 +240,7 @@ export class StatusHistoryService {
         endTime = new Date(nextEntry.timestamp);
       } else {
         // Last entry - use current time or end of day if analyzing past dates
-        const now = new Date();
+        const now = this.now();
         endTime = now < endOfDay ? now : endOfDay;
       }
 
@@ -277,7 +280,7 @@ export class StatusHistoryService {
       if (beforeDay.length > 0) {
         // The most recent entry before this day determines the starting status
         const lastBeforeDay = beforeDay[0];
-        const now = new Date();
+        const now = this.now();
         const effectiveEnd = now < endOfDay ? now : endOfDay;
         const durationMs = effectiveEnd.getTime() - startOfDay.getTime();
 
@@ -318,7 +321,7 @@ export class StatusHistoryService {
     }
 
     const summaries: DailySummary[] = [];
-    const today = new Date();
+    const today = this.now();
 
     for (let i = 0; i < 7; i++) {
       const date = new Date(today);

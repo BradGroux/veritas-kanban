@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "test": "vitest run --testTimeout 15000",
+    "test": "vitest run --testTimeout 15000 --maxWorkers=4",
     "test:watch": "vitest --testTimeout 15000",
     "clean": "rm -rf dist"
   },
