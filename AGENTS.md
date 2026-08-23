@@ -72,6 +72,7 @@ pnpm lint:fix
 # Smoke checks
 pnpm check:pnpm-settings        # Validates package manager fields match this file
 pnpm check:delivery-cadence     # Prevents verification and review policy drift
+pnpm check:vite-native-config   # Loads web build and test configs with Vite's native loader
 pnpm test:ci-scope              # Validates path-aware CI test selection
 pnpm smoke:cli-mcp              # CLI ↔ MCP compatibility smoke test
 pnpm test:buzz:compatibility    # Credential-free composed Buzz release gate

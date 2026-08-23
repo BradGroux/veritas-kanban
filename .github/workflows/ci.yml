@@ -518,6 +518,9 @@ jobs:
       - name: Build shared (dependency for all builds)
         run: pnpm --filter @veritas-kanban/shared build
 
+      - name: Verify native Vite config loading
+        run: pnpm check:vite-native-config
+
       - name: Build all packages
         run: pnpm build
 
