@@ -229,6 +229,7 @@ import {
   type CompletionEvidenceSource,
 } from '../services/task-envelope-service.js';
 import { ProviderCompletionService } from '../services/provider-completion-service.js';
+import type { ReflectionExtractionJobService } from '../services/reflection-extraction-job-service.js';
 import type {
   CreateRunApprovalRequestInput,
   RunApprovalBrokerService,
@@ -283,6 +284,12 @@ type TestableClawdbotAgentService = ClawdbotAgentService & {
   recordCodexThread(task: Task, attemptId: string, threadId: string): Promise<void>;
 };
 
+function testReflectionExtractionJobs(): Pick<ReflectionExtractionJobService, 'enqueue'> {
+  return {
+    enqueue: vi.fn().mockResolvedValue({}),
+  } as unknown as Pick<ReflectionExtractionJobService, 'enqueue'>;
+}
+
 function testableService(
   tmpDir: string,
   credentialLeases?: CredentialLeaseLifecycle,
@@ -332,7 +339,7 @@ function testableService(
       handleRunCompletion: mockHandleDurableGoalCompletion,
       reconcilePlannedForTask: mockReconcileDurableGoalContinuation,
     },
-    undefined,
+    testReflectionExtractionJobs(),
     undefined,
     runTerminals,
     workspaceCheckpoints
@@ -3438,6 +3445,39 @@ describe('ClawdbotAgentService Codex providers', () => {
     await expect(service.getAgentStatus(task.id)).resolves.toBeNull();
   });
 
+  it('isolates reflection enqueue failures from provider completion', async () => {
+    const child = createControllableChild();
+    mockSpawn.mockReturnValue(child);
+    const reflectionExtractionJobs = {
+      enqueue: vi.fn().mockRejectedValue(new Error('reflection queue unavailable')),
+    } as unknown as Pick<ReflectionExtractionJobService, 'enqueue'>;
+    const service = testableService(tmpDir);
+    (
+      service as unknown as {
+        reflectionExtractionJobs: Pick<ReflectionExtractionJobService, 'enqueue'>;
+      }
+    ).reflectionExtractionJobs = reflectionExtractionJobs;
+    const active = await service.startAgent(task.id, 'codex');
+
+    await service.completeAgent(
+      task.id,
+      { success: true, summary: 'Provider completion remains authoritative.' },
+      {
+        attemptId: active.attemptId,
+        terminalSource: 'process',
+        providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+      }
+    );
+    await waitFor(() => expect(reflectionExtractionJobs.enqueue).toHaveBeenCalledOnce());
+    await Promise.resolve();
+
+    expect(task.attempt).toMatchObject({
+      id: active.attemptId,
+      status: 'complete',
+      completionResult: { status: 'success' },
+    });
+  });
+
   it('reports attempt-scoped terminals and cleans them up before completion commits', async () => {
     const child = createControllableChild();
     mockSpawn.mockReturnValue(child);
@@ -3688,23 +3728,37 @@ describe('ClawdbotAgentService Codex providers', () => {
       ...request,
       requestId: 'terminal-finalization-race',
     };
-    const racingExecution = service.executeRunTerminal(
-      task.id,
-      active.attemptId,
-      racingRequest
-    );
+    const racingExecution = service.executeRunTerminal(task.id, active.attemptId, racingRequest);
     await waitFor(() => expect(runTerminals.execute).toHaveBeenCalledTimes(2));
-    const stopping = service.stopAgent(task.id, active.attemptId);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-    expect(runTerminals.cleanupAttempt).not.toHaveBeenCalled();
-
-    resolveLaunch?.();
-    await expect(racingExecution).resolves.toMatchObject({
-      status: 'started',
-      handle: { id: 'terminal_finalization_race' },
+    const originalProviderComplete = ProviderCompletionService.prototype.complete;
+    let resolveProviderCompletion: (() => void) | undefined;
+    const providerCompletion = new Promise<void>((resolve) => {
+      resolveProviderCompletion = resolve;
     });
-    await stopping;
-    expect(runTerminals.cleanupAttempt).toHaveBeenCalledOnce();
+    const completionSpy = vi
+      .spyOn(ProviderCompletionService.prototype, 'complete')
+      .mockImplementation(async function (input) {
+        const result = await originalProviderComplete.call(this, input);
+        resolveProviderCompletion?.();
+        return result;
+      });
+    try {
+      const stopping = service.stopAgent(task.id, active.attemptId);
+      await providerCompletion;
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(runTerminals.cleanupAttempt).not.toHaveBeenCalled();
+
+      resolveLaunch?.();
+      await expect(racingExecution).resolves.toMatchObject({
+        status: 'started',
+        handle: { id: 'terminal_finalization_race' },
+      });
+      await stopping;
+      expect(runTerminals.cleanupAttempt).toHaveBeenCalledOnce();
+    } finally {
+      completionSpy.mockRestore();
+    }
   });
 
   it('does not let a competing terminal claim poison an in-flight finalizer', async () => {
