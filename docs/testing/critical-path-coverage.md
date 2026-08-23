@@ -33,9 +33,9 @@ Git.
 
 The initial floors were measured on 2026-08-23 with Node 22-compatible Vitest 4.1.11 and V8. A
 floor is the exact measured percentage, not a rounded repository target. Any lower line, branch,
-function, or statement result fails the gate. Pull-request CI also compares the policy with the
-base commit, so removing boundaries, narrowing include patterns, or lowering a floor fails even
-when the edited policy would otherwise pass.
+function, or statement result fails the gate. CI checks out complete Git history and compares the
+policy with the event's base commit, so removing boundaries, narrowing include patterns, or
+lowering a floor fails even when the edited policy would otherwise pass.
 
 | Package | Boundary                  |  Lines | Branches | Functions | Statements |
 | ------- | ------------------------- | -----: | -------: | --------: | ---------: |

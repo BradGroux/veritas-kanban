@@ -30,7 +30,7 @@ const valid = {
     devDependencies: { '@vitest/coverage-v8': '^4.1.11' },
   },
   workflow:
-    'critical-path-coverage:\nneeds.select-tests.outputs.coverage_packages\npnpm test:coverage --packages\nCOVERAGE_BASE_REF:\nif: always() && needs.select-tests.outputs.coverage_packages\nactions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+    'jobs:\n  critical-path-coverage:\n    fetch-depth: 0\n    needs.select-tests.outputs.coverage_packages\n    pnpm test:coverage --packages\n    COVERAGE_BASE_REF:\n    if: always() && needs.select-tests.outputs.coverage_packages\n    actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n  build:\n    runs-on: ubuntu-latest',
   configs: Object.fromEntries(
     ['server', 'web', 'cli', 'mcp', 'desktop'].map((id) => [
       id,
@@ -56,7 +56,15 @@ test('requires the command, CI artifact, and all workspace configs', () => {
 
   assert.match(errors, /documented test:coverage command/);
   assert.match(errors, /CI must define/);
+  assert.match(errors, /fetch the base commit/);
   assert.match(errors, /web coverage must use V8/);
+});
+
+test('requires the coverage job itself to fetch the comparison base', () => {
+  const invalid = globalThis.structuredClone(valid);
+  invalid.workflow = invalid.workflow.replace('    fetch-depth: 0\n', '');
+
+  assert.match(validateCoveragePolicy(invalid).join('\n'), /fetch the base commit/);
 });
 
 test('rejects lowered floors, removed boundaries, and narrowed governed scope', () => {

@@ -91,6 +91,9 @@ export function validateCoveragePolicy({
 }) {
   const errors = [];
   const packageIds = policy.packages?.map(({ id }) => id) ?? [];
+  const coverageJob = workflow.match(
+    /(?:^|\n)  critical-path-coverage:\n[\s\S]*?(?=\n  [a-zA-Z0-9_-]+:\n|$)/
+  )?.[0];
 
   if (policy.schemaVersion !== 'critical-path-coverage/v1') {
     errors.push('coverage policy must use critical-path-coverage/v1');
@@ -159,6 +162,9 @@ export function validateCoveragePolicy({
   }
   if (!workflow.includes('COVERAGE_BASE_REF:')) {
     errors.push('CI must compare coverage policy and changed critical files with the base commit');
+  }
+  if (!coverageJob?.includes('fetch-depth: 0')) {
+    errors.push('CI coverage checkout must fetch the base commit used by coverage ratchets');
   }
   if (!workflow.includes('if: always() && needs.select-tests.outputs.coverage_packages')) {
     errors.push('CI must preserve coverage artifacts after a failed ratchet');
