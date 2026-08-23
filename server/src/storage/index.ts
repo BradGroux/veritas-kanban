@@ -44,6 +44,11 @@ export { FileStatusHistoryStore } from './status-history-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
 export {
+  FileAgentPermissionRepository,
+  InMemoryAgentPermissionRepository,
+  type AgentPermissionRepository,
+} from './agent-permission-repository.js';
+export {
   FileCeremonyStateRepository,
   InMemoryCeremonyStateRepository,
   type CeremonyState,

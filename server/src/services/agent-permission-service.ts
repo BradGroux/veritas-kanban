@@ -11,14 +11,11 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import type { CreateGovernanceTraceInput } from '@veritas-kanban/shared';
-import { getLegacyRuntimeDirs, getRuntimeDir } from '../utils/paths.js';
-import { migrateLegacyFiles } from '../utils/migrate-legacy-files.js';
-const DATA_DIR = getRuntimeDir();
-const LEGACY_DATA_DIRS = getLegacyRuntimeDirs();
-let migrationChecked = false;
+import {
+  FileAgentPermissionRepository,
+  type AgentPermissionRepository,
+} from '../storage/agent-permission-repository.js';
 
 const log = createLogger('agent-permissions');
 
@@ -93,69 +90,20 @@ const DEFAULT_PERMISSIONS: Record<
 
 // ─── Service ─────────────────────────────────────────────────────
 
-class AgentPermissionService {
-  private permissions = new Map<string, AgentPermissionConfig>();
-  private approvals: ApprovalRequest[] = [];
-  private loaded = false;
-
-  private get permissionsPath(): string {
-    return path.join(DATA_DIR, 'agent-permissions.json');
-  }
-
-  private get approvalsPath(): string {
-    return path.join(DATA_DIR, 'approval-requests.json');
-  }
-
-  private async ensureLoaded(): Promise<void> {
-    if (!migrationChecked) {
-      migrationChecked = true;
-      await migrateLegacyFiles(
-        LEGACY_DATA_DIRS,
-        DATA_DIR,
-        ['agent-permissions.json', 'approval-requests.json'],
-        'agent permission'
-      );
-    }
-
-    if (this.loaded) return;
-    try {
-      const data = await fs.readFile(this.permissionsPath, 'utf-8');
-      const arr: AgentPermissionConfig[] = JSON.parse(data);
-      for (const p of arr) {
-        this.permissions.set(p.agentId, p);
-      }
-    } catch {
-      // No saved permissions
-    }
-    try {
-      const data = await fs.readFile(this.approvalsPath, 'utf-8');
-      this.approvals = JSON.parse(data);
-    } catch {
-      this.approvals = [];
-    }
-    this.loaded = true;
-  }
-
-  private async savePermissions(): Promise<void> {
-    const arr = Array.from(this.permissions.values());
-    await fs.writeFile(this.permissionsPath, JSON.stringify(arr, null, 2));
-  }
-
-  private async saveApprovals(): Promise<void> {
-    await fs.writeFile(this.approvalsPath, JSON.stringify(this.approvals, null, 2));
-  }
+export class AgentPermissionService {
+  constructor(
+    private readonly repository: AgentPermissionRepository = new FileAgentPermissionRepository()
+  ) {}
 
   /**
    * Get permission config for an agent. Returns default specialist if not configured.
    */
   async getPermissions(agentId: string): Promise<AgentPermissionConfig> {
-    await this.ensureLoaded();
+    const normalizedAgentId = agentId.toLowerCase();
+    const permissions = await this.repository.readPermissions();
     return (
-      this.permissions.get(agentId.toLowerCase()) || {
-        agentId: agentId.toLowerCase(),
-        ...DEFAULT_PERMISSIONS.specialist,
-        updatedAt: new Date().toISOString(),
-      }
+      permissions.find((config) => config.agentId === normalizedAgentId) ??
+      this.defaultPermissions(normalizedAgentId)
     );
   }
 
@@ -163,20 +111,23 @@ class AgentPermissionService {
    * Set permission level for an agent.
    */
   async setLevel(agentId: string, level: PermissionLevel): Promise<AgentPermissionConfig> {
-    await this.ensureLoaded();
-
-    const existing = this.permissions.get(agentId.toLowerCase());
-    const config: AgentPermissionConfig = {
-      ...(existing || { agentId: agentId.toLowerCase() }),
-      ...DEFAULT_PERMISSIONS[level],
-      agentId: agentId.toLowerCase(),
-      trustedDomains: existing?.trustedDomains,
-      restrictions: existing?.restrictions,
-      updatedAt: new Date().toISOString(),
-    };
-
-    this.permissions.set(agentId.toLowerCase(), config);
-    await this.savePermissions();
+    const normalizedAgentId = agentId.toLowerCase();
+    const config = await this.repository.mutatePermissions((permissions) => {
+      const index = permissions.findIndex((candidate) => candidate.agentId === normalizedAgentId);
+      const existing = index >= 0 ? permissions[index] : undefined;
+      const updated: AgentPermissionConfig = {
+        ...(existing || { agentId: normalizedAgentId }),
+        ...DEFAULT_PERMISSIONS[level],
+        agentId: normalizedAgentId,
+        trustedDomains: existing?.trustedDomains,
+        restrictions: existing?.restrictions,
+        updatedAt: new Date().toISOString(),
+      };
+      const next = [...permissions];
+      if (index >= 0) next[index] = updated;
+      else next.push(updated);
+      return { values: next, result: updated };
+    });
 
     log.info({ agentId, level }, 'Agent permission level updated');
     return config;
@@ -199,26 +150,27 @@ class AgentPermissionService {
       >
     >
   ): Promise<AgentPermissionConfig> {
-    await this.ensureLoaded();
-
-    const current = await this.getPermissions(agentId);
-    const updated: AgentPermissionConfig = {
-      ...current,
-      ...update,
-      updatedAt: new Date().toISOString(),
-    };
-
-    this.permissions.set(agentId.toLowerCase(), updated);
-    await this.savePermissions();
-    return updated;
+    const normalizedAgentId = agentId.toLowerCase();
+    return this.repository.mutatePermissions((permissions) => {
+      const index = permissions.findIndex((candidate) => candidate.agentId === normalizedAgentId);
+      const current = index >= 0 ? permissions[index] : this.defaultPermissions(normalizedAgentId);
+      const updated: AgentPermissionConfig = {
+        ...current,
+        ...update,
+        updatedAt: new Date().toISOString(),
+      };
+      const next = [...permissions];
+      if (index >= 0) next[index] = updated;
+      else next.push(updated);
+      return { values: next, result: updated };
+    });
   }
 
   /**
    * List all configured agent permissions.
    */
   async listPermissions(): Promise<AgentPermissionConfig[]> {
-    await this.ensureLoaded();
-    return Array.from(this.permissions.values());
+    return this.repository.readPermissions();
   }
 
   /**
@@ -319,8 +271,6 @@ class AgentPermissionService {
     taskId?: string;
     details?: string;
   }): Promise<ApprovalRequest> {
-    await this.ensureLoaded();
-
     const request: ApprovalRequest = {
       id: `approval_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       agentId: params.agentId.toLowerCase(),
@@ -331,8 +281,10 @@ class AgentPermissionService {
       createdAt: new Date().toISOString(),
     };
 
-    this.approvals.push(request);
-    await this.saveApprovals();
+    await this.repository.mutateApprovals((approvals) => ({
+      values: [...approvals, request],
+      result: request,
+    }));
 
     log.info(
       { requestId: request.id, agentId: params.agentId, action: params.action },
@@ -349,16 +301,22 @@ class AgentPermissionService {
     decision: 'approved' | 'rejected',
     reviewedBy: string
   ): Promise<ApprovalRequest | null> {
-    await this.ensureLoaded();
-
-    const request = this.approvals.find((a) => a.id === requestId);
+    const request = await this.repository.mutateApprovals((approvals) => {
+      const index = approvals.findIndex((candidate) => candidate.id === requestId);
+      if (index === -1) {
+        return { values: approvals, result: null as ApprovalRequest | null };
+      }
+      const updated: ApprovalRequest = {
+        ...approvals[index],
+        status: decision,
+        reviewedBy,
+        reviewedAt: new Date().toISOString(),
+      };
+      const next = [...approvals];
+      next[index] = updated;
+      return { values: next, result: updated as ApprovalRequest | null };
+    });
     if (!request) return null;
-
-    request.status = decision;
-    request.reviewedBy = reviewedBy;
-    request.reviewedAt = new Date().toISOString();
-
-    await this.saveApprovals();
     log.info({ requestId, decision, reviewedBy }, 'Approval reviewed');
     return request;
   }
@@ -367,15 +325,24 @@ class AgentPermissionService {
    * Get pending approval requests.
    */
   async getPendingApprovals(filters?: { agentId?: string }): Promise<ApprovalRequest[]> {
-    await this.ensureLoaded();
-
-    let results = this.approvals.filter((a) => a.status === 'pending');
+    let results = (await this.repository.readApprovals()).filter(
+      (approval) => approval.status === 'pending'
+    );
     if (filters?.agentId) {
-      results = results.filter((a) => a.agentId === filters.agentId!.toLowerCase());
+      const agentId = filters.agentId.toLowerCase();
+      results = results.filter((approval) => approval.agentId === agentId);
     }
     return results.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+  }
+
+  private defaultPermissions(agentId: string): AgentPermissionConfig {
+    return {
+      agentId,
+      ...DEFAULT_PERMISSIONS.specialist,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   private buildPermissionTrace(
