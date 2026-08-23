@@ -56,6 +56,7 @@
           "src/__tests__/sqlite-journal-ownership-policy.test.ts",
           "src/__tests__/sqlite-maintenance-bootstrap.test.ts",
           "src/__tests__/sqlite-portability-service.test.ts",
+          "src/__tests__/system-health-service.test.ts",
           "src/__tests__/storage/dual-storage-parity.test.ts",
           "src/__tests__/storage/file-storage.test.ts",
           "src/__tests__/storage/sqlite-audit-policy-repositories.test.ts",
