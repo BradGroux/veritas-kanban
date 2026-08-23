@@ -76,6 +76,7 @@ jobs:
           node --test
           scripts/check-actions-pinned.test.mjs
           scripts/check-delivery-cadence.test.mjs
+          scripts/check-security-gates.test.mjs
           scripts/select-ci-test-scope.test.mjs
           scripts/verify-full-suite-job-evidence.test.mjs
 
@@ -84,6 +85,9 @@ jobs:
 
       - name: Guard immutable GitHub Actions references
         run: node scripts/check-actions-pinned.mjs
+
+      - name: Guard continuous security gates
+        run: node scripts/check-security-gates.mjs
 
       - name: Find reviewed full-suite evidence
         id: reviewed_full

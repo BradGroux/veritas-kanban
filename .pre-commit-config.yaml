@@ -1,10 +1,10 @@
 # Pre-commit hooks for veritas-kanban
 # Install: pip install pre-commit && pre-commit install
-# Or standalone gitleaks hook (no pre-commit framework needed):
-#   gitleaks protect --staged --verbose
+# Or scan the reviewed tree without the pre-commit framework:
+#   gitleaks dir . --redact=100
 
 repos:
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.2
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
     hooks:
       - id: gitleaks

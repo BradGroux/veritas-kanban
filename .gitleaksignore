@@ -1,22 +1,53 @@
-# Gitleaks False Positives
-# Updated: 2026-01-29 (post-history-rewrite)
-# All entries below are placeholder/example/test values, NOT real secrets.
+# CLI snapshot uses an intentionally synthetic API key in serialized output.
+cli/src/__tests__/snapshot.test.ts:generic-api-key:220
 
-# Documentation example: "your-admin-key" placeholder in deployment guide
-39423f74cf3849684e8de4ebf746156a6be0ea00:docs/DEPLOYMENT.md:curl-auth-header:557
+# API documentation contains non-functional response examples.
+docs/API-REFERENCE.md:generic-api-key:991
+docs/API-WORKFLOWS.md:generic-api-key:1460
 
-# Documentation example: "dev-admin-key" placeholder in security audit
-f01a0157f1d1612ab7bea646cf7265ec018e1d9a:docs/SECURITY_AUDIT_2026-01-28.md:curl-auth-header:135
+# Operator documentation uses placeholders in curl authentication examples.
+docs/DEPLOYMENT.md:curl-auth-header:891
+docs/TROUBLESHOOTING.md:curl-auth-header:229
+docs/TROUBLESHOOTING.md:curl-auth-header:257
+docs/TROUBLESHOOTING.md:curl-auth-header:260
+docs/features/prd-driven-development.md:curl-auth-header:95
+docs/features/prd-driven-development.md:curl-auth-header:775
+docs/guides/SELF_HOST.md:curl-auth-header:738
+docs/security.md:curl-auth-header:51
+docs/security.md:curl-auth-header:58
 
-# Test fixture: hardcoded test JWT secret (not used in production)
-f01a0157f1d1612ab7bea646cf7265ec018e1d9a:server/src/__tests__/routes/auth.test.ts:generic-api-key:28
-f01a0157f1d1612ab7bea646cf7265ec018e1d9a:server/src/__tests__/routes/auth.test.ts:generic-api-key:29
-f01a0157f1d1612ab7bea646cf7265ec018e1d9a:server/src/__tests__/routes/auth.test.ts:generic-api-key:60
+# Demo seeding passes the operator-provided key variable to curl.
+seed-demo-data.sh:curl-auth-header:45
 
-# .env.example placeholder values ("your-api-key")
-55c742c2dfd731069505e1baab16bb4c328234bd:server/.env.example:curl-auth-header:43
-55c742c2dfd731069505e1baab16bb4c328234bd:server/.env.example:curl-auth-header:46
+# Environment template documents shell-variable authentication examples.
+server/.env.example:curl-auth-header:127
+server/.env.example:curl-auth-header:130
 
-# Documentation placeholder values ("your-api-key")
-55c742c2dfd731069505e1baab16bb4c328234bd:docs/security.md:curl-auth-header:40
-55c742c2dfd731069505e1baab16bb4c328234bd:docs/security.md:curl-auth-header:47
+# Compatibility test verifies redaction of a deliberately synthetic value.
+server/src/__tests__/buzz-compatibility-service.test.ts:generic-api-key:477
+
+# Governance trace test verifies Stripe-shaped token redaction.
+server/src/__tests__/governance-trace-service.test.ts:stripe-access-token:22
+
+# Log redaction tests require JWT- and Stripe-shaped synthetic fixtures.
+server/src/__tests__/log-redaction.test.ts:jwt:17
+server/src/__tests__/log-redaction.test.ts:stripe-access-token:30
+server/src/__tests__/log-redaction.test.ts:stripe-access-token:31
+
+# Completion service test verifies JWT-shaped output redaction.
+server/src/__tests__/provider-completion-service.test.ts:jwt:314
+
+# Local admission tests use synthetic idempotency keys, not credentials.
+server/src/__tests__/routes/agents-local-capability.test.ts:generic-api-key:606
+server/src/__tests__/routes/agents-local-capability.test.ts:generic-api-key:619
+
+# Authentication route tests require a synthetic JWT signing value.
+server/src/__tests__/routes/auth.test.ts:generic-api-key:29
+server/src/__tests__/routes/auth.test.ts:generic-api-key:31
+server/src/__tests__/routes/auth.test.ts:generic-api-key:80
+
+# Skill capability test verifies Stripe-shaped token redaction.
+server/src/__tests__/skill-capability-service.test.ts:stripe-access-token:63
+
+# Multi-user UI test renders a non-secret token prefix fixture.
+web/src/__tests__/multi-user-tab.test.tsx:generic-api-key:123

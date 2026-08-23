@@ -69,6 +69,34 @@ pnpm check:actions-pinned
 Dependabot retains the `github-actions` ecosystem entry so reviewed updates can
 advance both the immutable commit and its release comment.
 
+## Continuous Security Gates
+
+The `Security Gates` workflow runs CodeQL and gitleaks for pull requests, main
+branch updates, and a weekly schedule. CodeQL uses the extended JavaScript and
+TypeScript security query suite. Repository merge protection blocks CodeQL
+errors and high-or-critical security alerts. Gitleaks scans the current tree,
+accepts only the exact reviewed fingerprints in `.gitleaksignore`, and proves
+that a newly introduced synthetic secret is still rejected.
+
+Brad Groux owns Dependabot and GitHub security alert triage. New dependency,
+code-scanning, or secret-scanning alerts must be reviewed privately within two
+working days. Confirm exploitability and affected releases before opening a
+public issue. Track confirmed vulnerabilities in a private GitHub security
+advisory, prioritize critical and high findings for the next safe patch, and
+record false positives at the narrowest available fingerprint or path. Do not
+disable a detector class to clear a gate.
+
+Dependabot vulnerability alerts and security updates, GitHub secret scanning,
+and push protection must remain enabled. Security-update pull requests use the
+existing `BradGroux` reviewer assignment in `.github/dependabot.yml`.
+
+Run the repository controls locally with:
+
+```bash
+pnpm check:security-gates
+pnpm check:gitleaks
+```
+
 ## Scope
 
 This policy applies to:
