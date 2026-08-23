@@ -41,6 +41,7 @@
     "check:vite-native-config": "pnpm --filter @veritas-kanban/web exec vite build --configLoader native && vitest run --configLoader native web/src/lib/__tests__/client-policy.test.ts",
     "check:pnpm-settings": "node scripts/check-pnpm-settings.mjs",
     "check:security-artifacts": "node scripts/check-security-artifacts.mjs",
+    "check:service-filesystem-boundary": "node --test scripts/check-service-filesystem-boundary.test.mjs && node scripts/check-service-filesystem-boundary.mjs",
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
     "test": "pnpm test:unit",
     "test:unit": "node --test scripts/run-workspace-unit-tests.test.mjs && node scripts/run-workspace-unit-tests.mjs",

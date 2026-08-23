@@ -1,0 +1,324 @@
+{
+  "schemaVersion": 1,
+  "maximumEntries": 53,
+  "entries": [
+    {
+      "path": "server/src/services/activity-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/agent-health-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/agent-permission-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/attachment-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/audit-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/broadcast-storage-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/ceremony-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/chat-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/clawdbot-agent-service.ts",
+      "category": "transient-process-io",
+      "owner": "#1189",
+      "rationale": "Remaining process I/O migration is tracked in issue #1189."
+    },
+    {
+      "path": "server/src/services/codex-health-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/config-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/conflict-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/delegation-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/doc-freshness-service.ts",
+      "category": "packaged-readonly-content",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/docs-service.ts",
+      "category": "packaged-readonly-content",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/error-learning-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/external-tracker-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/file-lock.ts",
+      "category": "transient-process-io",
+      "owner": "#1189",
+      "rationale": "Remaining process I/O migration is tracked in issue #1189."
+    },
+    {
+      "path": "server/src/services/gateway-chat-client.ts",
+      "category": "transient-process-io",
+      "owner": "#1189",
+      "rationale": "Remaining process I/O migration is tracked in issue #1189."
+    },
+    {
+      "path": "server/src/services/github-sync-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/integrity-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/lifecycle-hooks-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/maintenance-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/managed-list-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/metrics/task-metrics.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/metrics/telemetry-reader.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/notification-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/outbound-integration-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/pdf-report-service.ts",
+      "category": "transient-process-io",
+      "owner": "#1189",
+      "rationale": "Remaining process I/O migration is tracked in issue #1189."
+    },
+    {
+      "path": "server/src/services/progress-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/prompt-registry-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/queue-intake-monitor-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/reflection-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/run-session-share-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/scheduled-deliverables-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/scheduler-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/search-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/shared-resources-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/skill-security-service.ts",
+      "category": "packaged-readonly-content",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/sqlite-portability-service.ts",
+      "category": "transient-process-io",
+      "owner": "#1189",
+      "rationale": "Remaining process I/O migration is tracked in issue #1189."
+    },
+    {
+      "path": "server/src/services/status-history-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/task-identity-diagnostics.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/task-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/telemetry-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/template-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/text-extraction-service.ts",
+      "category": "transient-process-io",
+      "owner": "#1189",
+      "rationale": "Remaining process I/O migration is tracked in issue #1189."
+    },
+    {
+      "path": "server/src/services/tool-policy-service.ts",
+      "category": "compatibility-debt",
+      "owner": "#1188",
+      "rationale": "Managed-content storage migration is tracked in issue #1188."
+    },
+    {
+      "path": "server/src/services/trace-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/transition-hooks-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/work-product-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1187",
+      "rationale": "Operational evidence storage migration is tracked in issue #1187."
+    },
+    {
+      "path": "server/src/services/workflow-run-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/workflow-service.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    },
+    {
+      "path": "server/src/services/workflow-step-executor.ts",
+      "category": "authoritative-persistence",
+      "owner": "#1186",
+      "rationale": "Coordination-state storage migration is tracked in issue #1186."
+    }
+  ]
+}
