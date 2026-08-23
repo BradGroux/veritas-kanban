@@ -10,6 +10,79 @@
     {
       "id": "server",
       "report": "coverage/server/coverage-summary.json",
+      "runner": {
+        "maxWorkers": 2,
+        "extraArgs": ["--hookTimeout=20000", "--testTimeout=30000"],
+        "testFiles": [
+          "src/__tests__/acp-stdio-provider.test.ts",
+          "src/__tests__/admission-control-service.test.ts",
+          "src/__tests__/claude-code-provider.smoke.test.ts",
+          "src/__tests__/claude-code-provider.test.ts",
+          "src/__tests__/codex-app-server-provider.smoke.test.ts",
+          "src/__tests__/codex-app-server-provider.test.ts",
+          "src/__tests__/codex-env.test.ts",
+          "src/__tests__/codex-provider-service.test.ts",
+          "src/__tests__/communication-adapter-schemas.test.ts",
+          "src/__tests__/context-provider-health-service.test.ts",
+          "src/__tests__/credential-broker-service.test.ts",
+          "src/__tests__/enforcement.test.ts",
+          "src/__tests__/filesystem-sandbox-service.test.ts",
+          "src/__tests__/harness-support-profile-schemas.test.ts",
+          "src/__tests__/hermes-provider.test.ts",
+          "src/__tests__/log-redaction.test.ts",
+          "src/__tests__/middleware/auth.test.ts",
+          "src/__tests__/middleware/write-enforcement.integration.test.ts",
+          "src/__tests__/openclaw-provider.test.ts",
+          "src/__tests__/path-audit.test.ts",
+          "src/__tests__/provider-completion-service.test.ts",
+          "src/__tests__/provider-launch-credential-plan-service.test.ts",
+          "src/__tests__/provider-runtime-adapters.test.ts",
+          "src/__tests__/provider-runtime-capability-service.test.ts",
+          "src/__tests__/provider-runtime-control-service.test.ts",
+          "src/__tests__/provider-runtime-manifest-service.test.ts",
+          "src/__tests__/provider-task-envelope-renderer.test.ts",
+          "src/__tests__/routes/admin-governance-auth.test.ts",
+          "src/__tests__/routes/auth.test.ts",
+          "src/__tests__/routes/credential-broker.test.ts",
+          "src/__tests__/routes/sqlite-journal-maintenance.test.ts",
+          "src/__tests__/routes/v1-permission-guards.test.ts",
+          "src/__tests__/run-launch-manifest-service.test.ts",
+          "src/__tests__/run-recovery-policy-service.test.ts",
+          "src/__tests__/run-supervisor-service.test.ts",
+          "src/__tests__/schemas.test.ts",
+          "src/__tests__/shared-api-permissions.test.ts",
+          "src/__tests__/sqlite-journal-ownership-policy.test.ts",
+          "src/__tests__/sqlite-maintenance-bootstrap.test.ts",
+          "src/__tests__/sqlite-portability-service.test.ts",
+          "src/__tests__/storage/dual-storage-parity.test.ts",
+          "src/__tests__/storage/file-storage.test.ts",
+          "src/__tests__/storage/sqlite-audit-policy-repositories.test.ts",
+          "src/__tests__/storage/sqlite-chat-repositories.test.ts",
+          "src/__tests__/storage/sqlite-config-repositories.test.ts",
+          "src/__tests__/storage/sqlite-dashboard-metrics.test.ts",
+          "src/__tests__/storage/sqlite-database.test.ts",
+          "src/__tests__/storage/sqlite-governance-repositories.test.ts",
+          "src/__tests__/storage/sqlite-identity-repository.test.ts",
+          "src/__tests__/storage/sqlite-notification-repositories.test.ts",
+          "src/__tests__/storage/sqlite-operational-repositories.test.ts",
+          "src/__tests__/storage/sqlite-performance.test.ts",
+          "src/__tests__/storage/sqlite-provenance-repository.test.ts",
+          "src/__tests__/storage/sqlite-scheduled-deliverables-repository.test.ts",
+          "src/__tests__/storage/sqlite-storage.test.ts",
+          "src/__tests__/storage/sqlite-task-repository.test.ts",
+          "src/__tests__/storage/sqlite-work-products.test.ts",
+          "src/__tests__/storage/sqlite-workflow-repositories.test.ts",
+          "src/__tests__/storage/sqlite-workflow-run-execution.test.ts",
+          "src/__tests__/task-service-sqlite.test.ts",
+          "src/__tests__/work-product-run-launch-manifest.test.ts",
+          "src/__tests__/work-product-schemas.test.ts",
+          "src/__tests__/workflow-run-service.test.ts",
+          "src/__tests__/workflow-step-executor-codex.test.ts",
+          "src/__tests__/workflow-step-executor-openclaw.test.ts",
+          "src/storage/sqlite/database.test.ts",
+          "src/storage/sqlite/filesystem-posture.test.ts"
+        ]
+      },
       "boundaries": [
         {
           "id": "dispatch-runtime",
@@ -43,13 +116,15 @@
             "server/src/utils/codex-env.ts",
             "server/src/utils/hermes-env.ts",
             "server/src/utils/paths.ts",
-            "server/src/utils/sanitize.ts"
+            "server/src/utils/sanitize.ts",
+            "server/src/schemas/**/*.ts",
+            "shared/src/utils/api-permissions.ts"
           ],
           "thresholds": {
-            "lines": 62.84,
-            "branches": 60.11,
-            "functions": 61.86,
-            "statements": 61.79
+            "lines": 57.58,
+            "branches": 52.85,
+            "functions": 50.91,
+            "statements": 56.89
           }
         },
         {
@@ -68,6 +143,21 @@
     {
       "id": "web",
       "report": "coverage/web/coverage-summary.json",
+      "runner": {
+        "extraArgs": ["--testTimeout=15000"],
+        "testFiles": [
+          "src/__tests__/api-helpers.test.ts",
+          "src/__tests__/api-no-raw-fetch.test.ts",
+          "src/__tests__/api-tasks.test.ts",
+          "src/__tests__/archive-backlog-mantine.test.tsx",
+          "src/__tests__/auth-guard.test.tsx",
+          "src/__tests__/auth-screens-mantine.test.tsx",
+          "src/__tests__/use-task-sync-admission.test.ts",
+          "src/__tests__/useTasks-patchCache.test.ts",
+          "src/__tests__/useRealtimeAgentStatus.test.ts",
+          "src/__tests__/useWebSocket.test.ts"
+        ]
+      },
       "boundaries": [
         {
           "id": "api-auth-realtime",
@@ -96,6 +186,9 @@
     {
       "id": "cli",
       "report": "coverage/cli/coverage-summary.json",
+      "runner": {
+        "triggerPatterns": ["cli/src/**/*.test.ts"]
+      },
       "boundaries": [
         {
           "id": "api-compatibility",
@@ -120,6 +213,9 @@
     {
       "id": "mcp",
       "report": "coverage/mcp/coverage-summary.json",
+      "runner": {
+        "triggerPatterns": ["mcp/src/**/*.test.ts"]
+      },
       "boundaries": [
         {
           "id": "api-tool-contracts",
@@ -137,6 +233,9 @@
     {
       "id": "desktop",
       "report": "coverage/desktop/coverage-summary.json",
+      "runner": {
+        "triggerPatterns": ["desktop/src/**/*.test.ts"]
+      },
       "boundaries": [
         {
           "id": "preload-ipc-trust",

@@ -1,12 +1,94 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXPECTED_PACKAGES = ['server', 'web', 'cli', 'mcp', 'desktop'];
 const METRICS = ['lines', 'branches', 'functions', 'statements'];
+const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const TRACKING_ISSUE_PATTERN = /^#\d+$/;
+const GLOB_PATTERN = /[*?[\]{}!]/;
 
-export function validateCoveragePolicy({ policy, packageJson, workflow, configs }) {
+function isValidIsoDate(value) {
+  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validateException(exception, fullId, errors, today) {
+  const normalized = path.posix.normalize(exception.path ?? '');
+  if (
+    !exception.path ||
+    normalized !== exception.path ||
+    normalized.startsWith('../') ||
+    path.posix.isAbsolute(normalized) ||
+    GLOB_PATTERN.test(normalized)
+  ) {
+    errors.push(`${fullId} exception path must be one exact repository-relative file`);
+  }
+  if (typeof exception.reason !== 'string' || exception.reason.trim().length < 20) {
+    errors.push(`${fullId} exception reason must contain at least 20 characters`);
+  }
+  if (!GITHUB_LOGIN_PATTERN.test(exception.owner ?? '')) {
+    errors.push(`${fullId} exception owner must be a GitHub login`);
+  }
+  if (!TRACKING_ISSUE_PATTERN.test(exception.trackingIssue ?? '')) {
+    errors.push(`${fullId} exception must reference a tracking issue such as #123`);
+  }
+  if (!isValidIsoDate(exception.reviewBy)) {
+    errors.push(`${fullId} exception reviewBy must be a real YYYY-MM-DD date`);
+    return;
+  }
+  const maximum = new Date(`${today}T00:00:00.000Z`);
+  maximum.setUTCDate(maximum.getUTCDate() + 90);
+  if (exception.reviewBy < today || exception.reviewBy > maximum.toISOString().slice(0, 10)) {
+    errors.push(`${fullId} exception reviewBy must be today or within the next 90 days`);
+  }
+}
+
+export function compareCoveragePolicy(current, baseline) {
+  const errors = [];
+  for (const baselinePackage of baseline?.packages ?? []) {
+    const currentPackage = current.packages?.find(({ id }) => id === baselinePackage.id);
+    if (!currentPackage) {
+      errors.push(`coverage package ${baselinePackage.id} cannot be removed`);
+      continue;
+    }
+    for (const baselineBoundary of baselinePackage.boundaries ?? []) {
+      const fullId = `${baselinePackage.id}/${baselineBoundary.id}`;
+      const currentBoundary = currentPackage.boundaries?.find(
+        ({ id }) => id === baselineBoundary.id
+      );
+      if (!currentBoundary) {
+        errors.push(`coverage boundary ${fullId} cannot be removed`);
+        continue;
+      }
+      for (const metric of METRICS) {
+        if (currentBoundary.thresholds?.[metric] < baselineBoundary.thresholds?.[metric]) {
+          errors.push(`${fullId} ${metric} threshold cannot decrease`);
+        }
+      }
+      for (const pattern of baselineBoundary.include ?? []) {
+        if (!currentBoundary.include?.includes(pattern)) {
+          errors.push(`${fullId} cannot remove governed include pattern ${pattern}`);
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+export function validateCoveragePolicy({
+  policy,
+  baselinePolicy,
+  packageJson,
+  workflow,
+  configs,
+  today = new Date().toISOString().slice(0, 10),
+}) {
   const errors = [];
   const packageIds = policy.packages?.map(({ id }) => id) ?? [];
 
@@ -27,6 +109,16 @@ export function validateCoveragePolicy({ policy, packageJson, workflow, configs 
     if (!packagePolicy.report?.endsWith('/coverage-summary.json')) {
       errors.push(`${packagePolicy.id} must declare a machine-readable coverage summary`);
     }
+    for (const testFile of packagePolicy.runner?.testFiles ?? []) {
+      if (
+        path.posix.normalize(testFile) !== testFile ||
+        path.posix.isAbsolute(testFile) ||
+        GLOB_PATTERN.test(testFile) ||
+        !/\.test\.[cm]?[jt]sx?$/.test(testFile)
+      ) {
+        errors.push(`${packagePolicy.id} coverage test files must be exact test paths`);
+      }
+    }
     for (const boundary of packagePolicy.boundaries ?? []) {
       const fullId = `${packagePolicy.id}/${boundary.id}`;
       if (boundaryIds.has(fullId)) errors.push(`duplicate boundary ${fullId}`);
@@ -45,9 +137,7 @@ export function validateCoveragePolicy({ policy, packageJson, workflow, configs 
         }
       }
       for (const exception of boundary.exceptions ?? []) {
-        if (!exception.path || !exception.reason || !exception.owner || !exception.reviewBy) {
-          errors.push(`${fullId} exceptions require path, reason, owner, and reviewBy`);
-        }
+        validateException(exception, fullId, errors, today);
       }
     }
   }
@@ -67,6 +157,12 @@ export function validateCoveragePolicy({ policy, packageJson, workflow, configs 
   if (!workflow.includes('pnpm test:coverage --packages')) {
     errors.push('CI must execute the documented coverage command');
   }
+  if (!workflow.includes('COVERAGE_BASE_REF:')) {
+    errors.push('CI must compare coverage policy and changed critical files with the base commit');
+  }
+  if (!workflow.includes('if: always() && needs.select-tests.outputs.coverage_packages')) {
+    errors.push('CI must preserve coverage artifacts after a failed ratchet');
+  }
   if (!workflow.includes('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a')) {
     errors.push('CI must upload coverage with the immutable approved action');
   }
@@ -80,8 +176,36 @@ export function validateCoveragePolicy({ policy, packageJson, workflow, configs 
       errors.push(`${packageId} coverage must exclude type declarations`);
     }
   }
+  for (const packageId of ['server', 'web']) {
+    if (
+      (policy.packages.find(({ id }) => id === packageId)?.runner?.testFiles?.length ?? 0) === 0
+    ) {
+      errors.push(`${packageId} critical coverage must use exact test files`);
+    }
+  }
+
+  errors.push(...compareCoveragePolicy(policy, baselinePolicy));
 
   return errors;
+}
+
+function readBaselinePolicy(repoRoot) {
+  const baselineRef = process.env.COVERAGE_BASE_REF;
+  if (!baselineRef) return undefined;
+  if (!COMMIT_SHA_PATTERN.test(baselineRef)) {
+    throw new Error('COVERAGE_BASE_REF must be a hexadecimal commit ID.');
+  }
+  try {
+    return JSON.parse(
+      execFileSync('git', ['show', `${baselineRef}:docs/testing/critical-path-coverage.json`], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 async function main(repoRoot = process.cwd()) {
@@ -98,7 +222,13 @@ async function main(repoRoot = process.cwd()) {
   const configs = Object.fromEntries(
     EXPECTED_PACKAGES.map((packageId, index) => [packageId, configTexts[index]])
   );
-  const errors = validateCoveragePolicy({ policy, packageJson, workflow, configs });
+  const errors = validateCoveragePolicy({
+    policy,
+    baselinePolicy: readBaselinePolicy(repoRoot),
+    packageJson,
+    workflow,
+    configs,
+  });
 
   if (errors.length > 0) {
     throw new Error(`Coverage policy check failed:\n- ${errors.join('\n- ')}`);

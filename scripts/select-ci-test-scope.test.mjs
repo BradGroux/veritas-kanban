@@ -68,6 +68,19 @@ test('selects coverage only for changed critical boundaries and all packages for
   assert.deepEqual(coverageWorkspaces(files, 'full'), ['server', 'web', 'cli', 'mcp', 'desktop']);
 });
 
+test('reruns coverage when governed tests, schemas, or shared permissions change', () => {
+  assert.deepEqual(
+    coverageWorkspaces([
+      'server/src/__tests__/provider-completion-service.test.ts',
+      'server/src/schemas/auth-schemas.ts',
+      'shared/src/utils/api-permissions.ts',
+      'web/src/__tests__/useWebSocket.test.ts',
+      'mcp/src/__tests__/task-tools.test.ts',
+    ]),
+    ['server', 'web', 'mcp']
+  );
+});
+
 test('ci:full overrides a documentation-only pull request', () => {
   const result = classifyCiTestScope({
     eventName: 'pull_request',

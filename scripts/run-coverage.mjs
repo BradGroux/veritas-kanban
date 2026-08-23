@@ -1,60 +1,19 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGE_DEFINITIONS = [
-  {
-    id: 'server',
-    filter: '@veritas-kanban/server',
-    maxWorkers: 2,
-    extraArgs: ['--hookTimeout=20000', '--testTimeout=30000'],
-    testFilters: [
-      'provider',
-      'workflow-run-service',
-      'workflow-step-executor',
-      'run-launch-manifest',
-      'run-recovery-policy',
-      'run-supervisor',
-      'admission-control',
-      'credential-broker',
-      'filesystem-sandbox',
-      'middleware/auth',
-      'routes/auth',
-      'routes/admin-governance-auth',
-      'enforcement',
-      'schemas',
-      'log-redaction',
-      'codex-env',
-      'path-audit',
-      'storage/',
-      'routes/sqlite-journal-maintenance',
-      'sqlite-journal-ownership-policy',
-      'sqlite-maintenance-bootstrap',
-      'sqlite-portability-service',
-      'task-service-sqlite',
-    ],
-  },
-  {
-    id: 'web',
-    filter: '@veritas-kanban/web',
-    extraArgs: ['--testTimeout=15000'],
-    testFilters: [
-      'api',
-      'auth',
-      'identity',
-      'useWebSocket',
-      'use-task-sync',
-      'useTasks',
-      'Backlog',
-      'realtime',
-    ],
-  },
-  { id: 'cli', filter: '@veritas-kanban/cli' },
-  { id: 'mcp', filter: '@veritas-kanban/mcp' },
-  { id: 'desktop', filter: '@veritas-kanban/desktop' },
+const POLICY_PATH = 'docs/testing/critical-path-coverage.json';
+const SMOKE_ENV_KEYS = [
+  'HERMES_SMOKE_TEST',
+  'VERITAS_CLAUDE_CODE_SMOKE',
+  'VERITAS_CODEX_APP_SERVER_SMOKE',
+  'VERITAS_RUN_NATIVE_SANDBOX_SMOKE',
+  'VK_MCP_INTEGRATION_TEST',
 ];
 
-export function parsePackageSelection(args) {
+export function parsePackageSelection(args, available) {
   const valueIndex = args.findIndex((arg) => arg === '--packages');
   const inline = args.find((arg) => arg.startsWith('--packages='));
   const raw =
@@ -68,8 +27,8 @@ export function parsePackageSelection(args) {
             .filter(Boolean)
         ),
       ]
-    : PACKAGE_DEFINITIONS.map(({ id }) => id);
-  const known = new Set(PACKAGE_DEFINITIONS.map(({ id }) => id));
+    : [...available];
+  const known = new Set(available);
   const unknown = selected.filter((id) => !known.has(id));
 
   if (unknown.length > 0) {
@@ -82,30 +41,42 @@ export function parsePackageSelection(args) {
   return selected;
 }
 
-export function coverageCommands(selected) {
+export function coverageCommands(policy, selected) {
   const commands = [['--filter', '@veritas-kanban/shared', 'build']];
 
-  for (const definition of PACKAGE_DEFINITIONS) {
+  for (const definition of policy.packages) {
     if (!selected.includes(definition.id)) continue;
+    const runner = definition.runner ?? {};
     commands.push([
       '--filter',
-      definition.filter,
+      `@veritas-kanban/${definition.id}`,
       'exec',
       'vitest',
       'run',
       '--coverage',
-      `--maxWorkers=${definition.maxWorkers ?? 4}`,
+      `--maxWorkers=${runner.maxWorkers ?? 4}`,
       '--reporter=dot',
       '--coverage.reporter=json-summary',
       '--coverage.reporter=html',
       '--coverage.reporter=text-summary',
       `--coverage.reportsDirectory=../coverage/${definition.id}`,
-      ...(definition.extraArgs ?? []),
-      ...(definition.testFilters ?? []),
+      ...(runner.extraArgs ?? []),
+      ...(runner.testFiles ?? []),
     ]);
   }
 
   return commands;
+}
+
+export function coverageEnvironment(environment = process.env) {
+  const sanitized = { ...environment };
+  for (const key of SMOKE_ENV_KEYS) delete sanitized[key];
+  return {
+    ...sanitized,
+    LOG_LEVEL: 'silent',
+    NODE_ENV: 'test',
+    VERITAS_DISABLE_WATCHERS: '1',
+  };
 }
 
 function run(command, args, env = process.env) {
@@ -122,15 +93,15 @@ function run(command, args, env = process.env) {
 }
 
 async function main() {
-  const selected = parsePackageSelection(process.argv.slice(2));
-  const env = {
-    ...process.env,
-    LOG_LEVEL: 'silent',
-    NODE_ENV: 'test',
-    VERITAS_DISABLE_WATCHERS: '1',
-  };
+  const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+  const policy = JSON.parse(await readFile(path.join(repoRoot, POLICY_PATH), 'utf8'));
+  const selected = parsePackageSelection(
+    process.argv.slice(2),
+    policy.packages.map(({ id }) => id)
+  );
+  const env = coverageEnvironment();
 
-  for (const args of coverageCommands(selected)) run('pnpm', args, env);
+  for (const args of coverageCommands(policy, selected)) run('pnpm', args, env);
   run('node', ['scripts/check-coverage-ratchets.mjs', '--packages', selected.join(',')], env);
 }
 

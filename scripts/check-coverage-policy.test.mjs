@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateCoveragePolicy } from './check-coverage-policy.mjs';
+import { compareCoveragePolicy, validateCoveragePolicy } from './check-coverage-policy.mjs';
 
 const packages = ['server', 'web', 'cli', 'mcp', 'desktop'].map((id) => ({
   id,
   report: `coverage/${id}/coverage-summary.json`,
+  ...(id === 'server' || id === 'web'
+    ? { runner: { testFiles: ['src/__tests__/critical.test.ts'] } }
+    : {}),
   boundaries: [
     {
       id: 'critical',
@@ -27,7 +30,7 @@ const valid = {
     devDependencies: { '@vitest/coverage-v8': '^4.1.11' },
   },
   workflow:
-    'critical-path-coverage:\nneeds.select-tests.outputs.coverage_packages\npnpm test:coverage --packages\nactions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+    'critical-path-coverage:\nneeds.select-tests.outputs.coverage_packages\npnpm test:coverage --packages\nCOVERAGE_BASE_REF:\nif: always() && needs.select-tests.outputs.coverage_packages\nactions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
   configs: Object.fromEntries(
     ['server', 'web', 'cli', 'mcp', 'desktop'].map((id) => [
       id,
@@ -54,4 +57,37 @@ test('requires the command, CI artifact, and all workspace configs', () => {
   assert.match(errors, /documented test:coverage command/);
   assert.match(errors, /CI must define/);
   assert.match(errors, /web coverage must use V8/);
+});
+
+test('rejects lowered floors, removed boundaries, and narrowed governed scope', () => {
+  const baseline = globalThis.structuredClone(valid.policy);
+  const lowered = globalThis.structuredClone(valid.policy);
+  lowered.packages[0].boundaries[0].thresholds.lines = 49;
+  lowered.packages[0].boundaries[0].include = [];
+  lowered.packages[1].boundaries = [];
+
+  const errors = compareCoveragePolicy(lowered, baseline).join('\n');
+  assert.match(errors, /server\/critical lines threshold cannot decrease/);
+  assert.match(errors, /cannot remove governed include pattern/);
+  assert.match(errors, /coverage boundary web\/critical cannot be removed/);
+});
+
+test('requires exact, tracked, short-lived coverage exceptions', () => {
+  const invalid = globalThis.structuredClone(valid);
+  invalid.policy.packages[0].boundaries[0].exceptions = [
+    {
+      path: 'server/src/**',
+      reason: 'short',
+      owner: 'not a login!',
+      trackingIssue: 'later',
+      reviewBy: 'never',
+    },
+  ];
+  const errors = validateCoveragePolicy({ ...invalid, today: '2026-08-23' }).join('\n');
+
+  assert.match(errors, /one exact repository-relative file/);
+  assert.match(errors, /at least 20 characters/);
+  assert.match(errors, /GitHub login/);
+  assert.match(errors, /tracking issue/);
+  assert.match(errors, /real YYYY-MM-DD date/);
 });

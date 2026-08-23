@@ -7,10 +7,12 @@ export default defineConfig({
     globals: true,
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      allowExternal: true,
+      include: ['src/**/*.ts', '../shared/src/utils/api-permissions.ts'],
       exclude: [
         'src/**/*.test.ts',
         'src/**/*.d.ts',
+        '../shared/src/**/*.d.ts',
         'src/__tests__/**',
         'src/scripts/**',
         'src/storage/sqlite/test-helpers.ts',

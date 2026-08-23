@@ -77,7 +77,8 @@ test('requires bounded reviewed exceptions and omits active exceptions', () => {
       path: 'server/src/middleware/legacy.ts',
       reason: 'Legacy adapter awaiting removal.',
       owner: 'BradGroux',
-      reviewBy: '2026-12-31',
+      trackingIssue: '#1169',
+      reviewBy: '2026-09-30',
     },
   ];
   const evaluation = evaluateCoverage(
@@ -93,8 +94,47 @@ test('requires bounded reviewed exceptions and omits active exceptions', () => {
   assert.deepEqual(evaluation.failures, []);
   assert.deepEqual(evaluation.results[0].files, ['server/src/middleware/auth.ts']);
 
-  withException.packages[0].boundaries[0].exceptions[0].reviewBy = '2026-08-22';
-  assert.throws(() => evaluateCoverage(withException, { server: {} }, '2026-08-23'), /expired/);
+  withException.packages[0].boundaries[0].exceptions[0].reviewBy = 'never';
+  assert.throws(
+    () => evaluateCoverage(withException, { server: {} }, '2026-08-23'),
+    /review date is invalid/
+  );
+});
+
+test('rejects a changed critical file without covered executable lines', () => {
+  const uncovered = evaluateCoverage(
+    policy,
+    {
+      server: {
+        'server/src/middleware/auth.ts': fileCoverage(3, 4),
+        'server/src/middleware/new-auth.ts': fileCoverage(0, 4),
+      },
+    },
+    '2026-08-23',
+    ['server/src/middleware/new-auth.ts']
+  );
+  assert.ok(
+    uncovered.failures.includes(
+      'server/auth changed critical file server/src/middleware/new-auth.ts has no covered lines'
+    )
+  );
+});
+
+test('rejects broad and untracked exceptions', () => {
+  const invalid = globalThis.structuredClone(policy);
+  invalid.packages[0].boundaries[0].exceptions = [
+    {
+      path: 'server/src/middleware/**',
+      reason: 'This reason is long enough for review.',
+      owner: 'BradGroux',
+      trackingIssue: '#1169',
+      reviewBy: '2026-09-01',
+    },
+  ];
+  assert.throws(
+    () => evaluateCoverage(invalid, { server: {} }, '2026-08-23'),
+    /one exact repository-relative file/
+  );
 });
 
 test('validates selected coverage packages', () => {

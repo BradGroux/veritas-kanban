@@ -159,8 +159,36 @@ jobs:
                 printf '{}'
               fi
             )"
+            coverage_check_id="$(
+              jq -r '
+                [
+                  .check_runs[] |
+                  select(
+                    .name == "Critical Path Coverage" and
+                    .status == "completed" and
+                    .conclusion == "success" and
+                    .app.slug == "github-actions"
+                  )
+                ] |
+                sort_by(.completed_at) |
+                last |
+                .id // empty
+              ' <<<"$check_runs"
+            )"
+            coverage_job="$(
+              if [[ -n "$coverage_check_id" ]]; then
+                gh api \
+                  -H 'Accept: application/vnd.github+json' \
+                  "repos/${GITHUB_REPOSITORY}/actions/jobs/${coverage_check_id}" \
+                  2>/dev/null ||
+                  printf '{}'
+              else
+                printf '{}'
+              fi
+            )"
 
-            if node scripts/verify-full-suite-job-evidence.mjs <<<"$full_suite_job"; then
+            if node scripts/verify-full-suite-job-evidence.mjs <<<"$full_suite_job" &&
+              node scripts/verify-full-suite-job-evidence.mjs coverage <<<"$coverage_job"; then
               if git cat-file -e "${reviewed_head}^{commit}" 2>/dev/null ||
                 git fetch --no-tags origin "$reviewed_head"; then
                 if git merge-base --is-ancestor "$reviewed_head" "$GITHUB_SHA"; then
@@ -543,21 +571,24 @@ jobs:
 
       - name: Verify coverage policy
         if: needs.select-tests.outputs.coverage_packages != ''
+        env:
+          COVERAGE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
         run: pnpm check:coverage-policy
 
       - name: Measure and ratchet critical paths
         if: needs.select-tests.outputs.coverage_packages != ''
         env:
           COVERAGE_PACKAGES: ${{ needs.select-tests.outputs.coverage_packages }}
+          COVERAGE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
         run: pnpm test:coverage --packages "$COVERAGE_PACKAGES"
 
       - name: Upload coverage reports
-        if: needs.select-tests.outputs.coverage_packages != ''
+        if: always() && needs.select-tests.outputs.coverage_packages != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: critical-path-coverage-${{ github.sha }}
           path: coverage/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Record coverage skip

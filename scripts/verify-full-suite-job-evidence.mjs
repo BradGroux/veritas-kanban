@@ -7,8 +7,13 @@ const REQUIRED_FULL_SUITE_STEPS = [
   'Run desktop readiness regression tests',
   'Run dual-storage parity tests',
 ];
+const REQUIRED_COVERAGE_STEPS = [
+  'Verify coverage policy',
+  'Measure and ratchet critical paths',
+  'Upload coverage reports',
+];
 
-export function hasSuccessfulFullSuiteEvidence(job) {
+function hasSuccessfulJobEvidence(job, requiredSteps) {
   if (
     !job ||
     typeof job !== 'object' ||
@@ -19,7 +24,7 @@ export function hasSuccessfulFullSuiteEvidence(job) {
     return false;
   }
 
-  return REQUIRED_FULL_SUITE_STEPS.every((requiredName) =>
+  return requiredSteps.every((requiredName) =>
     job.steps.some(
       (step) =>
         step &&
@@ -29,6 +34,14 @@ export function hasSuccessfulFullSuiteEvidence(job) {
         step.conclusion === 'success'
     )
   );
+}
+
+export function hasSuccessfulFullSuiteEvidence(job) {
+  return hasSuccessfulJobEvidence(job, REQUIRED_FULL_SUITE_STEPS);
+}
+
+export function hasSuccessfulCoverageEvidence(job) {
+  return hasSuccessfulJobEvidence(job, REQUIRED_COVERAGE_STEPS);
 }
 
 async function main() {
@@ -45,7 +58,9 @@ async function main() {
     return;
   }
 
-  if (!hasSuccessfulFullSuiteEvidence(job)) {
+  const validator =
+    process.argv[2] === 'coverage' ? hasSuccessfulCoverageEvidence : hasSuccessfulFullSuiteEvidence;
+  if (!validator(job)) {
     process.exitCode = 1;
   }
 }

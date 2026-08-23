@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import path from 'node:path';
+import path, { matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const WORKSPACE_NAMES = ['server', 'web', 'cli', 'mcp', 'desktop'];
+const COVERAGE_POLICY = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL('../docs/testing/critical-path-coverage.json', import.meta.url)),
+    'utf8'
+  )
+);
+const WORKSPACE_NAMES = COVERAGE_POLICY.packages.map(({ id }) => id);
 
 const FULL_SUITE_PATH_PATTERNS = [
   /^\.github\/workflows\//,
@@ -25,32 +32,18 @@ const ALL_WORKSPACE_PATH_PATTERNS = [
   /^tsconfig(?:\.[^/]+)?\.json$/,
 ];
 
-const CRITICAL_COVERAGE_PATH_PATTERNS = {
-  server: [
-    /^server\/src\/middleware\//,
-    /^server\/src\/storage\//,
-    /^server\/src\/config\/security\.ts$/,
-    /^server\/src\/lib\/redact\.ts$/,
-    /^server\/src\/utils\/(?:codex-env|hermes-env|paths|sanitize)\.ts$/,
-    /^server\/src\/services\/(?:.*provider.*|clawdbot-agent-service|workflow-run-service|workflow-step-executor|run-launch-manifest-service|run-recovery-policy-service|run-supervisor-service)\.ts$/,
-  ],
-  web: [
-    /^web\/src\/lib\/api\//,
-    /^web\/src\/lib\/(?:client-policy|sanitize)\.ts$/,
-    /^web\/src\/hooks\/use(?:Auth|Identity|WebSocket|TaskSync|Tasks|Backlog)\.tsx?$/,
-    /^web\/src\/contexts\/WebSocketContext\.tsx$/,
-  ],
-  cli: [
-    /^cli\/src\/utils\/api\.ts$/,
-    /^cli\/src\/commands\/(?:agents|admission|tasks|sqlite|doctor)\.ts$/,
-  ],
-  mcp: [/^mcp\/src\/utils\/api\.ts$/, /^mcp\/src\/tools\//],
-  desktop: [
-    /^desktop\/src\/preload\/index\.ts$/,
-    /^desktop\/src\/shared\/desktop-bridge-contracts\.ts$/,
-    /^desktop\/src\/main\/(?:bridge|navigation|secrets|updates|process-supervisor)\.ts$/,
-  ],
-};
+const CRITICAL_COVERAGE_PATHS = Object.fromEntries(
+  COVERAGE_POLICY.packages.map((packagePolicy) => [
+    packagePolicy.id,
+    [
+      ...packagePolicy.boundaries.flatMap(({ include }) => include),
+      ...(packagePolicy.runner?.testFiles ?? []).map(
+        (testFile) => `${packagePolicy.id}/${testFile}`
+      ),
+      ...(packagePolicy.runner?.triggerPatterns ?? []),
+    ],
+  ])
+);
 
 const DOCUMENTATION_PATH_PATTERNS = [
   /\.md$/i,
@@ -109,7 +102,7 @@ export function coverageWorkspaces(files, scope = 'focused') {
 
   return WORKSPACE_NAMES.filter((workspace) =>
     files.some((file) =>
-      CRITICAL_COVERAGE_PATH_PATTERNS[workspace].some((pattern) => pattern.test(file))
+      CRITICAL_COVERAGE_PATHS[workspace].some((pattern) => matchesGlob(file, pattern))
     )
   );
 }
@@ -165,7 +158,7 @@ export function classifyCiTestScope({
       scope: 'none',
       packages: [],
       files,
-      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and ${evidence}.`,
+      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and Critical Path Coverage, and ${evidence}.`,
     };
   }
 

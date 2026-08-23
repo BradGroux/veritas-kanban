@@ -1,10 +1,16 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path, { matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const METRICS = ['lines', 'branches', 'functions', 'statements'];
 const POLICY_PATH = 'docs/testing/critical-path-coverage.json';
+const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const TRACKING_ISSUE_PATTERN = /^#\d+$/;
+const GLOB_PATTERN = /[*?[\]{}!]/;
 
 function roundPercent(covered, total) {
   if (total === 0) return 100;
@@ -45,11 +51,41 @@ export function normalizeCoverageSummary(summary, repoRoot) {
 }
 
 function validateException(exception, today) {
-  if (!exception.path || !exception.reason || !exception.owner || !exception.reviewBy) {
-    throw new Error('Coverage exceptions require path, reason, owner, and reviewBy.');
+  const normalized = path.posix.normalize(exception.path ?? '');
+  if (
+    !exception.path ||
+    normalized !== exception.path ||
+    normalized.startsWith('../') ||
+    path.posix.isAbsolute(normalized) ||
+    GLOB_PATTERN.test(normalized)
+  ) {
+    throw new Error('Coverage exception path must be one exact repository-relative file.');
   }
-  if (exception.reviewBy < today) {
-    throw new Error(`Coverage exception expired for ${exception.path} on ${exception.reviewBy}.`);
+  if (typeof exception.reason !== 'string' || exception.reason.trim().length < 20) {
+    throw new Error(`Coverage exception reason is too short for ${exception.path}.`);
+  }
+  if (!GITHUB_LOGIN_PATTERN.test(exception.owner ?? '')) {
+    throw new Error(`Coverage exception owner is invalid for ${exception.path}.`);
+  }
+  if (!TRACKING_ISSUE_PATTERN.test(exception.trackingIssue ?? '')) {
+    throw new Error(`Coverage exception tracking issue is invalid for ${exception.path}.`);
+  }
+  if (!ISO_DATE_PATTERN.test(exception.reviewBy ?? '')) {
+    throw new Error(`Coverage exception review date is invalid for ${exception.path}.`);
+  }
+  const reviewDate = new Date(`${exception.reviewBy}T00:00:00.000Z`);
+  if (
+    Number.isNaN(reviewDate.valueOf()) ||
+    reviewDate.toISOString().slice(0, 10) !== exception.reviewBy
+  ) {
+    throw new Error(`Coverage exception review date is invalid for ${exception.path}.`);
+  }
+  const maximum = new Date(`${today}T00:00:00.000Z`);
+  maximum.setUTCDate(maximum.getUTCDate() + 90);
+  if (exception.reviewBy < today || exception.reviewBy > maximum.toISOString().slice(0, 10)) {
+    throw new Error(
+      `Coverage exception for ${exception.path} must be reviewed within the next 90 days.`
+    );
   }
 }
 
@@ -63,7 +99,12 @@ function aggregate(entries) {
   );
 }
 
-export function evaluateCoverage(policy, summaries, today = new Date().toISOString().slice(0, 10)) {
+export function evaluateCoverage(
+  policy,
+  summaries,
+  today = new Date().toISOString().slice(0, 10),
+  changedFiles = []
+) {
   if (policy.schemaVersion !== 'critical-path-coverage/v1') {
     throw new Error(`Unsupported coverage policy schema: ${policy.schemaVersion}`);
   }
@@ -100,6 +141,22 @@ export function evaluateCoverage(policy, summaries, today = new Date().toISOStri
         );
       }
 
+      for (const changedFile of changedFiles) {
+        const included = boundary.include.some((pattern) => matchesGlob(changedFile, pattern));
+        const excepted = exceptions.some((exception) => exception.path === changedFile);
+        if (!included || excepted) continue;
+        const fileCoverage = summary[changedFile];
+        if (!fileCoverage || fileCoverage.lines.total === 0) {
+          failures.push(
+            `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no executable coverage entry`
+          );
+        } else if (fileCoverage.lines.covered === 0) {
+          failures.push(
+            `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no covered lines`
+          );
+        }
+      }
+
       results.push({
         package: packagePolicy.id,
         boundary: boundary.id,
@@ -113,6 +170,24 @@ export function evaluateCoverage(policy, summaries, today = new Date().toISOStri
   }
 
   return { results, failures };
+}
+
+export function changedFilesFromBase(repoRoot, baselineRef) {
+  if (!baselineRef) return [];
+  if (!COMMIT_SHA_PATTERN.test(baselineRef)) {
+    throw new Error('COVERAGE_BASE_REF must be a hexadecimal commit ID.');
+  }
+  return execFileSync(
+    'git',
+    ['diff', '--name-only', '--diff-filter=ACMR', `${baselineRef}...HEAD`],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    }
+  )
+    .split('\n')
+    .map((file) => file.trim())
+    .filter(Boolean);
 }
 
 export function markdownSummary(evaluation, longTermTarget) {
@@ -153,7 +228,8 @@ export async function runCoverageRatchets({
     summaries[packagePolicy.id] = normalizeCoverageSummary(summary, repoRoot);
   }
 
-  const evaluation = evaluateCoverage(policy, summaries);
+  const changedFiles = changedFilesFromBase(repoRoot, process.env.COVERAGE_BASE_REF);
+  const evaluation = evaluateCoverage(policy, summaries, undefined, changedFiles);
   const machineReport = {
     schemaVersion: 'critical-path-coverage-report/v1',
     longTermTarget: policy.longTermTarget,

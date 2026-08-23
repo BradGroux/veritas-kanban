@@ -3,7 +3,10 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { hasSuccessfulFullSuiteEvidence } from './verify-full-suite-job-evidence.mjs';
+import {
+  hasSuccessfulCoverageEvidence,
+  hasSuccessfulFullSuiteEvidence,
+} from './verify-full-suite-job-evidence.mjs';
 
 const scriptPath = fileURLToPath(new URL('./verify-full-suite-job-evidence.mjs', import.meta.url));
 
@@ -66,4 +69,26 @@ test('command-line entrypoint validates piped GitHub job JSON', () => {
     encoding: 'utf8',
   });
   assert.equal(rejected.status, 1, rejected.stderr);
+});
+
+test('requires successful policy, ratchet, and artifact steps for coverage evidence', () => {
+  const coverageJob = job({
+    steps: [
+      { name: 'Verify coverage policy', status: 'completed', conclusion: 'success' },
+      { name: 'Measure and ratchet critical paths', status: 'completed', conclusion: 'success' },
+      { name: 'Upload coverage reports', status: 'completed', conclusion: 'success' },
+    ],
+  });
+  assert.equal(hasSuccessfulCoverageEvidence(coverageJob), true);
+  coverageJob.steps[2].conclusion = 'skipped';
+  assert.equal(hasSuccessfulCoverageEvidence(coverageJob), false);
+
+  const accepted = spawnSync(process.execPath, [scriptPath, 'coverage'], {
+    input: JSON.stringify({
+      ...coverageJob,
+      steps: coverageJob.steps.map((step) => ({ ...step, conclusion: 'success' })),
+    }),
+    encoding: 'utf8',
+  });
+  assert.equal(accepted.status, 0, accepted.stderr);
 });
