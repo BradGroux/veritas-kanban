@@ -10,7 +10,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteScheduledDeliverablesRepository } from '../storage/sqlite/scheduled-deliverables-repository.js';
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+import { getRuntimeDir } from '../utils/paths.js';
+const DATA_DIR = getRuntimeDir();
 
 const log = createLogger('deliverables');
 

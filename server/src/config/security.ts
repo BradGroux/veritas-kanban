@@ -8,35 +8,33 @@ import {
 import path from 'path';
 import crypto from 'crypto';
 import { createLogger } from '../lib/logger.js';
-import { getRuntimeDir } from '../utils/paths.js';
+import { getLegacyRuntimeDirs, getRuntimeDir } from '../utils/paths.js';
 const log = createLogger('security');
 
 // Security config file location
 const RUNTIME_DIR = getRuntimeDir();
 const SECURITY_CONFIG_PATH = path.join(RUNTIME_DIR, 'security.json');
-// Legacy path: security.ts originally only checked VERITAS_DATA_DIR (not DATA_DIR),
-// so we preserve that for migration detection. Other services checked DATA_DIR instead.
-const LEGACY_DATA_DIR = process.env.VERITAS_DATA_DIR || path.join(process.cwd(), '.veritas-kanban');
-const LEGACY_SECURITY_CONFIG_PATH = path.join(LEGACY_DATA_DIR, 'security.json');
+const LEGACY_SECURITY_CONFIG_PATHS = getLegacyRuntimeDirs().map((dir) =>
+  path.join(dir, 'security.json')
+);
 let migrationChecked = false;
 
 function migrateSecurityConfig(): void {
   if (migrationChecked) return;
   migrationChecked = true;
 
-  if (LEGACY_SECURITY_CONFIG_PATH === SECURITY_CONFIG_PATH) return;
-
-  if (existsSync(LEGACY_SECURITY_CONFIG_PATH) && !existsSync(SECURITY_CONFIG_PATH)) {
+  for (const legacySecurityConfigPath of LEGACY_SECURITY_CONFIG_PATHS) {
+    if (!existsSync(legacySecurityConfigPath) || existsSync(SECURITY_CONFIG_PATH)) continue;
     try {
       if (!existsSync(RUNTIME_DIR)) {
         mkdirSync(RUNTIME_DIR, { recursive: true });
       }
 
-      const data = readFileSync(LEGACY_SECURITY_CONFIG_PATH, 'utf-8');
+      const data = readFileSync(legacySecurityConfigPath, 'utf-8');
       writeFileSync(SECURITY_CONFIG_PATH, data, 'utf-8');
       log.info(
         {
-          from: LEGACY_SECURITY_CONFIG_PATH,
+          from: legacySecurityConfigPath,
           to: SECURITY_CONFIG_PATH,
         },
         'Migrated security.json to the runtime data directory'

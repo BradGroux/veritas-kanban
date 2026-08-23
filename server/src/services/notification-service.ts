@@ -11,8 +11,9 @@ import * as path from 'node:path';
 import { withFileLock } from './file-lock.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteNotificationRepository } from '../storage/sqlite/notification-repository.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+const DATA_DIR = getRuntimeDir();
 
 const log = createLogger('notifications');
 

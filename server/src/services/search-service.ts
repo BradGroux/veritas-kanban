@@ -12,6 +12,7 @@ import { getTelemetryService, TelemetryService } from './telemetry-service.js';
 import { getWorkProductService, WorkProductService } from './work-product-service.js';
 import { getWorkflowService, WorkflowService } from './workflow-service.js';
 import { getWorkflowRunService, WorkflowRunService } from './workflow-run-service.js';
+import { getStorageRoot } from '../utils/paths.js';
 
 const log = createLogger('search-service');
 
@@ -90,7 +91,6 @@ interface ScoreDetails {
   recencyBoost: number;
 }
 
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const DEFAULT_COLLECTIONS: SearchCollection[] = [...SEARCH_COLLECTIONS];
 const QMD_COLLECTIONS = new Set<SearchCollection>(['tasks-active', 'tasks-archive', 'docs']);
 const MAX_LIMIT = 50;
@@ -1396,9 +1396,8 @@ class SearchService {
   }
 
   private projectRoot(): string {
-    const configured =
-      process.env.VERITAS_SEARCH_ROOT || process.env.DATA_DIR || process.env.VERITAS_DATA_DIR;
-    return configured ? path.resolve(configured) : PROJECT_ROOT;
+    const configured = process.env.VERITAS_SEARCH_ROOT;
+    return configured ? path.resolve(configured) : getStorageRoot();
   }
 
   private runtimeDir(): string {

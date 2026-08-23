@@ -1,7 +1,7 @@
-import { resolve } from 'path';
 import type { TaskTypeConfig } from '@veritas-kanban/shared';
 import { ManagedListService } from './managed-list-service.js';
 import { TaskService } from './task-service.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const DEFAULT_TASK_TYPES: TaskTypeConfig[] = [
   {
@@ -50,8 +50,8 @@ export class TaskTypeService extends ManagedListService<TaskTypeConfig> {
   private taskService: TaskService;
 
   constructor(taskService: TaskService) {
-    const configDir = resolve(process.cwd(), '..', '.veritas-kanban');
-    
+    const configDir = getRuntimeDir();
+
     super({
       filename: 'task-types.json',
       configDir,

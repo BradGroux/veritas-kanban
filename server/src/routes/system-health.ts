@@ -11,10 +11,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import fs from 'fs/promises';
-import path from 'path';
 import { createLogger } from '../lib/logger.js';
 import { getAgentRegistryService } from '../services/agent-registry-service.js';
 import { getMetricsService } from '../services/metrics/index.js';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('system-health');
 
@@ -55,13 +55,8 @@ interface SystemHealthResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function getDataDir(): string {
-  const dataDir = process.env.DATA_DIR || '.veritas-kanban';
-  return path.resolve(process.cwd(), dataDir);
-}
-
 async function checkStorage(): Promise<boolean> {
-  const dataDir = getDataDir();
+  const dataDir = getRuntimeDir();
   try {
     await fs.access(dataDir, fs.constants.R_OK | fs.constants.W_OK);
     return true;
@@ -71,7 +66,7 @@ async function checkStorage(): Promise<boolean> {
 }
 
 async function checkDisk(): Promise<boolean> {
-  const dataDir = getDataDir();
+  const dataDir = getRuntimeDir();
   try {
     const stats = await fs.statfs(dataDir);
     const freeBytes = stats.bfree * stats.bsize;

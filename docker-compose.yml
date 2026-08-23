@@ -18,7 +18,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: veritas-kanban-demo
-    # IMPORTANT: Must match Dockerfile WORKDIR (/app/server) for correct path resolution
+    # Kept aligned with the image entrypoint; persistent paths resolve from DATA_DIR.
     working_dir: /app/server
     ports:
       # Demo instance port (do NOT use production 3001)

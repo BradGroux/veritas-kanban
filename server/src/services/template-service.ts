@@ -12,6 +12,7 @@ import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import type { TemplateRepository } from '../storage/interfaces.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteTemplateRepository } from '../storage/sqlite/template-repository.js';
+import { getTemplatesDir } from '../utils/paths.js';
 const log = createLogger('template-service');
 
 export interface TemplateServiceOptions {
@@ -27,7 +28,7 @@ export class TemplateService {
   private sqliteDatabase: SqliteDatabase | null = null;
 
   constructor(options: TemplateServiceOptions = {}) {
-    this.templatesDir = options.templatesDir || join(process.cwd(), '.veritas-kanban', 'templates');
+    this.templatesDir = options.templatesDir || getTemplatesDir();
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 

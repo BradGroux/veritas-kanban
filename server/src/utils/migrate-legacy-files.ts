@@ -10,22 +10,15 @@ const log = createLogger('legacy-migration');
  * Never deletes source files.
  */
 export async function migrateLegacyFiles(
-  legacyDir: string,
+  legacyDir: string | readonly string[],
   currentDir: string,
   fileNames: string[],
   serviceName: string
 ): Promise<void> {
-  if (legacyDir === currentDir) return;
+  const legacyDirs = Array.isArray(legacyDir) ? legacyDir : [legacyDir];
 
   for (const fileName of fileNames) {
-    const from = path.join(legacyDir, fileName);
     const to = path.join(currentDir, fileName);
-
-    try {
-      await fs.access(from);
-    } catch {
-      continue;
-    }
 
     try {
       await fs.access(to);
@@ -34,13 +27,26 @@ export async function migrateLegacyFiles(
       // destination missing; proceed
     }
 
-    try {
-      await fs.mkdir(path.dirname(to), { recursive: true });
-      const data = await fs.readFile(from, 'utf-8');
-      await fs.writeFile(to, data);
-      log.info({ from, to }, `Migrated ${serviceName} data to runtime directory`);
-    } catch (err) {
-      log.warn({ err, from }, `Failed to migrate ${serviceName} data`);
+    for (const candidate of legacyDirs) {
+      if (candidate === currentDir) continue;
+      const from = path.join(candidate, fileName);
+
+      try {
+        const sourceStats = await fs.lstat(from);
+        if (!sourceStats.isFile() || sourceStats.isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
+
+      try {
+        await fs.mkdir(path.dirname(to), { recursive: true });
+        await fs.copyFile(from, to, fs.constants.COPYFILE_EXCL);
+        log.info({ from, to }, `Migrated ${serviceName} data to runtime directory`);
+        break;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'EEXIST') break;
+        log.warn({ err, from }, `Failed to migrate ${serviceName} data`);
+      }
     }
   }
 }

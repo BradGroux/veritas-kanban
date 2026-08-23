@@ -4,8 +4,8 @@
  * process.cwd() or PROJECT_ROOT; they must use the centralized helpers
  * in server/src/utils/paths.ts.
  *
- * The KNOWN_VIOLATIONS set tracks pre-existing issues (tracked in issue #774
- * for follow-up cleanup).  New violations added after this PR will fail the test.
+ * Legacy-path construction is permitted only in the centralized path and
+ * migration helpers. Services and routes must use those helpers.
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
@@ -21,13 +21,14 @@ const SERVICE_DIR = path.join(SRC_DIR, 'services');
 const ROUTE_DIR = path.join(SRC_DIR, 'routes');
 
 /**
- * Returns all TypeScript files in a directory (non-recursive).
+ * Returns all TypeScript files in a directory recursively.
  */
 function tsFiles(dir: string): string[] {
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
-    .map((f) => path.join(dir, f));
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return tsFiles(entryPath);
+    return entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts') ? [entryPath] : [];
+  });
 }
 
 /**
@@ -38,43 +39,18 @@ const FORBIDDEN_PATTERNS = [
   /join\(\s*process\.cwd\(\)[^)]*,\s*['"]\.veritas-kanban['"]/,
   /PROJECT_ROOT[^;]*\.veritas-kanban/,
   /path\.resolve\(\s*process\.cwd\(\)[^)]*,\s*['"]\.{0,2}\.veritas-kanban['"]/,
+  /process\.env\.(?:DATA_DIR|VERITAS_DATA_DIR)/,
 ];
 
 /**
  * Files allowed to reference .veritas-kanban directly (centralized helper
  * itself, one-time migration helpers that intentionally build the legacy path).
  */
-const ALLOWED_FILES = new Set(['paths.ts', 'migration-service.ts']);
-
-/**
- * Pre-existing violations tracked in issue #774.
- * Do NOT add new entries here — fix the file instead.
- * Files listed here will be skipped by this test to avoid blocking unrelated work.
- */
-const KNOWN_VIOLATION_FILES = new Set([
-  'agent-permission-service.ts',
-  'agent-registry-service.ts', // legacy migration path (intentional)
-  'broadcast-storage-service.ts',
-  'delegation-service.ts',
-  'docs-service.ts',
-  'error-learning-service.ts',
-  'github-sync-service.ts',
-  'lifecycle-hooks-service.ts',
-  'notification-service.ts',
-  'pdf-report-service.ts',
-  'progress-service.ts',
-  'prompt-registry-service.ts',
-  'scheduled-deliverables-service.ts',
-  'status-history-service.ts',
-  'template-service.ts',
-  'transition-hooks-service.ts',
-  'work-product-service.ts',
-  'worktree-service.ts',
-]);
+const ALLOWED_FILES = new Set<string>();
 
 function fileContainsForbiddenPattern(filePath: string): string[] {
   const name = path.basename(filePath);
-  if (ALLOWED_FILES.has(name) || KNOWN_VIOLATION_FILES.has(name)) return [];
+  if (ALLOWED_FILES.has(name)) return [];
 
   const content = fs.readFileSync(filePath, 'utf-8');
   const hits: string[] = [];
@@ -100,9 +76,9 @@ describe('Path audit — no hardcoded .veritas-kanban paths (issue #774)', () =>
 
     if (violations.length > 0) {
       throw new Error(
-        `New hardcoded .veritas-kanban paths found — use getRuntimeDir() from utils/paths.ts:\n` +
+        `Hardcoded .veritas-kanban paths found — use getRuntimeDir() from utils/paths.ts:\n` +
           violations.map((v) => `  - ${v}`).join('\n') +
-          '\n\nTo add this to KNOWN_VIOLATION_FILES, file a follow-up issue first.'
+          '\n\nLegacy path construction belongs in the centralized migration helper.'
       );
     }
 
@@ -121,9 +97,9 @@ describe('Path audit — no hardcoded .veritas-kanban paths (issue #774)', () =>
 
     if (violations.length > 0) {
       throw new Error(
-        `New hardcoded .veritas-kanban paths found — use getRuntimeDir() from utils/paths.ts:\n` +
+        `Hardcoded .veritas-kanban paths found — use getRuntimeDir() from utils/paths.ts:\n` +
           violations.map((v) => `  - ${v}`).join('\n') +
-          '\n\nTo add this to KNOWN_VIOLATION_FILES, file a follow-up issue first.'
+          '\n\nLegacy path construction belongs in the centralized migration helper.'
       );
     }
 

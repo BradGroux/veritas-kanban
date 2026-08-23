@@ -10,7 +10,7 @@
 import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+import { getDocsDir } from '../utils/paths.js';
 
 const log = createLogger('docs');
 
@@ -59,10 +59,7 @@ export class DocsService {
   private docsRoot: string;
 
   constructor(docsRoot?: string) {
-    // Default to <storage>/../docs, configurable via VK_DOCS_DIR
-    this.docsRoot = path.resolve(
-      docsRoot || process.env.VK_DOCS_DIR || path.join(DATA_DIR, '..', 'docs')
-    );
+    this.docsRoot = path.resolve(docsRoot || process.env.VK_DOCS_DIR || getDocsDir());
   }
 
   /**

@@ -174,7 +174,9 @@ Thresholds (hardcoded in v4.0):
 
 **Status shows `elevated` with all agents appearing online:** Check the operations signal — `status: critical` also triggers `elevated`. The agent registry shows registered agents, not process health.
 
-**`system.disk: false` immediately after startup:** The data directory path may be wrong. Check the `DATA_DIR` environment variable — it should point to the `.veritas-kanban` data directory.
+**`system.disk: false` immediately after startup:** The storage root may be wrong. Check
+`DATA_DIR` (or `VERITAS_DATA_DIR` when `DATA_DIR` is unset); runtime health checks use its
+`.veritas-kanban` child directory.
 
 **Health endpoint returns 500:** The metrics service or agent registry service failed to initialize. Check the server startup logs.
 

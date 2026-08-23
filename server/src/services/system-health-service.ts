@@ -10,7 +10,6 @@
  * logic is reusable and unit-testable.
  */
 import fs from 'fs/promises';
-import path from 'path';
 import { createLogger } from '../lib/logger.js';
 import { getAgentRegistryService } from './agent-registry-service.js';
 import { getMetricsService } from './metrics/index.js';
@@ -21,19 +20,15 @@ import type {
   AgentSignal,
   OperationsSignal,
 } from '@veritas-kanban/shared';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('system-health-service');
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function getDataDir(): string {
-  const dataDir = process.env.DATA_DIR || '.veritas-kanban';
-  return path.resolve(process.cwd(), dataDir);
-}
-
 async function checkStorage(): Promise<boolean> {
   try {
-    await fs.access(getDataDir(), fs.constants.R_OK | fs.constants.W_OK);
+    await fs.access(getRuntimeDir(), fs.constants.R_OK | fs.constants.W_OK);
     return true;
   } catch {
     return false;
@@ -42,7 +37,7 @@ async function checkStorage(): Promise<boolean> {
 
 async function checkDisk(): Promise<boolean> {
   try {
-    const stats = await fs.statfs(getDataDir());
+    const stats = await fs.statfs(getRuntimeDir());
     const freeBytes = stats.bfree * stats.bsize;
     const MIN_FREE_BYTES = 100 * 1024 * 1024; // 100 MB
     return freeBytes >= MIN_FREE_BYTES;

@@ -12,12 +12,12 @@ import { createLogger } from '../lib/logger.js';
 import { withFileLock } from './file-lock.js';
 import type { DelegationSettings, DelegationScope, TaskPriority } from '@veritas-kanban/shared';
 import type { DelegationApproval, DelegationLog } from '@veritas-kanban/shared';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('delegation');
 
 // Storage paths
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const DELEGATION_DIR = path.join(PROJECT_ROOT, '.veritas-kanban');
+const DELEGATION_DIR = getRuntimeDir();
 const SETTINGS_FILE = path.join(DELEGATION_DIR, 'delegation.json');
 const LOG_FILE = path.join(DELEGATION_DIR, 'delegation-log.json');
 

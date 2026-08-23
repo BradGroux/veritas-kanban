@@ -22,6 +22,7 @@ import type {
   TransitionValidationResult,
 } from '@veritas-kanban/shared';
 import { DEFAULT_TRANSITION_HOOKS_CONFIG } from '@veritas-kanban/shared';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('transition-hooks');
 
@@ -29,8 +30,7 @@ const log = createLogger('transition-hooks');
 // Configuration Storage
 // ---------------------------------------------------------------------------
 
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
-const CONFIG_PATH = path.join(PROJECT_ROOT, '.veritas-kanban', 'transition-hooks.json');
+const CONFIG_PATH = path.join(getRuntimeDir(), 'transition-hooks.json');
 
 let cachedConfig: TransitionHooksConfig | null = null;
 

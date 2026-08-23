@@ -11,11 +11,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
 import { createLogger } from '../lib/logger.js';
-import {
-  authenticate,
-  authorize,
-  type AuthenticatedRequest,
-} from '../middleware/auth.js';
+import { authenticate, authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { getAllStatus as getCircuitBreakerStatus } from '../services/circuit-registry.js';
 import { getDependencyCircuitControlService } from '../services/dependency-circuit-control-service.js';
@@ -26,6 +22,7 @@ import {
 } from '../services/dependency-circuit-runtime.js';
 import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import type { WebSocketServer } from 'ws';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('health');
 const dependencyCircuitKeySchema = z.string().trim().min(1).max(2_000);
@@ -58,21 +55,12 @@ export function setHealthWss(wss: WebSocketServer): void {
 // Helpers
 // ============================================
 
-/**
- * Resolve the data directory path.
- * Reads DATA_DIR from env at call time so tests can override it.
- * If DATA_DIR is relative, resolve against cwd.
- */
-function getDataDir(): string {
-  const dataDir = process.env.DATA_DIR || '.veritas-kanban';
-  return path.resolve(process.cwd(), dataDir);
-}
-
+/** Runtime health checks use the centralized storage-root contract. */
 /**
  * Check that the data directory exists and is writable.
  */
 async function checkStorage(): Promise<'ok' | 'fail'> {
-  const dataDir = getDataDir();
+  const dataDir = getRuntimeDir();
   try {
     await fs.access(dataDir, fs.constants.R_OK | fs.constants.W_OK);
     // Write and remove a temp file to verify actual write access
@@ -106,7 +94,7 @@ async function checkStorageThroughCircuit(): Promise<'ok' | 'fail'> {
  * Uses Node.js fs.statfs (available in Node 18.15+).
  */
 async function checkDisk(): Promise<'ok' | 'fail'> {
-  const dataDir = getDataDir();
+  const dataDir = getRuntimeDir();
   try {
     const stats = await fs.statfs(dataDir);
     const freeBytes = stats.bfree * stats.bsize;
@@ -142,7 +130,7 @@ function checkMemory(): 'ok' | 'warn' {
  * Check that tasks.json is readable and valid JSON.
  */
 async function checkTasksFile(): Promise<'ok' | 'fail'> {
-  const dataDir = getDataDir();
+  const dataDir = getRuntimeDir();
   const tasksPath = path.join(dataDir, 'tasks.json');
   try {
     const content = await fs.readFile(tasksPath, 'utf-8');
@@ -281,7 +269,7 @@ async function buildDeepHealthPayload() {
   const storageStatus = storage === 'fail' || tasksFile === 'fail' ? 'fail' : 'ok';
   const sqlite = getSqliteStorageDiagnostics();
 
-  const dataDir = getDataDir();
+  const dataDir = getRuntimeDir();
   let dataDirSize = 0;
   try {
     dataDirSize = await getDataDirSize(dataDir);
@@ -392,7 +380,10 @@ healthRouter.post(
       res.status(404).json({ error: 'Dependency circuit not found.' });
       return;
     }
-    res.json({ reset: true, circuit: await getDependencyCircuitRegistryService().getSnapshot(key) });
+    res.json({
+      reset: true,
+      circuit: await getDependencyCircuitRegistryService().getSnapshot(key),
+    });
   })
 );
 

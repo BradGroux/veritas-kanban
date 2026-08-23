@@ -1,8 +1,8 @@
-import { resolve } from 'path';
 import type { SprintConfig } from '@veritas-kanban/shared';
 import { ManagedListService } from './managed-list-service.js';
 import { TaskService } from './task-service.js';
 import { createLogger } from '../lib/logger.js';
+import { getRuntimeDir } from '../utils/paths.js';
 const log = createLogger('sprint-service');
 
 export class SprintService extends ManagedListService<SprintConfig> {
@@ -10,7 +10,7 @@ export class SprintService extends ManagedListService<SprintConfig> {
   private seeded = false;
 
   constructor(taskService: TaskService) {
-    const configDir = resolve(process.cwd(), '..', '.veritas-kanban');
+    const configDir = getRuntimeDir();
 
     super({
       filename: 'sprints.json',

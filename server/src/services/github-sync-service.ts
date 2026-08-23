@@ -17,6 +17,7 @@ import { getBreaker } from './circuit-registry.js';
 import { getTaskService, type TaskService } from './task-service.js';
 import { createLogger } from '../lib/logger.js';
 import type { Task, TaskStatus, TaskPriority } from '@veritas-kanban/shared';
+import { getRuntimeDir } from '../utils/paths.js';
 
 const execFileAsync = promisify(execFile);
 const log = createLogger('github-sync');
@@ -64,7 +65,7 @@ interface GhIssue {
 
 // ─── Constants ───────────────────────────────────────────────
 
-const DATA_DIR = join(process.cwd(), '.veritas-kanban');
+const DATA_DIR = getRuntimeDir();
 const INTEGRATIONS_FILE = join(DATA_DIR, 'integrations.json');
 const SYNC_STATE_FILE = join(DATA_DIR, 'github-sync.json');
 

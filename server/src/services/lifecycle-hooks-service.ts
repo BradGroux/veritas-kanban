@@ -17,11 +17,11 @@
 import { createLogger } from '../lib/logger.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { getRuntimeDir } from '../utils/paths.js';
+import { getLegacyRuntimeDirs, getRuntimeDir } from '../utils/paths.js';
 import { migrateLegacyFiles } from '../utils/migrate-legacy-files.js';
 import { getOutboundIntegrationService } from './outbound-integration-service.js';
 const DATA_DIR = getRuntimeDir();
-const LEGACY_DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '..', '.veritas-kanban');
+const LEGACY_DATA_DIRS = getLegacyRuntimeDirs();
 let migrationChecked = false;
 
 const log = createLogger('lifecycle-hooks');
@@ -250,7 +250,7 @@ class LifecycleHooksService {
     if (!migrationChecked) {
       migrationChecked = true;
       await migrateLegacyFiles(
-        LEGACY_DATA_DIR,
+        LEGACY_DATA_DIRS,
         DATA_DIR,
         ['lifecycle-hooks.json', 'hook-executions.json'],
         'lifecycle hook'

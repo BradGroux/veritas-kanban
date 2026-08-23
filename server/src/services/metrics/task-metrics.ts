@@ -5,7 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import type { BlockedCategory } from '@veritas-kanban/shared';
 import { TaskService } from '../task-service.js';
-import { PROJECT_ROOT } from './helpers.js';
+import { getRuntimeDir } from '../../utils/paths.js';
 import type {
   TaskMetrics,
   VelocityTrend,
@@ -112,7 +112,7 @@ export async function computeVelocityMetrics(
   // Load sprint labels from sprints.json for display
   const sprintLabels = new Map<string, string>();
   try {
-    const sprintsFile = path.join(PROJECT_ROOT, '.veritas-kanban', 'sprints.json');
+    const sprintsFile = path.join(getRuntimeDir(), 'sprints.json');
     const sprintsData = await fs.readFile(sprintsFile, 'utf-8');
     const sprints = JSON.parse(sprintsData) as Array<{ id: string; label: string }>;
     for (const s of sprints) {
