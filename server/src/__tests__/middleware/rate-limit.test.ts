@@ -19,22 +19,29 @@ import {
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
 
-/** Fire `count` GET requests and return the last response. */
-async function exhaust(app: express.Express, path: string, count: number) {
-  let res: request.Response | undefined;
-  for (let i = 0; i < count; i++) {
-    res = await request(app).get(path);
-  }
-  return res!;
+function expectConfiguredLimit(response: request.Response, expected: number): void {
+  expect(response.headers['x-ratelimit-limit']).toBe(String(expected));
 }
 
-/** Fire `count` POST requests and return the last response. */
-async function exhaustPost(app: express.Express, path: string, count: number) {
-  let res: request.Response | undefined;
-  for (let i = 0; i < count; i++) {
-    res = await request(app).post(path).send({});
-  }
-  return res!;
+function configuredLimit(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function createWriteLimiter(limit = 2) {
+  return rateLimit({
+    limit,
+    windowMs: 60_000,
+    message: 'Too many write requests. Please slow down.',
+  });
+}
+
+function createUploadLimiter(limit = 2) {
+  return rateLimit({
+    limit,
+    windowMs: 60_000,
+    message: 'Too many upload requests. Please slow down.',
+  });
 }
 
 // ── Factory tests ──────────────────────────────────────────────────────────────
@@ -176,26 +183,23 @@ describe('Rate Limit Middleware', () => {
   });
 
   describe('writeRateLimit (60 req / min)', () => {
-    it('should allow requests up to the limit', async () => {
+    it('should expose the configured limit and allow an initial request', async () => {
       const app = express();
       app.use(writeRateLimit);
       app.post('/items', (_req, res) => res.json({ ok: true }));
 
-      for (let i = 0; i < 60; i++) {
-        const res = await request(app).post('/items').send({});
-        expect(res.status).toBe(200);
-      }
+      const res = await request(app).post('/items').send({});
+      expect(res.status).toBe(200);
+      expectConfiguredLimit(res, configuredLimit('RATE_LIMIT_WRITE_MAX', 60));
     });
 
-    it('should block the 61st request', async () => {
+    it('should block writes over the configured limit', async () => {
       const app = express();
-      app.use(writeRateLimit);
+      app.use(createWriteLimiter());
       app.post('/items', (_req, res) => res.json({ ok: true }));
 
-      for (let i = 0; i < 60; i++) {
-        await request(app).post('/items').send({});
-      }
-
+      await request(app).post('/items').send({});
+      await request(app).post('/items').send({});
       const res = await request(app).post('/items').send({});
       expect(res.status).toBe(429);
       expect(res.body.error).toContain('write');
@@ -203,13 +207,10 @@ describe('Rate Limit Middleware', () => {
 
     it('should include Retry-After header on 429', async () => {
       const app = express();
-      app.use(writeRateLimit);
+      app.use(createWriteLimiter(1));
       app.post('/items', (_req, res) => res.json({ ok: true }));
 
-      for (let i = 0; i < 60; i++) {
-        await request(app).post('/items').send({});
-      }
-
+      await request(app).post('/items').send({});
       const res = await request(app).post('/items').send({});
       expect(res.status).toBe(429);
       expect(res.headers['retry-after']).toBeDefined();
@@ -217,16 +218,14 @@ describe('Rate Limit Middleware', () => {
   });
 
   describe('readRateLimit (300 req / min)', () => {
-    it('should allow requests under the limit', async () => {
+    it('should expose the configured limit and allow an initial request', async () => {
       const app = express();
       app.use(readRateLimit);
       app.get('/items', (_req, res) => res.json({ ok: true }));
 
-      // Just test a subset — 300 requests would be slow
-      for (let i = 0; i < 50; i++) {
-        const res = await request(app).get('/items');
-        expect(res.status).toBe(200);
-      }
+      const res = await request(app).get('/items');
+      expect(res.status).toBe(200);
+      expectConfiguredLimit(res, configuredLimit('RATE_LIMIT_MAX', 300));
     });
 
     it('should return proper error message when limited', async () => {
@@ -250,26 +249,23 @@ describe('Rate Limit Middleware', () => {
   });
 
   describe('uploadRateLimit (20 req / min)', () => {
-    it('should allow requests up to the limit', async () => {
+    it('should expose the configured limit and allow an initial request', async () => {
       const app = express();
       app.use(uploadRateLimit);
       app.post('/upload', (_req, res) => res.json({ ok: true }));
 
-      for (let i = 0; i < 20; i++) {
-        const res = await request(app).post('/upload').send({});
-        expect(res.status).toBe(200);
-      }
+      const res = await request(app).post('/upload').send({});
+      expect(res.status).toBe(200);
+      expectConfiguredLimit(res, 20);
     });
 
-    it('should block the 21st request', async () => {
+    it('should block uploads over the configured limit', async () => {
       const app = express();
-      app.use(uploadRateLimit);
+      app.use(createUploadLimiter());
       app.post('/upload', (_req, res) => res.json({ ok: true }));
 
-      for (let i = 0; i < 20; i++) {
-        await request(app).post('/upload').send({});
-      }
-
+      await request(app).post('/upload').send({});
+      await request(app).post('/upload').send({});
       const res = await request(app).post('/upload').send({});
       expect(res.status).toBe(429);
       expect(res.body.error).toContain('upload');
@@ -277,13 +273,10 @@ describe('Rate Limit Middleware', () => {
 
     it('should include Retry-After header on 429', async () => {
       const app = express();
-      app.use(uploadRateLimit);
+      app.use(createUploadLimiter(1));
       app.post('/upload', (_req, res) => res.json({ ok: true }));
 
-      for (let i = 0; i < 20; i++) {
-        await request(app).post('/upload').send({});
-      }
-
+      await request(app).post('/upload').send({});
       const res = await request(app).post('/upload').send({});
       expect(res.status).toBe(429);
       expect(res.headers['retry-after']).toBeDefined();

@@ -8,6 +8,13 @@ import { errorHandler } from '../../middleware/error-handler.js';
 
 let app: express.Express;
 let testRoot: string;
+let agentId: string;
+
+const originalEnv = {
+  DATA_DIR: process.env.DATA_DIR,
+  VERITAS_DATA_DIR: process.env.VERITAS_DATA_DIR,
+  VERITAS_TASK_SYNC_FLAP_GUARD_MS: process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS,
+};
 
 let taskRoutes: typeof import('../../routes/tasks.js').taskRoutes;
 let agentRegistryRoutes: typeof import('../../routes/agent-registry.js').agentRegistryRoutes;
@@ -21,10 +28,20 @@ function unwrap<T>(body: any): T {
   return body as T;
 }
 
+function restoreEnv(name: keyof typeof originalEnv): void {
+  const originalValue = originalEnv[name];
+  if (originalValue === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = originalValue;
+  }
+}
+
 describe('Task ↔ Agent registry sync (route-level integration)', () => {
   beforeAll(async () => {
     const uniqueSuffix = Math.random().toString(36).slice(2, 8);
     testRoot = path.join(os.tmpdir(), `veritas-task-agent-sync-${uniqueSuffix}`);
+    agentId = `route-sync-agent-${uniqueSuffix}`;
     await fs.mkdir(testRoot, { recursive: true });
 
     // Isolate all storage for this test file.
@@ -46,14 +63,14 @@ describe('Task ↔ Agent registry sync (route-level integration)', () => {
 
   afterAll(async () => {
     disposeTaskService?.();
-    disposeAgentRegistryService?.();
-    delete process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
+    await disposeAgentRegistryService?.();
+    restoreEnv('VERITAS_TASK_SYNC_FLAP_GUARD_MS');
+    restoreEnv('VERITAS_DATA_DIR');
+    restoreEnv('DATA_DIR');
     await fs.rm(testRoot, { recursive: true, force: true }).catch(() => {});
   });
 
   it('syncs agent busy/idle state from task route transitions with registry readback', async () => {
-    const agentId = 'route-sync-agent-1';
-
     // 1) Register agent.
     const reg = await request(app)
       .post('/api/agents/register')
