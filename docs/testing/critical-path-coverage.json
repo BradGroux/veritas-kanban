@@ -87,6 +87,7 @@
           "src/__tests__/storage/sqlite-workflow-repositories.test.ts",
           "src/__tests__/storage/sqlite-workflow-run-execution.test.ts",
           "src/__tests__/task-service-sqlite.test.ts",
+          "src/__tests__/transition-hooks-config-repository.test.ts",
           "src/__tests__/work-product-run-launch-manifest.test.ts",
           "src/__tests__/work-product-schemas.test.ts",
           "src/__tests__/workflow-definition-repository.test.ts",
