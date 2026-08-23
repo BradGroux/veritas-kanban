@@ -97,9 +97,6 @@ export class FileDelegationRepository implements DelegationRepository {
     } catch (error) {
       const errorCode = (error as NodeJS.ErrnoException).code;
       if (errorCode === 'ENOENT') return fallback;
-      if (errorCode === 'ELOOP') {
-        throw new Error(`${label} must not use a symbolic link`, { cause: error });
-      }
       throw error;
     } finally {
       await handle?.close();
