@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { WorkflowDefinition } from '@veritas-kanban/shared';
 
@@ -250,8 +250,7 @@ describe('workflow browser view and edit actions', () => {
       .find((input) => (input as HTMLInputElement).value === 'Owned workflow');
     expect(nameInput).toBeDefined();
     if (!nameInput) throw new Error('Workflow name input was not rendered');
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Owned workflow revised!');
+    fireEvent.change(nameInput, { target: { value: 'Owned workflow revised!' } });
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(updateAttempts).toBe(1));
@@ -263,8 +262,7 @@ describe('workflow browser view and edit actions', () => {
       })
     );
 
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Owned workflow revised');
+    fireEvent.change(nameInput, { target: { value: 'Owned workflow revised' } });
     expect((nameInput as HTMLInputElement).value).toBe('Owned workflow revised');
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
