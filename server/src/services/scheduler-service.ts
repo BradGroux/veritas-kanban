@@ -1,5 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type {
   SchedulerDueRunResult,
@@ -20,7 +18,12 @@ import type {
 import type { RunTelemetryEvent } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
-import { getRuntimeDir } from '../utils/paths.js';
+import {
+  FileSchedulerStateRepository,
+  type SchedulerItemState,
+  type SchedulerState,
+  type SchedulerStateRepository,
+} from '../storage/scheduler-state-repository.js';
 import {
   getScheduledDeliverablesService,
   type Deliverable,
@@ -41,32 +44,15 @@ import {
 } from './queue-intake-monitor-service.js';
 
 const log = createLogger('scheduler');
-const STATE_VERSION = 1;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MINUTES = 5;
 const MAX_EVENTS = 200;
 const SCHEDULER_PROJECT = 'operations';
 const SCHEDULER_AGENT = 'scheduler';
 
-interface SchedulerItemState {
-  attempts?: number;
-  nextAttemptAt?: string;
-  lastRunAt?: string;
-  nextRunAt?: string;
-  lastStatus?: SchedulerRunStatus;
-  lastSummary?: string;
-  lastError?: string;
-  sourceRunId?: string;
-}
-
-interface SchedulerStateFile {
-  version: typeof STATE_VERSION;
-  items: Record<string, SchedulerItemState>;
-  events: SchedulerEvent[];
-}
-
 interface SchedulerServiceOptions {
   stateFile?: string;
+  stateRepository?: SchedulerStateRepository;
   deliverablesService?: ScheduledDeliverablesService;
   workflowService?: WorkflowService;
   workflowRunService?: WorkflowRunService;
@@ -76,19 +62,20 @@ interface SchedulerServiceOptions {
 }
 
 export class SchedulerService {
-  private readonly stateFile: string;
+  private readonly stateRepository: SchedulerStateRepository;
   private readonly deliverablesService: ScheduledDeliverablesService;
   private readonly workflowService: WorkflowService;
   private readonly workflowRunService: WorkflowRunService;
   private readonly workflowAuthoringService: WorkflowAuthoringService;
   private readonly queueMonitorService: QueueIntakeMonitorService;
   private readonly telemetryService: TelemetryService;
-  private state: SchedulerStateFile | null = null;
+  private state: SchedulerState | null = null;
   private runningDue = false;
   private readonly runningItems = new Set<string>();
 
   constructor(options: SchedulerServiceOptions = {}) {
-    this.stateFile = options.stateFile ?? path.join(getRuntimeDir(), 'scheduler-state.json');
+    this.stateRepository =
+      options.stateRepository ?? new FileSchedulerStateRepository(options.stateFile);
     this.deliverablesService = options.deliverablesService ?? getScheduledDeliverablesService();
     this.workflowService = options.workflowService ?? getWorkflowService();
     this.workflowRunService = options.workflowRunService ?? getWorkflowRunService();
@@ -166,12 +153,6 @@ export class SchedulerService {
       await this.updateWorkflowSchedule(item.sourceId, { enabled: false });
     }
 
-    const state = this.currentState();
-    state.items[itemId] = {
-      ...state.items[itemId],
-      attempts: 0,
-      nextAttemptAt: undefined,
-    };
     const event = await this.recordEvent({
       item: { ...item, enabled: false },
       type: 'pause',
@@ -179,7 +160,6 @@ export class SchedulerService {
       summary: 'Scheduler item paused.',
       now,
     });
-    await this.saveState();
     return { item: await this.getItem(itemId, now), event };
   }
 
@@ -197,12 +177,6 @@ export class SchedulerService {
       await this.updateWorkflowSchedule(item.sourceId, { enabled: true });
     }
 
-    const state = this.currentState();
-    state.items[itemId] = {
-      ...state.items[itemId],
-      attempts: 0,
-      nextAttemptAt: undefined,
-    };
     const event = await this.recordEvent({
       item: { ...item, enabled: true },
       type: 'resume',
@@ -210,7 +184,6 @@ export class SchedulerService {
       summary: 'Scheduler item resumed.',
       now,
     });
-    await this.saveState();
     return { item: await this.getItem(itemId, now), event };
   }
 
@@ -254,7 +227,6 @@ export class SchedulerService {
           : item.kind === 'queue-monitor'
             ? await this.runQueueMonitor(item, trigger, now, startedAt)
             : await this.runWorkflow(item, trigger, now, startedAt);
-      await this.saveState();
       return result;
     } finally {
       this.runningItems.delete(itemId);
@@ -654,27 +626,28 @@ export class SchedulerService {
       nextRunAt: params.nextRunAt,
     };
 
-    const state = this.currentState();
-    const previous = state.items[params.item.id] ?? {};
-    const failed = params.status === 'failed';
-    const attempts = failed ? (previous.attempts ?? 0) + 1 : 0;
-    state.items[params.item.id] = {
-      ...previous,
-      attempts,
-      nextAttemptAt:
-        failed && attempts < DEFAULT_MAX_ATTEMPTS
-          ? retryAttemptAt(params.now, attempts)
-          : undefined,
-      lastRunAt: params.now.toISOString(),
-      nextRunAt: params.nextRunAt ?? previous.nextRunAt,
-      lastStatus: params.status,
-      lastSummary: params.summary,
-      lastError: params.error,
-      sourceRunId: params.sourceRunId,
-    };
-    state.events.push(event);
-    state.events = state.events.slice(-MAX_EVENTS);
-    await this.saveState();
+    this.state = await this.stateRepository.update((state) => {
+      const previous = state.items[params.item.id] ?? {};
+      const failed = params.status === 'failed';
+      const attempts = failed ? (previous.attempts ?? 0) + 1 : 0;
+      state.items[params.item.id] = {
+        ...previous,
+        attempts,
+        nextAttemptAt:
+          failed && attempts < DEFAULT_MAX_ATTEMPTS
+            ? retryAttemptAt(params.now, attempts)
+            : undefined,
+        lastRunAt: params.now.toISOString(),
+        nextRunAt: params.nextRunAt ?? previous.nextRunAt,
+        lastStatus: params.status,
+        lastSummary: params.summary,
+        lastError: params.error,
+        sourceRunId: params.sourceRunId,
+      };
+      state.events.push(event);
+      state.events = state.events.slice(-MAX_EVENTS);
+      return state;
+    });
     await this.emitTelemetry(event);
     log.info(
       { eventId: event.id, itemId: event.itemId, status: event.status },
@@ -708,30 +681,14 @@ export class SchedulerService {
   }
 
   private async ensureLoaded(): Promise<void> {
-    if (this.state) return;
-    try {
-      const data = await fs.readFile(this.stateFile, 'utf-8');
-      const parsed = JSON.parse(data) as SchedulerStateFile;
-      this.state = {
-        version: STATE_VERSION,
-        items: parsed.items ?? {},
-        events: Array.isArray(parsed.events) ? parsed.events.slice(-MAX_EVENTS) : [],
-      };
-    } catch {
-      this.state = { version: STATE_VERSION, items: {}, events: [] };
-    }
+    this.state = await this.stateRepository.read();
   }
 
-  private currentState(): SchedulerStateFile {
+  private currentState(): SchedulerState {
     if (!this.state) {
       throw new Error('Scheduler state has not been loaded');
     }
     return this.state;
-  }
-
-  private async saveState(): Promise<void> {
-    await fs.mkdir(path.dirname(this.stateFile), { recursive: true });
-    await fs.writeFile(this.stateFile, JSON.stringify(this.state, null, 2));
   }
 }
 
