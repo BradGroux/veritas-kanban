@@ -16,6 +16,7 @@
         "testFiles": [
           "src/__tests__/acp-stdio-provider.test.ts",
           "src/__tests__/admission-control-service.test.ts",
+          "src/__tests__/broadcast-storage-service.test.ts",
           "src/__tests__/claude-code-provider.smoke.test.ts",
           "src/__tests__/claude-code-provider.test.ts",
           "src/__tests__/codex-app-server-provider.smoke.test.ts",
