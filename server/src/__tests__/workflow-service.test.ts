@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs/promises';
-import os from 'os';
 import path from 'path';
 
 import { WorkflowService } from '../services/workflow-service.js';
@@ -29,7 +28,7 @@ describe('WorkflowService', () => {
   };
 
   beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workflow-service-'));
+    tmpDir = await fs.mkdtemp(path.join(process.cwd(), '.veritas-workflow-service-'));
     service = new WorkflowService(tmpDir);
     originalCodexEnv = {
       VERITAS_CODEX_EXECUTABLE: process.env.VERITAS_CODEX_EXECUTABLE,

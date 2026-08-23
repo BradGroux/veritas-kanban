@@ -42,6 +42,7 @@ export { LocalWorkspaceFileRepository } from './workspace-file-repository.js';
 export { FileProgressRepository, type ProgressRepository } from './progress-repository.js';
 export { FileStatusHistoryStore } from './status-history-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
+export { FileWorkflowDefinitionRepository } from './workflow-definition-repository.js';
 export {
   FileWorkspaceExecutionTrustRepository,
   InMemoryWorkspaceExecutionTrustRepository,
