@@ -6,7 +6,7 @@ Veritas Kanban 6.1.1 is a focused maintenance release for the agentic-control pl
 
 ## 6.1.1 Maintenance Changes
 
-Long Task Detail content is height-constrained and scrollable again. The regression gate verifies the shared overlay's flex-column layout, real overflow, and wheel-driven scroll movement in Chromium. Nested task-card controls no longer activate the card, preserving touch status selection in WebKit after the Mantine 9.5 update. The dependency maintenance pass updates supported minor and patch versions, adopts Chalk 6, and refreshes transitive override floors so production and full dependency audits report no known vulnerabilities.
+Long Task Detail content is height-constrained and scrollable again. The regression gate verifies the shared overlay's flex-column layout, real overflow, and wheel-driven scroll movement in Chromium. Nested task-card controls no longer activate the card, preserving touch status selection in WebKit after the Mantine 9.5 update. File-backed workflow operations now await storage-directory readiness, preventing immediate startup requests from racing directory creation. The dependency maintenance pass updates supported minor and patch versions, adopts Chalk 6, and refreshes transitive override floors so production and full dependency audits report no known vulnerabilities.
 
 jsdom 30 remains deferred in Dependabot because it exceeds the documented Node.js patch floor and breaks the current changed-test suite; jsdom 29 patch updates remain enabled. Version 6.1.1 does not change the storage schema, public REST API, provider contracts, configuration, or migration requirements from 6.1.0.
 

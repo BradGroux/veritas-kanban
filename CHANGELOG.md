@@ -32,6 +32,9 @@ tabs migration and completes a security-audited dependency maintenance pass.
   restoring reliable touch status selection in WebKit after the Mantine 9.5
   update. Status-move browser coverage now waits for the visible save contract
   before closing Task Detail (#1156).
+- Made file-backed workflow operations wait for their storage directory to be
+  ready, eliminating a startup race that could return `ENOENT` when the first
+  workflow request arrived immediately after service construction (#1156).
 
 ## [6.1.0] - 2026-07-26
 
