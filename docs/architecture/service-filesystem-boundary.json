@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 49,
+  "maximumEntries": 48,
   "entries": [
     {
       "path": "server/src/services/agent-health-service.ts",
@@ -280,12 +280,6 @@
     },
     {
       "path": "server/src/services/workflow-run-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1186",
-      "rationale": "Coordination-state storage migration is tracked in issue #1186."
-    },
-    {
-      "path": "server/src/services/workflow-service.ts",
       "category": "authoritative-persistence",
       "owner": "#1186",
       "rationale": "Coordination-state storage migration is tracked in issue #1186."

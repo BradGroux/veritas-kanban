@@ -3,9 +3,6 @@
  * Phase 1: Core Engine
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import yaml from 'yaml';
 import { PHASE_NAMES, type PhaseName } from '@veritas-kanban/shared';
 import type { WorkflowDefinition, WorkflowACL, WorkflowAuditEvent } from '../types/workflow.js';
 import { ValidationError } from '../types/workflow.js';
@@ -13,6 +10,7 @@ import { getWorkflowsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkflowDefinitionRepository } from '../storage/sqlite/workflow-repositories.js';
+import { FileWorkflowDefinitionRepository } from '../storage/workflow-definition-repository.js';
 import { evaluateCodexCommandPolicy, isCodexWorkflowAgent } from '../utils/codex-command-policy.js';
 
 const log = createLogger('workflow-service');
@@ -28,16 +26,15 @@ const MAX_TOOLS_PER_AGENT = 50;
 const MAX_RETRY_DELAY_MS = 300000; // 5 minutes max delay
 
 export class WorkflowService {
-  private workflowsDir: string;
   private cache: Map<string, WorkflowDefinition> = new Map();
+  private readonly fileRepository: FileWorkflowDefinitionRepository | null = null;
   private readonly repository: SqliteWorkflowDefinitionRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
-  private readonly directoriesReady: Promise<void>;
 
   constructor(options: string | WorkflowServiceOptions = {}) {
     const resolvedOptions = typeof options === 'string' ? { workflowsDir: options } : options;
-    this.workflowsDir = resolvedOptions.workflowsDir || getWorkflowsDir();
+    const workflowsDir = resolvedOptions.workflowsDir || getWorkflowsDir();
     const storageType =
       resolvedOptions.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
@@ -51,14 +48,8 @@ export class WorkflowService {
     }
 
     if (!this.repository) {
-      this.directoriesReady = this.ensureDirectories();
-    } else {
-      this.directoriesReady = Promise.resolve();
+      this.fileRepository = new FileWorkflowDefinitionRepository(workflowsDir);
     }
-  }
-
-  private async ensureDirectories(): Promise<void> {
-    await fs.mkdir(this.workflowsDir, { recursive: true });
   }
 
   private normalizeWorkflowId(id: string): string {
@@ -101,13 +92,12 @@ export class WorkflowService {
       return workflow;
     }
 
-    await this.directoriesReady;
-
-    const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
-
     try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const workflow = yaml.parse(content) as WorkflowDefinition;
+      const workflow = await this.getFileRepository().get(normalizedId);
+      if (!workflow) {
+        log.debug({ workflowId: normalizedId }, 'Workflow not found');
+        return null;
+      }
 
       // Validate schema
       this.validateWorkflow(workflow);
@@ -118,10 +108,6 @@ export class WorkflowService {
       log.info({ workflowId: normalizedId, version: workflow.version }, 'Workflow loaded');
       return workflow;
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-        log.debug({ workflowId: normalizedId }, 'Workflow not found');
-        return null;
-      }
       log.error({ workflowId: normalizedId, err }, 'Failed to load workflow');
       const message = err instanceof Error ? err.message : 'Unknown error';
       throw new ValidationError(`Invalid workflow YAML: ${message}`);
@@ -141,19 +127,10 @@ export class WorkflowService {
       return workflows;
     }
 
-    await this.directoriesReady;
-
-    const files = await fs.readdir(this.workflowsDir).catch(() => []);
-    const workflows: WorkflowDefinition[] = [];
-
-    for (const file of files) {
-      if (!file.endsWith('.yml') && !file.endsWith('.yaml')) continue;
-
-      const id = file.replace(/\.(yml|yaml)$/, '');
-      const workflow = await this.loadWorkflow(id);
-      if (workflow) {
-        workflows.push(workflow);
-      }
+    const workflows = await this.getFileRepository().list();
+    for (const workflow of workflows) {
+      this.validateWorkflow(workflow);
+      this.cache.set(workflow.id, workflow);
     }
 
     log.info({ count: workflows.length }, 'Listed workflows');
@@ -173,32 +150,7 @@ export class WorkflowService {
       return metadata;
     }
 
-    await this.directoriesReady;
-
-    const files = await fs.readdir(this.workflowsDir).catch(() => []);
-    const metadata: Array<Pick<WorkflowDefinition, 'id' | 'name' | 'version' | 'description'>> = [];
-
-    for (const file of files) {
-      if (!file.endsWith('.yml') && !file.endsWith('.yaml')) continue;
-
-      const id = file.replace(/\.(yml|yaml)$/, '');
-      const filePath = path.join(this.workflowsDir, file);
-
-      try {
-        const content = await fs.readFile(filePath, 'utf-8');
-        const workflow = yaml.parse(content) as WorkflowDefinition;
-
-        metadata.push({
-          id: workflow.id,
-          name: workflow.name,
-          version: workflow.version,
-          description: workflow.description,
-        });
-      } catch (err: unknown) {
-        log.warn({ workflowId: id, err }, 'Failed to read workflow metadata');
-        continue;
-      }
-    }
+    const metadata = await this.getFileRepository().listMetadata();
 
     log.info({ count: metadata.length }, 'Listed workflow metadata');
     return metadata;
@@ -225,28 +177,16 @@ export class WorkflowService {
       return;
     }
 
-    await this.directoriesReady;
-
-    const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
-
-    // Check if this is a new workflow (not an update)
-    try {
-      await fs.access(filePath);
-      // File exists, this is an update
-    } catch {
-      // New workflow - check count limit
-      const files = await fs.readdir(this.workflowsDir).catch(() => []);
-      const workflowCount = files.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml')).length;
-
-      if (workflowCount >= MAX_WORKFLOWS) {
-        throw new ValidationError(
-          `Maximum workflow limit (${MAX_WORKFLOWS}) reached. Delete unused workflows before creating new ones.`
-        );
-      }
+    const fileRepository = this.getFileRepository();
+    if (
+      !(await fileRepository.get(normalizedId)) &&
+      (await fileRepository.count()) >= MAX_WORKFLOWS
+    ) {
+      throw new ValidationError(
+        `Maximum workflow limit (${MAX_WORKFLOWS}) reached. Delete unused workflows before creating new ones.`
+      );
     }
-
-    const content = yaml.stringify(workflow);
-    await fs.writeFile(filePath, content, 'utf-8');
+    await fileRepository.save(workflow);
 
     // Update cache
     this.cache.set(normalizedId, workflow);
@@ -266,10 +206,7 @@ export class WorkflowService {
       return;
     }
 
-    await this.directoriesReady;
-
-    const filePath = path.join(this.workflowsDir, `${normalizedId}.yml`);
-    await fs.unlink(filePath);
+    await this.getFileRepository().delete(normalizedId);
     this.cache.delete(normalizedId);
 
     log.info({ workflowId: normalizedId }, 'Workflow deleted');
@@ -411,18 +348,7 @@ export class WorkflowService {
       return this.repository.getAcl(workflowId);
     }
 
-    await this.directoriesReady;
-
-    const aclPath = path.join(this.workflowsDir, '.acl.json');
-
-    try {
-      const content = await fs.readFile(aclPath, 'utf-8');
-      const acls = JSON.parse(content) as Record<string, WorkflowACL>;
-      return acls[workflowId] || null;
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') return null;
-      throw err;
-    }
+    return this.getFileRepository().getAcl(workflowId);
   }
 
   /**
@@ -435,22 +361,7 @@ export class WorkflowService {
       return;
     }
 
-    await this.directoriesReady;
-
-    const aclPath = path.join(this.workflowsDir, '.acl.json');
-
-    let acls: Record<string, WorkflowACL> = {};
-
-    try {
-      const content = await fs.readFile(aclPath, 'utf-8');
-      acls = JSON.parse(content);
-    } catch (err: unknown) {
-      if (!(err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT')) throw err;
-    }
-
-    acls[acl.workflowId] = acl;
-
-    await fs.writeFile(aclPath, JSON.stringify(acls, null, 2), 'utf-8');
+    await this.getFileRepository().saveAcl(acl);
 
     log.info({ workflowId: acl.workflowId }, 'Workflow ACL saved');
   }
@@ -465,11 +376,7 @@ export class WorkflowService {
       return;
     }
 
-    await this.directoriesReady;
-
-    const auditPath = path.join(this.workflowsDir, '.audit.jsonl');
-    const line = JSON.stringify(event) + '\n';
-    await fs.appendFile(auditPath, line, 'utf-8');
+    await this.getFileRepository().appendAuditEvent(event);
 
     log.info({ event }, 'Workflow audit event logged');
   }
@@ -479,6 +386,13 @@ export class WorkflowService {
    */
   clearCache(): void {
     this.cache.clear();
+  }
+
+  private getFileRepository(): FileWorkflowDefinitionRepository {
+    if (!this.fileRepository) {
+      throw new Error('File workflow repository is not configured');
+    }
+    return this.fileRepository;
   }
 
   dispose(): void {
