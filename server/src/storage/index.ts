@@ -43,6 +43,12 @@ export { FileProgressRepository, type ProgressRepository } from './progress-repo
 export { FileStatusHistoryStore } from './status-history-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
+export {
+  FileCeremonyStateRepository,
+  InMemoryCeremonyStateRepository,
+  type CeremonyState,
+  type CeremonyStateRepository,
+} from './ceremony-state-repository.js';
 export { FileDelegationRepository, type DelegationRepository } from './delegation-repository.js';
 export {
   LocalConflictWorkspaceRepository,
