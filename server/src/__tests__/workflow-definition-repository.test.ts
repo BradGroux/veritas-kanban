@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { WorkflowACL, WorkflowAuditEvent, WorkflowDefinition } from '../types/workflow.js';
 import { FileWorkflowDefinitionRepository } from '../storage/workflow-definition-repository.js';
@@ -42,6 +42,7 @@ describe('FileWorkflowDefinitionRepository', () => {
 
   it('atomically persists, lists, and deletes workflow definitions', async () => {
     await expect(repository.get('missing')).resolves.toBeNull();
+    await expect(repository.getAcl('missing')).resolves.toBeNull();
     await repository.save(workflow('alpha'));
 
     await expect(repository.get('alpha')).resolves.toMatchObject({ id: 'alpha' });
@@ -110,5 +111,36 @@ describe('FileWorkflowDefinitionRepository', () => {
     await symlink(realDirectory, linkedDirectory, 'dir');
     const linkedRepository = new FileWorkflowDefinitionRepository(linkedDirectory);
     await expect(linkedRepository.save(workflow('unsafe'))).rejects.toThrow(/regular directory/i);
+  });
+
+  it('rejects non-file, oversized, and linked persistence targets', async () => {
+    await mkdir(workflowsDir, { recursive: true });
+    const invalidWorkflowPath = path.join(workflowsDir, 'invalid.yml');
+    await mkdir(invalidWorkflowPath);
+    await expect(repository.get('invalid')).rejects.toThrow(/bounded regular file/i);
+    await expect(repository.delete('invalid')).rejects.toThrow();
+    await rm(invalidWorkflowPath, { recursive: true });
+
+    await expect(
+      repository.save({ ...workflow('oversized'), description: 'x'.repeat(2 * 1024 * 1024) })
+    ).rejects.toThrow(/storage limit/i);
+
+    const auditPath = path.join(workflowsDir, '.audit.jsonl');
+    await writeFile(auditPath, '', 'utf8');
+    await truncate(auditPath, 64 * 1024 * 1024);
+    const event: WorkflowAuditEvent = {
+      timestamp: '2026-08-23T21:00:00.000Z',
+      userId: 'brad',
+      action: 'edit',
+      workflowId: 'alpha',
+      workflowVersion: 1,
+    };
+    await expect(repository.appendAuditEvent(event)).rejects.toThrow(/bounded regular file/i);
+
+    await rm(auditPath);
+    const auditTarget = path.join(root, 'outside-audit.jsonl');
+    await writeFile(auditTarget, '', 'utf8');
+    await symlink(auditTarget, auditPath);
+    await expect(repository.appendAuditEvent(event)).rejects.toThrow(/symbolic link/i);
   });
 });

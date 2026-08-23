@@ -26,7 +26,10 @@ export class FileWorkflowDefinitionRepository {
   }
 
   async get(id: string): Promise<WorkflowDefinition | null> {
-    const content = await this.readBoundedFile(this.getWorkflowPath(id), MAX_WORKFLOW_BYTES, true);
+    const content = await this.readOptionalBoundedFile(
+      this.getWorkflowPath(id),
+      MAX_WORKFLOW_BYTES
+    );
     return content === null ? null : (yaml.parse(content) as WorkflowDefinition);
   }
 
@@ -35,10 +38,8 @@ export class FileWorkflowDefinitionRepository {
     for (const file of await this.listDefinitionFiles()) {
       const content = await this.readBoundedFile(
         ensureWithinBase(this.workflowsDir, path.join(this.workflowsDir, file)),
-        MAX_WORKFLOW_BYTES,
-        false
+        MAX_WORKFLOW_BYTES
       );
-      if (content === null) throw new Error('Workflow definition disappeared while listing');
       workflows.push(yaml.parse(content) as WorkflowDefinition);
     }
     return workflows;
@@ -50,10 +51,8 @@ export class FileWorkflowDefinitionRepository {
       try {
         const content = await this.readBoundedFile(
           ensureWithinBase(this.workflowsDir, path.join(this.workflowsDir, file)),
-          MAX_WORKFLOW_BYTES,
-          false
+          MAX_WORKFLOW_BYTES
         );
-        if (content === null) continue;
         const workflow = yaml.parse(content) as Partial<WorkflowDefinition> | null;
         if (
           !workflow ||
@@ -99,7 +98,7 @@ export class FileWorkflowDefinitionRepository {
   }
 
   async getAcl(workflowId: string): Promise<WorkflowACL | null> {
-    const content = await this.readBoundedFile(this.getAclPath(), MAX_ACL_BYTES, true);
+    const content = await this.readOptionalBoundedFile(this.getAclPath(), MAX_ACL_BYTES);
     if (content === null) return null;
     const acls = JSON.parse(content) as Record<string, WorkflowACL>;
     return acls[workflowId] ?? null;
@@ -109,7 +108,7 @@ export class FileWorkflowDefinitionRepository {
     const aclPath = this.getAclPath();
     await this.prepareDirectory();
     await withFileLock(aclPath, async () => {
-      const current = await this.readBoundedFile(aclPath, MAX_ACL_BYTES, true);
+      const current = await this.readOptionalBoundedFile(aclPath, MAX_ACL_BYTES);
       const acls = current === null ? {} : (JSON.parse(current) as Record<string, WorkflowACL>);
       acls[acl.workflowId] = acl;
       const content = JSON.stringify(acls, null, 2);
@@ -175,11 +174,7 @@ export class FileWorkflowDefinitionRepository {
     }
   }
 
-  private async readBoundedFile(
-    filePath: string,
-    maximumBytes: number,
-    missingAsNull: boolean
-  ): Promise<string | null> {
+  private async readBoundedFile(filePath: string, maximumBytes: number): Promise<string> {
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
       handle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -190,13 +185,24 @@ export class FileWorkflowDefinitionRepository {
       return await handle.readFile({ encoding: 'utf8' });
     } catch (error) {
       const errorCode = (error as NodeJS.ErrnoException).code;
-      if (missingAsNull && errorCode === 'ENOENT') return null;
       if (errorCode === 'ELOOP') {
         throw new Error('Workflow storage must not use symbolic links', { cause: error });
       }
       throw error;
     } finally {
       await handle?.close();
+    }
+  }
+
+  private async readOptionalBoundedFile(
+    filePath: string,
+    maximumBytes: number
+  ): Promise<string | null> {
+    try {
+      return await this.readBoundedFile(filePath, maximumBytes);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
     }
   }
 
