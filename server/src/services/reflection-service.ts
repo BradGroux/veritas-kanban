@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import type {
@@ -22,12 +21,16 @@ import type {
   TaskEnvelopeMemoryReference,
 } from '@veritas-kanban/shared';
 import { auditLog, type AuditEvent } from './audit-service.js';
-import { withFileLock } from './file-lock.js';
 import { getTaskService } from './task-service.js';
 import { ConflictError, NotFoundError } from '../middleware/error-handler.js';
-import { ensureWithinBase, stripHtml, validatePathSegment } from '../utils/sanitize.js';
+import { stripHtml, validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
+import {
+  FileReflectionStateRepository,
+  type ReflectionState,
+  type ReflectionStateRepository,
+} from '../storage/reflection-state-repository.js';
 import {
   getReflectionPromotionAdapterRegistry,
   type ReflectionPromotionAdapterRegistry,
@@ -42,12 +45,6 @@ const MAX_CONTRADICTION_IDS = 20;
 const MAX_SOURCE_EVENT_IDS = 20;
 const MAX_RETRIEVALS_PER_CANDIDATE = 100;
 const DEFAULT_RETRIEVAL_LIMIT = 8;
-
-interface ReflectionState {
-  version: 1;
-  candidates: ReflectionCandidate[];
-  updatedAt: string;
-}
 
 export interface ReflectionListFilters {
   status?: ReflectionCandidateStatus;
@@ -76,6 +73,7 @@ export interface ReflectionTaskService {
 
 export interface ReflectionServiceOptions {
   storageDir?: string;
+  stateRepository?: ReflectionStateRepository;
   persist?: boolean;
   audit?: (event: AuditEvent) => Promise<void>;
   taskService?: ReflectionTaskService;
@@ -143,7 +141,7 @@ function lessonEntry(
 }
 
 export class ReflectionService {
-  private readonly storageDir: string;
+  private readonly stateRepository: ReflectionStateRepository;
   private readonly persist: boolean;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private readonly taskService: ReflectionTaskService;
@@ -152,7 +150,8 @@ export class ReflectionService {
   private state: ReflectionState = this.emptyState();
 
   constructor(options: ReflectionServiceOptions = {}) {
-    this.storageDir = options.storageDir ?? path.join(getRuntimeDir(), 'reflections');
+    const storageDir = options.storageDir ?? path.join(getRuntimeDir(), 'reflections');
+    this.stateRepository = options.stateRepository ?? new FileReflectionStateRepository(storageDir);
     this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.audit = options.audit ?? auditLog;
     this.taskService = options.taskService ?? getTaskService();
@@ -664,20 +663,11 @@ export class ReflectionService {
       return;
     }
 
-    await fs.mkdir(this.storageDir, { recursive: true });
-    try {
-      const raw = await fs.readFile(this.statePath, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<ReflectionState>;
-      this.state = {
-        version: 1,
-        candidates: Array.isArray(parsed.candidates)
-          ? (parsed.candidates as ReflectionCandidate[])
-          : [],
-        updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : nowIso(),
-      };
+    const state = await this.stateRepository.read();
+    if (state) {
+      this.state = state;
       this.refreshDuplicateCounts();
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    } else {
       this.state = this.emptyState();
     }
     this.loaded = true;
@@ -686,16 +676,7 @@ export class ReflectionService {
   private async saveState(): Promise<void> {
     this.state.updatedAt = nowIso();
     if (!this.persist) return;
-    await fs.mkdir(this.storageDir, { recursive: true });
-    await withFileLock(this.statePath, async () => {
-      await fs.writeFile(this.statePath, JSON.stringify(this.state, null, 2), 'utf-8');
-    });
-  }
-
-  private get statePath(): string {
-    const filePath = path.join(this.storageDir, 'candidates.json');
-    ensureWithinBase(this.storageDir, filePath);
-    return filePath;
+    await this.stateRepository.write(this.state);
   }
 
   private emptyState(): ReflectionState {

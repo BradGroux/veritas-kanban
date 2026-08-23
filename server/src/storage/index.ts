@@ -55,6 +55,11 @@ export {
   type SchedulerState,
   type SchedulerStateRepository,
 } from './scheduler-state-repository.js';
+export {
+  FileReflectionStateRepository,
+  type ReflectionState,
+  type ReflectionStateRepository,
+} from './reflection-state-repository.js';
 export { FileScheduledDeliverablesStore } from './scheduled-deliverables-repository.js';
 export { FileBroadcastRepository } from './broadcast-repository.js';
 export {
