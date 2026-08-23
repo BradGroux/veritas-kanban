@@ -58,9 +58,11 @@ test.describe('Task Status Change', () => {
 
     // Ensure the PATCH succeeded
     expect(patchResponse.status()).toBeLessThan(400);
+    await expect(statusTrigger).toHaveValue('In Progress');
+    await expect(detailPanel.getByText('Saving...')).not.toBeVisible({ timeout: 5_000 });
 
     // Close the detail panel
-    await page.keyboard.press('Escape');
+    await detailPanel.getByRole('button', { name: 'Close task details' }).click();
     await expect(detailPanel).not.toBeVisible({ timeout: 3_000 });
 
     // Wait for the task to move to the In Progress column
@@ -112,9 +114,12 @@ test.describe('Task Status Change', () => {
     ]);
 
     expect(patchResponse.status()).toBeLessThan(400);
+    await expect(statusTrigger).toHaveValue('Done');
+    await expect(detailPanel.getByText('Saving...')).not.toBeVisible({ timeout: 5_000 });
 
     // Close panel
-    await page.keyboard.press('Escape');
+    await detailPanel.getByRole('button', { name: 'Close task details' }).click();
+    await expect(detailPanel).not.toBeVisible({ timeout: 3_000 });
 
     // Verify the task moved to Done
     const doneCol = page.getByRole('region', { name: 'Done' });

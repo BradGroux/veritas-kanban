@@ -1,13 +1,35 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist contains the completed stable-release gate for Veritas Kanban
-6.1.0 and retains the completed 6.0.2 evidence below. Command results, platform
+This checklist contains the active stable-release gate for Veritas Kanban
+6.1.1 and retains the completed 6.1.0 and 6.0.2 evidence below. Command results, platform
 details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
+Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
 
-## 6.1.0 Completed Release Gate
+## 6.1.1 Release Gate
+
+- [x] Issue #1153 and pull requests #1148, #1149, #1150, #1154, and #1155
+      received an evidence-backed maintainer disposition.
+- [x] Long Task Detail content is constrained and scrollable, with Chromium
+      layout, overflow, and wheel-input regression coverage (#1153, #1154).
+- [x] Dependency updates were audited for runtime compatibility, peer ranges,
+      advisories, lockfile integrity, tests, builds, and desktop packaging;
+      jsdom 30 was rejected rather than weakening the Node.js floor (#1148,
+      #1149, #1150, #1155).
+- [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.1.1.
+- [x] README, API reference, compatibility policy, upgrade guide, release
+      notes, canonical GitHub release body, and changelog agree on 6.1.1.
+- [x] Frozen install, production and full audits, lint and warning budget,
+      typecheck, build, workspace tests, Playwright, Mantine QA, CLI/MCP smoke,
+      desktop checks, and release validators pass on the consolidated candidate.
+- [ ] The required opposite-model review reports no unresolved blocker.
+- [ ] The release PR merges and the exact merge is published as annotated
+      `v6.1.1` with a live body matching `docs/releases/v6.1.1.md`.
+- [ ] Signed/notarized macOS assets, updater metadata, independent installed-app
+      readiness, and the Homebrew cask are published and verified.
+
+## Historical 6.1.0 Completed Release Gate
 
 - [x] Roadmap issues #855, #864, #865, #866, #867, #868, #871, #872, #873,
       #876, and #879 are closed through merged pull requests.
@@ -31,7 +53,7 @@ Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
 
 ## Final Release Validation Commands
 
-Run once from the clean 6.1.0 release candidate:
+Run once from the clean 6.1.1 release candidate:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -51,15 +73,15 @@ pnpm desktop:build
 pnpm desktop:check:electron-artifacts
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
-pnpm validate:release -- --version 6.1.0
-pnpm validate:release -- --version 6.1.0 --docker-build
+pnpm validate:release -- --version 6.1.1
+pnpm validate:release -- --version 6.1.1 --docker-build
 ```
 
 ## Distribution And Post-Publication
 
-Publish only after every active 6.1.0 gate above is checked. The canonical
-GitHub body is `docs/releases/v6.1.0.md`; post-publication validation must run
-`pnpm validate:release -- --version 6.1.0 --github --repo BradGroux/veritas-kanban`.
+Publish only after every pre-publication 6.1.1 gate above is checked. The canonical
+GitHub body is `docs/releases/v6.1.1.md`; post-publication validation must run
+`pnpm validate:release -- --version 6.1.1 --github --repo BradGroux/veritas-kanban`.
 Update the Homebrew cask only from the independently verified published ZIP
 checksum.
 

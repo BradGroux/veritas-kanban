@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.1] - 2026-08-22
+
+Veritas Kanban 6.1.1 restores reliable Task Detail scrolling after the Mantine
+tabs migration and completes a security-audited dependency maintenance pass.
+
+### Changed
+
+- Updated supported runtime and development dependencies across the workspace,
+  including Chalk 6, and refreshed transitive security override floors so both
+  production and full dependency audits resolve without known vulnerabilities
+  (#1149, #1155).
+- Deferred jsdom major updates in Dependabot while the current major requires a
+  higher Node.js patch floor and breaks the Mantine-backed web test environment;
+  jsdom 29 patch updates remain enabled (#1148).
+
+### Fixed
+
+- Restored the shared overlay flex-column contract so long Task Detail content
+  remains height-constrained and scrollable. Added a Chromium regression that
+  verifies layout, overflow, and real wheel scrolling through the drawer
+  (#1153, #1154).
+- Prevented interactive controls inside task cards from activating the card,
+  restoring reliable touch status selection in WebKit after the Mantine 9.5
+  update. Status-move browser coverage now waits for the visible save contract
+  before closing Task Detail (#1156).
+
 ## [6.1.0] - 2026-07-26
 
 ### Added
@@ -2432,7 +2458,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.0...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.1...HEAD
+[6.1.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.2...v6.1.0
 [6.0.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.1...v6.0.2
 [6.0.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.0...v6.0.1

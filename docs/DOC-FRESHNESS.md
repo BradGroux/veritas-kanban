@@ -58,6 +58,7 @@ When a doc is older than the current version, it may need review.
 
 | Date       | Scope                                                               | Agent   |
 | ---------- | ------------------------------------------------------------------- | ------- |
+| 2026-08-22 | v6.1.1 maintenance, dependency, release, upgrade, and evidence docs | Release |
 | 2026-07-26 | v6.1.0 roadmap, harness, governance, knowledge, and release docs    | Release |
 | 2026-07-24 | v6.0.2 desktop recovery, version support, release, and evidence     | Release |
 | 2026-07-24 | v6.0.1 stabilization, release, upgrade, API, MCP, and evidence      | Release |

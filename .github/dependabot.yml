@@ -12,6 +12,12 @@ updates:
       - 'BradGroux'
     labels:
       - 'dependencies'
+    ignore:
+      # jsdom 30 requires Node >=22.22.2 and currently breaks the Mantine UI suite.
+      # Keep receiving jsdom 29 patches until the runtime floor is deliberately raised.
+      - dependency-name: 'jsdom'
+        update-types:
+          - 'version-update:semver-major'
     groups:
       # Group minor/patch updates to reduce PR noise
       production-dependencies:

@@ -1,8 +1,14 @@
-# Veritas Kanban 6.1.0 Release Notes
+# Veritas Kanban 6.1.1 Release Notes
 
-Veritas Kanban 6.1.0 completes the agentic-control roadmap that followed the first stable v6 release. The release gives Buzz, Grok Build, OpenAI Codex, Claude Code, GitHub Copilot CLI, Hermes, and OpenClaw one provider-neutral control plane while retaining explicit transport and capability differences. It also adds governed knowledge collections, durable execution supervision, run-scoped network enforcement, safe workspace rewind, and resilient output handling.
+Veritas Kanban 6.1.1 is a focused maintenance release for the agentic-control platform delivered in 6.1.0. It restores reliable Task Detail drawer scrolling after the Mantine tabs migration, adds browser-level regression coverage, updates the supported dependency set, and refreshes transitive security floors.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.0 supersedes 6.0.2 as the supported stable v6 release; signed assets and updater metadata are published.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.1 supersedes 6.1.0 as the supported stable v6 release after signed assets and updater metadata are published.
+
+## 6.1.1 Maintenance Changes
+
+Long Task Detail content is height-constrained and scrollable again. The regression gate verifies the shared overlay's flex-column layout, real overflow, and wheel-driven scroll movement in Chromium. Nested task-card controls no longer activate the card, preserving touch status selection in WebKit after the Mantine 9.5 update. The dependency maintenance pass updates supported minor and patch versions, adopts Chalk 6, and refreshes transitive override floors so production and full dependency audits report no known vulnerabilities.
+
+jsdom 30 remains deferred in Dependabot because it exceeds the documented Node.js patch floor and breaks the current changed-test suite; jsdom 29 patch updates remain enabled. Version 6.1.1 does not change the storage schema, public REST API, provider contracts, configuration, or migration requirements from 6.1.0.
 
 ## Harness Support On Equal Footing
 
@@ -51,11 +57,11 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.0 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.0). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.1 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.1). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
-Veritas Kanban 6.1.0 advances SQLite through migrations 30 to 33 for knowledge collections and integrity operations. Rollback to an older schema requires restoring the stopped-writer pre-upgrade backup; do not open migrated data with an older binary.
+Veritas Kanban 6.1.1 retains SQLite migrations 30 to 33 from 6.1.0. No new migration runs when upgrading from 6.1.0. Rollback to an older schema still requires restoring the stopped-writer pre-upgrade backup; do not open migrated data with an older binary.
 
 The public REST API remains mounted at `v1`. Provider-less or adapter/profile-mismatched records do not fall through to OpenClaw. Unknown or changed provider builds lose certification until current probes and deterministic fixtures pass. Claude Code does not launch with `--dangerously-skip-permissions`. Credential-bound MCP servers remain available only through the mediated run-scoped bridge.
 
@@ -67,7 +73,7 @@ Deterministic compatibility does not prove provider authentication, subscription
 
 ## Release Artifacts
 
-The supported stable desktop release publishes signed and notarized `Veritas-Kanban-6.1.0-mac-arm64.dmg` and `Veritas-Kanban-6.1.0-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.0` tag. Publication is complete only after GitHub assets, signature, Gatekeeper, stapling, updater, downloaded-app launch, and Homebrew installation have been verified.
+The supported stable desktop release publishes signed and notarized `Veritas-Kanban-6.1.1-mac-arm64.dmg` and `Veritas-Kanban-6.1.1-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.1` tag. Publication is complete only after GitHub assets, signature, Gatekeeper, stapling, updater, downloaded-app launch, and Homebrew installation have been verified.
 
 ## Documentation And Evidence
 

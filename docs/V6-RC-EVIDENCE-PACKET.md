@@ -1,15 +1,35 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the completed Veritas Kanban 6.1.0 stable release and
-retains historical evidence for the quarantined 6.0.0 prerelease, the 6.0.1
+This packet records the Veritas Kanban 6.1.1 maintenance release candidate and
+retains historical evidence for the completed 6.1.0 release, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.0 is the supported stable v6 release. Do not use 6.0.0 for
-installation or upgrade validation.
+Veritas Kanban 6.1.0 remains the supported stable v6 release until 6.1.1
+publication and artifact verification complete. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-07-26 for Veritas Kanban 6.1.0.
+Documentation freshness: 2026-08-22 for the Veritas Kanban 6.1.1 release candidate.
+
+## 6.1.1 Maintenance Release Candidate
+
+| Field              | Value                                                                                                                                                                                                                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version    | 6.1.1                                                                                                                                                                                                                                                                                                                      |
+| Source branch      | `fix/release-6-1-1-1156`                                                                                                                                                                                                                                                                                                   |
+| Source baseline    | `main` after the audited task-drawer fix, dependency rollup, and Chalk 6 disposition (#1154, #1155, #1149)                                                                                                                                                                                                                 |
+| Included issues    | [#1153](https://github.com/BradGroux/veritas-kanban/issues/1153) and release tracker [#1156](https://github.com/BradGroux/veritas-kanban/issues/1156)                                                                                                                                                                      |
+| Pull-request audit | #1154 accepted and merged with browser proof; #1155 accepted with refreshed security floors; #1149 accepted after Node.js and test review; #1150 closed as unnecessary because `pnpm/action-setup@v6` already resolves to 6.0.9; #1148 rejected because its engine floor and 65 failing tests violate the release contract |
+| Publication state  | Pending the consolidated release gate, release PR, annotated tag, GitHub publication, signed/notarized assets, installed-app verification, and Homebrew cask update                                                                                                                                                        |
+
+### 6.1.1 verification evidence
+
+| Gate                                       | Candidate result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task Detail and mobile browser regressions | Chromium verifies the Mantine tabs root is a flex column, the overlay has real overflow, and wheel input increases the scroll position. Chromium and WebKit verify nested task-card controls do not activate the card and status movement completes through the visible save lifecycle                                                                                                                                                                                                                                              |
+| Dependency security                        | `pnpm audit --prod` and full `pnpm audit` report no known vulnerabilities after stale override floors were refreshed                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Dependency PR CI                           | Build, lint/typecheck, security audit, affected-workspace tests, and unsigned macOS, Linux, and Windows packaging passed on #1155                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Consolidated candidate                     | Frozen install, production and full audits, package-manager policy, release formatting, lint and 592-warning budget, typecheck, build, 3,770 workspace tests, 37 Playwright cases across Chromium and WebKit, Mantine QA, CLI/MCP smoke, 50 Buzz compatibility tests, 67 desktop tests, seven readiness tests, unsigned macOS packaging, packaged-app smoke, and the 6.1.1 release validator pass. The local Docker build variant was unavailable because the Docker daemon was not running. Opposite-model review remains pending. |
 
 ## 6.1.0 Roadmap Release
 
