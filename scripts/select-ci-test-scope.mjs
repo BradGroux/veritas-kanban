@@ -287,13 +287,14 @@ function parseLabels(value) {
   }
 }
 
-function githubOutputLines(result, input) {
+export function githubOutputLines(result, input) {
   const diffRange = diffRangeFor(input.baseSha, input.headSha, input.eventName);
   const coveragePackages = coverageWorkspaces(result.files, result.scope);
   return [
     `scope=${result.scope}`,
     `packages=${result.packages.join(',')}`,
     `coverage_packages=${coveragePackages.join(',')}`,
+    `base_sha=${input.baseSha}`,
     `diff_range=${diffRange}`,
     `reason=${result.reason}`,
   ].join('\n');

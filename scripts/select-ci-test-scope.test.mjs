@@ -6,6 +6,7 @@ import {
   classifyCiTestScope,
   coverageWorkspaces,
   diffRangeFor,
+  githubOutputLines,
   isDependencyFreeScopeControlPath,
   isDocumentationPath,
   requiresFullSuite,
@@ -273,4 +274,15 @@ test('uses two-dot push ranges, three-dot review ranges, and rejects non-SHAs', 
     () => diffRangeFor('--output=/tmp/unsafe', head, 'workflow_dispatch'),
     /hexadecimal commit IDs/
   );
+});
+
+test('exports the resolved base SHA for downstream coverage gates', () => {
+  const baseSha = 'a'.repeat(40);
+  const headSha = 'b'.repeat(40);
+  const output = githubOutputLines(
+    { scope: 'focused', packages: ['server'], files: [], reason: 'test' },
+    { baseSha, headSha, eventName: 'workflow_dispatch' }
+  );
+
+  assert.match(output, new RegExp(`^base_sha=${baseSha}$`, 'm'));
 });

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,6 +57,7 @@ export function validateCoveragePolicy({
   packageJson,
   workflow,
   configs,
+  fileExists = () => true,
   today = new Date().toISOString().slice(0, 10),
 }) {
   const errors = [];
@@ -89,6 +91,9 @@ export function validateCoveragePolicy({
         !/\.test\.[cm]?[jt]sx?$/.test(testFile)
       ) {
         errors.push(`${packagePolicy.id} coverage test files must be exact test paths`);
+      }
+      if (!fileExists(`${packagePolicy.id}/${testFile}`)) {
+        errors.push(`${packagePolicy.id} governed coverage test file does not exist: ${testFile}`);
       }
     }
     for (const boundary of packagePolicy.boundaries ?? []) {
@@ -131,6 +136,9 @@ export function validateCoveragePolicy({
   }
   if (!workflow.includes('COVERAGE_BASE_REF:')) {
     errors.push('CI must compare coverage policy and changed critical files with the base commit');
+  }
+  if (!workflow.includes('needs.select-tests.outputs.base_sha')) {
+    errors.push('CI coverage must use the selector base SHA for every event type');
   }
   if (!coverageJob?.includes('fetch-depth: 0')) {
     errors.push('CI coverage checkout must fetch the base commit used by coverage ratchets');
@@ -221,6 +229,7 @@ async function main(repoRoot = process.cwd()) {
     packageJson,
     workflow,
     configs,
+    fileExists: (relativePath) => existsSync(path.join(repoRoot, relativePath)),
   });
 
   if (errors.length > 0) {

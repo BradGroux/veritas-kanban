@@ -56,6 +56,7 @@ export function coverageCommands(policy, selected) {
       '--coverage',
       `--maxWorkers=${runner.maxWorkers ?? 4}`,
       '--reporter=dot',
+      '--coverage.reporter=json',
       '--coverage.reporter=json-summary',
       '--coverage.reporter=html',
       '--coverage.reporter=text-summary',

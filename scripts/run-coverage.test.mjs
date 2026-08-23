@@ -41,6 +41,7 @@ test('builds shared first and emits isolated machine-readable and HTML reports',
 
   const web = commands[1].join(' ');
   assert.match(web, /--filter @veritas-kanban\/web/);
+  assert.match(web, /--coverage\.reporter=json(?: |$)/);
   assert.match(web, /--coverage\.reporter=json-summary/);
   assert.match(web, /--coverage\.reporter=html/);
   assert.match(web, /--coverage\.reportsDirectory=\.\.\/coverage\/web/);

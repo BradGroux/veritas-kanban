@@ -30,7 +30,7 @@ const valid = {
     devDependencies: { '@vitest/coverage-v8': '^4.1.11' },
   },
   workflow:
-    'jobs:\n  critical-path-coverage:\n    fetch-depth: 0\n    needs.select-tests.outputs.coverage_packages\n    pnpm test:coverage --packages\n    COVERAGE_BASE_REF:\n    if: always() && needs.select-tests.outputs.coverage_packages\n    actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n  build:\n    runs-on: ubuntu-latest',
+    'jobs:\n  critical-path-coverage:\n    fetch-depth: 0\n    needs.select-tests.outputs.coverage_packages\n    needs.select-tests.outputs.base_sha\n    pnpm test:coverage --packages\n    COVERAGE_BASE_REF:\n    if: always() && needs.select-tests.outputs.coverage_packages\n    actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n  build:\n    runs-on: ubuntu-latest',
   configs: Object.fromEntries(
     ['server', 'web', 'cli', 'mcp', 'desktop'].map((id) => [
       id,
@@ -75,6 +75,15 @@ test('requires the coverage job itself to fetch the comparison base', () => {
   invalid.workflow = invalid.workflow.replace('    fetch-depth: 0\n', '');
 
   assert.match(validateCoveragePolicy(invalid).join('\n'), /fetch the base commit/);
+});
+
+test('rejects missing governed test inventory entries', () => {
+  const errors = validateCoveragePolicy({
+    ...valid,
+    fileExists: (relativePath) => relativePath !== 'server/src/__tests__/critical.test.ts',
+  }).join('\n');
+
+  assert.match(errors, /governed coverage test file does not exist/);
 });
 
 test('rejects lowered floors, removed boundaries, and narrowed governed scope', () => {

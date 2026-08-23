@@ -60,6 +60,7 @@ jobs:
     outputs:
       scope: ${{ steps.scope.outputs.scope }}
       packages: ${{ steps.scope.outputs.packages }}
+      base_sha: ${{ steps.scope.outputs.base_sha }}
       diff_range: ${{ steps.scope.outputs.diff_range }}
       reason: ${{ steps.scope.outputs.reason }}
       coverage_packages: ${{ steps.scope.outputs.coverage_packages }}
@@ -575,14 +576,14 @@ jobs:
       - name: Verify coverage policy
         if: needs.select-tests.outputs.coverage_packages != ''
         env:
-          COVERAGE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          COVERAGE_BASE_REF: ${{ needs.select-tests.outputs.base_sha }}
         run: pnpm check:coverage-policy
 
       - name: Measure and ratchet critical paths
         if: needs.select-tests.outputs.coverage_packages != ''
         env:
           COVERAGE_PACKAGES: ${{ needs.select-tests.outputs.coverage_packages }}
-          COVERAGE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          COVERAGE_BASE_REF: ${{ needs.select-tests.outputs.base_sha }}
         run: pnpm test:coverage --packages "$COVERAGE_PACKAGES"
 
       - name: Upload coverage reports

@@ -48,21 +48,18 @@ export function normalizeCoverageSummary(summary, repoRoot) {
   );
 }
 
+export function normalizeDetailedCoverage(coverage, repoRoot) {
+  return Object.fromEntries(
+    Object.entries(coverage).map(([file, details]) => {
+      const relative = path.isAbsolute(file) ? path.relative(repoRoot, file) : file;
+      return [relative.split(path.sep).join('/'), details];
+    })
+  );
+}
+
 function validateException(exception, label, today) {
   const errors = coverageExceptionErrors(exception, label, today);
   if (errors.length > 0) throw new Error(errors.join('\n'));
-}
-
-function changedGovernedTest(packagePolicy, changedFiles) {
-  const exactTests = new Set(
-    (packagePolicy.runner?.testFiles ?? []).map(
-      (testFile) => `${packagePolicy.id}/${testFile}`
-    )
-  );
-  const triggerPatterns = packagePolicy.runner?.triggerPatterns ?? [];
-  return changedFiles.some(
-    (file) => exactTests.has(file) || triggerPatterns.some((pattern) => matchesGlob(file, pattern))
-  );
 }
 
 function aggregate(entries) {
@@ -75,11 +72,33 @@ function aggregate(entries) {
   );
 }
 
+function emptyMetrics() {
+  return Object.fromEntries(
+    METRICS.map((metric) => [metric, { total: 0, covered: 0, pct: 0 }])
+  );
+}
+
+function uncoveredChangedStatements(details, changedLines) {
+  if (!details || changedLines.size === 0) return [];
+  return Object.entries(details.statementMap ?? {})
+    .filter(([, location]) => {
+      for (let line = location.start.line; line <= location.end.line; line += 1) {
+        if (changedLines.has(line)) return true;
+      }
+      return false;
+    })
+    .filter(([id]) => (details.s?.[id] ?? 0) === 0)
+    .map(([, location]) => location.start.line)
+    .sort((left, right) => left - right);
+}
+
 export function evaluateCoverage(
   policy,
   summaries,
   today = new Date().toISOString().slice(0, 10),
-  changedFiles = []
+  changedFiles = [],
+  detailedCoverage = {},
+  changedLineNumbers = new Map()
 ) {
   if (policy.schemaVersion !== 'critical-path-coverage/v1') {
     throw new Error(`Unsupported coverage policy schema: ${policy.schemaVersion}`);
@@ -91,7 +110,7 @@ export function evaluateCoverage(
   for (const packagePolicy of policy.packages) {
     const summary = summaries[packagePolicy.id];
     if (!summary) continue;
-    const hasChangedGovernedTest = changedGovernedTest(packagePolicy, changedFiles);
+    const details = detailedCoverage[packagePolicy.id] ?? {};
 
     for (const boundary of packagePolicy.boundaries) {
       const failureCountBeforeBoundary = failures.length;
@@ -108,6 +127,15 @@ export function evaluateCoverage(
 
       if (entries.length === 0) {
         failures.push(`${packagePolicy.id}/${boundary.id} matched no reported source files`);
+        results.push({
+          package: packagePolicy.id,
+          boundary: boundary.id,
+          description: boundary.description,
+          files: [],
+          metrics: emptyMetrics(),
+          thresholds: boundary.thresholds,
+          status: 'fail',
+        });
         continue;
       }
 
@@ -135,10 +163,19 @@ export function evaluateCoverage(
             `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no covered lines`
           );
         }
-        if (!hasChangedGovernedTest) {
+        const changedLines = changedLineNumbers.get(changedFile) ?? new Set();
+        const detailedFileCoverage = details[changedFile];
+        if (changedLines.size > 0 && !detailedFileCoverage) {
           failures.push(
-            `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} requires a governed test change or explicit exception`
+            `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no statement coverage entry`
           );
+        } else {
+          const uncoveredLines = uncoveredChangedStatements(detailedFileCoverage, changedLines);
+          if (uncoveredLines.length > 0) {
+            failures.push(
+              `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has uncovered executable statements on line(s) ${uncoveredLines.join(', ')}`
+            );
+          }
         }
       }
 
@@ -175,6 +212,30 @@ export function changedFilesFromBase(repoRoot, baselineRef) {
     .filter(Boolean);
 }
 
+export function changedLineNumbersFromBase(repoRoot, baselineRef, changedFiles) {
+  if (!baselineRef || changedFiles.length === 0) return new Map();
+  const changedLines = new Map();
+  for (const file of changedFiles) {
+    const diff = execFileSync(
+      'git',
+      ['diff', '--unified=0', '--no-color', `${baselineRef}...HEAD`, '--', file],
+      { cwd: repoRoot, encoding: 'utf8' }
+    );
+    changedLines.set(file, parseChangedLineNumbers(diff));
+  }
+  return changedLines;
+}
+
+export function parseChangedLineNumbers(diff) {
+  const lines = new Set();
+  for (const match of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+    const start = Number(match[1]);
+    const count = match[2] === undefined ? 1 : Number(match[2]);
+    for (let line = start; line < start + count; line += 1) lines.add(line);
+  }
+  return lines;
+}
+
 export function markdownSummary(evaluation, longTermTarget) {
   const lines = [
     '### Critical-path coverage ratchets',
@@ -205,16 +266,33 @@ export async function runCoverageRatchets({
   const available = policy.packages.map(({ id }) => id);
   const selected = parseSelectedPackages(args, available);
   const summaries = {};
+  const detailedCoverage = {};
 
   for (const packagePolicy of policy.packages) {
     if (!selected.includes(packagePolicy.id)) continue;
     const reportPath = path.join(repoRoot, packagePolicy.report);
-    const summary = JSON.parse(await readFile(reportPath, 'utf8'));
+    const [summary, details] = await Promise.all([
+      readFile(reportPath, 'utf8').then(JSON.parse),
+      readFile(path.join(path.dirname(reportPath), 'coverage-final.json'), 'utf8').then(JSON.parse),
+    ]);
     summaries[packagePolicy.id] = normalizeCoverageSummary(summary, repoRoot);
+    detailedCoverage[packagePolicy.id] = normalizeDetailedCoverage(details, repoRoot);
   }
 
   const changedFiles = changedFilesFromBase(repoRoot, process.env.COVERAGE_BASE_REF);
-  const evaluation = evaluateCoverage(policy, summaries, undefined, changedFiles);
+  const changedLineNumbers = changedLineNumbersFromBase(
+    repoRoot,
+    process.env.COVERAGE_BASE_REF,
+    changedFiles
+  );
+  const evaluation = evaluateCoverage(
+    policy,
+    summaries,
+    undefined,
+    changedFiles,
+    detailedCoverage,
+    changedLineNumbers
+  );
   const machineReport = {
     schemaVersion: 'critical-path-coverage-report/v1',
     longTermTarget: policy.longTermTarget,

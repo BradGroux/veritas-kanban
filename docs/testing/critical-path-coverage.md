@@ -24,7 +24,8 @@ To measure only the packages selected by CI:
 pnpm test:coverage --packages server,web
 ```
 
-Each measured package writes HTML and `coverage-summary.json` under `coverage/<package>/`.
+Each measured package writes HTML, `coverage-summary.json`, and statement-level
+`coverage-final.json` under `coverage/<package>/`.
 The root `coverage/critical-path-summary.json` and `.md` files contain the machine-readable and
 human-readable boundary results. Coverage output is generated evidence and remains ignored by
 Git.
@@ -65,9 +66,10 @@ Broad source patterns in the policy automatically include new files in governed 
 workspace coverage uses `all: true`, an untested critical file contributes zero coverage and
 drops its boundary. CI additionally rejects every changed governed source file with no executable
 coverage entry or zero covered lines, so stronger coverage elsewhere cannot hide new untested code.
-Every changed governed source file must also be paired with a changed governed test file in the
-same package or an explicit reviewed exception. This prevents historical coverage elsewhere in an
-existing file from satisfying the new-code test requirement by itself.
+Every added or modified executable statement in governed source must be covered by the measured
+suite or carry an explicit reviewed exception. The gate reads the base-to-head diff alongside the
+statement-level V8 report, so historical coverage elsewhere in an existing file cannot satisfy the
+new-code test requirement. Comments and type-only edits do not manufacture executable statements.
 The authentication boundary includes server Zod schemas and the shared authoritative API
 permission map in addition to middleware and redaction code.
 
