@@ -1,36 +1,19 @@
 /**
- * Enforcement test: all first-party API modules must use apiFetch, not raw fetch().
+ * Enforcement test: all first-party web code uses the credential-aware API transport.
  *
  * This test catches regressions where a developer adds a direct `fetch(` call
- * in web/src/lib/api/ that bypasses credential handling and base-URL resolution.
- *
- * Documented exceptions (text/stream responses that cannot use apiFetch):
- *   - agent.ts      — getLog() returns plain-text log file via response.text()
- *   - decisions.ts  — reviews.export() returns markdown export via response.text()
- *   - work-products.ts — export() returns markdown export via response.text()
- *
- * Any new exception must be added to the allowlist below with a justification comment.
+ * anywhere under web/src that bypasses credential handling and base-URL resolution.
  */
 import { describe, it, expect } from 'vitest';
 
-// Load raw source of every API module via Vite's import.meta.glob (no Node.js globals needed)
-const apiSources = import.meta.glob('../lib/api/*.ts', {
+// Load production sources via Vite's import.meta.glob (no Node.js globals needed).
+const apiSources = import.meta.glob(['../**/*.ts', '../**/*.tsx', '!../__tests__/**'], {
   query: '?raw',
   import: 'default',
   eager: true,
 }) as Record<string, string>;
 
-/** Files that may contain raw fetch() calls with documented justification. */
-const ALLOWLISTED: Record<string, number> = {
-  // text() responses — cannot use apiFetch (which only handles JSON envelopes)
-  'agent.ts': 1, // getLog() — plain-text agent log
-  'decisions.ts': 1, // reviews.export() — markdown export
-  'work-products.ts': 1, // export() — markdown export
-  // helpers.ts implements apiFetch itself
-  'helpers.ts': 1,
-};
-
-describe('API module raw fetch policy', () => {
+describe('credential-aware API transport policy', () => {
   for (const [path, source] of Object.entries(apiSources)) {
     const filenameCandidate = path.split('/').pop();
     if (!filenameCandidate) {
@@ -40,11 +23,11 @@ describe('API module raw fetch policy', () => {
 
     it(`${filename} does not contain unapproved raw fetch() calls`, () => {
       const matches = [...source.matchAll(/\bfetch\s*\(/g)];
-      const allowed = ALLOWLISTED[filename] ?? 0;
+      const allowed = path.endsWith('/lib/api/helpers.ts') ? 2 : 0;
       if (matches.length > allowed) {
         throw new Error(
           `${filename} has ${matches.length} raw fetch() call(s) but only ${allowed} are allowed. ` +
-            `Use apiFetch() from ./helpers instead, or add a justified allowlist entry.`
+            `Use apiFetch(), apiText(), or apiResponse() from lib/api/helpers.`
         );
       }
       expect(matches.length).toBeLessThanOrEqual(allowed);

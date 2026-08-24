@@ -44,6 +44,31 @@ export const tasksApi = {
     });
   },
 
+  addDependency: async (
+    taskId: string,
+    targetId: string,
+    type: 'depends_on' | 'blocks'
+  ): Promise<Task> => {
+    return apiFetch<Task>(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [type]: targetId }),
+    });
+  },
+
+  removeDependency: async (taskId: string, targetId: string): Promise<Task> => {
+    return apiFetch<Task>(
+      `${API_BASE}/tasks/${encodeURIComponent(taskId)}/dependencies/${encodeURIComponent(targetId)}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  clearCheckpoint: async (taskId: string): Promise<void> => {
+    return apiFetch<void>(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/checkpoint`, {
+      method: 'DELETE',
+    });
+  },
+
   archive: async (id: string): Promise<void> => {
     return apiFetch<void>(`${API_BASE}/tasks/${id}/archive`, {
       method: 'POST',

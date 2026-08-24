@@ -7,7 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { API_BASE, handleResponse } from '@/lib/api/helpers';
+import { docsApi } from '@/lib/api/docs';
 import {
   FileText,
   FolderOpen,
@@ -21,57 +21,6 @@ import {
   Clock,
   HardDrive,
 } from 'lucide-react';
-
-// ─── API Client ──────────────────────────────────────────────────
-
-interface DocFile {
-  path: string;
-  name: string;
-  content?: string;
-  size: number;
-  modified: string;
-  created: string;
-  extension: string;
-  directory: string;
-}
-
-const docsApi = {
-  list: async (params?: { directory?: string; sortBy?: string }): Promise<DocFile[]> => {
-    const qs = new URLSearchParams();
-    if (params?.directory) qs.set('directory', params.directory);
-    if (params?.sortBy) qs.set('sortBy', params.sortBy);
-    const resp = await fetch(`${API_BASE}/docs?${qs}`);
-    return handleResponse<DocFile[]>(resp);
-  },
-  getFile: async (path: string): Promise<DocFile> => {
-    const resp = await fetch(`${API_BASE}/docs/file/${path}`);
-    return handleResponse<DocFile>(resp);
-  },
-  saveFile: async (path: string, content: string): Promise<DocFile> => {
-    const resp = await fetch(`${API_BASE}/docs/file/${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ content }),
-    });
-    return handleResponse<DocFile>(resp);
-  },
-  deleteFile: async (path: string): Promise<void> => {
-    const resp = await fetch(`${API_BASE}/docs/file/${path}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    return handleResponse<void>(resp);
-  },
-  search: async (q: string): Promise<Array<{ file: DocFile; matches: Array<{ line: number; text: string }> }>> => {
-    const resp = await fetch(`${API_BASE}/docs/search?q=${encodeURIComponent(q)}`);
-    return handleResponse(resp);
-  },
-  directories: async (): Promise<string[]> => {
-    const resp = await fetch(`${API_BASE}/docs/directories`);
-    return handleResponse<string[]>(resp);
-  },
-};
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -214,7 +163,9 @@ export function DocsViewer() {
           <div className="space-y-0.5">
             <button
               className={`flex items-center gap-1.5 w-full text-left text-xs px-2 py-1 rounded transition-colors ${
-                !selectedDir ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:bg-muted/50'
+                !selectedDir
+                  ? 'bg-muted text-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-muted/50'
               }`}
               onClick={() => setSelectedDir(undefined)}
             >
@@ -225,7 +176,9 @@ export function DocsViewer() {
               <button
                 key={dir}
                 className={`flex items-center gap-1.5 w-full text-left text-xs px-2 py-1 rounded transition-colors ${
-                  selectedDir === dir ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:bg-muted/50'
+                  selectedDir === dir
+                    ? 'bg-muted text-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-muted/50'
                 }`}
                 onClick={() => setSelectedDir(dir)}
               >
@@ -252,7 +205,10 @@ export function DocsViewer() {
               <button className="text-[10px] text-green-500 hover:underline" onClick={handleCreate}>
                 Create
               </button>
-              <button className="text-[10px] text-muted-foreground hover:underline" onClick={() => setCreating(false)}>
+              <button
+                className="text-[10px] text-muted-foreground hover:underline"
+                onClick={() => setCreating(false)}
+              >
                 Cancel
               </button>
             </div>

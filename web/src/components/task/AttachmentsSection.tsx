@@ -27,6 +27,7 @@ import {
   ThemeIcon,
 } from '@mantine/core';
 import { useUploadAttachment, useDeleteAttachment } from '@/hooks/useAttachments';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { Task, Attachment } from '@veritas-kanban/shared';
 
@@ -78,10 +79,7 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
     if (!expanded && extractedText === null && isDocument) {
       setLoadingText(true);
       try {
-        const response = await fetch(
-          `${API_BASE}/tasks/${taskId}/attachments/${attachment.id}/text`
-        );
-        const data = await response.json();
+        const data = await api.attachments.getText(taskId, attachment.id);
         setExtractedText(data.text || '(No text extracted)');
       } catch (error) {
         console.error('[Attachments] Failed to load extracted text:', error);

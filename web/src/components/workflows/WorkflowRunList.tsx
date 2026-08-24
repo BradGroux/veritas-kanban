@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { API_BASE } from '@/lib/config';
+import { workflowsApi } from '@/lib/api/workflows';
 import {
   Badge,
   Button,
@@ -60,10 +60,7 @@ export function WorkflowRunList({ workflowId, onBack }: WorkflowRunListProps) {
   useEffect(() => {
     const fetchRuns = async () => {
       try {
-        const response = await fetch(`${API_BASE}/workflows/runs?workflowId=${workflowId}`);
-        if (!response.ok) throw new Error('Failed to fetch workflow runs');
-        const json = await response.json();
-        setRuns(json.data ?? json);
+        setRuns(await workflowsApi.listRuns({ workflowId }));
       } catch (error) {
         toast({
           title: '❌ Failed to load workflow runs',

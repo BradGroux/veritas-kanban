@@ -12,8 +12,8 @@
 import { useState } from 'react';
 import { Badge, Button, Group, Paper, Select, Stack, Switch, Text } from '@mantine/core';
 import { CheckCircle2, XCircle, ShieldCheck, Loader2 } from 'lucide-react';
-import { API_BASE } from '@/lib/config';
 import { useToast } from '@/hooks/useToast';
+import { tasksApi } from '@/lib/api/tasks';
 import type { Task, RunMode, QaGateState } from '@veritas-kanban/shared';
 
 interface RunModeGateSectionProps {
@@ -56,12 +56,7 @@ export function RunModeGateSection({ task, onUpdate, readOnly = false }: RunMode
     const newMode = value === 'none' ? null : (value as RunMode);
     setIsSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runMode: newMode }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await tasksApi.update(task.id, { runMode: newMode });
       onUpdate('runMode', newMode ?? undefined);
       toast({ title: newMode ? `Run mode set: ${RUN_MODE_LABELS[newMode]}` : 'Run mode cleared' });
     } catch (err) {
@@ -84,12 +79,7 @@ export function RunModeGateSection({ task, onUpdate, readOnly = false }: RunMode
     };
     setIsSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qaGate: newGate }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await tasksApi.update(task.id, { qaGate: newGate });
       onUpdate('qaGate', newGate);
       toast({ title: checked ? 'QA gate enabled' : 'QA gate disabled' });
     } catch (err) {
@@ -114,12 +104,7 @@ export function RunModeGateSection({ task, onUpdate, readOnly = false }: RunMode
     };
     setIsSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qaGate: newGate }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await tasksApi.update(task.id, { qaGate: newGate });
       onUpdate('qaGate', newGate);
       toast({ title: nowPassed ? '✅ QA passed' : 'QA pass revoked' });
     } catch (err) {

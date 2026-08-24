@@ -26,7 +26,7 @@ import type {
   CreateWorktreeRequest,
   DeleteWorktreeRequest,
 } from '@veritas-kanban/shared';
-import { API_BASE, apiFetch } from './helpers';
+import { API_BASE, apiFetch, apiText } from './helpers';
 
 export interface StartAgentRequest {
   agent?: AgentType;
@@ -257,14 +257,7 @@ export const agentApi = {
   },
 
   getLog: async (taskId: string, attemptId: string): Promise<string> => {
-    // Log endpoint returns plain text, not a JSON envelope — keep raw fetch.
-    const response = await fetch(`${API_BASE}/agents/${taskId}/attempts/${attemptId}/log`, {
-      credentials: 'include',
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch log');
-    }
-    return response.text();
+    return apiText(`${API_BASE}/agents/${taskId}/attempts/${attemptId}/log`);
   },
 };
 

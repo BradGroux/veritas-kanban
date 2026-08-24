@@ -8,6 +8,7 @@ import type {
   WorkflowSkillAuditSummary,
   AgentBudgetPolicy,
   WorkflowAccess,
+  WorkflowRun,
 } from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
@@ -114,9 +115,7 @@ export interface WorkflowRecipeMaterialization {
   };
 }
 
-export interface WorkflowRunStartResponse {
-  id: string;
-}
+export type WorkflowRunStartResponse = WorkflowRun;
 
 export interface WorkflowLaunchRecommendationParams {
   workflowId?: string;
@@ -147,6 +146,26 @@ export const workflowsApi = {
       `${API_BASE}/workflows/${encodeURIComponent(workflowId)}`
     );
     return unwrapData(response);
+  },
+
+  listRuns: async (
+    filters: { workflowId?: string; taskId?: string } = {}
+  ): Promise<WorkflowRun[]> => {
+    const query = new URLSearchParams();
+    if (filters.workflowId) query.set('workflowId', filters.workflowId);
+    if (filters.taskId) query.set('taskId', filters.taskId);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch<WorkflowRun[]>(`${API_BASE}/workflows/runs${suffix}`);
+  },
+
+  getRun: async (runId: string): Promise<WorkflowRun> => {
+    return apiFetch<WorkflowRun>(`${API_BASE}/workflows/runs/${encodeURIComponent(runId)}`);
+  },
+
+  resumeRun: async (runId: string): Promise<WorkflowRun> => {
+    return apiFetch<WorkflowRun>(`${API_BASE}/workflows/runs/${encodeURIComponent(runId)}/resume`, {
+      method: 'POST',
+    });
   },
 
   access: async (workflowId: string): Promise<WorkflowAccess> => {
@@ -184,8 +203,8 @@ export const workflowsApi = {
       budget?: AgentBudgetPolicy;
       context?: Record<string, unknown>;
     } = {}
-  ): Promise<WorkflowRunStartResponse> => {
-    const response = await apiFetch<WorkflowRunStartResponse | { data: WorkflowRunStartResponse }>(
+  ): Promise<WorkflowRun> => {
+    const response = await apiFetch<WorkflowRun | { data: WorkflowRun }>(
       `${API_BASE}/workflows/${encodeURIComponent(workflowId)}/runs`,
       {
         method: 'POST',

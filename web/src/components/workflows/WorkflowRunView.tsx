@@ -18,7 +18,7 @@ import {
   type WorkflowPipelineSummary,
   type WorkflowSubagentRunStatus,
 } from '@veritas-kanban/shared';
-import { API_BASE } from '@/lib/config';
+import { workflowsApi } from '@/lib/api/workflows';
 import {
   Alert,
   Badge,
@@ -174,10 +174,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   // Fetch run details
   const fetchRun = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/workflows/runs/${runId}`);
-      if (!response.ok) throw new Error('Failed to fetch workflow run');
-      const json = await response.json();
-      setRun(json.data ?? json);
+      setRun(await workflowsApi.getRun(runId));
     } catch (error) {
       toast({
         title: '❌ Failed to load workflow run',
@@ -205,11 +202,9 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     let isCancelled = false;
     const fetchWorkflow = async () => {
       try {
-        const workflowResponse = await fetch(`${API_BASE}/workflows/${workflowId}`);
-        if (!workflowResponse.ok) throw new Error('Failed to fetch workflow definition');
-        const json = await workflowResponse.json();
+        const workflowDefinition = await workflowsApi.get(workflowId);
         if (!isCancelled) {
-          setWorkflow(json.data ?? json);
+          setWorkflow(workflowDefinition);
         }
       } catch (error) {
         console.error('Failed to fetch workflow definition:', error);
@@ -249,11 +244,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
 
   const handleResume = async () => {
     try {
-      const response = await fetch(`${API_BASE}/workflows/runs/${runId}/resume`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to resume workflow run');
+      await workflowsApi.resumeRun(runId);
 
       toast({
         title: 'Workflow resumed',
