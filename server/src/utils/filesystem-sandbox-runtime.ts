@@ -552,14 +552,39 @@ async function digestFileContents(filePath: string): Promise<string> {
 }
 
 async function readBoundedPathFile(filePath: string, maxBytes: number): Promise<string> {
-  const stat = await fs.lstat(filePath);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error('Filesystem metadata pointer must be a regular file.');
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+  try {
+    const noFollow = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0;
+    handle = await fs.open(filePath, constants.O_RDONLY | noFollow);
+    const before = await handle.stat();
+    if (!before.isFile()) {
+      throw new Error('Filesystem metadata pointer must be a regular file.');
+    }
+    if (before.size > maxBytes) {
+      throw new Error(`Filesystem metadata file exceeds ${maxBytes} bytes.`);
+    }
+
+    const buffer = Buffer.alloc(maxBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const after = await handle.stat();
+    if (
+      bytesRead > maxBytes ||
+      before.dev !== after.dev ||
+      before.ino !== after.ino ||
+      before.size !== after.size ||
+      before.mtimeMs !== after.mtimeMs
+    ) {
+      throw new Error('Filesystem metadata file changed while it was being inspected.');
+    }
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
+      throw new Error('Filesystem metadata pointer must be a regular file.', { cause: error });
+    }
+    throw error;
+  } finally {
+    await handle?.close();
   }
-  if (stat.size > maxBytes) {
-    throw new Error(`Filesystem metadata file exceeds ${maxBytes} bytes.`);
-  }
-  return fs.readFile(filePath, 'utf8');
 }
 
 async function readGitIdentityValue(cwd: string, key: 'user.name' | 'user.email') {
