@@ -383,7 +383,7 @@ async function handleHttpRequest(
   });
   upstream.once('response', (upstreamResponse) => {
     response.writeHead(
-      upstreamResponse.statusCode ?? 502,
+      normalizeUpstreamStatusCode(upstreamResponse.statusCode),
       forwardHeaders(upstreamResponse.headers, undefined, false)
     );
     upstreamResponse.pipe(response);
@@ -955,20 +955,29 @@ function portFor(url: URL, fallback: number): number {
   return url.port ? Number.parseInt(url.port, 10) : fallback;
 }
 
+function normalizeUpstreamStatusCode(statusCode: number | undefined): number {
+  if (typeof statusCode !== 'number' || !Number.isInteger(statusCode)) return 502;
+  return statusCode >= 100 && statusCode <= 599 ? statusCode : 502;
+}
+
 function forwardHeaders(
   headers: IncomingHttpHeaders,
   host: string | undefined,
   preserveUpgrade: boolean
-): IncomingHttpHeaders {
-  const result: IncomingHttpHeaders = {};
+): string[] {
+  const result: string[] = [];
   for (const [name, value] of Object.entries(headers)) {
     const lower = name.toLowerCase();
     if (lower === 'proxy-authorization' || lower === 'proxy-connection') continue;
     if (!preserveUpgrade && HOP_BY_HOP_HEADERS.has(lower)) continue;
     if (value === undefined) continue;
-    result[lower] = value;
+    if (Array.isArray(value)) {
+      for (const item of value) result.push(lower, item);
+    } else {
+      result.push(lower, value);
+    }
   }
-  if (host) result.host = host;
+  if (host) result.push('host', host);
   return result;
 }
 

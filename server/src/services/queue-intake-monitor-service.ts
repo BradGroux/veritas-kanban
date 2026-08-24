@@ -27,6 +27,12 @@ import type {
 import { createLogger } from '../lib/logger.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import {
+  createSafeRecord,
+  getSafeRecordValue,
+  safeRecordFrom,
+  setSafeRecordValue,
+} from '../utils/safe-record.js';
 import { JsonFileRepository } from '../storage/json-file-repository.js';
 import { getAgentBudgetService, type AgentBudgetService } from './agent-budget-service.js';
 import { getBreaker } from './circuit-registry.js';
@@ -247,13 +253,18 @@ export class QueueIntakeMonitorService {
     };
     store.monitors[index] = normalizeDefinition(updated);
     if (patch.enabled === true) {
-      store.state[monitorId] = {
-        ...this.stateFor(monitorId),
-        failureStreak: 0,
-        lastError: undefined,
-        actionItem: undefined,
-        nextRunAt: now.toISOString(),
-      };
+      setSafeRecordValue(
+        store.state,
+        monitorId,
+        {
+          ...this.stateFor(monitorId),
+          failureStreak: 0,
+          lastError: undefined,
+          actionItem: undefined,
+          nextRunAt: now.toISOString(),
+        },
+        'Queue monitor ID'
+      );
     }
     await this.saveStore();
     return this.snapshot(store.monitors[index], now);
@@ -833,22 +844,27 @@ export class QueueIntakeMonitorService {
           ? state.actionItem
           : undefined;
 
-    store.state[monitor.id] = {
-      ...state,
-      lastScanAt:
-        type === 'manual-run' || type === 'due-run' || type === 'explain'
-          ? now.toISOString()
-          : state.lastScanAt,
-      lastActionAt: now.toISOString(),
-      nextRunAt: nextRunAt(monitor, now),
-      failureStreak,
-      lastStatus: action.status,
-      lastSummary: action.summary,
-      lastError: action.error,
-      lastPacket: packet,
-      lastAction: action,
-      actionItem,
-    };
+    setSafeRecordValue(
+      store.state,
+      monitor.id,
+      {
+        ...state,
+        lastScanAt:
+          type === 'manual-run' || type === 'due-run' || type === 'explain'
+            ? now.toISOString()
+            : state.lastScanAt,
+        lastActionAt: now.toISOString(),
+        nextRunAt: nextRunAt(monitor, now),
+        failureStreak,
+        lastStatus: action.status,
+        lastSummary: action.summary,
+        lastError: action.error,
+        lastPacket: packet,
+        lastAction: action,
+        actionItem,
+      },
+      'Queue monitor ID'
+    );
 
     const event: QueueMonitorEvent = {
       id: `qm_evt_${nanoid(10)}`,
@@ -959,8 +975,11 @@ export class QueueIntakeMonitorService {
 
   private stateFor(monitorId: string): QueueMonitorState {
     const store = this.currentStore();
-    store.state[monitorId] ??= { failureStreak: 0 };
-    return store.state[monitorId];
+    const existing = getSafeRecordValue(store.state, monitorId, 'Queue monitor ID');
+    if (existing) return existing;
+    const created: QueueMonitorState = { failureStreak: 0 };
+    setSafeRecordValue(store.state, monitorId, created, 'Queue monitor ID');
+    return created;
   }
 
   private async ensureLoaded(): Promise<void> {
@@ -993,7 +1012,7 @@ function defaultStore(): QueueMonitorStore {
   return {
     version: STORE_VERSION,
     monitors: [defaultBacklogMonitor()],
-    state: {},
+    state: createSafeRecord<QueueMonitorState>(),
     events: [],
   };
 }
@@ -1034,7 +1053,7 @@ function normalizeStore(input: Partial<QueueMonitorStore>): QueueMonitorStore {
   return {
     version: STORE_VERSION,
     monitors: monitors.map(normalizeDefinition),
-    state: input.state ?? {},
+    state: safeRecordFrom<QueueMonitorState>(input.state, 'Queue monitor state'),
     events: Array.isArray(input.events) ? input.events.slice(-MAX_EVENTS) : [],
   };
 }
