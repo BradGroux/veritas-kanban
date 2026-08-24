@@ -1,0 +1,50 @@
+name: Docker Image Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - server/**
+      - shared/**
+      - web/**
+      - scripts/check-docker-image.mjs
+      - .github/workflows/docker-image.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - server/**
+      - shared/**
+      - web/**
+      - scripts/check-docker-image.mjs
+      - .github/workflows/docker-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Build, Size, and Runtime Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build production image
+        run: docker build --target production --tag veritas-kanban:contract .
+
+      - name: Enforce image and runtime contract
+        run: node scripts/check-docker-image.mjs veritas-kanban:contract

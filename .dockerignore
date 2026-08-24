@@ -7,6 +7,11 @@ node_modules
 server/dist
 web/dist
 shared/dist
+desktop/.desktop-release
+desktop/release
+.veritas-desktop-dev
+playwright-report
+test-results
 
 # Git
 .git

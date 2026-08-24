@@ -43,6 +43,7 @@
     "check:security-artifacts": "node scripts/check-security-artifacts.mjs",
     "check:tracked-ignore": "node --test scripts/check-tracked-ignore.test.mjs && node scripts/check-tracked-ignore.mjs",
     "check:service-filesystem-boundary": "node --test scripts/check-service-filesystem-boundary.test.mjs && node scripts/check-service-filesystem-boundary.mjs",
+    "check:docker-image": "node scripts/check-docker-image.mjs",
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
     "test": "pnpm test:unit",
     "test:unit": "node --test scripts/run-workspace-unit-tests.test.mjs && node scripts/run-workspace-unit-tests.mjs",
