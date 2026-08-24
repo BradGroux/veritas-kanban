@@ -97,6 +97,7 @@ export class TaskService {
   private sqliteTasks: SqliteTaskRepository | null = null;
   private fileTasks: FileTaskRepository | null = null;
   private sqliteMutationQueue: Promise<unknown> = Promise.resolve();
+  private taskMutationQueues = new Map<string, Promise<void>>();
   private configService: Pick<ConfigService, 'getFeatureSettings'>;
   private ceremonyService: Pick<CeremonyService, 'evaluateTaskCompletion'>;
 
@@ -212,8 +213,17 @@ export class TaskService {
   }
 
   private withTaskMutex<T>(id: string, callback: () => Promise<T>): Promise<T> {
-    if (this.fileTasks) return this.fileTasks.withTaskLock(id, callback);
-    return this.runSqliteMutation(callback);
+    const previous = this.taskMutationQueues.get(id) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.taskMutationQueues.set(id, current);
+
+    return previous.then(callback).finally(() => {
+      release();
+      if (this.taskMutationQueues.get(id) === current) this.taskMutationQueues.delete(id);
+    });
   }
 
   /** Get a task from the cache */
@@ -608,7 +618,7 @@ export class TaskService {
   }
 
   async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
-    return this.updateTaskMutation(id, input);
+    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
   }
 
   async patchTaskAttempt(
@@ -619,7 +629,7 @@ export class TaskService {
     const input: TaskMutationInput = {
       attemptPatch: { id: attemptId, ...patch },
     };
-    return this.updateTaskMutation(id, input);
+    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
   }
 
   private async updateTaskMutation(id: string, input: TaskMutationInput): Promise<Task | null> {
@@ -1054,6 +1064,10 @@ export class TaskService {
   }
 
   async deleteTask(id: string): Promise<boolean> {
+    return this.withTaskMutex(id, () => this.deleteTaskMutation(id));
+  }
+
+  private async deleteTaskMutation(id: string): Promise<boolean> {
     if (this.sqliteTasks) {
       await this.assertTaskIdentityIntegrity('task.delete', id, {
         allowSameLocationTaskIdDuplicates: true,
@@ -1082,6 +1096,13 @@ export class TaskService {
   }
 
   async archiveTask(
+    id: string,
+    options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string }
+  ): Promise<boolean> {
+    return this.withTaskMutex(id, () => this.archiveTaskMutation(id, options));
+  }
+
+  private async archiveTaskMutation(
     id: string,
     options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string }
   ): Promise<boolean> {
@@ -1189,6 +1210,10 @@ export class TaskService {
   }
 
   async restoreTask(id: string): Promise<Task | null> {
+    return this.withTaskMutex(id, () => this.restoreTaskMutation(id));
+  }
+
+  private async restoreTaskMutation(id: string): Promise<Task | null> {
     if (this.sqliteTasks) {
       await this.assertTaskIdentityIntegrity('task.restore', id);
       const task = await this.getArchivedTask(id);
