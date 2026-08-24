@@ -1,7 +1,10 @@
 import { execFile } from 'child_process';
-import { readFile } from 'fs/promises';
 import { promisify } from 'util';
 import { ConfigService } from './config-service.js';
+import {
+  OperationalMetadataRepository,
+  operationalMetadataRepository,
+} from '../storage/operational-metadata-repository.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -38,7 +41,9 @@ export interface CodexHealthStatus {
 export class CodexHealthService {
   private configService: ConfigService;
 
-  constructor() {
+  constructor(
+    private readonly operationalMetadata: OperationalMetadataRepository = operationalMetadataRepository
+  ) {
     this.configService = new ConfigService();
   }
 
@@ -111,12 +116,9 @@ export class CodexHealthService {
       await import('@openai/codex-sdk');
       const moduleUrl = import.meta.resolve('@openai/codex-sdk');
       const packageUrl = new URL('../package.json', moduleUrl);
-      const packageMetadata = JSON.parse(await readFile(packageUrl, 'utf8')) as {
-        version?: unknown;
-      };
       return {
         available: true,
-        version: typeof packageMetadata.version === 'string' ? packageMetadata.version : undefined,
+        version: await this.operationalMetadata.readPackageVersion(packageUrl),
       };
     } catch (error: any) {
       return { available: false, error: error.message || 'Codex SDK is not available' };
