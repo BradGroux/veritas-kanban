@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { TraceService } from '../services/trace-service.js';
+import { TraceFileRepository } from '../storage/trace-file-repository.js';
 
 function requireValue<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) {
@@ -35,8 +36,11 @@ describe('TraceService', () => {
 
     service = new TraceService();
     // Override private fields
-    const internals = service as unknown as { tracesDir: string; enabled: boolean };
-    internals.tracesDir = tracesDir;
+    const internals = service as unknown as {
+      repository: TraceFileRepository;
+      enabled: boolean;
+    };
+    internals.repository = new TraceFileRepository(tracesDir);
     internals.enabled = true;
   });
 

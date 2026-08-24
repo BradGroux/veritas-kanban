@@ -113,7 +113,6 @@ function visitRecords(
 function findString(value: unknown, keys: Set<string>): string | undefined {
   let found: string | undefined;
   visitRecords(value, (record) => {
-    if (found) return true;
     for (const [key, candidate] of Object.entries(record)) {
       if (keys.has(key) && typeof candidate === 'string' && candidate.trim()) {
         found = candidate.trim();
@@ -128,7 +127,6 @@ function findString(value: unknown, keys: Set<string>): string | undefined {
 function findStringArray(value: unknown, keys: Set<string>): string[] {
   let found: string[] = [];
   visitRecords(value, (record) => {
-    if (found.length) return true;
     for (const [key, candidate] of Object.entries(record)) {
       if (keys.has(key) && Array.isArray(candidate)) {
         const strings = candidate
@@ -149,7 +147,6 @@ function findStringArray(value: unknown, keys: Set<string>): string[] {
 function findNumber(value: unknown, keys: Set<string>): number | undefined {
   let found: number | undefined;
   visitRecords(value, (record) => {
-    if (found !== undefined) return true;
     for (const [key, candidate] of Object.entries(record)) {
       if (!keys.has(key)) continue;
       if (typeof candidate !== 'number' && typeof candidate !== 'string') continue;
@@ -184,7 +181,6 @@ function extractFiles(value: unknown): string[] {
 function extractUsage(value: unknown): CodexEventUsage | undefined {
   let usage: CodexEventUsage | undefined;
   visitRecords(value, (record) => {
-    if (usage) return true;
     const input =
       record.input_tokens ?? record.inputTokens ?? record.prompt_tokens ?? record.promptTokens;
     const output =
@@ -228,7 +224,6 @@ function itemType(event: Record<string, unknown>): string | undefined {
 function extractSummary(value: unknown): string | undefined {
   let summary: string | undefined;
   visitRecords(value, (record) => {
-    if (summary) return true;
     for (const key of SUMMARY_KEYS) {
       const candidate = record[key];
       if (typeof candidate === 'string' && candidate.trim()) {
