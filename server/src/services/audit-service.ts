@@ -7,14 +7,11 @@
  * Log files are stored as JSONL (one JSON object per line) with monthly rotation:
  *   {dataDir}/audit/audit-{YYYY-MM}.log
  */
-import fs from 'fs/promises';
-import { createReadStream } from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-import readline from 'readline';
 import { createLogger } from '../lib/logger.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteAuditRepository } from '../storage/sqlite/audit-policy-repositories.js';
+import { AuditFileRepository } from '../storage/audit-file-repository.js';
 
 const log = createLogger('audit');
 
@@ -57,6 +54,7 @@ import { getAuditDir } from '../utils/paths.js';
 
 const AUDIT_DIR = getAuditDir();
 const SQLITE_AUDIT_LOG_PATH = 'sqlite://audit/current';
+const auditFileRepository = new AuditFileRepository(AUDIT_DIR);
 
 // ---------------------------------------------------------------------------
 // Internal State
@@ -89,21 +87,19 @@ function logFilePath(date: Date = new Date()): string {
     return SQLITE_AUDIT_LOG_PATH;
   }
 
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const month = `${yyyy}-${mm}`;
+  const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
   // Cache to avoid path.join on every write
   if (month !== currentMonth) {
     currentMonth = month;
-    currentLogPath = path.join(AUDIT_DIR, `audit-${month}.log`);
+    currentLogPath = auditFileRepository.getMonthlyLogPath(date);
   }
   return currentLogPath;
 }
 
 /** Ensure the audit directory exists. */
 async function ensureAuditDir(): Promise<void> {
-  await fs.mkdir(AUDIT_DIR, { recursive: true });
+  await auditFileRepository.ensureReady();
 }
 
 function isSqliteAuditEnabled(): boolean {
@@ -131,22 +127,7 @@ async function seedLastHash(filePath: string): Promise<void> {
     return;
   }
 
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    const lines = content.trimEnd().split('\n').filter(Boolean);
-    if (lines.length > 0) {
-      lastHash = sha256(lines[lines.length - 1]);
-    } else {
-      lastHash = '';
-    }
-  } catch (err: unknown) {
-    // File doesn't exist yet — first entry
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      lastHash = '';
-    } else {
-      throw err;
-    }
-  }
+  lastHash = await auditFileRepository.getLastHash(filePath);
 }
 
 /** Track whether we've seeded for the current file. */
@@ -198,7 +179,7 @@ async function writeEntry(event: AuditEvent): Promise<void> {
   if (isSqliteAuditEnabled()) {
     getAuditRepository().save(entry, line);
   } else {
-    await fs.appendFile(filePath, line + '\n', 'utf8');
+    await auditFileRepository.append(filePath, line);
   }
 
   // Update the running hash
@@ -216,71 +197,7 @@ export async function verifyAuditLog(filePath: string): Promise<VerifyResult> {
     return getAuditRepository().verify();
   }
 
-  // Check if file exists
-  try {
-    await fs.access(filePath);
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { valid: true, entries: 0 };
-    }
-    throw err;
-  }
-
-  return new Promise((resolve, reject) => {
-    const stream = createReadStream(filePath, { encoding: 'utf8' });
-    const rl = readline.createInterface({
-      input: stream,
-      crlfDelay: Infinity,
-    });
-
-    let prevHash = '';
-    let lineIndex = 0;
-    let totalLines = 0;
-    let invalidResult: VerifyResult | null = null;
-
-    rl.on('line', (line) => {
-      if (invalidResult) return; // Already found an error
-
-      const trimmed = line.trim();
-      if (!trimmed) {
-        lineIndex++;
-        return;
-      }
-
-      totalLines++;
-
-      let entry: AuditEntry;
-      try {
-        entry = JSON.parse(trimmed) as AuditEntry;
-      } catch {
-        invalidResult = { valid: false, entries: totalLines, firstBroken: lineIndex };
-        rl.close();
-        stream.destroy();
-        return;
-      }
-
-      if (entry.integrity !== prevHash) {
-        invalidResult = { valid: false, entries: totalLines, firstBroken: lineIndex };
-        rl.close();
-        stream.destroy();
-        return;
-      }
-
-      prevHash = sha256(trimmed);
-      lineIndex++;
-    });
-
-    rl.on('close', () => {
-      if (invalidResult) {
-        resolve(invalidResult);
-      } else {
-        resolve({ valid: true, entries: totalLines });
-      }
-    });
-
-    rl.on('error', reject);
-    stream.on('error', reject);
-  });
+  return auditFileRepository.verify(filePath);
 }
 
 /**
@@ -293,20 +210,7 @@ export async function readRecentAuditEntries(limit = 100): Promise<AuditEntry[]>
     return getAuditRepository().readRecent(limit) as AuditEntry[];
   }
 
-  let content: string;
-  try {
-    content = await fs.readFile(filePath, 'utf8');
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return [];
-    }
-    throw err;
-  }
-
-  const lines = content.trimEnd().split('\n').filter(Boolean);
-  // Take the last `limit` entries and reverse for newest-first
-  const slice = lines.slice(-limit).reverse();
-  return slice.map((line) => JSON.parse(line) as AuditEntry);
+  return auditFileRepository.readRecent(filePath, limit);
 }
 
 /**
