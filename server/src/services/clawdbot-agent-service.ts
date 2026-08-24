@@ -13,7 +13,7 @@
 import { EventEmitter } from 'events';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { nanoid } from 'nanoid';
-import fs from 'fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import path from 'path';
 import { createHash } from 'node:crypto';
 import { ConfigService } from './config-service.js';
@@ -3284,9 +3284,7 @@ export class ClawdbotAgentService {
         {
           summary: this.redactTraceText(startError.message || `Failed to start ${adapter.label}`),
           phase: 'launch',
-          ...(failedDependencyCircuits
-            ? { dependencyCircuits: failedDependencyCircuits }
-            : {}),
+          ...(failedDependencyCircuits ? { dependencyCircuits: failedDependencyCircuits } : {}),
         },
         {
           provider,
@@ -3348,8 +3346,7 @@ export class ClawdbotAgentService {
         harnessSupport: this.harnessTelemetry(harnessSupport, 'launch-failed'),
         ...(failedDependencyCircuits
           ? {
-              dependencyCircuits:
-                this.dependencyCircuitTelemetry(failedDependencyCircuits),
+              dependencyCircuits: this.dependencyCircuitTelemetry(failedDependencyCircuits),
             }
           : {}),
       });
@@ -4416,8 +4413,7 @@ export class ClawdbotAgentService {
             ),
             ...(dependencyCircuits
               ? {
-                  dependencyCircuits:
-                    this.dependencyCircuitTelemetry(dependencyCircuits),
+                  dependencyCircuits: this.dependencyCircuitTelemetry(dependencyCircuits),
                 }
               : {}),
           }),
@@ -5653,12 +5649,8 @@ export class ClawdbotAgentService {
     selectedHost: string
   ): Promise<RunDependencyCircuitEvidence> {
     const [providerCircuit, agentHostCircuit] = await Promise.all([
-      this.dependencyExecution.inspect(
-        providerDependencyIdentity(provider, model, workspaceId)
-      ),
-      this.dependencyExecution.inspect(
-        agentHostDependencyIdentity(selectedHost, workspaceId)
-      ),
+      this.dependencyExecution.inspect(providerDependencyIdentity(provider, model, workspaceId)),
+      this.dependencyExecution.inspect(agentHostDependencyIdentity(selectedHost, workspaceId)),
     ]);
     return {
       schemaVersion: RUN_DEPENDENCY_CIRCUIT_EVIDENCE_SCHEMA_VERSION,
@@ -9192,7 +9184,7 @@ export class ClawdbotAgentService {
           ? event.payload.summary
           : outputArtifact && typeof outputArtifact.content === 'string'
             ? outputArtifact.content
-          : undefined;
+            : undefined;
     if (!content?.trim()) return;
     const type: AgentOutput['type'] =
       event.source.provider === 'operator'

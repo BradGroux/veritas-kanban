@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import { extractText as unpdfExtract } from 'unpdf';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';

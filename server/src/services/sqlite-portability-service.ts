@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import { createReadStream } from 'fs';
+import * as fs from '../storage/fs-helpers.js';
+import { createReadStream } from '../storage/fs-helpers.js';
 import path from 'path';
 import readline from 'readline';
 import { createGunzip } from 'zlib';

@@ -14,7 +14,9 @@ import type { FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import {
   access,
+  appendFile as appendFileAsync,
   copyFile as copyFileAsync,
+  cp as cpAsync,
   lstat as lstatAsync,
   mkdir as mkdirAsync,
   open as openAsync,
@@ -77,7 +79,9 @@ export const createWriteStream = fs.createWriteStream;
 export const mkdir = mkdirAsync;
 export const open = openAsync;
 export { access };
+export const appendFile = appendFileAsync;
 export const copyFile = copyFileAsync;
+export const cp = cpAsync;
 export const lstat = lstatAsync;
 export const readFile = readFileAsync;
 export const readdir = readdirAsync;

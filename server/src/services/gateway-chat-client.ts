@@ -8,6 +8,7 @@
 import WebSocket from 'ws';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../lib/logger.js';
+import { readFile } from '../storage/fs-helpers.js';
 
 const log = createLogger('gateway-chat');
 
@@ -259,10 +260,9 @@ export async function loadGatewayToken(): Promise<string> {
   }
 
   try {
-    const fs = await import('fs/promises');
     const path = await import('path');
     const configPath = path.join(process.env.HOME || '', '.clawdbot', 'clawdbot.json');
-    const raw = await fs.readFile(configPath, 'utf-8');
+    const raw = await readFile(configPath, 'utf-8');
     const config = JSON.parse(raw);
     const token = config?.gateway?.auth?.token;
     if (token) {
