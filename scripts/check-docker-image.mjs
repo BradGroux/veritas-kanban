@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 const image = process.env.VERITAS_DOCKER_IMAGE || process.argv[2] || 'veritas-kanban:contract';
 const maxBytes = Number(process.env.VERITAS_DOCKER_MAX_BYTES || '625000000');
 const containerName = `veritas-kanban-contract-${process.pid}`;
+const volumeName = `${containerName}-data`;
 const adminKey = randomBytes(24).toString('hex');
 
 function run(args) {
@@ -21,25 +22,32 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function containerLogs() {
+  const result = spawnSync('docker', ['logs', containerName], {
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
+  return [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+}
+
 async function waitForHealthyContainer() {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
-    const status = run([
-      'inspect',
-      '--format',
-      '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}',
-      containerName,
-    ]);
-    if (status === 'healthy') return;
-    if (status === 'exited' || status === 'dead') {
-      const logs = run(['logs', containerName]);
-      throw new Error(`Container stopped before becoming healthy (${status})\n${logs}`);
+    const state = JSON.parse(
+      run(['inspect', '--format', '{{json .State}}', containerName])
+    );
+    if (state.Health?.Status === 'healthy') return;
+    if (state.Status === 'exited' || state.Status === 'dead') {
+      throw new Error(
+        `Container stopped before becoming healthy (${state.Status})\n${containerLogs()}`
+      );
     }
     await new Promise((resolve) => globalThis.setTimeout(resolve, 1_000));
   }
   const health = run(['inspect', '--format', '{{json .State.Health}}', containerName]);
-  const logs = run(['logs', containerName]);
-  throw new Error(`Container did not become healthy within 90 seconds\nHealth: ${health}\n${logs}`);
+  throw new Error(
+    `Container did not become healthy within 90 seconds\nHealth: ${health}\n${containerLogs()}`
+  );
 }
 
 const runtimeProbe = String.raw`
@@ -82,6 +90,7 @@ const runtimeProbe = String.raw`
 `;
 
 let started = false;
+let volumeCreated = false;
 try {
   assert(Number.isFinite(maxBytes) && maxBytes > 0, 'VERITAS_DOCKER_MAX_BYTES must be positive');
 
@@ -105,11 +114,15 @@ try {
   const configuredUser = run(['image', 'inspect', image, '--format', '{{.Config.User}}']);
   assert(configuredUser === 'veritas', `Expected image user veritas, found ${configuredUser || 'root'}`);
 
+  run(['volume', 'create', volumeName]);
+  volumeCreated = true;
   run([
     'run',
     '--detach',
     '--name',
     containerName,
+    '--mount',
+    `type=volume,source=${volumeName},target=/app/data`,
     '--env',
     `VERITAS_ADMIN_KEY=${adminKey}`,
     '--env',
@@ -136,5 +149,8 @@ try {
 } finally {
   if (started) {
     spawnSync('docker', ['rm', '--force', containerName], { stdio: 'ignore' });
+  }
+  if (volumeCreated) {
+    spawnSync('docker', ['volume', 'rm', volumeName], { stdio: 'ignore' });
   }
 }
