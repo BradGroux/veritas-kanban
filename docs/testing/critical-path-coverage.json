@@ -113,7 +113,9 @@
           "description": "Provider dispatch, persisted runtime evidence, workflow execution, completion, and recovery.",
           "include": [
             "server/src/services/clawdbot-agent-service.ts",
+            "server/src/services/codex-event-interpreter.ts",
             "server/src/services/*provider*.ts",
+            "server/src/services/run-launch-compiler.ts",
             "server/src/services/workflow-run-service.ts",
             "server/src/services/workflow-step-executor.ts",
             "server/src/services/run-launch-manifest-service.ts",
