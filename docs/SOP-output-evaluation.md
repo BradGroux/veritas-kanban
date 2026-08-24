@@ -10,12 +10,26 @@ The Scoring Framework lets you define profiles with weighted criteria that evalu
 
 **Scorer types:**
 
-| Type                | What it checks                                               |
-| ------------------- | ------------------------------------------------------------ |
-| `RegexMatch`        | Whether the output matches a regular expression              |
-| `KeywordContains`   | Whether the output contains required keywords                |
-| `NumericRange`      | Whether a numeric field in the output falls within a range   |
-| `CustomExpression`  | A custom evaluation expression                               |
+| Type               | What it checks                                                        |
+| ------------------ | --------------------------------------------------------------------- |
+| `RegexMatch`       | Whether bounded worker-isolated regex evaluation matches              |
+| `KeywordContains`  | Whether the output contains required keywords                         |
+| `NumericRange`     | Whether a numeric field in the output falls within a range            |
+| `OccurrenceRatio`  | Literal occurrence density with optional numeric-path normalization   |
+
+`RegexMatch` accepts patterns up to 256 characters and any valid JavaScript regex flag set supported
+by the active Node runtime. Evaluation uses a globally bounded four-worker pool outside the server
+event loop, a bounded wait queue, and a 100 ms limit. Output is limited to 100,000 characters,
+action text to 10,000 characters, and their combined scoring target to 110,001 characters.
+
+`OccurrenceRatio` is the declarative replacement for legacy custom expressions. It accepts one to
+32 literal `needles` and divides their occurrence count by either a fixed `denominator` or a numeric
+`denominatorPath`, optionally scaled with `denominatorScale`. `wholeWord`, `caseSensitive`,
+`minimumDenominator`, and `invert` provide bounded transformations without executing code.
+
+Persisted profiles containing the removed `CustomExpression` scorer fail closed during evaluation.
+Replace those scorers through the profile API before retrying; the server never evaluates or
+silently converts the stored expression.
 
 **Composite methods:**
 

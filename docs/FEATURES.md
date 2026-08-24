@@ -2523,7 +2523,9 @@ Define scoring profiles with weighted criteria and evaluate agent outputs agains
 
 **Key capabilities:**
 
-- Four scorer types: `RegexMatch`, `KeywordContains`, `NumericRange`, `CustomExpression`
+- Four bounded scorer types: `RegexMatch`, `KeywordContains`, `NumericRange`, `OccurrenceRatio`
+- Regex evaluation runs outside the server event loop with input, pattern, and time limits
+- Occurrence ratios use literal values and optional numeric normalization; arbitrary code is never evaluated
 - Weighted scorers with optional `target`: `action`, `output`, or `combined`
 - Composite scoring methods: `weightedAvg`, `minimum`, `geometricMean`
 - Per-evaluation history with scorer-level breakdowns

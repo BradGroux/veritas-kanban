@@ -278,6 +278,40 @@ describe('SQLite governance repositories', () => {
       result.id,
     ]);
 
+    const now = new Date().toISOString();
+    const legacyProfile = {
+      id: 'legacy-sqlite-profile',
+      name: 'Legacy SQLite profile',
+      builtIn: false,
+      compositeMethod: 'weightedAvg',
+      created: now,
+      updated: now,
+      scorers: [
+        {
+          id: 'legacy',
+          name: 'Legacy',
+          type: 'CustomExpression',
+          weight: 1,
+          expression: 'globalThis.process',
+        },
+      ],
+    };
+    fixture.database
+      .getConnection()
+      .prepare(
+        `
+          INSERT INTO scoring_profiles (
+            id, workspace_id, name, built_in, profile_json, created_at, updated_at
+          )
+          VALUES (?, 'local', ?, 0, ?, ?, ?)
+        `
+      )
+      .run(legacyProfile.id, legacyProfile.name, JSON.stringify(legacyProfile), now, now);
+
+    await expect(
+      service.evaluate({ profileId: legacyProfile.id, output: 'ordinary output' })
+    ).rejects.toThrow('legacy custom expression');
+
     await expect(fs.access(profilesDir)).rejects.toThrow();
     await expect(fs.access(evaluationsDir)).rejects.toThrow();
   });

@@ -51,8 +51,8 @@ const createScorer = (type: ScorerType = 'KeywordContains'): Scorer => {
       return { ...base, type, pattern: '', flags: '', invert: false };
     case 'NumericRange':
       return { ...base, type, valuePath: 'metadata.outputWordCount', min: 1, max: 500 };
-    case 'CustomExpression':
-      return { ...base, type, expression: 'output.length > 0 ? 1 : 0' };
+    case 'OccurrenceRatio':
+      return { ...base, type, needles: ['verified'], denominator: 1 };
     case 'KeywordContains':
     default:
       return {
@@ -83,7 +83,7 @@ const scorerTypeOptions: ScorerType[] = [
   'KeywordContains',
   'RegexMatch',
   'NumericRange',
-  'CustomExpression',
+  'OccurrenceRatio',
 ];
 
 const scorerTypeSelectData = scorerTypeOptions.map((type) => ({ value: type, label: type }));
@@ -805,23 +805,57 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                 </>
                               )}
 
-                              {'expression' in scorer && (
+                              {scorer.type === 'OccurrenceRatio' && (
                                 <div className="space-y-2 lg:col-span-2">
                                   <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                    Expression
+                                    Literal values, one per line
                                   </label>
                                   <Textarea
-                                    aria-label={`Scorer ${index + 1} expression`}
+                                    aria-label={`Scorer ${index + 1} literal values`}
                                     rows={3}
-                                    value={scorer.expression}
+                                    value={scorer.needles.join('\n')}
                                     onChange={(event) =>
                                       updateScorer(index, (current) => ({
                                         ...current,
-                                        expression: event.target.value,
+                                        needles: event.target.value
+                                          .split('\n')
+                                          .map((value) => value.trim())
+                                          .filter(Boolean),
                                       }))
                                     }
                                     disabled={draftReadOnly}
                                   />
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <TextInput
+                                      aria-label={`Scorer ${index + 1} denominator`}
+                                      type="number"
+                                      min={1}
+                                      placeholder="Denominator"
+                                      value={scorer.denominator ?? ''}
+                                      onChange={(event) =>
+                                        updateScorer(index, (current) => ({
+                                          ...current,
+                                          denominator:
+                                            event.target.value === ''
+                                              ? undefined
+                                              : Number(event.target.value),
+                                        }))
+                                      }
+                                      disabled={draftReadOnly}
+                                    />
+                                    <TextInput
+                                      aria-label={`Scorer ${index + 1} denominator value path`}
+                                      placeholder="metadata.outputWordCount"
+                                      value={scorer.denominatorPath ?? ''}
+                                      onChange={(event) =>
+                                        updateScorer(index, (current) => ({
+                                          ...current,
+                                          denominatorPath: event.target.value || undefined,
+                                        }))
+                                      }
+                                      disabled={draftReadOnly}
+                                    />
+                                  </div>
                                 </div>
                               )}
                             </div>

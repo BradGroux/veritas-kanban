@@ -44,7 +44,7 @@ export type {
   RegexMatchScorer,
   KeywordContainsScorer,
   NumericRangeScorer,
-  CustomExpressionScorer,
+  OccurrenceRatioScorer,
   Scorer,
   ScoringProfile,
   CreateScoringProfileInput,

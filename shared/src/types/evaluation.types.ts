@@ -1,6 +1,6 @@
 import type { AgentType } from './task.types.js';
 
-export type ScorerType = 'RegexMatch' | 'KeywordContains' | 'NumericRange' | 'CustomExpression';
+export type ScorerType = 'RegexMatch' | 'KeywordContains' | 'NumericRange' | 'OccurrenceRatio';
 
 export type ScoringCompositeMethod = 'weightedAvg' | 'minimum' | 'geometricMean';
 
@@ -39,16 +39,23 @@ export interface NumericRangeScorer extends BaseScorer {
   scoreOnMiss?: number;
 }
 
-export interface CustomExpressionScorer extends BaseScorer {
-  type: 'CustomExpression';
-  expression: string;
+export interface OccurrenceRatioScorer extends BaseScorer {
+  type: 'OccurrenceRatio';
+  needles: string[];
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  denominator?: number;
+  denominatorPath?: string;
+  denominatorScale?: number;
+  minimumDenominator?: number;
+  invert?: boolean;
 }
 
 export type Scorer =
   | RegexMatchScorer
   | KeywordContainsScorer
   | NumericRangeScorer
-  | CustomExpressionScorer;
+  | OccurrenceRatioScorer;
 
 export interface ScoringProfile {
   id: string;

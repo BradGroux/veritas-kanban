@@ -2,13 +2,13 @@ import { join } from 'path';
 import { nanoid } from 'nanoid';
 import type {
   CreateScoringProfileInput,
-  CustomExpressionScorer,
   EvaluationDimensionScore,
   EvaluationHistoryQuery,
   EvaluationRequest,
   EvaluationResult,
   KeywordContainsScorer,
   NumericRangeScorer,
+  OccurrenceRatioScorer,
   RegexMatchScorer,
   Scorer,
   ScoringProfile,
@@ -17,9 +17,15 @@ import { fileExists, mkdir, readdir, readFile, unlink, writeFile } from '../stor
 import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
-import { NotFoundError } from '../middleware/error-handler.js';
+import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteScoringRepository } from '../storage/sqlite/governance-repositories.js';
+import {
+  createScoringProfileSchema,
+  evaluateScoringSchema,
+  updateScoringProfileSchema,
+} from '../schemas/scoring-schemas.js';
+import { boundedRegexTest, evaluateOccurrenceRatio } from './scoring-runtime.js';
 
 const log = createLogger('scoring-service');
 
@@ -55,11 +61,32 @@ const getTargetText = (scorer: Scorer, context: EvaluationContext): string => {
 
 const getValueAtPath = (root: Record<string, unknown>, path: string): unknown => {
   return path.split('.').reduce<unknown>((current, segment) => {
-    if (current && typeof current === 'object' && segment in current) {
+    if (
+      current &&
+      typeof current === 'object' &&
+      segment !== '__proto__' &&
+      segment !== 'prototype' &&
+      segment !== 'constructor' &&
+      Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
       return (current as Record<string, unknown>)[segment];
     }
     return undefined;
   }, root);
+};
+
+const hasLegacyCustomExpression = (profile: unknown): boolean => {
+  if (!profile || typeof profile !== 'object') return false;
+  const scorers = (profile as { scorers?: unknown }).scorers;
+  return (
+    Array.isArray(scorers) &&
+    scorers.some(
+      (scorer) =>
+        scorer &&
+        typeof scorer === 'object' &&
+        (scorer as { type?: unknown }).type === 'CustomExpression'
+    )
+  );
 };
 
 const BUILT_IN_PROFILES: Array<Omit<ScoringProfile, 'created' | 'updated'>> = [
@@ -129,10 +156,15 @@ const BUILT_IN_PROFILES: Array<Omit<ScoringProfile, 'created' | 'updated'>> = [
       {
         id: 'limited-filler',
         name: 'Limited filler',
-        type: 'CustomExpression',
+        type: 'OccurrenceRatio',
         weight: 0.25,
-        expression:
-          'Math.max(0, 1 - (((output.match(/\\b(?:just|really|very|basically|simply)\\b/gi) || []).length) / Math.max(1, metadata.outputWordCount / 50)))',
+        target: 'output',
+        needles: ['just', 'really', 'very', 'basically', 'simply'],
+        wholeWord: true,
+        denominatorPath: 'metadata.outputWordCount',
+        denominatorScale: 50,
+        minimumDenominator: 1,
+        invert: true,
       },
     ],
   },
@@ -164,11 +196,11 @@ const BUILT_IN_PROFILES: Array<Omit<ScoringProfile, 'created' | 'updated'>> = [
       {
         id: 'has-structure',
         name: 'Has concise structure',
-        type: 'CustomExpression',
+        type: 'OccurrenceRatio',
         target: 'output',
         weight: 0.33,
-        expression:
-          'Math.min(1, ((output.match(/\\n/g) || []).length + (output.match(/\\./g) || []).length) / 4)',
+        needles: ['\n', '.'],
+        denominator: 4,
       },
     ],
   },
@@ -213,19 +245,49 @@ export class ScoringService {
     await this.seedBuiltIns();
   }
 
+  private parseProfileInput(input: unknown): CreateScoringProfileInput {
+    const parsed = createScoringProfileSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+    if (hasLegacyCustomExpression(input)) {
+      throw new ValidationError(
+        'Scoring profile contains a legacy custom expression. Replace it with a bounded OccurrenceRatio, KeywordContains, RegexMatch, or NumericRange scorer before evaluation.'
+      );
+    }
+    throw new ValidationError('Invalid scoring profile', parsed.error.issues);
+  }
+
+  private parseProfileUpdate(input: unknown): Partial<CreateScoringProfileInput> {
+    const parsed = updateScoringProfileSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+    if (hasLegacyCustomExpression(input)) {
+      throw new ValidationError(
+        'Scoring profile contains a legacy custom expression. Replace it with a bounded OccurrenceRatio, KeywordContains, RegexMatch, or NumericRange scorer before evaluation.'
+      );
+    }
+    throw new ValidationError('Invalid scoring profile update', parsed.error.issues);
+  }
+
+  private parseEvaluationInput(input: unknown): EvaluationRequest {
+    const parsed = evaluateScoringSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+    throw new ValidationError('Invalid scoring evaluation request', parsed.error.issues);
+  }
+
   private async seedBuiltIns(): Promise<void> {
     if (this.builtInsSeeded) return;
 
     for (const profile of BUILT_IN_PROFILES) {
       const existing = this.repository
         ? await this.repository.getProfile(profile.id)
-        : await fileExists(this.profilePath(profile.id));
-      if (existing) continue;
+        : (await fileExists(this.profilePath(profile.id)))
+          ? await this.readProfileFile(this.profilePath(profile.id))
+          : null;
+      if (existing && !(existing.builtIn && hasLegacyCustomExpression(existing))) continue;
 
       const now = new Date().toISOString();
       const seededProfile: ScoringProfile = {
         ...profile,
-        created: now,
+        created: existing?.created ?? now,
         updated: now,
       };
 
@@ -311,15 +373,16 @@ export class ScoringService {
 
   async createProfile(input: CreateScoringProfileInput): Promise<ScoringProfile> {
     await this.ensureDirs();
+    const parsed = this.parseProfileInput(input);
 
     const now = new Date().toISOString();
-    const id = `${slugify(input.name)}-${nanoid(6)}`;
+    const id = `${slugify(parsed.name)}-${nanoid(6)}`;
     const profile: ScoringProfile = {
       id,
-      name: input.name,
-      description: input.description,
-      scorers: input.scorers,
-      compositeMethod: input.compositeMethod,
+      name: parsed.name,
+      description: parsed.description,
+      scorers: parsed.scorers,
+      compositeMethod: parsed.compositeMethod,
       builtIn: false,
       created: now,
       updated: now,
@@ -348,10 +411,11 @@ export class ScoringService {
     if (existing.builtIn) {
       throw new Error('Built-in scoring profiles cannot be modified');
     }
+    const parsed = this.parseProfileUpdate(input);
 
     const updated: ScoringProfile = {
       ...existing,
-      ...input,
+      ...parsed,
       id: existing.id,
       builtIn: existing.builtIn,
       updated: new Date().toISOString(),
@@ -386,13 +450,12 @@ export class ScoringService {
     return true;
   }
 
-  private evaluateRegex(
+  private async evaluateRegex(
     scorer: RegexMatchScorer,
     context: EvaluationContext
-  ): EvaluationDimensionScore {
+  ): Promise<EvaluationDimensionScore> {
     const text = getTargetText(scorer, context);
-    const regex = new RegExp(scorer.pattern, scorer.flags);
-    const didMatch = regex.test(text);
+    const didMatch = await boundedRegexTest(scorer.pattern, scorer.flags, text);
     const matched = scorer.invert ? !didMatch : didMatch;
     const score = matched ? (scorer.scoreOnMatch ?? 1) : (scorer.scoreOnMiss ?? 0);
 
@@ -472,51 +535,27 @@ export class ScoringService {
     };
   }
 
-  private evaluateCustom(
-    scorer: CustomExpressionScorer,
+  private evaluateOccurrence(
+    scorer: OccurrenceRatioScorer,
     context: EvaluationContext
   ): EvaluationDimensionScore {
-    const evaluator = new Function(
-      'action',
-      'output',
-      'combined',
-      'metadata',
-      `return (${scorer.expression});`
-    ) as (
-      action: string,
-      output: string,
-      combined: string,
-      metadata: Record<string, unknown>
-    ) => unknown;
-
-    let rawResult: unknown = 0;
-    try {
-      rawResult = evaluator(context.action, context.output, context.combined, context.metadata);
-    } catch (error) {
-      log.warn({ err: error, scorerId: scorer.id }, 'Custom scorer expression failed');
-    }
-
-    const score =
-      typeof rawResult === 'boolean'
-        ? rawResult
-          ? 1
-          : 0
-        : typeof rawResult === 'number'
-          ? rawResult
-          : 0;
+    const score = clampScore(evaluateOccurrenceRatio(scorer, context));
 
     return {
       scorerId: scorer.id,
       scorerName: scorer.name,
       scorerType: scorer.type,
       weight: scorer.weight,
-      score: clampScore(score),
-      matched: clampScore(score) > 0,
-      explanation: `Custom expression returned ${String(rawResult)}`,
+      score,
+      matched: score > 0,
+      explanation: `Observed occurrence ratio ${score.toFixed(3)}`,
     };
   }
 
-  private evaluateScorer(scorer: Scorer, context: EvaluationContext): EvaluationDimensionScore {
+  private async evaluateScorer(
+    scorer: Scorer,
+    context: EvaluationContext
+  ): Promise<EvaluationDimensionScore> {
     switch (scorer.type) {
       case 'RegexMatch':
         return this.evaluateRegex(scorer, context);
@@ -524,8 +563,12 @@ export class ScoringService {
         return this.evaluateKeywords(scorer, context);
       case 'NumericRange':
         return this.evaluateNumeric(scorer, context);
-      case 'CustomExpression':
-        return this.evaluateCustom(scorer, context);
+      case 'OccurrenceRatio':
+        return this.evaluateOccurrence(scorer, context);
+      default:
+        throw new ValidationError(
+          'Scoring profile uses an unsupported legacy scorer. Replace it with KeywordContains, RegexMatch, NumericRange, or OccurrenceRatio.'
+        );
     }
   }
 
@@ -575,23 +618,35 @@ export class ScoringService {
 
   async evaluate(input: EvaluationRequest): Promise<EvaluationResult> {
     await this.ensureDirs();
+    const parsedInput = this.parseEvaluationInput(input);
 
-    const profile = await this.getProfile(input.profileId);
+    const profile = await this.getProfile(parsedInput.profileId);
     if (!profile) {
       throw new NotFoundError('Scoring profile not found');
     }
 
-    const context = this.buildContext(input);
-    const scores = profile.scorers.map((scorer) => this.evaluateScorer(scorer, context));
+    const validatedProfile = this.parseProfileInput({
+      name: profile.name,
+      description: profile.description,
+      scorers: profile.scorers,
+      compositeMethod: profile.compositeMethod,
+    });
+    const context = this.buildContext(parsedInput);
+    const scores: EvaluationDimensionScore[] = [];
+    for (const scorer of validatedProfile.scorers) {
+      // Regex scorers execute in worker threads. Keep evaluation sequential so
+      // one request cannot fan out into dozens of concurrent workers.
+      scores.push(await this.evaluateScorer(scorer, context));
+    }
     const compositeScore = this.computeComposite(profile, scores);
     const result: EvaluationResult = {
       id: `evaluation_${Date.now()}_${nanoid(6)}`,
       profileId: profile.id,
       profileName: profile.name,
-      action: input.action,
-      output: input.output,
-      agent: input.agent,
-      taskId: input.taskId,
+      action: parsedInput.action,
+      output: parsedInput.output,
+      agent: parsedInput.agent,
+      taskId: parsedInput.taskId,
       metadata: context.metadata,
       scores,
       compositeScore,
