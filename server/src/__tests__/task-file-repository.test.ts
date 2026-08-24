@@ -246,6 +246,7 @@ Legacy description.
       reviewComments: [{ file: 'server/src/file.ts', line: 12, content: 'Keep this.' }],
     };
     const descriptor = repository.describeActiveTask(reviewed);
+    expect(descriptor.filename).toBe('task_reviewed-reviewed-task.md');
     await repository.createActive(reviewed);
     await expect(readFile(descriptor.path, 'utf8')).resolves.toContain(
       '**server/src/file.ts:12** - Keep this.'

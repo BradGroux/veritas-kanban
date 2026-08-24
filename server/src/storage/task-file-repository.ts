@@ -37,12 +37,12 @@ export interface TaskFileChange {
 type ActiveMutation<T> = (current: Task, persist: (updated: Task) => Promise<void>) => Promise<T>;
 
 function makeSlug(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '')
-    .slice(0, 50);
+  const normalized = text.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  let start = 0;
+  let end = normalized.length;
+  while (normalized[start] === '-') start += 1;
+  while (normalized[end - 1] === '-') end -= 1;
+  return normalized.slice(start, end).slice(0, 50);
 }
 
 function assertTaskId(id: string): void {
