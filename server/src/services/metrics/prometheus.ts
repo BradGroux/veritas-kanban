@@ -48,14 +48,14 @@ export class Counter {
 
   /** Return all (labelKey → value) pairs. */
   entries(): Array<[Record<string, string>, number]> {
-    return [...this.values.entries()].map(([key, val]) => [this.labelSets.get(key)!, val]);
+    return [...this.values.entries()].map(([key, val]) => [this.labelSets.get(key) ?? {}, val]);
   }
 
   /** Render Prometheus text lines (without HELP/TYPE — registry adds those). */
   render(): string[] {
     const lines: string[] = [];
     for (const [key, val] of this.values) {
-      const lbls = this.labelSets.get(key)!;
+      const lbls = this.labelSets.get(key) ?? {};
       lines.push(`${this.meta.name}${formatLabels(lbls)} ${val}`);
     }
     return lines;
@@ -81,9 +81,12 @@ export class Gauge {
       this.labelSets.set(key, {});
       this.values.set(key, labelsOrValue);
     } else {
+      if (value === undefined) {
+        throw new TypeError('Gauge label sets require a value');
+      }
       const key = labelKey(labelsOrValue);
       this.labelSets.set(key, labelsOrValue);
-      this.values.set(key, value!);
+      this.values.set(key, value);
     }
   }
 
@@ -106,7 +109,7 @@ export class Gauge {
   render(): string[] {
     const lines: string[] = [];
     for (const [key, val] of this.values) {
-      const lbls = this.labelSets.get(key)!;
+      const lbls = this.labelSets.get(key) ?? {};
       lines.push(`${this.meta.name}${formatLabels(lbls)} ${val}`);
     }
     return lines;
@@ -139,15 +142,19 @@ export class Histogram {
 
   private getOrCreate(labels: Record<string, string>): HistogramData {
     const key = labelKey(labels);
-    if (!this.data.has(key)) {
-      this.labelSets.set(key, labels);
-      this.data.set(key, {
-        buckets: this.bucketBoundaries.map((le) => ({ le, count: 0 })),
-        sum: 0,
-        count: 0,
-      });
+    const existing = this.data.get(key);
+    if (existing) {
+      return existing;
     }
-    return this.data.get(key)!;
+
+    const created = {
+      buckets: this.bucketBoundaries.map((le) => ({ le, count: 0 })),
+      sum: 0,
+      count: 0,
+    };
+    this.labelSets.set(key, labels);
+    this.data.set(key, created);
+    return created;
   }
 
   observe(labels: Record<string, string>, value: number): void;
@@ -159,8 +166,11 @@ export class Histogram {
       labels = {};
       observedValue = labelsOrValue;
     } else {
+      if (value === undefined) {
+        throw new TypeError('Histogram label sets require a value');
+      }
       labels = labelsOrValue;
-      observedValue = value!;
+      observedValue = value;
     }
 
     const data = this.getOrCreate(labels);
@@ -176,7 +186,7 @@ export class Histogram {
   render(): string[] {
     const lines: string[] = [];
     for (const [key, hd] of this.data) {
-      const lbls = this.labelSets.get(key)!;
+      const lbls = this.labelSets.get(key) ?? {};
       const baseLabelStr = labelKey(lbls);
 
       for (const bucket of hd.buckets) {

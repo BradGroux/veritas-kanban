@@ -19,9 +19,16 @@ vi.mock('../../storage/fs-helpers.js', () => ({
 // Must import after mock
 const { getAgentRegistryService, disposeAgentRegistryService, createTaskSyncToken } =
   await import('../../services/agent-registry-service.js');
-import type { RegisteredAgent, TaskSyncContext } from '../../services/agent-registry-service.js';
+import type { TaskSyncContext } from '../../services/agent-registry-service.js';
 import { providerRuntimeManifestFixture } from '../fixtures/provider-runtime-manifest.js';
 import { existsSync, readFileSync } from '../../storage/fs-helpers.js';
+
+function requireValue<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error('Expected a value');
+  }
+  return value;
+}
 
 const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
 const TASK_RECONCILE_CONTEXT: TaskSyncContext = createTaskSyncToken('task-reconciler');
@@ -253,9 +260,9 @@ describe('AgentRegistryService', () => {
       });
 
       expect(updated).not.toBeNull();
-      expect(updated!.status).toBe('busy');
-      expect(updated!.currentTaskId).toBe('TASK-1');
-      expect(updated!.currentTaskTitle).toBe('Fix the bug');
+      expect(requireValue(updated).status).toBe('busy');
+      expect(requireValue(updated).currentTaskId).toBe('TASK-1');
+      expect(requireValue(updated).currentTaskTitle).toBe('Fix the bug');
     });
 
     it('should return null for unknown agent', () => {
@@ -283,7 +290,7 @@ describe('AgentRegistryService', () => {
 
       vi.useRealTimers();
 
-      expect(updated!.lastHeartbeat).not.toBe(originalHeartbeat);
+      expect(requireValue(updated).lastHeartbeat).not.toBe(originalHeartbeat);
     });
 
     it('should update task information', () => {
@@ -306,8 +313,8 @@ describe('AgentRegistryService', () => {
         currentTaskTitle: 'Second task',
       });
 
-      expect(updated!.currentTaskId).toBe('TASK-2');
-      expect(updated!.currentTaskTitle).toBe('Second task');
+      expect(requireValue(updated).currentTaskId).toBe('TASK-2');
+      expect(requireValue(updated).currentTaskTitle).toBe('Second task');
     });
 
     it('should clear task on idle status', () => {
@@ -326,9 +333,9 @@ describe('AgentRegistryService', () => {
         currentTaskTitle: '',
       });
 
-      expect(updated!.status).toBe('idle');
-      expect(updated!.currentTaskId).toBeUndefined();
-      expect(updated!.currentTaskTitle).toBeUndefined();
+      expect(requireValue(updated).status).toBe('idle');
+      expect(requireValue(updated).currentTaskId).toBeUndefined();
+      expect(requireValue(updated).currentTaskTitle).toBeUndefined();
     });
 
     it('should merge metadata on heartbeat', () => {
@@ -344,7 +351,7 @@ describe('AgentRegistryService', () => {
       service.heartbeat(agent.id, { metadata: { session: 'abc', ping: Date.now() } });
 
       const updated = service.get(agent.id);
-      expect(updated!.metadata).toEqual({
+      expect(requireValue(updated).metadata).toEqual({
         host: 'mac-mini',
         session: 'abc',
         ping: expect.any(Number),
@@ -443,7 +450,7 @@ describe('AgentRegistryService', () => {
       const found = service.get(agent.id);
 
       expect(found).not.toBeNull();
-      expect(found!.name).toBe('Test Agent');
+      expect(requireValue(found).name).toBe('Test Agent');
     });
 
     it('should return null for unknown ID', () => {
@@ -547,9 +554,9 @@ describe('AgentRegistryService', () => {
       );
 
       expect(updated).not.toBeNull();
-      expect(updated!.status).toBe('busy');
-      expect(updated!.currentTaskId).toBe('task_20260228_syncA');
-      expect(updated!.currentTaskTitle).toBe('Wire backend sync');
+      expect(requireValue(updated).status).toBe('busy');
+      expect(requireValue(updated).currentTaskId).toBe('task_20260228_syncA');
+      expect(requireValue(updated).currentTaskTitle).toBe('Wire backend sync');
     });
 
     it('should set agent idle and clear task on terminal status for same task', () => {
@@ -580,9 +587,9 @@ describe('AgentRegistryService', () => {
       );
 
       expect(updated).not.toBeNull();
-      expect(updated!.status).toBe('idle');
-      expect(updated!.currentTaskId).toBeUndefined();
-      expect(updated!.currentTaskTitle).toBeUndefined();
+      expect(requireValue(updated).status).toBe('idle');
+      expect(requireValue(updated).currentTaskId).toBeUndefined();
+      expect(requireValue(updated).currentTaskTitle).toBeUndefined();
 
       vi.useRealTimers();
     });
@@ -611,9 +618,9 @@ describe('AgentRegistryService', () => {
       );
 
       expect(updated).not.toBeNull();
-      expect(updated!.status).toBe('busy');
-      expect(updated!.currentTaskId).toBe('task_20260228_syncA');
-      expect(updated!.currentTaskTitle).toBe('Current task');
+      expect(requireValue(updated).status).toBe('busy');
+      expect(requireValue(updated).currentTaskId).toBe('task_20260228_syncA');
+      expect(requireValue(updated).currentTaskTitle).toBe('Current task');
     });
 
     it('should resolve agent by name when task.agent stores display name', () => {
@@ -630,8 +637,8 @@ describe('AgentRegistryService', () => {
       );
 
       expect(updated).not.toBeNull();
-      expect(updated!.id).toBe('coder-1');
-      expect(updated!.status).toBe('busy');
+      expect(requireValue(updated).id).toBe('coder-1');
+      expect(requireValue(updated).status).toBe('busy');
     });
 
     it('should prevent rapid busy-to-idle flapping within guard window', () => {
@@ -678,7 +685,7 @@ describe('AgentRegistryService', () => {
             taskId: 'task_20260228_syncA',
             taskStatus: 'in-progress',
           },
-          { source: 'task-service-untrusted' as any }
+          { source: 'task-service-untrusted' } as unknown as TaskSyncContext
         )
       ).toThrow('Unauthorized task sync context');
     });
@@ -766,8 +773,8 @@ describe('AgentRegistryService', () => {
 
       expect(() =>
         service.reconcileFromTasks([{ id: 'task_1', status: 'in-progress', agent: 'coder-1' }], {
-          source: 'task-service-untrusted' as any,
-        })
+          source: 'task-service-untrusted',
+        } as unknown as TaskSyncContext)
       ).toThrow('Unauthorized task reconcile context');
     });
 

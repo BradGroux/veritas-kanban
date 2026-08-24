@@ -8,6 +8,13 @@ import path from 'path';
 import os from 'os';
 import { TraceService } from '../services/trace-service.js';
 
+function requireValue<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error('Expected a value');
+  }
+  return value;
+}
+
 // Mock telemetry service
 vi.mock('../services/telemetry-service.js', () => ({
   getTelemetryService: () => ({
@@ -28,8 +35,9 @@ describe('TraceService', () => {
 
     service = new TraceService();
     // Override private fields
-    (service as any).tracesDir = tracesDir;
-    (service as any).enabled = true;
+    const internals = service as unknown as { tracesDir: string; enabled: boolean };
+    internals.tracesDir = tracesDir;
+    internals.enabled = true;
   });
 
   afterEach(async () => {
@@ -59,23 +67,24 @@ describe('TraceService', () => {
     });
 
     it('should create a new trace when enabled', () => {
-      const trace = service.startTrace('attempt-1', 'task-1', 'veritas', 'my-project', {
-        clientSource: 'agent-service',
-        mode: 'eng-review',
-        capabilitySet: ['start', 'status', 'logs', 'complete'],
-        workspaceId: 'local',
-        runKey: 'attempt-1',
-        policyProfile: 'codex-cli:workspace-write',
-      });
-      expect(trace).not.toBeNull();
-      expect(trace!.traceId).toBe('attempt-1');
-      expect(trace!.taskId).toBe('task-1');
-      expect(trace!.agent).toBe('veritas');
-      expect(trace!.project).toBe('my-project');
-      expect(trace!.status).toBe('running');
-      expect(trace!.steps).toHaveLength(0);
-      expect(trace!.startedAt).toBeDefined();
-      expect(trace!.metadata).toMatchObject({
+      const trace = requireValue(
+        service.startTrace('attempt-1', 'task-1', 'veritas', 'my-project', {
+          clientSource: 'agent-service',
+          mode: 'eng-review',
+          capabilitySet: ['start', 'status', 'logs', 'complete'],
+          workspaceId: 'local',
+          runKey: 'attempt-1',
+          policyProfile: 'codex-cli:workspace-write',
+        })
+      );
+      expect(trace.traceId).toBe('attempt-1');
+      expect(trace.taskId).toBe('task-1');
+      expect(trace.agent).toBe('veritas');
+      expect(trace.project).toBe('my-project');
+      expect(trace.status).toBe('running');
+      expect(trace.steps).toHaveLength(0);
+      expect(trace.startedAt).toBeDefined();
+      expect(trace.metadata).toMatchObject({
         clientSource: 'agent-service',
         runKey: 'attempt-1',
         policyProfile: 'codex-cli:workspace-write',
@@ -97,16 +106,15 @@ describe('TraceService', () => {
 
     it('should add a step to an existing trace', () => {
       service.startTrace('attempt-1', 'task-1', 'veritas');
-      const step = service.startStep('attempt-1', 'execute', { tool: 'vitest' });
+      const step = requireValue(service.startStep('attempt-1', 'execute', { tool: 'vitest' }));
 
-      expect(step).not.toBeNull();
-      expect(step!.type).toBe('execute');
-      expect(step!.sequence).toBe(1);
-      expect(step!.startedAt).toBeDefined();
-      expect(step!.metadata).toEqual({ tool: 'vitest' });
+      expect(step.type).toBe('execute');
+      expect(step.sequence).toBe(1);
+      expect(step.startedAt).toBeDefined();
+      expect(step.metadata).toEqual({ tool: 'vitest' });
 
-      const trace = service.getActiveTrace('attempt-1');
-      expect(trace!.steps).toHaveLength(1);
+      const trace = requireValue(service.getActiveTrace('attempt-1'));
+      expect(trace.steps).toHaveLength(1);
     });
 
     it('should preserve stream, retry, abort, and finalize lifecycle steps', () => {
@@ -132,14 +140,14 @@ describe('TraceService', () => {
       });
       service.endStep('attempt-lifecycle', 'finalize');
 
-      const trace = service.getActiveTrace('attempt-lifecycle');
-      expect(trace!.steps.map((step) => step.type)).toEqual([
+      const trace = requireValue(service.getActiveTrace('attempt-lifecycle'));
+      expect(trace.steps.map((step) => step.type)).toEqual([
         'stream',
         'retry',
         'abort',
         'finalize',
       ]);
-      expect(trace!.steps.every((step) => step.endedAt)).toBe(true);
+      expect(trace.steps.every((step) => step.endedAt)).toBe(true);
     });
   });
 
@@ -157,11 +165,11 @@ describe('TraceService', () => {
       // Small delay for duration
       service.endStep('attempt-1', 'execute');
 
-      const trace = service.getActiveTrace('attempt-1');
-      const step = trace!.steps[0];
+      const trace = requireValue(service.getActiveTrace('attempt-1'));
+      const step = requireValue(trace.steps[0]);
       expect(step.endedAt).toBeDefined();
       expect(step.durationMs).toBeDefined();
-      expect(step.durationMs!).toBeGreaterThanOrEqual(0);
+      expect(requireValue(step.durationMs)).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -183,14 +191,13 @@ describe('TraceService', () => {
       service.endStep('attempt-1', 'init');
       service.startStep('attempt-1', 'execute');
 
-      const trace = await service.completeTrace('attempt-1', 'completed');
-      expect(trace).not.toBeNull();
-      expect(trace!.status).toBe('completed');
-      expect(trace!.endedAt).toBeDefined();
-      expect(trace!.totalDurationMs).toBeDefined();
+      const trace = requireValue(await service.completeTrace('attempt-1', 'completed'));
+      expect(trace.status).toBe('completed');
+      expect(trace.endedAt).toBeDefined();
+      expect(trace.totalDurationMs).toBeDefined();
 
       // All open steps should be closed
-      for (const step of trace!.steps) {
+      for (const step of trace.steps) {
         expect(step.endedAt).toBeDefined();
       }
 
@@ -207,8 +214,8 @@ describe('TraceService', () => {
 
     it('should handle failed status', async () => {
       service.startTrace('attempt-2', 'task-2', 'copilot');
-      const trace = await service.completeTrace('attempt-2', 'failed');
-      expect(trace!.status).toBe('failed');
+      const trace = requireValue(await service.completeTrace('attempt-2', 'failed'));
+      expect(trace.status).toBe('failed');
     });
   });
 
@@ -219,18 +226,16 @@ describe('TraceService', () => {
 
     it('should return active trace', () => {
       service.startTrace('attempt-1', 'task-1', 'veritas');
-      const trace = service.getActiveTrace('attempt-1');
-      expect(trace).not.toBeNull();
-      expect(trace!.traceId).toBe('attempt-1');
+      const trace = requireValue(service.getActiveTrace('attempt-1'));
+      expect(trace.traceId).toBe('attempt-1');
     });
   });
 
   describe('getTrace', () => {
     it('should return active trace if available', async () => {
       service.startTrace('attempt-1', 'task-1', 'veritas');
-      const trace = await service.getTrace('attempt-1');
-      expect(trace).not.toBeNull();
-      expect(trace!.traceId).toBe('attempt-1');
+      const trace = requireValue(await service.getTrace('attempt-1'));
+      expect(trace.traceId).toBe('attempt-1');
     });
 
     it('should load completed trace from disk', async () => {
@@ -250,10 +255,9 @@ describe('TraceService', () => {
         'utf-8'
       );
 
-      const trace = await service.getTrace('attempt-saved');
-      expect(trace).not.toBeNull();
-      expect(trace!.traceId).toBe('attempt-saved');
-      expect(trace!.status).toBe('completed');
+      const trace = requireValue(await service.getTrace('attempt-saved'));
+      expect(trace.traceId).toBe('attempt-saved');
+      expect(trace.status).toBe('completed');
     });
 
     it('should return null for non-existent trace', async () => {

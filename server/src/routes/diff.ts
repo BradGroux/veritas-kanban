@@ -27,7 +27,7 @@ router.get(
   '/:taskId',
   validate({ params: DiffParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<DiffParams>, res) => {
-    const { taskId } = req.validated.params!;
+    const { taskId } = req.validated.params;
     const summary = await diffService.getDiffSummary(taskId);
     res.json(summary);
   })
@@ -38,8 +38,8 @@ router.get(
   '/:taskId/file',
   validate({ params: DiffParamsSchema, query: DiffFileQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<DiffParams, DiffFileQuery>, res) => {
-    const { taskId } = req.validated.params!;
-    const { path } = req.validated.query!;
+    const { taskId } = req.validated.params;
+    const { path } = req.validated.query;
     const diff = await diffService.getFileDiff(taskId, path);
     res.json(diff);
   })
@@ -50,7 +50,7 @@ router.get(
   '/:taskId/full',
   validate({ params: DiffParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<DiffParams>, res) => {
-    const { taskId } = req.validated.params!;
+    const { taskId } = req.validated.params;
     const diffs = await diffService.getFullDiff(taskId);
     res.json(diffs);
   })
@@ -71,7 +71,7 @@ router.post(
       throw error;
     }
 
-    const { taskId } = req.validated.params!;
+    const { taskId } = req.validated.params;
     const review = await codexReviewService.reviewTask({ taskId, ...body });
     res.status(201).json(review);
   })

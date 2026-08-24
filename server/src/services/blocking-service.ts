@@ -122,7 +122,8 @@ export class BlockingService {
     const queue = [newBlockerId];
 
     while (queue.length > 0) {
-      const currentId = queue.shift()!;
+      const currentId = queue.shift();
+      if (!currentId) continue;
 
       if (currentId === taskId) {
         return true;

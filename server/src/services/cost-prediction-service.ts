@@ -259,12 +259,12 @@ class CostPredictionService {
 
     const meanAbsoluteError = errors.reduce((sum, e) => sum + e, 0) / errors.length;
     const meanAccuracy = accuracies.reduce((sum, a) => sum + a, 0) / accuracies.length;
+    const midpoint = Math.floor(sortedAccuracies.length / 2);
+    const upperMedian = sortedAccuracies[midpoint] ?? 0;
     const medianAccuracy =
       sortedAccuracies.length % 2 === 0
-        ? (sortedAccuracies[sortedAccuracies.length / 2 - 1]! +
-            sortedAccuracies[sortedAccuracies.length / 2]!) /
-          2
-        : sortedAccuracies[Math.floor(sortedAccuracies.length / 2)]!;
+        ? ((sortedAccuracies[midpoint - 1] ?? upperMedian) + upperMedian) / 2
+        : upperMedian;
 
     const within20 = accuracy.filter((a) => a.accuracy >= 80 && a.accuracy <= 120).length;
     const within50 = accuracy.filter((a) => a.accuracy >= 50 && a.accuracy <= 150).length;

@@ -22,7 +22,7 @@ router.get(
   '/:taskId',
   validate({ params: ConflictParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<ConflictParams>, res) => {
-    const { taskId } = req.validated.params!;
+    const { taskId } = req.validated.params;
     const status = await conflictService.getConflictStatus(taskId);
     res.json(status);
   })
@@ -33,8 +33,8 @@ router.get(
   '/:taskId/file',
   validate({ params: ConflictParamsSchema, query: ConflictFileQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<ConflictParams, ConflictFileQuery>, res) => {
-    const { taskId } = req.validated.params!;
-    const { path } = req.validated.query!;
+    const { taskId } = req.validated.params;
+    const { path } = req.validated.query;
     const conflict = await conflictService.getFileConflict(taskId, path);
     res.json(conflict);
   })
@@ -50,9 +50,9 @@ router.post(
   }),
   asyncHandler(
     async (req: ValidatedRequest<ConflictParams, ConflictFileQuery, ResolveConflictBody>, res) => {
-      const { taskId } = req.validated.params!;
-      const { path } = req.validated.query!;
-      const { resolution, manualContent } = req.validated.body!;
+      const { taskId } = req.validated.params;
+      const { path } = req.validated.query;
+      const { resolution, manualContent } = req.validated.body;
 
       const result = await conflictService.resolveFile(taskId, path, resolution, manualContent);
       res.json(result);
@@ -65,7 +65,7 @@ router.post(
   '/:taskId/abort',
   validate({ params: ConflictParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<ConflictParams>, res) => {
-    const { taskId } = req.validated.params!;
+    const { taskId } = req.validated.params;
     const status = await conflictService.getConflictStatus(taskId);
 
     if (status.rebaseInProgress) {
@@ -85,8 +85,8 @@ router.post(
   '/:taskId/continue',
   validate({ params: ConflictParamsSchema, body: ContinueMergeBodySchema }),
   asyncHandler(async (req: ValidatedRequest<ConflictParams, unknown, ContinueMergeBody>, res) => {
-    const { taskId } = req.validated.params!;
-    const { message } = req.validated.body!;
+    const { taskId } = req.validated.params;
+    const { message } = req.validated.body;
     const status = await conflictService.getConflictStatus(taskId);
 
     let result;
