@@ -14,6 +14,7 @@ import {
   type FilesystemSandboxCommandRunner,
 } from '../services/filesystem-sandbox-service.js';
 import {
+  inspectGitMetadataRoots,
   removeRunSandboxDirectory,
   runSandboxDirectories,
 } from '../utils/filesystem-sandbox-runtime.js';
@@ -139,6 +140,23 @@ function conformantRunner(): FilesystemSandboxCommandRunner {
 }
 
 describe('FilesystemSandboxService', () => {
+  it('rejects a symbolic linked-worktree common-directory pointer', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-sandbox-git-metadata-'));
+    roots.push(root);
+    const workspace = path.join(root, 'workspace');
+    const gitDirectory = path.join(root, 'git-directory');
+    const commonDirectory = path.join(root, 'common-directory');
+    await fs.mkdir(workspace);
+    await fs.mkdir(gitDirectory);
+    await fs.mkdir(commonDirectory);
+    await fs.writeFile(path.join(workspace, '.git'), `gitdir: ${gitDirectory}\n`, 'utf8');
+    await fs.symlink(commonDirectory, path.join(gitDirectory, 'commondir'));
+
+    await expect(inspectGitMetadataRoots(workspace)).rejects.toThrow(
+      'Filesystem metadata pointer must be a regular file.'
+    );
+  });
+
   it.each([
     ['darwin', 'seatbelt'],
     ['linux', 'landlock-bubblewrap'],
