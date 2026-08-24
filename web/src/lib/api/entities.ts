@@ -195,6 +195,15 @@ export const attachmentsApi = {
     });
   },
 
+  getText: async (
+    taskId: string,
+    attachmentId: string
+  ): Promise<{ attachmentId: string; text: string | null; hasText: boolean }> => {
+    return apiFetch(
+      `${API_BASE}/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}/text`
+    );
+  },
+
   getTaskContext: async (taskId: string): Promise<TaskContext> => {
     return apiFetch<TaskContext>(`${API_BASE}/tasks/${taskId}/context`);
   },

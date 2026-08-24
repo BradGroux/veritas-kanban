@@ -11,7 +11,7 @@ import type {
   RecordDecisionReviewTurnInput,
   UpdateDecisionAssumptionInput,
 } from '@veritas-kanban/shared';
-import { API_BASE, apiFetch } from './helpers';
+import { API_BASE, apiFetch, apiText } from './helpers';
 
 function toQuery(filters: DecisionListFilters = {}): string {
   const params = new URLSearchParams();
@@ -140,22 +140,7 @@ export const decisionsApi = {
     },
 
     export: async (id: string): Promise<string> => {
-      // This endpoint returns plain text (markdown export), not a JSON envelope.
-      // Uses raw fetch intentionally; apiFetch does not support text() responses.
-      const response = await fetch(
-        `${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/export`,
-        {
-          credentials: 'include',
-        }
-      );
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        if (body && typeof body === 'object' && 'message' in body) {
-          throw new Error(String((body as { message: unknown }).message));
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return response.text();
+      return apiText(`${API_BASE}/decisions/reviews/${encodeURIComponent(id)}/export`);
     },
   },
 };

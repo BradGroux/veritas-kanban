@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Badge, Box, Button, Group, Modal, Paper, Stack, Text, Textarea } from '@mantine/core';
-import { API_BASE } from '@/lib/config';
+import { tasksApi } from '@/lib/api/tasks';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { TaskMetadataSection } from './TaskMetadataSection';
@@ -149,7 +149,7 @@ export function TaskDetailsTab({
                   aria-label="Clear checkpoint and discard saved progress"
                   onClick={async () => {
                     try {
-                      await fetch(`${API_BASE}/tasks/${task.id}/checkpoint`, { method: 'DELETE' });
+                      await tasksApi.clearCheckpoint(task.id);
                       onUpdate('checkpoint', undefined);
                     } catch (error) {
                       console.error('Failed to clear checkpoint:', error);

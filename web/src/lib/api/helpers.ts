@@ -106,3 +106,22 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   });
   return handleResponse<T>(response);
 }
+
+/**
+ * Credential-aware transport for endpoints that return text, blobs, or streams.
+ * JSON endpoints should continue to use apiFetch().
+ */
+export async function apiResponse(url: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(resolveApiUrl(url), {
+    credentials: 'include',
+    ...init,
+  });
+  if (!response.ok) {
+    await handleResponse<never>(response);
+  }
+  return response;
+}
+
+export async function apiText(url: string, init?: RequestInit): Promise<string> {
+  return (await apiResponse(url, init)).text();
+}

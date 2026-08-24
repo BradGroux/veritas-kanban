@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button, Group, Modal, PasswordInput, Stack, Text } from '@mantine/core';
 import { Eye, EyeOff, Check, AlertTriangle, Key } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
+import { authApi } from '@/lib/api/auth';
 
 // Password strength calculation (same as SetupScreen)
 function getPasswordStrength(password: string): { score: number; label: string; color: string } {
@@ -195,17 +196,8 @@ export function SecurityTab() {
                   onClick={async () => {
                     // Call the reset endpoint
                     try {
-                      const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-                      const res = await fetch(`${base}/api/auth/reset`, { method: 'POST' });
-                      if (res.ok) {
-                        window.location.reload();
-                      } else {
-                        toast({
-                          title: 'Reset failed',
-                          description: 'Please use the CLI command instead.',
-                          duration: 5000,
-                        });
-                      }
+                      await authApi.reset();
+                      window.location.reload();
                     } catch (err) {
                       console.error('[Security] Auth reset failed:', err);
                       toast({

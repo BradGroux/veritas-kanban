@@ -5,7 +5,7 @@ import type {
   WorkProductPreview,
   WorkProductVersion,
 } from '@veritas-kanban/shared';
-import { API_BASE, apiFetch } from './helpers';
+import { API_BASE, apiFetch, apiText } from './helpers';
 
 export type WorkProductExportFormat = 'markdown' | 'json';
 
@@ -23,25 +23,6 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
   }
   const serialized = query.toString();
   return serialized ? `?${serialized}` : '';
-}
-
-function getErrorMessage(body: unknown, status: number): string {
-  if (body && typeof body === 'object') {
-    const record = body as Record<string, unknown>;
-    if (typeof record.message === 'string') {
-      return record.message;
-    }
-    if (typeof record.error === 'string') {
-      return record.error;
-    }
-    if (record.error && typeof record.error === 'object') {
-      const error = record.error as Record<string, unknown>;
-      if (typeof error.message === 'string') {
-        return error.message;
-      }
-    }
-  }
-  return `HTTP ${status}`;
 }
 
 export const workProductsApi = {
@@ -78,24 +59,10 @@ export const workProductsApi = {
   },
 
   export: async (id: string, options: WorkProductExportOptions = {}): Promise<string> => {
-    // This endpoint returns plain text (markdown export), not a JSON envelope.
-    // Uses raw fetch intentionally; apiFetch does not support text() responses.
     const query = buildQuery({
       format: options.format ?? 'markdown',
       redacted: options.redacted ?? true,
     });
-    const response = await fetch(
-      `${API_BASE}/work-products/${encodeURIComponent(id)}/export${query}`,
-      {
-        credentials: 'include',
-      }
-    );
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      throw new Error(getErrorMessage(body, response.status));
-    }
-
-    return response.text();
+    return apiText(`${API_BASE}/work-products/${encodeURIComponent(id)}/export${query}`);
   },
 };

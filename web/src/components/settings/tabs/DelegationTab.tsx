@@ -3,16 +3,15 @@
  */
 
 import { useState } from 'react';
-import { API_BASE } from '@/lib/config';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Select, Switch } from '@mantine/core';
 import { useToast } from '@/hooks/useToast';
 import { Plane, ShieldCheck, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
-import type { DelegationSettings } from '@veritas-kanban/shared';
-
-interface DelegationResponse {
-  delegation: DelegationSettings | null;
-}
+import {
+  delegationApi,
+  type DelegationResponse,
+  type SetDelegationInput,
+} from '@/lib/api/delegation';
 
 function formatDateTime(isoString: string): string {
   const date = new Date(isoString);
@@ -45,34 +44,15 @@ export function DelegationTab() {
   // Fetch current delegation
   const { data, isLoading } = useQuery<DelegationResponse>({
     queryKey: ['delegation'],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/delegation`);
-      if (!res.ok) throw new Error('Failed to fetch delegation settings');
-      return res.json();
-    },
+    queryFn: delegationApi.get,
   });
 
   const delegation = data?.delegation;
 
   // Set delegation mutation
   const setDelegationMutation = useMutation({
-    mutationFn: async (params: {
-      delegateAgent: string;
-      expires: string;
-      scope: { type: 'all' | 'project' | 'priority' };
-      excludePriorities?: string[];
-      createdBy: string;
-    }) => {
-      const res = await fetch(`${API_BASE}/delegation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to set delegation');
-      }
-      return res.json();
+    mutationFn: async (params: SetDelegationInput) => {
+      return delegationApi.set(params);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delegation'] });
@@ -93,9 +73,7 @@ export function DelegationTab() {
   // Revoke delegation mutation
   const revokeDelegationMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/delegation`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to revoke delegation');
-      return res.json();
+      return delegationApi.revoke();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delegation'] });
@@ -115,7 +93,9 @@ export function DelegationTab() {
 
   const handleEnableDelegation = () => {
     const expires = addHours(new Date(), durationHours).toISOString();
-    const excludePriorities = excludeCritical ? ['critical'] : undefined;
+    const excludePriorities: SetDelegationInput['excludePriorities'] = excludeCritical
+      ? ['critical']
+      : undefined;
 
     setDelegationMutation.mutate({
       delegateAgent,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Group, Loader, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { Download } from 'lucide-react';
-import { API_BASE } from '@/lib/config';
+import { API_BASE, apiResponse } from '@/lib/api/helpers';
 
 export type ExportScope = 'full' | 'project' | 'task';
 export type ExportFormat = 'csv' | 'json';
@@ -72,11 +72,7 @@ export function ExportDialog({
         params.set('to', toDateTime.toISOString());
       }
 
-      const response = await fetch(`${API_BASE}/telemetry/export?${params}`);
-
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
+      const response = await apiResponse(`${API_BASE}/telemetry/export?${params}`);
 
       const disposition = response.headers.get('Content-Disposition');
       let filename = `telemetry-export.${format}`;

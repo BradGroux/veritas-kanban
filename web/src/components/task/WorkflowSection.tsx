@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { API_BASE } from '@/lib/config';
 import { Badge, Button, Group, Loader, Modal, Paper, ScrollArea, Stack, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { Play, Loader2 } from 'lucide-react';
@@ -196,11 +195,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
       setRecommendationsByWorkflow({});
       try {
         // Fetch available workflows
-        const workflowsRes = await fetch(`${API_BASE}/workflows`);
-        if (!workflowsRes.ok) {
-          throw new Error(`Unable to load workflows (${workflowsRes.status})`);
-        }
-        const workflowList = normalizeWorkflows(await workflowsRes.json());
+        const workflowList = normalizeWorkflows(await workflowsApi.list());
         if (isCancelled) return;
         setWorkflows(workflowList);
 
@@ -227,11 +222,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
         setRecommendationsByWorkflow(Object.fromEntries(recommendationEntries));
 
         // Fetch active runs for this task
-        const runsRes = await fetch(`${API_BASE}/workflows/runs?taskId=${task.id}`);
-        if (!runsRes.ok) {
-          throw new Error(`Unable to load workflow runs (${runsRes.status})`);
-        }
-        const runs = normalizeActiveRuns(await runsRes.json());
+        const runs = normalizeActiveRuns(await workflowsApi.listRuns({ taskId: task.id }));
         if (isCancelled) return;
         setActiveRuns(runs);
       } catch (error) {
@@ -254,16 +245,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   const handleStartWorkflow = async (workflowId: string) => {
     setIsStarting(workflowId);
     try {
-      const response = await fetch(`${API_BASE}/workflows/${workflowId}/runs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: task.id }),
-      });
-
-      if (!response.ok) throw new Error('Failed to start workflow run');
-
-      const runJson = await response.json();
-      const run = runJson.data ?? runJson;
+      const run = await workflowsApi.startRun(workflowId, { taskId: task.id });
       toast({
         title: 'Workflow run started',
         description: `Run ID: ${run.id}`,
