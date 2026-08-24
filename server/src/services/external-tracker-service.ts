@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import type {
@@ -24,9 +23,9 @@ import type {
 } from '@veritas-kanban/shared';
 import { auditLog, type AuditEvent } from './audit-service.js';
 import { activityService, type ActivityService } from './activity-service.js';
-import { withFileLock } from './file-lock.js';
 import { getTaskService } from './task-service.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { JsonFileRepository } from '../storage/json-file-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { stripHtml, validatePathSegment } from '../utils/sanitize.js';
 
@@ -400,7 +399,7 @@ class MockExternalTrackerAdapter implements ExternalTrackerAdapter {
 }
 
 export class ExternalTrackerService {
-  private readonly storageDir: string;
+  private readonly repository: JsonFileRepository<ExternalTrackerState>;
   private readonly persist: boolean;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private readonly taskService: ExternalTrackerTaskService;
@@ -410,7 +409,8 @@ export class ExternalTrackerService {
   private state: ExternalTrackerState = this.emptyState();
 
   constructor(options: ExternalTrackerServiceOptions = {}) {
-    this.storageDir = options.storageDir ?? path.join(getRuntimeDir(), 'external-trackers');
+    const storageDir = options.storageDir ?? path.join(getRuntimeDir(), 'external-trackers');
+    this.repository = new JsonFileRepository(path.join(storageDir, STATE_FILE));
     this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.audit = options.audit ?? auditLog;
     this.taskService = options.taskService ?? getTaskService();
@@ -946,10 +946,6 @@ export class ExternalTrackerService {
     };
   }
 
-  private get stateFile(): string {
-    return path.join(this.storageDir, STATE_FILE);
-  }
-
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     if (!this.persist) {
@@ -960,10 +956,8 @@ export class ExternalTrackerService {
       this.loaded = true;
       return;
     }
-    await fs.mkdir(this.storageDir, { recursive: true });
     try {
-      const content = await fs.readFile(this.stateFile, 'utf8');
-      this.state = { ...this.emptyState(), ...JSON.parse(content) };
+      this.state = { ...this.emptyState(), ...(await this.repository.read()) };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       this.state = this.emptyState();
@@ -977,10 +971,7 @@ export class ExternalTrackerService {
 
   private async saveState(): Promise<void> {
     if (!this.persist) return;
-    await fs.mkdir(this.storageDir, { recursive: true });
-    await withFileLock(this.stateFile, async () => {
-      await fs.writeFile(this.stateFile, JSON.stringify(this.state, null, 2), 'utf8');
-    });
+    await this.repository.write(this.state);
   }
 }
 

@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { nanoid } from 'nanoid';
@@ -28,6 +27,7 @@ import type {
 import { createLogger } from '../lib/logger.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { JsonFileRepository } from '../storage/json-file-repository.js';
 import { getAgentBudgetService, type AgentBudgetService } from './agent-budget-service.js';
 import { getBreaker } from './circuit-registry.js';
 import {
@@ -121,7 +121,7 @@ interface GateContext {
 }
 
 export class QueueIntakeMonitorService {
-  private readonly storeFile: string;
+  private readonly repository: JsonFileRepository<QueueMonitorStore>;
   private readonly githubExec: (args: string[]) => Promise<string>;
   private readonly watcherPolicyService: WatcherPolicyService;
   private readonly sandboxPolicyService: SandboxPolicyService;
@@ -136,7 +136,8 @@ export class QueueIntakeMonitorService {
   private readonly runningMonitors = new Set<string>();
 
   constructor(options: QueueIntakeMonitorServiceOptions = {}) {
-    this.storeFile = options.storeFile ?? path.join(getRuntimeDir(), 'queue-monitors.json');
+    const storeFile = options.storeFile ?? path.join(getRuntimeDir(), 'queue-monitors.json');
+    this.repository = new JsonFileRepository(storeFile);
     this.githubExec = options.githubExec ?? defaultGhExec;
     this.watcherPolicyService = options.watcherPolicyService ?? new WatcherPolicyService();
     this.sandboxPolicyService = options.sandboxPolicyService ?? getSandboxPolicyService();
@@ -965,8 +966,7 @@ export class QueueIntakeMonitorService {
   private async ensureLoaded(): Promise<void> {
     if (this.store) return;
     try {
-      const raw = await fs.readFile(this.storeFile, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<QueueMonitorStore>;
+      const parsed = await this.repository.read();
       this.store = normalizeStore(parsed);
     } catch {
       this.store = defaultStore();
@@ -979,8 +979,7 @@ export class QueueIntakeMonitorService {
   }
 
   private async saveStore(): Promise<void> {
-    await fs.mkdir(path.dirname(this.storeFile), { recursive: true });
-    await fs.writeFile(this.storeFile, JSON.stringify(this.store, null, 2), 'utf-8');
+    await this.repository.write(this.currentStore());
   }
 }
 

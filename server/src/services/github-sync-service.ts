@@ -8,11 +8,10 @@
  * Persists config to `.veritas-kanban/integrations.json` and sync state to
  * `.veritas-kanban/github-sync.json`.
  */
-import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { fileExists } from '../storage/fs-helpers.js';
+import { JsonFileRepository } from '../storage/json-file-repository.js';
 import { getBreaker } from './circuit-registry.js';
 import { getTaskService, type TaskService } from './task-service.js';
 import { createLogger } from '../lib/logger.js';
@@ -68,6 +67,10 @@ interface GhIssue {
 const DATA_DIR = getRuntimeDir();
 const INTEGRATIONS_FILE = join(DATA_DIR, 'integrations.json');
 const SYNC_STATE_FILE = join(DATA_DIR, 'github-sync.json');
+const integrationsRepository = new JsonFileRepository<Partial<IntegrationsConfig>>(
+  INTEGRATIONS_FILE
+);
+const syncStateRepository = new JsonFileRepository<Partial<SyncState>>(SYNC_STATE_FILE);
 
 const DEFAULT_CONFIG: IntegrationsConfig = {
   github: {
@@ -97,13 +100,8 @@ export class GitHubSyncService {
   // ── Config persistence ────────────────────────────────────
 
   async getConfig(): Promise<IntegrationsConfig> {
-    await mkdir(DATA_DIR, { recursive: true });
-    if (!(await fileExists(INTEGRATIONS_FILE))) {
-      return { ...DEFAULT_CONFIG };
-    }
     try {
-      const raw = await readFile(INTEGRATIONS_FILE, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<IntegrationsConfig>;
+      const parsed = await integrationsRepository.read();
       return {
         github: { ...DEFAULT_CONFIG.github, ...parsed.github },
       };
@@ -115,21 +113,15 @@ export class GitHubSyncService {
   async updateConfig(patch: Partial<GitHubSyncConfig>): Promise<IntegrationsConfig> {
     const current = await this.getConfig();
     current.github = { ...current.github, ...patch };
-    await mkdir(DATA_DIR, { recursive: true });
-    await writeFile(INTEGRATIONS_FILE, JSON.stringify(current, null, 2), 'utf-8');
+    await integrationsRepository.write(current);
     return current;
   }
 
   // ── Sync-state persistence ────────────────────────────────
 
   async getSyncState(): Promise<SyncState> {
-    await mkdir(DATA_DIR, { recursive: true });
-    if (!(await fileExists(SYNC_STATE_FILE))) {
-      return { ...DEFAULT_STATE, issueMappings: {} };
-    }
     try {
-      const raw = await readFile(SYNC_STATE_FILE, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<SyncState>;
+      const parsed = await syncStateRepository.read();
       return {
         lastSyncAt: parsed.lastSyncAt ?? null,
         issueMappings: parsed.issueMappings ?? {},
@@ -140,8 +132,7 @@ export class GitHubSyncService {
   }
 
   private async saveSyncState(state: SyncState): Promise<void> {
-    await mkdir(DATA_DIR, { recursive: true });
-    await writeFile(SYNC_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+    await syncStateRepository.write(state);
   }
 
   // ── gh CLI helpers ────────────────────────────────────────

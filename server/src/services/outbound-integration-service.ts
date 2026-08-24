@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import type { FeatureSettings } from '@veritas-kanban/shared';
@@ -9,6 +8,7 @@ import {
   type UrlValidationOptions,
 } from '../utils/url-validation.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { JsonFileRepository } from '../storage/json-file-repository.js';
 import {
   defaultDependencyCircuitExecutionService,
   integrationDependencyIdentity,
@@ -201,7 +201,8 @@ async function readLimitedResponseText(
 }
 
 export class OutboundIntegrationService {
-  private readonly storageDir: string;
+  private readonly endpointsRepository: JsonFileRepository<OutboundEndpointRecord[]>;
+  private readonly deliveriesRepository: JsonFileRepository<OutboundDeliveryAttempt[]>;
   private readonly persist: boolean;
   private readonly audit: (event: AuditEvent) => Promise<void>;
   private readonly dependencyExecution: DependencyCircuitExecutionService;
@@ -210,7 +211,9 @@ export class OutboundIntegrationService {
   private deliveries: OutboundDeliveryAttempt[] = [];
 
   constructor(options: OutboundIntegrationServiceOptions = {}) {
-    this.storageDir = options.storageDir || path.join(getRuntimeDir(), 'outbound-integrations');
+    const storageDir = options.storageDir || path.join(getRuntimeDir(), 'outbound-integrations');
+    this.endpointsRepository = new JsonFileRepository(path.join(storageDir, 'endpoints.json'));
+    this.deliveriesRepository = new JsonFileRepository(path.join(storageDir, 'deliveries.json'));
     this.persist = options.persist ?? process.env.VITEST !== 'true';
     this.audit = options.audit || auditLog;
     this.dependencyExecution =
@@ -388,8 +391,7 @@ export class OutboundIntegrationService {
       const message = this.sanitizeError(err, endpoint.url);
       const circuitRejected = err instanceof DependencyRouteUnavailableError;
       const policyBlocked = err instanceof OutboundPolicyBlockError;
-      const dependencyResponse =
-        err instanceof OutboundDependencyResponseError ? err : undefined;
+      const dependencyResponse = err instanceof OutboundDependencyResponseError ? err : undefined;
       const status: OutboundDeliveryStatus =
         circuitRejected || policyBlocked
           ? 'blocked'
@@ -412,7 +414,7 @@ export class OutboundIntegrationService {
               ? 'Dependency circuit rejected outbound delivery.'
               : policyBlocked
                 ? err.message
-              : message,
+                : message,
       });
       return {
         ok: false,
@@ -518,19 +520,15 @@ export class OutboundIntegrationService {
       return;
     }
 
-    await fs.mkdir(this.storageDir, { recursive: true });
-
     try {
-      const raw = await fs.readFile(this.endpointsPath, 'utf-8');
-      const parsed = JSON.parse(raw) as OutboundEndpointRecord[];
+      const parsed = await this.endpointsRepository.read();
       this.endpoints = new Map(parsed.map((endpoint) => [endpoint.id, endpoint]));
     } catch {
       this.endpoints = new Map();
     }
 
     try {
-      const raw = await fs.readFile(this.deliveriesPath, 'utf-8');
-      this.deliveries = JSON.parse(raw) as OutboundDeliveryAttempt[];
+      this.deliveries = await this.deliveriesRepository.read();
       if (this.deliveries.length > MAX_DELIVERIES) {
         this.deliveries = this.deliveries.slice(-MAX_DELIVERIES);
       }
@@ -541,28 +539,14 @@ export class OutboundIntegrationService {
     this.loaded = true;
   }
 
-  private get endpointsPath(): string {
-    return path.join(this.storageDir, 'endpoints.json');
-  }
-
-  private get deliveriesPath(): string {
-    return path.join(this.storageDir, 'deliveries.json');
-  }
-
   private async saveEndpoints(): Promise<void> {
     if (!this.persist) return;
-    await fs.mkdir(this.storageDir, { recursive: true });
-    await fs.writeFile(
-      this.endpointsPath,
-      JSON.stringify(Array.from(this.endpoints.values()), null, 2),
-      'utf-8'
-    );
+    await this.endpointsRepository.write(Array.from(this.endpoints.values()));
   }
 
   private async saveDeliveries(): Promise<void> {
     if (!this.persist) return;
-    await fs.mkdir(this.storageDir, { recursive: true });
-    await fs.writeFile(this.deliveriesPath, JSON.stringify(this.deliveries, null, 2), 'utf-8');
+    await this.deliveriesRepository.write(this.deliveries);
   }
 
   private async recordDelivery(input: {

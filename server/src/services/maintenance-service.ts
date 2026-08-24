@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'node:crypto';
 import {
@@ -33,6 +32,7 @@ import {
 import { redactString } from '../lib/redact.js';
 import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import { getStorage } from '../storage/index.js';
+import * as fs from '../storage/fs-helpers.js';
 import { getRunPhaseAuthorityService } from './run-phase-authority-service.js';
 import { getAdmissionControlService } from './admission-control-service.js';
 
@@ -413,9 +413,7 @@ export class MaintenanceService {
             (!artifact.retention.activeLeaseUntil ||
               Date.parse(artifact.retention.activeLeaseUntil) <= current)
         ).length,
-        lastUsedAt: this.latestDate(
-          artifacts.map((artifact) => artifact.redaction.validatedAt)
-        ),
+        lastUsedAt: this.latestDate(artifacts.map((artifact) => artifact.redaction.validatedAt)),
       };
     } catch {
       return { bytes: 0, itemCount: 0, cleanupEligibleCount: 0 };

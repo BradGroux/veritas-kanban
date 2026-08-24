@@ -1,18 +1,12 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 29,
+  "maximumEntries": 16,
   "entries": [
     {
       "path": "server/src/services/attachment-service.ts",
       "category": "compatibility-debt",
       "owner": "#1188",
       "rationale": "Managed-content storage migration is tracked in issue #1188."
-    },
-    {
-      "path": "server/src/services/audit-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     },
     {
       "path": "server/src/services/clawdbot-agent-service.ts",
@@ -39,12 +33,6 @@
       "rationale": "Managed-content storage migration is tracked in issue #1188."
     },
     {
-      "path": "server/src/services/external-tracker-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
       "path": "server/src/services/file-lock.ts",
       "category": "transient-process-io",
       "owner": "#1189",
@@ -57,40 +45,10 @@
       "rationale": "Remaining process I/O migration is tracked in issue #1189."
     },
     {
-      "path": "server/src/services/github-sync-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/integrity-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/maintenance-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
       "path": "server/src/services/managed-list-service.ts",
       "category": "compatibility-debt",
       "owner": "#1188",
       "rationale": "Managed-content storage migration is tracked in issue #1188."
-    },
-    {
-      "path": "server/src/services/notification-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/outbound-integration-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     },
     {
       "path": "server/src/services/pdf-report-service.ts",
@@ -103,24 +61,6 @@
       "category": "compatibility-debt",
       "owner": "#1188",
       "rationale": "Managed-content storage migration is tracked in issue #1188."
-    },
-    {
-      "path": "server/src/services/queue-intake-monitor-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/run-session-share-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/search-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     },
     {
       "path": "server/src/services/shared-resources-service.ts",
@@ -141,12 +81,6 @@
       "rationale": "Remaining process I/O migration is tracked in issue #1189."
     },
     {
-      "path": "server/src/services/task-identity-diagnostics.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
       "path": "server/src/services/template-service.ts",
       "category": "compatibility-debt",
       "owner": "#1188",
@@ -163,18 +97,6 @@
       "category": "compatibility-debt",
       "owner": "#1188",
       "rationale": "Managed-content storage migration is tracked in issue #1188."
-    },
-    {
-      "path": "server/src/services/trace-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/work-product-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     }
   ]
 }

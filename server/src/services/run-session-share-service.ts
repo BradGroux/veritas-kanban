@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type {
@@ -19,6 +18,7 @@ import type {
   UpdateRunSessionShareInput,
 } from '@veritas-kanban/shared';
 import { getDataDir } from '../utils/paths.js';
+import { JsonFileRepository } from '../storage/json-file-repository.js';
 import { validatePathSegment } from '../utils/sanitize.js';
 import { redactString } from '../lib/redact.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../middleware/error-handler.js';
@@ -55,15 +55,16 @@ const MAX_EVENT_HISTORY = 5000;
 const LOG_CONTEXT_LIMIT = 4000;
 
 export class RunSessionShareService {
-  private readonly filePath: string;
+  private readonly repository: JsonFileRepository<RunSessionShareState>;
   private readonly taskService: TaskService;
   private readonly agentService: typeof clawdbotAgentService;
   private readonly approvalBroker: RunApprovalBrokerService;
   private state: RunSessionShareState | null = null;
 
   constructor(options: RunSessionShareServiceOptions = {}) {
-    this.filePath =
+    const filePath =
       options.filePath ?? path.join(getDataDir(), 'storage', 'run-session-shares.json');
+    this.repository = new JsonFileRepository(filePath, { trailingNewline: true });
     this.taskService = options.taskService ?? getTaskService();
     this.agentService = options.agentService ?? clawdbotAgentService;
     this.approvalBroker = options.approvalBroker ?? getRunApprovalBrokerService();
@@ -479,8 +480,7 @@ export class RunSessionShareService {
   private async loadState(): Promise<RunSessionShareState> {
     if (this.state) return this.state;
     try {
-      const raw = await fs.readFile(this.filePath, 'utf8');
-      this.state = JSON.parse(raw) as RunSessionShareState;
+      this.state = await this.repository.read();
     } catch {
       this.state = { shares: [], events: [], forks: [] };
     }
@@ -489,8 +489,7 @@ export class RunSessionShareService {
 
   private async saveState(state: RunSessionShareState): Promise<void> {
     state.events = state.events.slice(-MAX_EVENT_HISTORY);
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fs.writeFile(this.filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+    await this.repository.write(state);
     this.state = state;
   }
 }
