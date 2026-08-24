@@ -68,7 +68,7 @@ const ALLOWED_ATTR = [
  * URI schemes allowed in href/src attributes.
  * Blocks javascript:, data:, vbscript:, etc.
  */
-const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto|tel|ftp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
+const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto|tel|ftp):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
 
 /**
  * Sanitize HTML content for safe rendering.
