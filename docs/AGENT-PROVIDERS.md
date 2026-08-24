@@ -681,6 +681,14 @@ Callback and remote-session terminal sources are accepted only for OpenClaw.
 CLI process and SDK stream providers reject callback transport even when an
 attempt ID and manifest digest are known.
 
+Terminal task mutation crosses one `AttemptLifecycleCoordinator` seam. The
+coordinator validates the persisted runtime, envelope, and optional launch
+manifest bindings; enforces active-attempt ownership; retries bounded task
+revision conflicts; updates current and historical attempt state together;
+and treats only the exact persisted idempotency key as a safe duplicate.
+Provider adapters and restart recovery prepare evidence but cannot implement a
+parallel terminal persistence path.
+
 Provider summaries, evidence, artifacts, and verification claims are bounded,
 redacted, and stored as unverified provider evidence. Veritas independently
 captures Git HEAD, post-launch files and commits, task verification state,

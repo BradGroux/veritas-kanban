@@ -168,9 +168,7 @@ import {
 } from '../middleware/error-handler.js';
 import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
-import {
-  ProviderRuntimeManifestService,
-} from './provider-runtime-manifest-service.js';
+import { ProviderRuntimeManifestService } from './provider-runtime-manifest-service.js';
 import type { WorkspaceFileRepository } from '../storage/interfaces.js';
 import { LocalWorkspaceFileRepository } from '../storage/workspace-file-repository.js';
 import {
@@ -197,11 +195,6 @@ import {
 } from './harness-support-profile-registry.js';
 import { RunLaunchManifestService, diffRunLaunchManifests } from './run-launch-manifest-service.js';
 import { RunLaunchCompiler } from './run-launch-compiler.js';
-import {
-  parseCompletionResultForEnvelope,
-  parseTaskEnvelope,
-} from '../schemas/task-envelope-schemas.js';
-import { parseRunLaunchManifest } from '../schemas/run-launch-manifest-schemas.js';
 import { RunTerminalExecuteRequestSchema } from '../schemas/run-terminal-schemas.js';
 import {
   ProviderCompletionService,
@@ -209,6 +202,10 @@ import {
   type ProviderCompletionEvidenceClaim,
   type ProviderTerminalClaim,
 } from './provider-completion-service.js';
+import {
+  AttemptLifecycleCoordinator,
+  CompletionOwnershipError,
+} from './attempt-lifecycle-coordinator.js';
 import { getCredentialBrokerService } from './credential-broker-service.js';
 import { WorktreeService } from './worktree-service.js';
 import {
@@ -609,7 +606,6 @@ const scheduledRecoveries = new Map<
   string,
   { attemptId: string; timer: ReturnType<typeof setTimeout> }
 >();
-const COMPLETION_PERSISTENCE_ATTEMPTS = 3;
 const NOOP_CREDENTIAL_LEASE_LIFECYCLE: CredentialLeaseLifecycle = {
   async revokeRun() {
     return 0;
@@ -626,8 +622,6 @@ class CompletionPersistenceError extends Error {
     this.name = 'CompletionPersistenceError';
   }
 }
-
-class CompletionOwnershipError extends ConflictError {}
 
 function normalizedTaskRevision(task: Pick<Task, 'revision'>): number {
   return typeof task.revision === 'number' && Number.isInteger(task.revision) && task.revision >= 0
@@ -650,6 +644,7 @@ export class ClawdbotAgentService {
   private runLaunchManifests: RunLaunchManifestService;
   private runLaunchCompiler: RunLaunchCompiler;
   private providerCompletions: ProviderCompletionService;
+  private attemptLifecycle: AttemptLifecycleCoordinator;
   private credentialLeases: CredentialLeaseLifecycle;
   private workspaceFiles: WorkspaceFileRepository;
   private worktrees: Pick<WorktreeService, 'claimOwnership' | 'releaseOwnership'>;
@@ -750,6 +745,7 @@ export class ClawdbotAgentService {
     this.taskEnvelopes = taskEnvelopes;
     this.runLaunchManifests = new RunLaunchManifestService();
     this.providerCompletions = providerCompletions;
+    this.attemptLifecycle = new AttemptLifecycleCoordinator(this.taskService);
     this.credentialLeases = credentialLeases;
     this.workspaceFiles = workspaceFiles;
     this.worktrees =
@@ -1064,16 +1060,9 @@ export class ClawdbotAgentService {
               'Legacy running attempt has no durable supervisor bindings and cannot be recovered safely.',
           };
           if (attempt.taskEnvelope && attempt.providerRuntimeManifest) {
-            await this.persistRestartedProviderCompletion(
-              task,
-              attempt,
-              claim,
-              this.providerCompletions.idempotencyKey({
-                taskEnvelope: attempt.taskEnvelope,
-                claim,
-              }),
-              { preserveNonActiveTaskStatus: true }
-            );
+            await this.persistRestartedProviderCompletion(task, attempt, claim, {
+              preserveNonActiveTaskStatus: true,
+            });
           } else {
             const failedAttempt: TaskAttempt = {
               ...attempt,
@@ -1090,7 +1079,7 @@ export class ClawdbotAgentService {
           continue;
         }
 
-        this.assertPersistedAttemptCompletionBinding(task.id, attempt);
+        this.attemptLifecycle.assertCompletionBinding(task.id, attempt);
         const provider = executableProvider(attempt.provider);
         if (provider === 'system') {
           throw new CompletionOwnershipError('Persisted attempt has no executable provider.', {
@@ -3492,7 +3481,7 @@ export class ClawdbotAgentService {
           provenance.providerRuntimeManifestDigest &&
         persistedAttempt.taskEnvelope
       ) {
-        this.assertPersistedAttemptCompletionBinding(taskId, persistedAttempt);
+        this.attemptLifecycle.assertCompletionBinding(taskId, persistedAttempt);
         this.assertTerminalTransport(persistedAttempt.provider, terminalSource);
         const claim = this.normalizeTerminalClaim(result, terminalSource);
         const idempotencyKey = this.providerCompletions.idempotencyKey({
@@ -3500,7 +3489,8 @@ export class ClawdbotAgentService {
           claim,
         });
         if (persistedAttempt.completionResult) {
-          const persistedCompletion = this.parsePersistedCompletion(persistedAttempt);
+          const persistedCompletion =
+            this.attemptLifecycle.parsePersistedCompletion(persistedAttempt);
           if (persistedCompletion.idempotencyKey === idempotencyKey) {
             await this.admission.releaseByAttempt(
               persistedAttempt.taskEnvelope.workspace.workspaceId,
@@ -3537,12 +3527,7 @@ export class ClawdbotAgentService {
           (terminalSource === 'callback' || terminalSource === 'remote-session') &&
           (persistedAttempt.status === 'running' || persistedAttempt.status === 'failed')
         ) {
-          await this.persistRestartedProviderCompletion(
-            task,
-            persistedAttempt,
-            claim,
-            idempotencyKey
-          );
+          await this.persistRestartedProviderCompletion(task, persistedAttempt, claim);
           return;
         }
       }
@@ -3606,121 +3591,6 @@ export class ClawdbotAgentService {
     }
   }
 
-  private parsePersistedCompletion(attempt: TaskAttempt): CompletionResult {
-    if (!attempt.taskEnvelope || !attempt.completionResult) {
-      throw new CompletionOwnershipError(
-        'Persisted provider completion is missing its task envelope',
-        {
-          attemptId: attempt.id,
-        }
-      );
-    }
-    try {
-      return parseCompletionResultForEnvelope(attempt.completionResult, attempt.taskEnvelope);
-    } catch {
-      throw new CompletionOwnershipError(
-        'Persisted provider completion failed integrity validation',
-        {
-          attemptId: attempt.id,
-          remediation:
-            'Repair or remove the corrupted completion record before accepting another terminal claim.',
-        }
-      );
-    }
-  }
-
-  private assertCompletionRetryBinding(
-    taskId: string,
-    expectedAttempt: TaskAttempt,
-    latestAttempt: TaskAttempt
-  ): void {
-    this.assertPersistedAttemptCompletionBinding(taskId, latestAttempt);
-    const mismatches = [
-      expectedAttempt.provider !== latestAttempt.provider && 'provider',
-      expectedAttempt.providerRuntimeManifest?.digest !==
-        latestAttempt.providerRuntimeManifest?.digest && 'provider runtime manifest',
-      expectedAttempt.taskEnvelope?.digest !== latestAttempt.taskEnvelope?.digest &&
-        'task envelope',
-      expectedAttempt.runLaunchManifest?.digest !== latestAttempt.runLaunchManifest?.digest &&
-        'run launch manifest',
-    ].filter((field): field is string => typeof field === 'string');
-    if (mismatches.length > 0) {
-      throw new CompletionOwnershipError(
-        'Persisted attempt binding changed during completion retry',
-        {
-          attemptId: latestAttempt.id,
-          mismatches,
-          remediation:
-            'Discard the stale local finalizer and reconcile the currently persisted attempt.',
-        }
-      );
-    }
-  }
-
-  private assertPersistedAttemptCompletionBinding(taskId: string, attempt: TaskAttempt): void {
-    const providerRuntimeManifest = attempt.providerRuntimeManifest;
-    const taskEnvelope = attempt.taskEnvelope;
-    if (!providerRuntimeManifest || !taskEnvelope) {
-      throw new CompletionOwnershipError(
-        'Persisted attempt is missing immutable completion bindings',
-        { taskId, attemptId: attempt.id }
-      );
-    }
-    let parsedEnvelope: TaskEnvelope;
-    let parsedRunLaunchManifest: RunLaunchManifest | undefined;
-    try {
-      assertProviderRuntimeManifestSnapshot(providerRuntimeManifest);
-      parsedEnvelope = parseTaskEnvelope(taskEnvelope);
-      parsedRunLaunchManifest = attempt.runLaunchManifest
-        ? parseRunLaunchManifest(attempt.runLaunchManifest)
-        : undefined;
-    } catch {
-      throw new CompletionOwnershipError('Persisted attempt binding failed integrity validation', {
-        taskId,
-        attemptId: attempt.id,
-      });
-    }
-    const mismatches = [
-      attempt.provider !== providerRuntimeManifest.provider && 'attempt runtime provider',
-      parsedEnvelope.subject.id !== taskId && 'task ID',
-      parsedEnvelope.attempt.id !== attempt.id && 'attempt ID',
-      parsedEnvelope.launchManifest.digest !== providerRuntimeManifest.digest &&
-        'envelope runtime digest',
-      parsedEnvelope.launchManifest.provider !== providerRuntimeManifest.provider &&
-        'envelope runtime provider',
-      parsedEnvelope.launchManifest.adapter !== providerRuntimeManifest.adapter &&
-        'envelope runtime adapter',
-      parsedEnvelope.launchManifest.protocolVersion !== providerRuntimeManifest.protocolVersion &&
-        'envelope runtime protocol',
-      parsedRunLaunchManifest?.taskId !== undefined &&
-        parsedRunLaunchManifest.taskId !== taskId &&
-        'run launch task ID',
-      parsedRunLaunchManifest?.attemptId !== undefined &&
-        parsedRunLaunchManifest.attemptId !== attempt.id &&
-        'run launch attempt ID',
-      parsedRunLaunchManifest?.taskEnvelope.digest !== undefined &&
-        parsedRunLaunchManifest.taskEnvelope.digest !== parsedEnvelope.digest &&
-        'run launch task envelope digest',
-      parsedRunLaunchManifest?.providerRuntime.digest !== undefined &&
-        parsedRunLaunchManifest.providerRuntime.digest !== providerRuntimeManifest.digest &&
-        'run launch runtime digest',
-      parsedRunLaunchManifest?.providerRuntime.provider !== undefined &&
-        parsedRunLaunchManifest.providerRuntime.provider !== providerRuntimeManifest.provider &&
-        'run launch runtime provider',
-      parsedRunLaunchManifest?.providerRuntime.adapter !== undefined &&
-        parsedRunLaunchManifest.providerRuntime.adapter !== providerRuntimeManifest.adapter &&
-        'run launch runtime adapter',
-    ].filter((field): field is string => typeof field === 'string');
-    if (mismatches.length > 0) {
-      throw new CompletionOwnershipError('Persisted attempt completion bindings do not agree', {
-        taskId,
-        attemptId: attempt.id,
-        mismatches,
-        remediation: 'Repair the persisted attempt binding before accepting a terminal completion.',
-      });
-    }
-  }
-
   private async persistSupervisorCompletion(
     task: Task,
     attempt: TaskAttempt,
@@ -3732,63 +3602,13 @@ export class ClawdbotAgentService {
         attemptId: attempt.id,
       });
     }
-    this.assertPersistedAttemptCompletionBinding(task.id, attempt);
-    const completionResult = parseCompletionResultForEnvelope(value, attempt.taskEnvelope);
-    const completedAttempt: TaskAttempt = {
-      ...attempt,
-      status: completionResult.status === 'success' ? 'complete' : 'failed',
-      ended: completionResult.completedAt,
-      completionResult,
-      runRecovery: undefined,
-    };
-    let taskSnapshot = task;
-    let lastError: unknown;
-    for (
-      let persistenceAttempt = 1;
-      persistenceAttempt <= COMPLETION_PERSISTENCE_ATTEMPTS;
-      persistenceAttempt++
-    ) {
-      try {
-        const updatedTask = await this.taskService.updateTask(task.id, {
-          expectedRevision: normalizedTaskRevision(taskSnapshot),
-          status: taskStatusForCompletion(completionResult.status),
-          attempt: completedAttempt,
-          attempts: upsertAttemptHistory(taskSnapshot.attempts, completedAttempt),
-        });
-        if (!updatedTask) {
-          throw new CompletionOwnershipError(
-            'Task was archived or deleted before supervisor completion could be persisted.',
-            { taskId: task.id, attemptId: attempt.id }
-          );
-        }
-        lastError = undefined;
-        break;
-      } catch (error) {
-        if (error instanceof CompletionOwnershipError) throw error;
-        lastError = error;
-        const latestTask = await this.taskService.getTask(task.id);
-        if (latestTask?.attempt?.id !== attempt.id) throw error;
-        this.assertCompletionRetryBinding(task.id, completedAttempt, latestTask.attempt);
-        if (latestTask.attempt.completionResult) {
-          const persisted = this.parsePersistedCompletion(latestTask.attempt);
-          if (persisted.idempotencyKey === completionResult.idempotencyKey) {
-            lastError = undefined;
-            break;
-          }
-          throw new CompletionOwnershipError(
-            'A different terminal result already owns this attempt.',
-            {
-              taskId: task.id,
-              attemptId: attempt.id,
-              persistedIdempotencyKey: persisted.idempotencyKey,
-              completionIdempotencyKey: completionResult.idempotencyKey,
-            }
-          );
-        }
-        taskSnapshot = latestTask;
-      }
-    }
-    if (lastError) throw lastError;
+    const persisted = await this.attemptLifecycle.persistCompletion({
+      task,
+      attempt,
+      completionResult: value,
+      clearRunRecovery: true,
+    });
+    const { completionResult, attempt: completedAttempt } = persisted;
     this.scheduleReflectionExtraction(attempt.taskEnvelope.workspace.workspaceId, completionResult);
     await this.admission.releaseByAttempt(
       attempt.taskEnvelope.workspace.workspaceId,
@@ -3824,7 +3644,6 @@ export class ClawdbotAgentService {
     task: Task,
     attempt: TaskAttempt,
     claim: ProviderTerminalClaim,
-    idempotencyKey: string,
     options: { preserveNonActiveTaskStatus?: boolean } = {}
   ): Promise<void> {
     if (!attempt.taskEnvelope) {
@@ -3833,7 +3652,7 @@ export class ClawdbotAgentService {
         attemptId: attempt.id,
       });
     }
-    this.assertPersistedAttemptCompletionBinding(task.id, attempt);
+    this.attemptLifecycle.assertCompletionBinding(task.id, attempt);
     const dependencyCircuits = attempt.runLaunchManifest
       ? await this.captureDependencyCircuits(
           attempt.runLaunchManifest.providerRuntime.provider,
@@ -3871,13 +3690,6 @@ export class ClawdbotAgentService {
       task.id,
       attempt.id
     );
-    const completedAttempt: TaskAttempt = {
-      ...attempt,
-      status: completionResult.status === 'success' ? 'complete' : 'failed',
-      ended: completionResult.completedAt,
-      completionResult,
-    };
-    const completionStatus = taskStatusForCompletion(completionResult.status);
     if (attempt.provider === 'openclaw' && completionResult.summary) {
       await this.appendMappedProviderEvent(
         task,
@@ -3952,58 +3764,12 @@ export class ClawdbotAgentService {
         completionResult
       );
     }
-    let taskSnapshot = task;
-    let lastError: unknown;
-    for (
-      let persistenceAttempt = 1;
-      persistenceAttempt <= COMPLETION_PERSISTENCE_ATTEMPTS;
-      persistenceAttempt++
-    ) {
-      const taskStatusUpdate =
-        options.preserveNonActiveTaskStatus && taskSnapshot.status !== 'in-progress'
-          ? {}
-          : { status: completionStatus };
-      try {
-        const updatedTask = await this.taskService.updateTask(task.id, {
-          expectedRevision: normalizedTaskRevision(taskSnapshot),
-          ...taskStatusUpdate,
-          attempt: completedAttempt,
-          attempts: upsertAttemptHistory(taskSnapshot.attempts, completedAttempt),
-        });
-        if (!updatedTask) {
-          throw new CompletionOwnershipError(
-            'Task was archived or deleted before completion could be persisted',
-            { taskId: task.id, attemptId: attempt.id }
-          );
-        }
-        lastError = undefined;
-        break;
-      } catch (error) {
-        if (error instanceof CompletionOwnershipError) throw error;
-        lastError = error;
-        const latestTask = await this.taskService.getTask(task.id);
-        if (latestTask?.attempt?.id !== attempt.id) throw error;
-        this.assertCompletionRetryBinding(task.id, completedAttempt, latestTask.attempt);
-        if (latestTask.attempt.completionResult) {
-          const latestCompletion = this.parsePersistedCompletion(latestTask.attempt);
-          if (latestCompletion.idempotencyKey === idempotencyKey) {
-            lastError = undefined;
-            break;
-          }
-          throw new CompletionOwnershipError(
-            'A different terminal result already owns this attempt',
-            {
-              taskId: task.id,
-              attemptId: attempt.id,
-              persistedIdempotencyKey: latestCompletion.idempotencyKey,
-              completionIdempotencyKey: idempotencyKey,
-            }
-          );
-        }
-        taskSnapshot = latestTask;
-      }
-    }
-    if (lastError) throw lastError;
+    await this.attemptLifecycle.persistCompletion({
+      task,
+      attempt,
+      completionResult,
+      preserveNonActiveTaskStatus: options.preserveNonActiveTaskStatus,
+    });
     this.scheduleReflectionExtraction(
       attempt.taskEnvelope.workspace.workspaceId,
       completionResult,
@@ -4557,69 +4323,18 @@ export class ClawdbotAgentService {
     pending: PendingAgent,
     prepared: NonNullable<PendingAgent['preparedCompletion']>
   ): Promise<boolean> {
-    let taskSnapshot = prepared.taskBeforeCompletion;
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= COMPLETION_PERSISTENCE_ATTEMPTS; attempt++) {
-      if (!taskSnapshot) {
-        throw new ConflictError('Task disappeared before completion could be persisted', {
-          taskId,
-          attemptId: pending.attemptId,
-        });
-      }
-      try {
-        const updatedTask = await this.taskService.updateTask(taskId, {
-          expectedRevision: normalizedTaskRevision(taskSnapshot),
-          status: taskStatusForCompletion(prepared.completionResult.status),
-          attempt: prepared.completedAttempt,
-          attempts: upsertAttemptHistory(taskSnapshot.attempts, prepared.completedAttempt),
-        });
-        if (!updatedTask) {
-          throw new CompletionOwnershipError(
-            'Task was archived or deleted before completion could be persisted',
-            { taskId, attemptId: pending.attemptId }
-          );
-        }
-        return true;
-      } catch (error) {
-        if (error instanceof CompletionOwnershipError) throw error;
-        lastError = error;
-        let latestTask: Task | null;
-        try {
-          latestTask = await this.taskService.getTask(taskId);
-        } catch {
-          latestTask = null;
-        }
-        if (!latestTask) continue;
-        if (latestTask.attempt?.id !== pending.attemptId) {
-          throw new CompletionOwnershipError(
-            'Provider finalization no longer matches the active attempt',
-            {
-              taskId,
-              activeAttemptId: latestTask.attempt?.id,
-              finalizationAttemptId: pending.attemptId,
-            }
-          );
-        }
-        this.assertCompletionRetryBinding(taskId, prepared.completedAttempt, latestTask.attempt);
-        if (latestTask.attempt.completionResult) {
-          const persisted = this.parsePersistedCompletion(latestTask.attempt);
-          if (persisted.idempotencyKey === prepared.completionResult.idempotencyKey) return true;
-          throw new CompletionOwnershipError(
-            'A different terminal result already owns this attempt',
-            {
-              taskId,
-              attemptId: pending.attemptId,
-              persistedIdempotencyKey: persisted.idempotencyKey,
-              completionIdempotencyKey: prepared.completionResult.idempotencyKey,
-            }
-          );
-        }
-        taskSnapshot = latestTask;
-      }
+    if (!prepared.taskBeforeCompletion) {
+      throw new ConflictError('Task disappeared before completion could be persisted', {
+        taskId,
+        attemptId: pending.attemptId,
+      });
     }
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('Provider completion persistence retry budget was exhausted');
+    await this.attemptLifecycle.persistCompletion({
+      task: prepared.taskBeforeCompletion,
+      attempt: prepared.completedAttempt,
+      completionResult: prepared.completionResult,
+    });
+    return true;
   }
 
   /**
@@ -10558,12 +10273,6 @@ ${forkTurnId ? `- Fork through turn: \`${forkTurnId}\`\n` : ''}
 
 ${message}
 `;
-}
-
-function taskStatusForCompletion(status: TaskCompletionStatus): 'done' | 'blocked' | 'in-progress' {
-  if (status === 'success') return 'done';
-  if (status === 'blocked') return 'blocked';
-  return 'in-progress';
 }
 
 function admissionReleaseReason(
