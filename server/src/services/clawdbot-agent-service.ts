@@ -315,7 +315,11 @@ import {
   DependencyCircuitExecutionService,
   type DependencyCircuitExecutionOptions,
 } from './dependency-circuit-routing-service.js';
-import { interpretCodexEvent, redactProviderTraceText } from './codex-event-interpreter.js';
+import {
+  interpretCodexEvent,
+  redactProviderTraceText,
+  type CodexEventInterpretation,
+} from './codex-event-interpreter.js';
 const log = createLogger('clawdbot-agent-service');
 const CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES = 64 * 1024;
 const providerDependencyExecutionOptions = {
@@ -8955,7 +8959,8 @@ export class ClawdbotAgentService {
     }
     const record = event as Record<string, unknown>;
     const type = String(record.type || record.event || 'codex.event');
-    const { summary, usage } = interpretCodexEvent(record, type);
+    const interpreted = interpretCodexEvent(record, type);
+    const { summary, usage } = interpreted;
     if (usage && task) {
       assertProviderRuntimeControl(
         pendingAgents.get(task.id)?.providerRuntimeManifest,
@@ -8963,7 +8968,7 @@ export class ClawdbotAgentService {
       );
     }
     if (task && attemptId) {
-      await this.recordCodexEvent(task, attemptId, agentConfig, type, record, summary);
+      await this.recordCodexEvent(task, attemptId, agentConfig, type, record, interpreted);
     }
     const redactedRecord = this.redactTraceText(JSON.stringify(record, null, 2));
     await this.appendLog(
@@ -9267,12 +9272,11 @@ export class ClawdbotAgentService {
     agentConfig: AgentConfig | undefined,
     type: string,
     event: Record<string, unknown>,
-    summary?: string
+    interpreted: CodexEventInterpretation
   ): Promise<void> {
     const agent =
       agentConfig?.type || (agentConfig?.provider === 'codex-sdk' ? 'codex-sdk' : 'codex');
-    const interpreted = interpretCodexEvent(event, type);
-    const { files, usage, command, tool, error } = interpreted;
+    const { summary, files, usage, command, tool, error } = interpreted;
     const sanitizedSummary = summary ? this.redactTraceText(summary) : undefined;
     const stepType = interpreted.traceStepType;
     const stream = interpreted.stream;
