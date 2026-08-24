@@ -1,13 +1,8 @@
-import fs from 'fs/promises';
-import { watch, batchedMap, atomicWriteFile, type FSWatcher } from '../storage/fs-helpers.js';
-import path from 'path';
-import matter from '../utils/frontmatter.js';
 import { nanoid } from 'nanoid';
 import type {
   Task,
   CreateTaskInput,
   UpdateTaskInput,
-  ReviewComment,
   TaskTelemetryEvent,
   TimeTracking,
   RunStartedEvent,
@@ -19,7 +14,6 @@ import type {
 import { normalizeBoardColumns, normalizeBoardDefaultStatus } from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { ConfigService } from './config-service.js';
-import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { fireHook, getHookEventForStatusChange } from './hook-service.js';
@@ -37,13 +31,13 @@ import { getWorkProductService } from './work-product-service.js';
 import { getTasksActiveDir, getTasksArchiveDir, getTasksBacklogDir } from '../utils/paths.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteTaskRepository } from '../storage/sqlite/task-repository.js';
+import { FileTaskRepository } from '../storage/task-file-repository.js';
 import {
   buildTaskIdentityConflictDetails,
   filterTaskIdentityDiagnostics,
   scanTaskIdentityDiagnostics,
   type TaskIdentityCandidate,
   type TaskIdentityDiagnostics,
-  type TaskIdentityLocation,
   type TaskIdentityScanSource,
 } from './task-identity-diagnostics.js';
 import { getCeremonyService, type CeremonyService } from './ceremony-service.js';
@@ -53,21 +47,9 @@ const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
 const TASK_RECONCILE_CONTEXT: TaskSyncContext = createTaskSyncToken('task-reconciler');
 
 /**
- * Task ID format validation
- * Production format: task_YYYYMMDD_XXXXXX (date + 6-char nanoid)
- * Legacy/test formats also accepted: task_YYYYMMDD_X{1,20} or task_WORD
- */
-const TASK_ID_REGEX = /^task_(\d{8}_[a-zA-Z0-9_-]{1,20}|[a-zA-Z0-9_-]+)$/;
-
-/**
  * Task types that require 4x10 review gate (when enforcement is enabled)
  */
 const CODE_TASK_TYPES = ['code', 'bug', 'feature', 'automation', 'system'];
-
-/** Validate task ID format */
-function isValidTaskId(id: string): boolean {
-  return TASK_ID_REGEX.test(id);
-}
 
 function normalizedTaskRevision(task: Pick<Task, 'revision'>): number {
   return typeof task.revision === 'number' && Number.isInteger(task.revision) && task.revision >= 0
@@ -84,15 +66,6 @@ interface BoardStatusConfig {
 type TaskMutationInput = UpdateTaskInput & {
   attemptPatch?: Pick<TaskAttempt, 'id'> & Partial<Omit<TaskAttempt, 'id'>>;
 };
-
-// Simple slug function to avoid CJS/ESM issues with slugify
-function makeSlug(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
-}
 
 // Default paths are resolved via the shared paths utility so Docker, tests,
 // and local dev all agree on where tasks live.
@@ -121,6 +94,7 @@ export class TaskService {
   private telemetry: TelemetryService;
   private sqliteDatabase: SqliteDatabase | null = null;
   private sqliteTasks: SqliteTaskRepository | null = null;
+  private fileTasks: FileTaskRepository | null = null;
   private sqliteMutationQueue: Promise<unknown> = Promise.resolve();
   private configService: Pick<ConfigService, 'getFeatureSettings'>;
   private ceremonyService: Pick<CeremonyService, 'evaluateTaskCompletion'>;
@@ -129,20 +103,13 @@ export class TaskService {
   private cache: Map<string, Task> = new Map();
   private cacheInitialized = false;
   private cacheLoading: Promise<void> | null = null;
-  private watcher: FSWatcher | null = null;
-  private lastWriteTime = 0;
   private cacheStats = { hits: 0, misses: 0 };
   private taskSyncReconcileInterval: ReturnType<typeof setInterval> | null = null;
   private reconcileRunning = false;
 
-  // ============ Per-Task Mutex ============
-  // Keyed on task ID — not filepath — so all in-process mutations for the
-  // same task serialize even when the slug/filename changes between writes.
-  private taskMutexes = new Map<string, Promise<void>>();
-
   // ============ Identity Diagnostics Cache ============
   // Cached to avoid a full filesystem scan on every list request (#784).
-  // Invalidated by any mutation (markWrite path) and by external file changes.
+  // Invalidated by repository mutations and external file changes.
   private identityDiagnosticsCache: TaskIdentityDiagnostics | null = null;
 
   constructor(options: TaskServiceOptions = {}) {
@@ -161,6 +128,11 @@ export class TaskService {
         options.sqliteDatabase ?? new SqliteDatabase(options.sqliteConnectionOptions);
       this.sqliteDatabase.open();
       this.sqliteTasks = new SqliteTaskRepository(this.sqliteDatabase);
+    } else {
+      this.fileTasks = new FileTaskRepository({
+        activeDir: this.tasksDir,
+        archiveDir: this.archiveDir,
+      });
     }
 
     this.startTaskSyncReconciler();
@@ -193,70 +165,12 @@ export class TaskService {
 
   /** Read every .md file in tasksDir and populate the cache */
   private async loadCacheFromDisk(): Promise<void> {
-    await this.ensureDirectories();
-    await this.seedIfEmpty();
-    const files = await fs.readdir(this.tasksDir);
-    const mdFiles = files.filter((f) => f.endsWith('.md'));
-
+    const fileTasks = this.requireFileTasks();
+    await fileTasks.ensureReady();
+    const seeded = await fileTasks.seedExamplesIfEmpty();
+    if (seeded > 0) log.info({ count: seeded }, 'Seeded example tasks for first run');
     this.cache.clear();
-
-    // Bounded-concurrency batch read — 10 files at a time.
-    // Individual read failures produce null (logged but don't abort the load).
-    const tasks = await batchedMap(mdFiles, async (filename) => {
-      const filepath = path.join(this.tasksDir, filename);
-      const content = await fs.readFile(filepath, 'utf-8');
-      return this.parseTaskFile(content, filename);
-    });
-
-    for (const task of tasks) {
-      if (task) {
-        this.cache.set(task.id, task);
-      }
-    }
-  }
-
-  /**
-   * First-run seed: if tasks/active/ is empty, copy example tasks from
-   * tasks/examples/ so new users see a populated board out of the box.
-   */
-  private async seedIfEmpty(): Promise<void> {
-    const files = await fs.readdir(this.tasksDir);
-    const hasTasks = files.some((f) => f.endsWith('.md'));
-    if (hasTasks) return;
-
-    const examplesDir = path.join(this.tasksDir, '..', 'examples');
-    try {
-      const examples = await fs.readdir(examplesDir);
-      const mdExamples = examples.filter((f) => f.endsWith('.md'));
-      if (mdExamples.length === 0) return;
-
-      await Promise.all(
-        mdExamples.map((filename) =>
-          fs.copyFile(path.join(examplesDir, filename), path.join(this.tasksDir, filename))
-        )
-      );
-      log.info({ count: mdExamples.length }, 'Seeded example tasks for first run');
-    } catch {
-      // examples/ doesn't exist — that's fine, skip silently
-    }
-  }
-
-  /** Reload a single file from disk into the cache */
-  private async reloadFile(filename: string): Promise<void> {
-    const filepath = path.join(this.tasksDir, filename);
-    // External file change also invalidates diagnostics cache (#784)
-    this.identityDiagnosticsCache = null;
-    try {
-      const content = await fs.readFile(filepath, 'utf-8');
-      const task = this.parseTaskFile(content, filename);
-      if (task) {
-        log.debug({ taskId: task.id }, 'Reloaded from disk');
-        this.cache.set(task.id, task);
-      }
-    } catch {
-      // File was deleted — find and remove matching cache entry
-      this.invalidateByFilename(filename);
-    }
+    for (const task of await fileTasks.listActive()) this.cache.set(task.id, task);
   }
 
   /** Remove a cache entry whose filename matches (used when a file is deleted externally) */
@@ -271,13 +185,20 @@ export class TaskService {
     }
   }
 
-  /** Invalidate a specific task by ID */
-  private cacheInvalidate(id: string): boolean {
+  /** Invalidate a specific task by ID. */
+  invalidateTaskCache(id: string): boolean {
     const deleted = this.cache.delete(id);
     if (deleted) {
       log.debug({ taskId: id }, 'Invalidated');
     }
     return deleted;
+  }
+
+  async reloadTaskCache(): Promise<void> {
+    if (this.sqliteTasks) return;
+    this.cacheInitialized = false;
+    this.cacheLoading = null;
+    await this.initCache();
   }
 
   private runSqliteMutation<T>(callback: () => Promise<T>): Promise<T> {
@@ -289,29 +210,9 @@ export class TaskService {
     return run;
   }
 
-  /**
-   * Serialize all in-process mutations for the given task ID.
-   *
-   * Uses the task ID as the queue key (not a filepath) so concurrent updates
-   * to the same task always serialize regardless of title / slug changes.
-   * The file lock inside still provides cross-process protection.
-   */
-  private withTaskMutex<T>(id: string, fn: () => Promise<T>): Promise<T> {
-    const previous = this.taskMutexes.get(id) ?? Promise.resolve();
-    let release!: () => void;
-    const myTurn = new Promise<void>((r) => {
-      release = r;
-    });
-    this.taskMutexes.set(id, myTurn);
-
-    return previous
-      .then(() => fn())
-      .finally(() => {
-        release();
-        if (this.taskMutexes.get(id) === myTurn) {
-          this.taskMutexes.delete(id);
-        }
-      });
+  private withTaskMutex<T>(id: string, callback: () => Promise<T>): Promise<T> {
+    if (this.fileTasks) return this.fileTasks.withTaskLock(id, callback);
+    return this.runSqliteMutation(callback);
   }
 
   /** Get a task from the cache */
@@ -333,40 +234,22 @@ export class TaskService {
     return tasks.sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
   }
 
-  /** Record that we are about to write — suppresses watcher for WRITE_DEBOUNCE_MS */
-  private markWrite(): void {
-    this.lastWriteTime = Date.now();
-    // Invalidate diagnostics cache on any mutation (#784)
-    this.identityDiagnosticsCache = null;
-  }
-
   /** Start watching tasksDir for external file changes */
   private startWatcher(): void {
-    try {
-      this.watcher = watch(this.tasksDir, (eventType, filename) => {
-        if (!filename || !filename.endsWith('.md')) return;
-
-        // Ignore events caused by our own writes
-        if (Date.now() - this.lastWriteTime < WRITE_DEBOUNCE_MS) return;
-
-        log.debug({ eventType, filename }, 'File change detected');
-        // Re-read the changed file (or remove from cache if deleted)
-        this.reloadFile(filename).catch((err) =>
-          log.error({ err, filename }, 'Error reloading file')
-        );
-      });
-    } catch (err) {
-      // fs.watch can fail on some platforms or when dir doesn't exist yet
-      log.warn({ err }, 'Could not start file watcher');
-    }
+    this.fileTasks?.watchActive(({ filename, task }) => {
+      this.identityDiagnosticsCache = null;
+      if (!task) {
+        this.invalidateByFilename(filename);
+        return;
+      }
+      log.debug({ taskId: task.id }, 'Reloaded from disk');
+      this.cache.set(task.id, task);
+    });
   }
 
   /** Clean up watchers and cache. Call on server shutdown. */
   dispose(): void {
-    if (this.watcher) {
-      this.watcher.close();
-      this.watcher = null;
-    }
+    this.fileTasks?.dispose();
     if (this.taskSyncReconcileInterval) {
       clearInterval(this.taskSyncReconcileInterval);
       this.taskSyncReconcileInterval = null;
@@ -374,7 +257,7 @@ export class TaskService {
     this.sqliteDatabase?.close();
     this.sqliteDatabase = null;
     this.sqliteTasks = null;
-    this.taskMutexes.clear();
+    this.fileTasks = null;
     this.cache.clear();
     this.cacheInitialized = false;
     this.cacheLoading = null;
@@ -438,36 +321,24 @@ export class TaskService {
     return { cleaned, errors };
   }
 
-  private async ensureDirectories(): Promise<void> {
-    await fs.mkdir(this.tasksDir, { recursive: true });
-    await fs.mkdir(this.archiveDir, { recursive: true });
-  }
-
   getIdentityScanSources(): TaskIdentityScanSource[] {
     if (this.sqliteTasks) return [];
-    const sources: TaskIdentityScanSource[] = [
-      { location: 'active', dir: this.tasksDir },
-      { location: 'archive', dir: this.archiveDir },
-    ];
-    if (this.backlogDir) {
-      sources.push({ location: 'backlog', dir: this.backlogDir });
-    }
-    return sources;
+    return this.requireFileTasks().getIdentityScanSources(this.backlogDir);
   }
 
   getActiveTasksDir(): string {
-    return this.tasksDir;
+    return this.fileTasks?.getActiveDirectory() ?? this.tasksDir;
   }
 
   getActiveTasksDestinationPath(): string {
-    return this.diagnosticPath(this.tasksDir);
+    return this.fileTasks?.getActiveDestinationPath() ?? 'active';
   }
 
   async getTaskIdentityDiagnostics(
     extraSources: TaskIdentityScanSource[] = []
   ): Promise<TaskIdentityDiagnostics> {
     // Use cached result when no extra sources are requested (#784).
-    // The cache is invalidated by markWrite() and by external file changes.
+    // The cache is invalidated by repository mutations and external file changes.
     if (extraSources.length === 0) {
       if (!this.identityDiagnosticsCache) {
         this.identityDiagnosticsCache = await scanTaskIdentityDiagnostics(
@@ -531,175 +402,14 @@ export class TaskService {
     );
   }
 
-  private taskIdentityCandidate(
-    task: Task,
-    location: TaskIdentityLocation,
-    filepath: string
-  ): TaskIdentityCandidate {
-    return {
-      location,
-      path: filepath,
-      filename: path.basename(filepath),
-      taskId: task.id,
-      title: task.title,
-      git: task.git,
-      github: task.github,
-    };
-  }
-
-  private diagnosticPath(filepath: string): string {
-    return path.relative(path.dirname(this.tasksDir), filepath);
-  }
-
   private generateId(): string {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     return `task_${date}_${nanoid(6)}`;
   }
 
-  private taskToFilename(task: Task): string {
-    const slug = makeSlug(task.title);
-    return `${task.id}-${slug}.md`;
-  }
-
-  /**
-   * Find the actual filename on disk for a task ID.
-   * Files are named `{id}-{slug}.md` but the slug may have changed since creation.
-   * Falls back to computed filename if no match found.
-   */
-  private async findTaskFile(dir: string, taskId: string): Promise<string | null> {
-    const files = await fs.readdir(dir);
-    // Files always start with `{taskId}-` prefix
-    const prefix = `${taskId}-`;
-    const match = files.find((f) => f.startsWith(prefix) && f.endsWith('.md'));
-    return match ?? null;
-  }
-
-  /**
-   * Find ALL files on disk for a task ID (handles stale files from title changes).
-   * Files are named `{id}-{slug}.md` but the slug changes when title is updated,
-   * leaving orphaned files behind. This method returns all matching files so they
-   * can be cleaned up together.
-   */
-  private async findAllTaskFiles(dir: string, taskId: string): Promise<string[]> {
-    const files = await fs.readdir(dir);
-    const prefix = `${taskId}-`;
-    return files.filter((f) => f.startsWith(prefix) && f.endsWith('.md'));
-  }
-
-  /** Recursively strip undefined values from an object (YAML can't serialize them) */
-  private deepCleanUndefined(obj: Record<string, any>): Record<string, any> {
-    const clean: Record<string, any> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (value === undefined) continue;
-      if (Array.isArray(value)) {
-        clean[key] = value.map((item) =>
-          item && typeof item === 'object' && !Array.isArray(item)
-            ? this.deepCleanUndefined(item)
-            : item
-        );
-      } else if (value && typeof value === 'object') {
-        clean[key] = this.deepCleanUndefined(value);
-      } else {
-        clean[key] = value;
-      }
-    }
-    return clean;
-  }
-
-  private taskToMarkdown(task: Task): string {
-    const { description, reviewComments, ...rest } = task;
-
-    // Filter out undefined values (YAML can't serialize them)
-    const frontmatter = this.deepCleanUndefined(rest);
-
-    const content = matter.stringify(description || '', frontmatter);
-
-    // Add review comments section if present
-    if (reviewComments && reviewComments.length > 0) {
-      const commentsSection = reviewComments
-        .map((c: ReviewComment) => `- **${c.file}:${c.line}** - ${c.content}`)
-        .join('\n');
-      return content + '\n\n## Review Comments\n\n' + commentsSection;
-    }
-
-    return content;
-  }
-
-  private parseTaskFile(content: string, filename: string): Task | null {
-    try {
-      const { data, content: description } = matter(content);
-
-      // Extract review comments from description if present
-      let cleanDescription = description;
-      const reviewComments: Task['reviewComments'] = [];
-
-      const reviewSection = description.indexOf('## Review Comments');
-      if (reviewSection !== -1) {
-        cleanDescription = description.slice(0, reviewSection).trim();
-      }
-
-      // Validate required fields
-      const id = data.id || filename.split('-')[0];
-      if (!isValidTaskId(id)) {
-        log.warn({ filename, id }, 'Invalid task ID format');
-        return null;
-      }
-
-      return {
-        id,
-        title: data.title || 'Untitled',
-        description: cleanDescription.trim(),
-        type: data.type || 'code',
-        status: data.status || 'todo',
-        priority: data.priority || 'medium',
-        project: data.project,
-        sprint: data.sprint,
-        agent: data.agent,
-        agents: data.agents,
-        executionPolicy: data.executionPolicy,
-        created: data.created || new Date().toISOString(),
-        updated: data.updated || new Date().toISOString(),
-        git: data.git,
-        github: data.github,
-        delegatedWork: data.delegatedWork,
-        externalWorkItems: data.externalWorkItems,
-        attempt: data.attempt,
-        attempts: data.attempts,
-        reviewComments,
-        reviewScores: data.reviewScores,
-        review: data.review,
-        subtasks: data.subtasks,
-        autoCompleteOnSubtasks: data.autoCompleteOnSubtasks,
-        blockedBy: data.blockedBy,
-        blockedReason: data.blockedReason,
-        automation: data.automation,
-        timeTracking: data.timeTracking,
-        comments: data.comments,
-        observations: data.observations,
-        attachments: data.attachments,
-        position: data.position,
-        costPrediction: data.costPrediction,
-        actualCost: data.actualCost,
-        lessonsLearned: data.lessonsLearned,
-        lessonTags: data.lessonTags,
-        checkpoint: data.checkpoint,
-        verificationSteps: data.verificationSteps,
-        deliverables: data.deliverables,
-        dependencies: data.dependencies,
-        runMode: data.runMode,
-        qaGate: data.qaGate,
-        deletedAt: data.deletedAt,
-        deletedBy: data.deletedBy,
-        purgeAfter: data.purgeAfter,
-        revision:
-          typeof data.revision === 'number' && Number.isInteger(data.revision) && data.revision >= 0
-            ? data.revision
-            : undefined,
-      };
-    } catch (error) {
-      log.error({ err: error, filename }, 'Failed to parse task file');
-      return null;
-    }
+  private requireFileTasks(): FileTaskRepository {
+    if (!this.fileTasks) throw new Error('File task repository is not configured');
+    return this.fileTasks;
   }
 
   private syncAgentRegistryForStatusTransition(task: Task): void {
@@ -867,21 +577,16 @@ export class TaskService {
       const sqliteTasks = this.sqliteTasks;
       await this.runSqliteMutation(() => sqliteTasks.create(task));
     } else {
-      const filename = this.taskToFilename(task);
-      const filepath = path.join(this.tasksDir, filename);
-      const content = this.taskToMarkdown(task);
+      const fileTasks = this.requireFileTasks();
+      const descriptor = fileTasks.describeActiveTask(task);
 
       await this.assertTaskIdentityIntegrity('task.create', task.id, {
-        candidates: [this.taskIdentityCandidate(task, 'active', filepath)],
-        destinationPath: this.diagnosticPath(filepath),
+        candidates: [fileTasks.describeIdentityCandidate(task, 'active')],
+        destinationPath: descriptor.diagnosticPath,
       });
 
-      await withFileLock(filepath, async () => {
-        this.markWrite();
-        await atomicWriteFile(filepath, content, 'utf-8');
-      });
-
-      // Write-through: update cache immediately
+      await fileTasks.createActive(task);
+      this.identityDiagnosticsCache = null;
       this.cache.set(task.id, task);
     }
 
@@ -902,10 +607,7 @@ export class TaskService {
   }
 
   async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
-    if (this.sqliteTasks) {
-      return this.updateTaskMutation(id, input);
-    }
-    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
+    return this.updateTaskMutation(id, input);
   }
 
   async patchTaskAttempt(
@@ -916,10 +618,7 @@ export class TaskService {
     const input: TaskMutationInput = {
       attemptPatch: { id: attemptId, ...patch },
     };
-    if (this.sqliteTasks) {
-      return this.updateTaskMutation(id, input);
-    }
-    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
+    return this.updateTaskMutation(id, input);
   }
 
   private async updateTaskMutation(id: string, input: TaskMutationInput): Promise<Task | null> {
@@ -941,25 +640,28 @@ export class TaskService {
       ...restInput
     } = input;
 
-    // Compute the current file path for locking. We lock on the CURRENT filepath
-    // so the file lock provides cross-process protection. Additionally, we wrap
-    // the entire mutation in withTaskMutex (keyed on task ID) to ensure all
-    // in-process updates for the same task serialize even when the slug changes.
-    const oldFilename = this.taskToFilename(task);
-    const lockPath = path.join(this.tasksDir, oldFilename);
-
     let updatedTask!: Task;
     let shouldGenerateCompletionPacket = false;
     let attemptPatchApplied = attemptPatch === undefined;
+    let fileMutationTask: Task | null = null;
+    let persistFileTask: ((updated: Task) => Promise<void>) | null = null;
+    let mutationFound = true;
     const runMutation = async (callback: () => Promise<void>): Promise<void> => {
       if (this.sqliteTasks) {
         await this.runSqliteMutation(callback);
         return;
       }
 
-      // File lock provides cross-process protection.
-      // updateTask provides in-process serialization by task ID.
-      await withFileLock(lockPath, callback);
+      const result = await this.requireFileTasks().withActiveMutation(
+        id,
+        async (current, persist) => {
+          fileMutationTask = current;
+          persistFileTask = persist;
+          await callback();
+          return true;
+        }
+      );
+      mutationFound = result !== null;
     };
 
     await runMutation(async () => {
@@ -968,7 +670,7 @@ export class TaskService {
       // timer start) from overwriting each other's changes.
       const freshTask = this.sqliteTasks
         ? ((await this.sqliteTasks.findById(id)) ?? task)
-        : (this.cacheGet(id) ?? task);
+        : (fileMutationTask ?? task);
 
       if (attemptPatch && freshTask.attempt?.id !== attemptPatch.id) {
         updatedTask = freshTask;
@@ -1203,35 +905,19 @@ export class TaskService {
       if (this.sqliteTasks) {
         await this.sqliteTasks.replaceActive(updatedTask);
       } else {
-        // Compute destination filepath inside the lock from the fresh task state.
-        // The new filename may differ from lockPath when the title changed.
-        const freshOldFilename = this.taskToFilename(freshTask);
-        const newFilename = this.taskToFilename(updatedTask);
-        const filepath = path.join(this.tasksDir, newFilename);
+        const fileTasks = this.requireFileTasks();
+        const descriptor = fileTasks.describeActiveTask(updatedTask);
 
         await this.assertTaskIdentityIntegrity('task.update', id, {
-          candidates: [this.taskIdentityCandidate(updatedTask, 'active', filepath)],
-          destinationPath: this.diagnosticPath(filepath),
+          candidates: [fileTasks.describeIdentityCandidate(updatedTask, 'active')],
+          destinationPath: descriptor.diagnosticPath,
           excludeTaskIds: [id],
         });
 
-        const content = this.taskToMarkdown(updatedTask);
-        this.markWrite();
-
-        // Write new content atomically first; only then remove the old slug file.
-        // This ensures the task is never unrecoverable: if the write fails,
-        // the old file is still present under its original name.
-        await atomicWriteFile(filepath, content, 'utf-8');
-
-        if (freshOldFilename !== newFilename) {
-          // Remove the old slug only after the replacement file is installed.
-          await fs.unlink(path.join(this.tasksDir, freshOldFilename)).catch((err) => {
-            if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
-            throw err;
-          });
-        }
-
-        // Write-through: update cache immediately (inside lock for consistency)
+        const persist = persistFileTask;
+        if (!persist) throw new Error('File task mutation persistence is unavailable');
+        await persist(updatedTask);
+        this.identityDiagnosticsCache = null;
         this.cache.set(updatedTask.id, updatedTask);
       }
 
@@ -1350,6 +1036,7 @@ export class TaskService {
       }
     });
 
+    if (!mutationFound) return null;
     if (!attemptPatchApplied) {
       return null;
     }
@@ -1377,42 +1064,20 @@ export class TaskService {
       return this.runSqliteMutation(() => sqliteTasks.deleteActive(id));
     }
 
-    return this.withTaskMutex(id, async () => {
-      await this.assertTaskIdentityIntegrity('task.delete', id, {
-        allowSameLocationTaskIdDuplicates: true,
-      });
-      const task = await this.getTaskWithoutIdentityCheck(id);
-      if (!task) return false;
-
-      // Find ALL files on disk with this task ID (handles orphaned slug variations)
-      const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
-      if (allFilenames.length === 0) {
-        log.warn({ taskId: id }, 'No task files found on disk for deletion');
-        return false;
-      }
-
-      // Delete ALL matching files (cleanup orphaned files from title changes)
-      await Promise.all(
-        allFilenames.map(async (filename) => {
-          const filepath = path.join(this.tasksDir, filename);
-          await withFileLock(filepath, async () => {
-            this.markWrite();
-            await fs.unlink(filepath);
-          });
-          log.debug({ taskId: id, filename }, 'Deleted task file');
-        })
-      );
-
-      // Remove from cache
-      this.cacheInvalidate(id);
-
-      // Delete attachments
-      const { getAttachmentService } = await import('./attachment-service.js');
-      const attachmentService = getAttachmentService();
-      await attachmentService.deleteAllAttachments(id);
-
-      return true;
+    await this.assertTaskIdentityIntegrity('task.delete', id, {
+      allowSameLocationTaskIdDuplicates: true,
     });
+    const task = await this.getTaskWithoutIdentityCheck(id);
+    if (!task) return false;
+
+    const deleted = await this.requireFileTasks().deleteActive(id);
+    if (!deleted) return false;
+    this.identityDiagnosticsCache = null;
+    this.invalidateTaskCache(id);
+
+    const { getAttachmentService } = await import('./attachment-service.js');
+    await getAttachmentService().deleteAllAttachments(id);
+    return true;
   }
 
   async archiveTask(
@@ -1451,72 +1116,43 @@ export class TaskService {
       return true;
     }
 
-    return this.withTaskMutex(id, async () => {
-      await this.assertTaskIdentityIntegrity('task.archive', id, {
-        allowSameLocationTaskIdDuplicates: true,
-      });
-      const freshTask = await this.getTaskWithoutIdentityCheck(id);
-      if (!freshTask) return false;
-
-      const freshArchivedTask: Task = {
+    await this.assertTaskIdentityIntegrity('task.archive', id, {
+      allowSameLocationTaskIdDuplicates: true,
+    });
+    const archiveResult: { task?: Task } = {};
+    const archived = await this.requireFileTasks().archiveActive(id, (freshTask) => {
+      archiveResult.task = {
         ...freshTask,
         updated: new Date().toISOString(),
         deletedAt: options?.deletedAt ?? freshTask.deletedAt,
         deletedBy: options?.deletedBy ?? freshTask.deletedBy,
         purgeAfter: options?.purgeAfter ?? freshTask.purgeAfter,
       };
-      const archivedContent = this.taskToMarkdown(freshArchivedTask);
-
-      // Find ALL files on disk with this task ID (handles orphaned slug variations)
-      const allFilenames = await this.findAllTaskFiles(this.tasksDir, id);
-      if (allFilenames.length === 0) {
-        log.warn({ taskId: id }, 'No task files found on disk for archiving');
-        return false;
-      }
-
-      // Archive ALL matching files (cleanup orphaned files from title changes)
-      await Promise.all(
-        allFilenames.map(async (filename) => {
-          const sourcePath = path.join(this.tasksDir, filename);
-          const destPath = path.join(this.archiveDir, filename);
-          await withFileLock(sourcePath, async () => {
-            this.markWrite();
-            // Install the archive copy before removing the active source.
-            await atomicWriteFile(destPath, archivedContent, 'utf-8');
-            await fs.unlink(sourcePath);
-          });
-          log.debug({ taskId: id, filename }, 'Archived task file');
-        })
-      );
-
-      // Remove from active cache (archived tasks are not cached)
-      this.cacheInvalidate(id);
-
-      // Move attachments to archive
-      const { getAttachmentService } = await import('./attachment-service.js');
-      const attachmentService = getAttachmentService();
-      await attachmentService.archiveAttachments(id);
-
-      // Delete progress file (cleanup when archived)
-      const { getProgressService } = await import('./progress-service.js');
-      const progressService = getProgressService();
-      await progressService.deleteProgress(id);
-
-      // Emit telemetry event
-      await this.telemetry.emit<TaskTelemetryEvent>({
-        type: 'task.archived',
-        taskId: freshArchivedTask.id,
-        project: freshArchivedTask.project,
-        status: freshArchivedTask.status,
-      });
-
-      // Fire onArchived hook
-      fireHook('onArchived', freshArchivedTask).catch((err) => {
-        log.warn({ taskId: freshArchivedTask.id }, 'onArchived hook failed: %s', err);
-      });
-
-      return true;
+      return archiveResult.task;
     });
+    const freshArchivedTask = archiveResult.task;
+    if (!archived || !freshArchivedTask) return false;
+    this.identityDiagnosticsCache = null;
+    this.invalidateTaskCache(id);
+
+    const { getAttachmentService } = await import('./attachment-service.js');
+    await getAttachmentService().archiveAttachments(id);
+
+    const { getProgressService } = await import('./progress-service.js');
+    await getProgressService().deleteProgress(id);
+
+    await this.telemetry.emit<TaskTelemetryEvent>({
+      type: 'task.archived',
+      taskId: freshArchivedTask.id,
+      project: freshArchivedTask.project,
+      status: freshArchivedTask.status,
+    });
+
+    fireHook('onArchived', freshArchivedTask).catch((err) => {
+      log.warn({ taskId: freshArchivedTask!.id }, 'onArchived hook failed: %s', err);
+    });
+
+    return true;
   }
 
   async listArchivedTasks(): Promise<Task[]> {
@@ -1524,36 +1160,14 @@ export class TaskService {
       return this.sqliteTasks.listArchived();
     }
 
-    await this.ensureDirectories();
-
-    const files = await fs.readdir(this.archiveDir);
-    const mdFiles = files.filter((f) => f.endsWith('.md'));
-
-    // Bounded-concurrency batch read — 10 files at a time.
-    // Individual read/parse failures produce null and are filtered out;
-    // one bad archive file never aborts the entire listing.
-    const results = await batchedMap(mdFiles, async (filename) => {
-      const filepath = path.join(this.archiveDir, filename);
-      const content = await fs.readFile(filepath, 'utf-8');
-      return this.parseTaskFile(content, filename);
-    });
-
-    // Filter out nulls (failed reads or invalid task files)
-    const tasks = results.filter((t): t is Task => t !== null);
-
-    // Sort by updated date, newest first
-    return tasks.sort(
-      (a: Task, b: Task) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
-    );
+    return this.requireFileTasks().listArchived();
   }
 
   async getArchivedTask(id: string): Promise<Task | null> {
     if (this.sqliteTasks) {
       return this.sqliteTasks.findArchivedById(id);
     }
-
-    const tasks = await this.listArchivedTasks();
-    return tasks.find((t) => t.id === id) || null;
+    return this.requireFileTasks().findArchivedById(id);
   }
 
   private isRestoreWindowExpired(task: Task): boolean {
@@ -1593,23 +1207,11 @@ export class TaskService {
       return restoredTask;
     }
 
-    return this.withTaskMutex(id, async () => {
-      await this.assertTaskIdentityIntegrity('task.restore', id);
-      const freshTask = await this.getArchivedTask(id);
-      if (!freshTask || this.isRestoreWindowExpired(freshTask)) return null;
-
-      // Find actual file on disk (slug may differ from current title)
-      const actualFilename = await this.findTaskFile(this.archiveDir, id);
-      if (!actualFilename) {
-        log.warn({ taskId: id }, 'Archived task file not found on disk for restoration');
-        return null;
-      }
-
-      const sourcePath = path.join(this.archiveDir, actualFilename);
-      const destPath = path.join(this.tasksDir, actualFilename);
-
-      // Update status to done
-      const restoredTask: Task = {
+    await this.assertTaskIdentityIntegrity('task.restore', id);
+    const restoreResult: { task?: Task } = {};
+    const restored = await this.requireFileTasks().restoreArchived(id, (freshTask) => {
+      if (this.isRestoreWindowExpired(freshTask)) return null;
+      restoreResult.task = {
         ...freshTask,
         status: 'done',
         updated: new Date().toISOString(),
@@ -1617,34 +1219,25 @@ export class TaskService {
         deletedBy: undefined,
         purgeAfter: undefined,
       };
-
-      const content = this.taskToMarkdown(restoredTask);
-
-      await withFileLock(destPath, async () => {
-        // Install the active copy before removing the archive source.
-        this.markWrite();
-        await atomicWriteFile(destPath, content, 'utf-8');
-        await fs.unlink(sourcePath);
-      });
-
-      // Restore attachments from archive
-      const { getAttachmentService } = await import('./attachment-service.js');
-      const attachmentService = getAttachmentService();
-      await attachmentService.restoreAttachments(id);
-
-      // Write-through: add restored task to active cache
-      this.cache.set(restoredTask.id, restoredTask);
-
-      // Emit telemetry event
-      await this.telemetry.emit<TaskTelemetryEvent>({
-        type: 'task.restored',
-        taskId: restoredTask.id,
-        project: restoredTask.project,
-        status: restoredTask.status,
-      });
-
-      return restoredTask;
+      return restoreResult.task;
     });
+    const restoredTask = restoreResult.task;
+    if (!restored || !restoredTask) return null;
+    this.identityDiagnosticsCache = null;
+
+    const { getAttachmentService } = await import('./attachment-service.js');
+    await getAttachmentService().restoreAttachments(id);
+
+    this.cache.set(restoredTask.id, restoredTask);
+
+    await this.telemetry.emit<TaskTelemetryEvent>({
+      type: 'task.restored',
+      taskId: restoredTask.id,
+      project: restoredTask.project,
+      status: restoredTask.status,
+    });
+
+    return restoredTask;
   }
 
   /**

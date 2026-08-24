@@ -23,8 +23,7 @@ ignored. The command exits nonzero and names the file when it finds:
 
 `maximumEntries` must equal the number of classified exceptions. Any increase
 therefore requires a visible inventory and ratchet change in the same review.
-The remaining #1163 child issues own the reductions: #1186 covers coordination
-state, #1187 operational evidence, #1188 managed content, and #1189 final
-process I/O plus removal of the last compatibility exceptions. Each migration
-must delete its stale inventory entries and lower `maximumEntries` in the same
-change.
+The remaining #1163 child issues own the reductions: #1187 covers operational
+evidence, #1188 managed content, and #1189 final process I/O plus removal of the
+last compatibility exceptions. Each migration must delete its stale inventory
+entries and lower `maximumEntries` in the same change.

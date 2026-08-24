@@ -281,9 +281,9 @@ export class BacklogService {
     // Move file to active tasks directory
     await this.backlogRepo.moveToActive(id, activeTasksDir);
 
-    // Invalidate task service cache and reload to pick up the new task
+    // Reload the active repository cache to pick up the promoted task.
     this.invalidateIdentityCache();
-    await this.taskService['initCache'](); // Force cache reload
+    await this.taskService.reloadTaskCache();
 
     // Log activity
     await activityService.logActivity(
@@ -321,11 +321,11 @@ export class BacklogService {
     }
 
     // Move file to backlog directory
-    const activeTasksDir = this.taskService['tasksDir']; // Access private field
+    const activeTasksDir = this.taskService.getActiveTasksDir();
     await this.backlogRepo.moveFromActive(task, activeTasksDir);
 
     // Invalidate task from active cache
-    this.taskService['cacheInvalidate'](id); // Access private method
+    this.taskService.invalidateTaskCache(id);
     this.invalidateIdentityCache();
 
     // Log activity
