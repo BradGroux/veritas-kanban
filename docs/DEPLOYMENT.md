@@ -67,17 +67,28 @@ Data is persisted in a Docker named volume (`kanban-data`), so it survives conta
 
 ### Dockerfile Overview
 
-The multi-stage Dockerfile produces a minimal production image (< 200 MB):
+The multi-stage Dockerfile produces a production image smaller than 625,000,000 bytes:
 
-| Stage          | Purpose                                 |
-| -------------- | --------------------------------------- |
-| `deps`         | Install all pnpm workspace dependencies |
-| `build-shared` | Compile the shared TypeScript package   |
-| `build-web`    | Build the React frontend with Vite      |
-| `build-server` | Compile the Express server TypeScript   |
-| `production`   | Minimal Node.js 22 Alpine runtime       |
+| Stage          | Purpose                                                                  |
+| -------------- | ------------------------------------------------------------------------ |
+| `deps`         | Install all pnpm workspace dependencies                                  |
+| `build-shared` | Compile the shared TypeScript package                                    |
+| `build-web`    | Build the React frontend with Vite                                       |
+| `build-server` | Compile the server and deploy its production dependency closure          |
+| `production`   | Copy only the server closure and built web assets into Node.js 22 Alpine |
 
-The production stage runs as a non-root user (`veritas`, UID 1001) for security.
+The production stage does not contain pnpm, workspace manifests, CLI dependencies, or MCP
+dependencies. It runs as the non-root `veritas` user (UID 1001).
+
+The measured release image is about 600 MB. Roughly 302 MB of its unpacked filesystem is the
+Linux Codex executable bundled by `@openai/codex-sdk`; retaining it keeps the `codex-sdk` provider
+functional without an operator-supplied binary. The previous 200 MB target was incompatible with
+that required runtime. The 625,000,000-byte ceiling leaves limited patch-version headroom while
+still failing material dependency growth.
+
+CI builds the production target and runs `pnpm check:docker-image`. The contract fails when the
+image reaches 625,000,000 bytes or when the runtime smoke cannot prove non-root execution, SQLite
+startup, API authentication, static web serving, health checks, and the native `bcrypt` module.
 
 **Path Resolution (v2.1.3):** All services use the shared `paths.ts` utility for consistent path resolution. The resolution priority is: `DATA_DIR` / `VERITAS_DATA_DIR` env var → auto-discovery of monorepo root (walks up from cwd looking for `pnpm-workspace.yaml`) → fallback to cwd. A filesystem root guard prevents silent `/` resolution, which previously caused `EACCES: permission denied` errors in Docker. The production image uses `WORKDIR /app/server` for backwards compatibility.
 

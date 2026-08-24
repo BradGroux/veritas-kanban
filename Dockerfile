@@ -5,10 +5,10 @@
 #   1. deps        — Install all workspace dependencies (shared cache layer)
 #   2. build-shared — Build the shared package
 #   3. build-web   — Build React frontend with Vite
-#   4. build-server — Compile Express server TypeScript
+#   4. build-server — Compile the Express server TypeScript
 #   5. production  — Minimal runtime image
 #
-# Target image size: < 200MB
+# Target image size: < 625,000,000 bytes
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -67,34 +67,31 @@ RUN pnpm --filter @veritas-kanban/server build
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS production
 
-RUN corepack enable && corepack prepare pnpm@11.1.1 --activate
-
 # Security: run as non-root
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S veritas -u 1001 -G nodejs
 
 WORKDIR /app
 
-# Copy workspace config for pnpm (include real web/package.json for lockfile integrity)
+# Install only the server workspace and its shared dependency. The Linux Codex
+# SDK runtime is intentionally retained; pnpm's platform pruning excludes the
+# other platform binaries that pnpm deploy currently copies.
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY shared/package.json ./shared/
 COPY server/package.json ./server/
-COPY web/package.json ./web/
-COPY cli/package.json ./cli/
-COPY mcp/package.json ./mcp/
+COPY scripts/ ./scripts/
+RUN corepack enable && \
+    corepack prepare pnpm@11.1.1 --activate && \
+    HUSKY=0 pnpm install --frozen-lockfile --prod --filter @veritas-kanban/server... && \
+    rm -rf /root/.cache/node/corepack /root/.local/share/pnpm/store /root/.local/share/pnpm/.tools && \
+    rm -rf scripts package.json pnpm-lock.yaml pnpm-workspace.yaml && \
+    rm -f /usr/local/bin/pnpm /usr/local/bin/pnpx
 
-# Install production-only dependencies
-# --ignore-scripts: skip husky prepare hook (not needed in container)
-# Note: web deps get installed to satisfy the lockfile, but we remove them
-# since the frontend is pre-built as static assets
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
-    rm -rf web/node_modules && \
-    pnpm store prune
-
-# Copy built artifacts
-COPY --from=build-shared /app/shared/dist ./shared/dist
-COPY --from=build-server /app/server/dist ./server/dist
-COPY --from=build-web /app/web/dist ./web/dist
+# Copy only built runtime artifacts. CLI, MCP, frontend dependencies, source,
+# and build tooling never enter the production stage.
+COPY --from=build-shared --chown=veritas:nodejs /app/shared/dist ./shared/dist
+COPY --from=build-server --chown=veritas:nodejs /app/server/dist ./server/dist
+COPY --from=build-web --chown=veritas:nodejs /app/web/dist ./web/dist
 
 # Create the single volume-backed storage root. Runtime state is stored at
 # /app/data/.veritas-kanban and task data at /app/data/tasks.
