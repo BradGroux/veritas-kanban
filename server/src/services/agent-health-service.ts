@@ -1,10 +1,11 @@
-import fs from 'fs/promises';
-import { constants as fsConstants } from 'fs';
-import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { AgentConfig } from '@veritas-kanban/shared';
 import { hasClaudeCodeBareAuthentication } from './claude-code-adapter.js';
+import {
+  OperationalMetadataRepository,
+  operationalMetadataRepository,
+} from '../storage/operational-metadata-repository.js';
 
 const execFileAsync = promisify(execFile);
 const PROVIDER_VERSION_TIMEOUT_MS = 5_000;
@@ -64,7 +65,10 @@ export interface AgentHealthChecker {
 }
 
 export class AgentHealthService implements AgentHealthChecker {
-  constructor(private readonly runCommand: AgentHealthCommandRunner = defaultCommandRunner) {}
+  constructor(
+    private readonly runCommand: AgentHealthCommandRunner = defaultCommandRunner,
+    private readonly operationalMetadata: OperationalMetadataRepository = operationalMetadataRepository
+  ) {}
 
   async checkAgent(agent: AgentConfig): Promise<AgentHealthStatus> {
     const checkedAt = new Date().toISOString();
@@ -98,14 +102,8 @@ export class AgentHealthService implements AgentHealthChecker {
   private async findExecutable(command: string): Promise<{ found: boolean; path?: string }> {
     if (!command.trim()) return { found: false };
 
-    if (command.includes(path.sep)) {
-      try {
-        await fs.access(command, fsConstants.X_OK);
-        return { found: true, path: command };
-      } catch {
-        return { found: false };
-      }
-    }
+    const directPath = await this.operationalMetadata.probeExecutablePath(command);
+    if (directPath.directPath) return { found: directPath.found, path: directPath.path };
 
     try {
       const { stdout } = await this.runCommand('which', [command]);
@@ -119,7 +117,7 @@ export class AgentHealthService implements AgentHealthChecker {
     agent: AgentConfig,
     versionProbe: ProviderVersionProbe
   ): Promise<{ authenticated: boolean | null; error?: string; diagnostics?: string[] }> {
-    const command = path.basename(agent.command);
+    const command = this.operationalMetadata.basename(agent.command);
     const provider = agent.provider ?? '';
 
     if (provider === 'codex-cloud' || command === 'gh') {
@@ -264,7 +262,7 @@ export class AgentHealthService implements AgentHealthChecker {
     command: string,
     args: string[]
   ): Promise<ProviderVersionProbe> {
-    const source = `${path.basename(command)} ${args.join(' ')}`;
+    const source = `${this.operationalMetadata.basename(command)} ${args.join(' ')}`;
     try {
       const { stdout, stderr } = await this.runCommand(command, args, {
         timeout: PROVIDER_VERSION_TIMEOUT_MS,

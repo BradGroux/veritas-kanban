@@ -1,13 +1,7 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 34,
+  "maximumEntries": 31,
   "entries": [
-    {
-      "path": "server/src/services/agent-health-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
     {
       "path": "server/src/services/attachment-service.ts",
       "category": "compatibility-debt",
@@ -25,12 +19,6 @@
       "category": "transient-process-io",
       "owner": "#1189",
       "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/codex-health-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     },
     {
       "path": "server/src/services/config-service.ts",
@@ -91,12 +79,6 @@
       "category": "compatibility-debt",
       "owner": "#1188",
       "rationale": "Managed-content storage migration is tracked in issue #1188."
-    },
-    {
-      "path": "server/src/services/metrics/task-metrics.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     },
     {
       "path": "server/src/services/metrics/telemetry-reader.ts",

@@ -1,11 +1,13 @@
 /**
  * Task-related metrics: task counts by status and sprint velocity.
  */
-import fs from 'fs/promises';
-import path from 'path';
 import type { BlockedCategory } from '@veritas-kanban/shared';
 import { TaskService } from '../task-service.js';
 import { getRuntimeDir } from '../../utils/paths.js';
+import {
+  OperationalMetadataRepository,
+  operationalMetadataRepository,
+} from '../../storage/operational-metadata-repository.js';
 import type {
   TaskMetrics,
   VelocityTrend,
@@ -101,7 +103,8 @@ export async function computeTaskMetrics(
 export async function computeVelocityMetrics(
   taskService: TaskService,
   project?: string,
-  limit = 10
+  limit = 10,
+  operationalMetadata: OperationalMetadataRepository = operationalMetadataRepository
 ): Promise<VelocityMetrics> {
   // Get all tasks (active + archived) to calculate velocity
   const [activeTasks, archivedTasks] = await Promise.all([
@@ -112,12 +115,8 @@ export async function computeVelocityMetrics(
   // Load sprint labels from sprints.json for display
   const sprintLabels = new Map<string, string>();
   try {
-    const sprintsFile = path.join(getRuntimeDir(), 'sprints.json');
-    const sprintsData = await fs.readFile(sprintsFile, 'utf-8');
-    const sprints = JSON.parse(sprintsData) as Array<{ id: string; label: string }>;
-    for (const s of sprints) {
-      sprintLabels.set(s.id, s.label);
-    }
+    const persistedLabels = await operationalMetadata.readSprintLabels(getRuntimeDir());
+    for (const [id, label] of persistedLabels) sprintLabels.set(id, label);
   } catch {
     // No sprints file or can't read it - will use IDs as labels
   }
