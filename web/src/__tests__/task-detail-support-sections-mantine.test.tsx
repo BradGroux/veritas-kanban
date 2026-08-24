@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   deleteComment: vi.fn(),
   uploadAttachment: vi.fn(),
   deleteAttachment: vi.fn(),
+  getAttachmentText: vi.fn(),
   timeStart: vi.fn(),
   timeStop: vi.fn(),
   timeAddEntry: vi.fn(),
@@ -57,6 +58,9 @@ vi.mock('@/lib/api', () => ({
       addEntry: mocks.timeAddEntry,
       deleteEntry: mocks.timeDeleteEntry,
     },
+    attachments: {
+      getText: mocks.getAttachmentText,
+    },
   },
 }));
 
@@ -69,6 +73,11 @@ describe('task detail support sections Mantine migration', () => {
     mocks.deleteComment.mockResolvedValue(undefined);
     mocks.uploadAttachment.mockResolvedValue(undefined);
     mocks.deleteAttachment.mockResolvedValue(undefined);
+    mocks.getAttachmentText.mockResolvedValue({
+      attachmentId: 'attachment-1',
+      text: 'Extracted design notes',
+      hasText: true,
+    });
   });
 
   afterEach(() => {
@@ -136,11 +145,6 @@ describe('task detail support sections Mantine migration', () => {
 
   it('renders attachments through direct Mantine controls and preserves upload, preview, and delete', async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockResolvedValue({
-      json: vi.fn().mockResolvedValue({ text: 'Extracted design notes' }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
     const task = createMockTask({
       id: 'task-attachments',
       attachments: [
@@ -187,9 +191,7 @@ describe('task detail support sections Mantine migration', () => {
       taskId: task.id,
       formData: expect.any(FormData),
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/tasks/task-attachments/attachments/attachment-1/text')
-    );
+    expect(mocks.getAttachmentText).toHaveBeenCalledWith(task.id, 'attachment-1');
     expect(mocks.deleteAttachment).toHaveBeenCalledWith({
       taskId: task.id,
       attachmentId: 'attachment-1',
