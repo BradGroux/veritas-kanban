@@ -114,7 +114,8 @@ const runtimeProbe = String.raw`
   const backupBody = await backup.json();
   assert(backup.status === 200, 'SQLite backup export did not return 200');
   assert(
-    backupBody.bundlePath === '/app/data/backups/docker-contract',
+    backupBody.success === true &&
+      backupBody.data?.bundlePath === '/app/data/backups/docker-contract',
     'SQLite backup export escaped the mounted DATA_DIR'
   );
   await access('/app/data/backups/docker-contract/manifest.json');
