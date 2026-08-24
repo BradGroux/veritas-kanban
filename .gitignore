@@ -44,10 +44,8 @@ tasks/archive/*.md
 tasks/backlog/*.md
 tasks/attachments/
 tasks/archive-attachments/
-storage/
-server/storage/
-!server/src/storage/
-!server/src/storage/**
+/storage/
+/server/storage/
 .veritas-kanban/*
 !.veritas-kanban/.gitkeep
 .veritas-desktop-dev/
@@ -112,7 +110,7 @@ tasks/
 !tasks/
 !tasks/examples/
 !tasks/examples/*.md
-.veritas-kanban/
+/.veritas-kanban/
 
 # Local security middleware (not shared)
 server/src/middleware/external-api-key.ts
