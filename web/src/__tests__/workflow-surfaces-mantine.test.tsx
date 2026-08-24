@@ -128,7 +128,7 @@ function jsonResponse(data: unknown, ok = true) {
   return {
     ok,
     status: ok ? 200 : 500,
-    json: async () => ({ data }),
+    json: async () => data,
   } as Response;
 }
 

@@ -5,15 +5,19 @@ const createFsPromisesMock = vi.hoisted(() => () => {
     access: vi.fn().mockResolvedValue(undefined),
     appendFile: vi.fn().mockResolvedValue(undefined),
     copyFile: vi.fn().mockResolvedValue(undefined),
+    cp: vi.fn().mockResolvedValue(undefined),
     lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
     mkdir: vi.fn().mockResolvedValue(undefined),
+    open: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(''),
     writeFile: vi.fn().mockResolvedValue(undefined),
     readdir: vi.fn().mockResolvedValue([]),
     rename: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
     rm: vi.fn().mockResolvedValue(undefined),
+    rmdir: vi.fn().mockResolvedValue(undefined),
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 0 }),
+    statfs: vi.fn().mockResolvedValue({ bfree: 1, bsize: 1 }),
   };
   return { ...mod, default: mod };
 });

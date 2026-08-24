@@ -5,7 +5,8 @@ import jwt from 'jsonwebtoken';
 // vi.hoisted runs before vi.mock hoisting — makes mockFs available to the mock factory
 const mockFs: Record<string, string> = vi.hoisted(() => ({}));
 
-vi.mock('node:fs/promises', () => {
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
   const access = vi.fn().mockResolvedValue(undefined);
   const lstat = vi.fn().mockResolvedValue({ isSymbolicLink: () => false });
   const mkdir = vi.fn().mockResolvedValue(undefined);
@@ -16,6 +17,7 @@ vi.mock('node:fs/promises', () => {
   const unlink = vi.fn().mockResolvedValue(undefined);
   const rm = vi.fn().mockResolvedValue(undefined);
   return {
+    ...actual,
     access,
     lstat,
     mkdir,
@@ -25,7 +27,18 @@ vi.mock('node:fs/promises', () => {
     readdir,
     unlink,
     rm,
-    default: { access, lstat, mkdir, readFile, rename, writeFile, readdir, unlink, rm },
+    default: {
+      ...actual,
+      access,
+      lstat,
+      mkdir,
+      readFile,
+      rename,
+      writeFile,
+      readdir,
+      unlink,
+      rm,
+    },
   };
 });
 
