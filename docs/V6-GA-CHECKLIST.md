@@ -55,7 +55,11 @@ Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
 
 ## Final Release Validation Commands
 
-Run once from the clean 6.1.1 release candidate:
+Apply `ci:full` to the release pull request and keep it applied through the
+final candidate synchronization. That single milestone runs the complete
+workspace suite, critical-path coverage, unsigned desktop artifacts, and
+Docker image contract. Run the following commands once from the clean 6.1.1
+release candidate:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -128,8 +132,9 @@ the Homebrew cask uses the independently verified published ZIP checksum.
 - [x] Native About, copied support information, the desktop bridge, and updater
       fallback consume one authoritative version/build/channel/OS/architecture
       record (#1005).
-- [x] Pull-request verification uses documentation-only, focused, or full test
-      scope, while explicit and milestone release gates remain full (#1000).
+- [x] Ordinary pull-request verification records affected workspaces without
+      running tests; manual focused diagnostics and explicit `ci:full`,
+      scheduled, or release milestones own the test suites (#1000, #1227).
 - [x] Published release notes are sourced from
       `docs/releases/vX.Y.Z.md`, use one full-width Markdown line per paragraph
       or list item, reject blockquotes and overlong prose blocks, and are

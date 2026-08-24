@@ -1,31 +1,9 @@
 name: Desktop Artifacts
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'desktop/**'
-      - 'server/**'
-      - 'web/**'
-      - 'shared/**'
-      - 'docs/DESKTOP-RELEASE.md'
-      - 'scripts/desktop-after-pack.mjs'
-      - 'scripts/prepare-desktop-release.mjs'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/desktop-artifacts.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'desktop/**'
-      - 'docs/DESKTOP-RELEASE.md'
-      - 'scripts/desktop-after-pack.mjs'
-      - 'scripts/prepare-desktop-release.mjs'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/desktop-artifacts.yml'
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 concurrency:
@@ -38,8 +16,20 @@ env:
 jobs:
   mac-unsigned:
     name: Unsigned macOS Artifact
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: macos-15
     steps:
+      - name: Record milestone selection
+        run: |
+          {
+            echo "### Unsigned macOS artifact milestone"
+            echo
+            echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- Reason: explicit \`ci:full\` or manual milestone"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -78,8 +68,20 @@ jobs:
 
   linux-unsigned:
     name: Unsigned Linux Artifacts
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-24.04
     steps:
+      - name: Record milestone selection
+        run: |
+          {
+            echo "### Unsigned Linux artifact milestone"
+            echo
+            echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- Reason: explicit \`ci:full\` or manual milestone"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -122,8 +124,21 @@ jobs:
 
   windows-unsigned:
     name: Unsigned Windows Artifacts
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: windows-2025
     steps:
+      - name: Record milestone selection
+        shell: bash
+        run: |
+          {
+            echo "### Unsigned Windows artifact milestone"
+            echo
+            echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- Reason: explicit \`ci:full\` or manual milestone"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10

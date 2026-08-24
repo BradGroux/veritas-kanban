@@ -1,6 +1,9 @@
 name: Scheduled QA
 
 on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   schedule:
     - cron: '17 8 * * 1'
   workflow_dispatch:
@@ -36,9 +39,21 @@ env:
 jobs:
   playwright:
     name: Playwright E2E
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Record milestone selection
+        run: |
+          {
+            echo "### Playwright E2E milestone"
+            echo
+            echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- Reason: explicit \`ci:full\`, scheduled, or manual milestone"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -81,11 +96,24 @@ jobs:
 
   k6:
     name: k6 Load Smoke
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       K6_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.load_profile || 'smoke' }}
     steps:
+      - name: Record milestone selection
+        run: |
+          {
+            echo "### k6 milestone"
+            echo
+            echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- Profile: \`$K6_PROFILE\`"
+            echo "- Reason: explicit \`ci:full\`, scheduled, or manual milestone"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10

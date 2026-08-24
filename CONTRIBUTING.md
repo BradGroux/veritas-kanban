@@ -73,16 +73,17 @@ veritas-kanban/
 
 2. Make your changes — write code, add tests, update docs.
 
-3. Run touched-package type checking, changed-file linting, and focused tests
-   before committing:
+3. Run touched-package type checking and changed-file linting before
+   committing. Ordinary implementation pull requests do not run workspace
+   tests:
 
    ```bash
    pnpm --filter @veritas-kanban/server typecheck
    pnpm exec eslint server/src/path/to/changed.ts
-   pnpm --filter @veritas-kanban/server exec vitest run src/path/to/changed.test.ts
    ```
 
-   Use direct `exec vitest run` invocation for exact-file slices. Do not use
+   At an explicitly declared focused diagnostic milestone, use direct
+   `exec vitest run` invocation for one exact-file slice. Do not use
    `pnpm --filter <package> test -- <test-files>` or
    `pnpm --filter <package> test -- --run <test-files>` as a focused command.
    Package wrappers can ignore that file boundary and expand into the entire
@@ -91,7 +92,8 @@ veritas-kanban/
    Build `@veritas-kanban/shared` first and type-check its known consumers when
    a shared contract changes. Use `pnpm test` at an explicit integration,
    critical-security, or release milestone, or when a maintainer explicitly
-   selects the `ci:full` gate.
+   selects the `ci:full` gate. Critical coverage, E2E, desktop packaging, and
+   Docker contracts follow the same milestone boundary.
 
 4. Commit using [conventional commits](#commit-conventions).
 
@@ -109,8 +111,9 @@ This cadence extends the deterministic CI selector delivered in
   verification effort becomes larger than the changed behavior.
 - Do not rerun an unchanged passing check after documentation, comments, or
   formatting-only edits.
-- Treat `Select Test Scope` as the CI authority. Focused, full, and no-test
-  selections are recorded in the job summary.
+- Treat `Select Test Scope` as the CI authority. Ordinary pull requests and
+  `main` pushes select no workspace tests; manual focused diagnostics and full
+  milestone selections are recorded in the job summary.
 - Do not wait for optional desktop artifacts, packaging previews, or release
   workflows unless the pull request changes that product boundary.
 - Test the behavior and meaningful failure modes. Do not use raw test count as
@@ -129,14 +132,16 @@ can rebase on the exact result.
 1. Merge first branch to `main`
 2. Confirm the required GitHub checks for that pull request
 3. Rebase the next branch on the updated `main`
-4. Run only the focused checks affected by conflict resolution
+4. Inspect conflict resolution and run changed-file static checks
 5. Merge the next branch
 
-The complete build, workspace suite, integration suite, and applicable E2E or
-artifact gates run once at the declared milestone. They are not repeated after
-every unrelated merge.
+The complete workspace suite, coverage, integration, E2E, desktop artifact,
+and Docker gates run once at the declared milestone. They are not repeated
+after every unrelated merge.
 
-**Why:** Parallel branches often introduce integration issues that are hidden when batch-merging. Sequential merges with testing between each merge catch these immediately.
+**Why:** Sequential merges keep conflicts attributable without paying the
+release-certification cost after every independent change. The declared
+milestone verifies the integrated candidate once.
 
 ### One Agent Per File Rule
 
@@ -192,7 +197,7 @@ owner explicitly requires it.
 Before merging, verify the checks selected for the changed product boundary:
 
 - [ ] **Selected CI tier:** Every required check started for the pull request is green.
-- [ ] **Focused local evidence:** Changed behavior and meaningful failure modes are covered.
+- [ ] **Implementation evidence:** The diff and applicable static checks support the changed behavior.
 - [ ] **Shared contracts, when changed:** New types are exported and known consumers type-check.
 - [ ] **Configuration, when changed:** Ports, URLs, timeouts, environment variables, CSP, and CORS behave in the affected modes.
 - [ ] **Frontend integration, when changed:** HTTP calls use shared helpers and location-sensitive behavior avoids hardcoded hosts.
@@ -211,8 +216,9 @@ Before merging, verify the checks selected for the changed product boundary:
 
 ### Testing Requirements
 
-Run browser or API smoke tests only when the change affects that product
-boundary. Choose the smallest runtime check that proves the behavior:
+Run browser or API smoke tests only at an explicit integration or release
+milestone when the change affects that product boundary. Choose the smallest
+runtime check that proves the behavior:
 
 - **Server or API changes:** Exercise the changed endpoint and its meaningful auth or failure path. Add a health check only when startup or routing changed.
 - **Web changes:** Open the changed route and verify its primary interaction, keyboard flow, and failure state.
@@ -279,10 +285,10 @@ docs: update README with deployment instructions
 3. **Open a PR** against `main`.
 4. **Fill out the PR template** — describe changes, link related issues, include screenshots for UI changes.
 5. **Ensure the selected PR CI tier passes** — all checks started for the pull
-   request must be green. The scope selector runs related tests for affected
-   workspaces and records its base/head evidence in the job summary. Use
-   `ci:full` for release candidates, critical integration/security boundaries,
-   or other changes that require an explicit complete-suite gate.
+   request must be green. The scope selector records affected workspaces but
+   defers their tests on ordinary pull requests. Use `ci:full` for release
+   candidates, critical integration/security boundaries, or other changes that
+   require an explicit complete-suite gate.
 6. **Request review** — a maintainer will review and may request changes.
 7. **Address feedback** — push additional commits as needed.
 8. **Merge** — once approved, a maintainer will merge.
@@ -336,32 +342,24 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 
 ### CI tiers
 
-| Trigger                                                                                                     | Stable checks                                                   | Scope                                                                                         |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Documentation-only pull request or merge                                                                    | Static gates; unit-test jobs record skip decisions              | No workspace unit suite                                                                       |
-| Ordinary code pull request                                                                                  | `Lint & Type Check`, `Changed Tests`, `Build`, `Security Audit` | Vitest `related` coverage for affected server, web, CLI, or MCP workspaces                    |
-| Ordinary code merge to `main`                                                                               | Default static gates plus `Changed Tests`                       | Related coverage limited to affected workspaces                                               |
-| Pull request with `ci:full`, or a CI selector/workflow control change                                       | Default checks plus `Workspace Unit Tests`                      | Complete workspace, desktop readiness regressions, and exact dual-storage parity              |
-| Merge whose reviewed head already passed `Workspace Unit Tests`                                             | Static gates; both unit-test tiers record skip decisions        | Reuses exact successful head evidence when that head is an ancestor of the merge commit       |
-| Nightly 08:00 UTC or manual `CI` dispatch with `test_scope=full`                                            | Static gates, `Workspace Unit Tests`, `Build`, `Security Audit` | Complete authoritative workspace suite                                                        |
-| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha`                                      | Static gates plus the selected unit-test tier                   | Classifies `base_sha...HEAD` (or `HEAD^...HEAD`) and stays focused unless CI controls changed |
-| Desktop/package/release-workflow pull request, relevant `main` push, or manual `Desktop Artifacts` dispatch | Unsigned macOS, Linux, and Windows artifact jobs                | Cross-platform packaging                                                                      |
+| Trigger                                                                | Stable checks                                                   | Scope                                                                      |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Documentation-only pull request or merge                               | Static gates; test jobs record skip decisions                   | No workspace tests                                                         |
+| Ordinary code pull request or merge to `main`                          | `Lint & Type Check`, `Build`, `Security Audit`, scope recording | No workspace tests or coverage; affected packages remain visible           |
+| Pull request with `ci:full`                                            | Default checks plus every milestone test and artifact gate      | Complete unit, coverage, desktop, Docker, and applicable integration gates |
+| Nightly 08:00 UTC or manual `CI` dispatch with `test_scope=full`       | Static gates plus complete workspace and coverage gates         | Authoritative recurring or operator-selected milestone                     |
+| Manual `CI` dispatch with `test_scope=focused` and optional `base_sha` | Static gates plus `Changed Tests`                               | Explicit diagnostic slice for affected workspaces; no coverage ratchet     |
+| Manual `Desktop Artifacts` or `Docker Image Contract` dispatch         | Selected artifact or container contract                         | Explicit operator milestone outside a pull request                         |
 
 `Select Test Scope` is the decision record for each run. Its summary names the
 event, exact base/head range, changed-path count, selected tier, affected
 workspaces, and why `Changed Tests` or `Workspace Unit Tests` ran or skipped.
-The selector fails safe to the complete suite for unknown non-documentation
-paths and for changes to:
-
-- GitHub Actions workflows and the selector itself
-- full-suite evidence validation
-
 Shared contracts, package manifests, lockfiles, storage implementations,
-desktop source, and known-workspace deletions select focused affected
-workspaces. Build and typecheck remain whole-repository gates on every ordinary
-code pull request. The full workspace suite runs at scheduled, explicit
-`ci:full`, critical integration/security, and release milestones instead of
-being repeated for every source slice.
+desktop source, and known-workspace deletions are recorded as affected
+workspaces without launching tests. Build and typecheck remain
+whole-repository gates on every ordinary code pull request. The full workspace
+suite and release-grade artifact gates run at scheduled, explicit `ci:full`,
+critical integration/security, and release milestones.
 
 Run the selector contract locally with:
 
@@ -372,11 +370,11 @@ pnpm test:ci-scope
 Release validation remains the final authority: clean-clone build, full unit
 and integration suites, applicable E2E, and signed artifact verification.
 
-The operational target for the default pull-request tier is under 15 minutes,
-with no desktop packaging. This is a target rather than an SLA; dependency
-installation and hosted-runner availability still vary. Behavior changes
-should include coverage reachable from the changed source so Vitest's related
-test selection can execute it.
+The operational target for the default pull-request tier is under 10 minutes,
+with no workspace tests, coverage, or desktop/container packaging. This is a
+target rather than an SLA; dependency installation and hosted-runner
+availability still vary. Behavior changes should include coverage that the
+next declared milestone can exercise.
 
 Optional `Desktop Artifacts`, packaging previews, and release workflows are not
 merge blockers outside their path boundary. If one starts without providing

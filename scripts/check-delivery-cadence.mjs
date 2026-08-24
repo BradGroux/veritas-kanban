@@ -14,8 +14,9 @@ export const CADENCE_CONTRACTS = {
       pattern: /one independently shippable behavior/i,
     },
     {
-      description: 'narrowest useful implementation loop',
-      pattern: /run the narrowest useful loop/i,
+      description: 'ordinary implementation defers workspace tests',
+      pattern:
+        /Do not run workspace unit, coverage, E2E, desktop packaging, or Docker contract tests between implementation PRs/i,
     },
     {
       description: '45-minute split or escalate delivery checkpoint',
@@ -62,7 +63,8 @@ export const CADENCE_CONTRACTS = {
     },
     {
       description: 'affected-boundary runtime smoke tests',
-      pattern: /Run browser or API smoke tests only when the change affects/i,
+      pattern:
+        /Run browser or API smoke tests only at an explicit integration or release milestone/i,
     },
   ],
   '.github/PULL_REQUEST_TEMPLATE.md': [
@@ -75,8 +77,8 @@ export const CADENCE_CONTRACTS = {
       pattern: /\*\*Verification tier:\*\*/i,
     },
     {
-      description: 'focused changed-package test tier',
-      pattern: /Focused changed-package tests/i,
+      description: 'explicit focused diagnostic tier',
+      pattern: /Explicit focused diagnostic/i,
     },
     {
       description: 'full milestone gate tier',
@@ -271,8 +273,7 @@ export function findUnsafeCanonicalCadenceStatements(files) {
 
 export function findAmbiguousFocusedTestCommands(files) {
   const violations = [];
-  const pattern =
-    /\bpnpm\s+(?:--filter(?:=|\s+)|-F\s+)\S+\s+(?:run\s+)?test\s+--(?=\s)/gi;
+  const pattern = /\bpnpm\s+(?:--filter(?:=|\s+)|-F\s+)\S+\s+(?:run\s+)?test\s+--(?=\s)/gi;
 
   for (const [file, content] of Object.entries(files)) {
     const normalized = normalizeWhitespace(content);

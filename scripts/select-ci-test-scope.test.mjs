@@ -9,7 +9,6 @@ import {
   githubOutputLines,
   isDependencyFreeScopeControlPath,
   isDocumentationPath,
-  requiresFullSuite,
 } from './select-ci-test-scope.mjs';
 
 test('classifies documentation-only pull requests without unit tests', () => {
@@ -37,39 +36,40 @@ test('dependency-free cadence controls do not trigger workspace unit tests', () 
   assert.equal(isDependencyFreeScopeControlPath('scripts/check-delivery-cadence.mjs'), true);
 });
 
-test('cadence controls do not widen a focused workspace change', () => {
+test('cadence controls do not turn an ordinary workspace change into a test milestone', () => {
   const result = classifyCiTestScope({
     eventName: 'pull_request',
     changedFiles: ['scripts/check-delivery-cadence.mjs', 'server/src/routes/tasks.ts'],
   });
 
-  assert.equal(result.scope, 'focused');
+  assert.equal(result.scope, 'none');
   assert.deepEqual(result.packages, ['server']);
 });
 
-test('selects affected workspaces for ordinary code changes', () => {
+test('records affected workspaces without testing an ordinary code change', () => {
   const result = classifyCiTestScope({
     eventName: 'pull_request',
     changedFiles: ['web/src/App.tsx', 'server/src/routes/tasks.ts', 'README.md'],
   });
 
-  assert.equal(result.scope, 'focused');
+  assert.equal(result.scope, 'none');
   assert.deepEqual(result.packages, ['server', 'web']);
 });
 
-test('selects coverage only for changed critical boundaries and all packages for full scope', () => {
+test('selects critical coverage only for the full milestone scope', () => {
   const files = [
     'server/src/storage/file-storage.ts',
     'web/src/components/Board.tsx',
     'mcp/src/tools/tasks.ts',
   ];
 
-  assert.deepEqual(coverageWorkspaces(files), ['server', 'mcp']);
+  assert.deepEqual(coverageWorkspaces(files), []);
+  assert.deepEqual(coverageWorkspaces(files, 'focused'), []);
   assert.deepEqual(coverageWorkspaces(files, 'none'), []);
   assert.deepEqual(coverageWorkspaces(files, 'full'), ['server', 'web', 'cli', 'mcp', 'desktop']);
 });
 
-test('reruns coverage when governed tests, schemas, or shared permissions change', () => {
+test('defers governed critical-path coverage until a milestone', () => {
   assert.deepEqual(
     coverageWorkspaces([
       'server/src/__tests__/provider-completion-service.test.ts',
@@ -78,7 +78,7 @@ test('reruns coverage when governed tests, schemas, or shared permissions change
       'web/src/__tests__/useWebSocket.test.ts',
       'mcp/src/__tests__/task-tools.test.ts',
     ]),
-    ['server', 'web', 'mcp']
+    []
   );
 });
 
@@ -92,7 +92,7 @@ test('ci:full overrides a documentation-only pull request', () => {
   assert.equal(result.scope, 'full');
 });
 
-test('selects the full suite only for CI control paths', () => {
+test('CI control paths require an explicit milestone instead of auto-running the full suite', () => {
   const paths = [
     '.github/workflows/ci.yml',
     'scripts/select-ci-test-scope.mjs',
@@ -108,12 +108,11 @@ test('selects the full suite only for CI control paths', () => {
       eventName: 'pull_request',
       changedFiles: [file],
     });
-    assert.equal(result.scope, 'full', file);
-    assert.equal(requiresFullSuite(file), true, file);
+    assert.equal(result.scope, 'none', file);
   }
 });
 
-test('keeps shared, storage, desktop, and manifest changes focused by workspace', () => {
+test('records shared, storage, desktop, and manifest workspaces without automatic tests', () => {
   const cases = [
     {
       file: 'shared/src/types/task.types.ts',
@@ -131,9 +130,8 @@ test('keeps shared, storage, desktop, and manifest changes focused by workspace'
       eventName: 'pull_request',
       changedFiles: [file],
     });
-    assert.equal(result.scope, 'focused', file);
+    assert.equal(result.scope, 'none', file);
     assert.deepEqual(result.packages, packages, file);
-    assert.equal(requiresFullSuite(file), false, file);
   }
 });
 
@@ -168,60 +166,33 @@ test('focused manual runs still classify the selected range by risk', () => {
   );
 });
 
-test('a successful reviewed full suite suppresses duplicate post-merge tests', () => {
-  const result = classifyCiTestScope({
-    eventName: 'push',
-    reviewedFullSuite: true,
-    reviewedPullRequest: '1000',
-    changedFiles: ['.github/workflows/ci.yml'],
-  });
-
-  assert.equal(result.scope, 'none');
-  assert.match(result.reason, /PR #1000/);
-  assert.match(result.reason, /ancestor/);
-});
-
-test('an exact reviewed tree suppresses duplicate tests after a squash merge', () => {
-  const result = classifyCiTestScope({
-    eventName: 'push',
-    reviewedFullSuite: true,
-    reviewedPullRequest: '1011',
-    reviewedFullSuiteMode: 'identical-tree',
-    changedFiles: ['.github/workflows/ci.yml'],
-  });
-
-  assert.equal(result.scope, 'none');
-  assert.match(result.reason, /PR #1011/);
-  assert.match(result.reason, /exact Git tree/);
-});
-
-test('ordinary post-merge pushes remain limited to affected packages', () => {
+test('ordinary post-merge pushes defer tests while recording affected packages', () => {
   const result = classifyCiTestScope({
     eventName: 'push',
     changedFiles: ['cli/src/commands/doctor.ts'],
   });
 
-  assert.equal(result.scope, 'focused');
+  assert.equal(result.scope, 'none');
   assert.deepEqual(result.packages, ['cli']);
 });
 
-test('unknown non-documentation paths fail safe to the full suite', () => {
+test('unknown non-documentation paths wait for an explicit milestone', () => {
   const result = classifyCiTestScope({
     eventName: 'pull_request',
     changedFiles: ['site/src/runtime.ts'],
   });
 
-  assert.equal(result.scope, 'full');
+  assert.equal(result.scope, 'none');
 });
 
-test('deleted known-workspace source stays focused while unknown source fails safe', () => {
+test('deleted source paths are recorded without automatic test escalation', () => {
   assert.equal(
     classifyCiTestScope({
       eventName: 'pull_request',
       changedFiles: ['server/src/obsolete.ts'],
       deletedFiles: ['server/src/obsolete.ts'],
     }).scope,
-    'focused'
+    'none'
   );
   assert.equal(
     classifyCiTestScope({
@@ -229,7 +200,7 @@ test('deleted known-workspace source stays focused while unknown source fails sa
       changedFiles: ['site/src/obsolete.ts'],
       deletedFiles: ['site/src/obsolete.ts'],
     }).scope,
-    'full'
+    'none'
   );
   assert.equal(
     classifyCiTestScope({

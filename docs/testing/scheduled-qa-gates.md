@@ -3,9 +3,10 @@
 Review date: 2026-06-04
 
 The scheduled QA workflow runs heavier browser and load-test coverage outside
-the fast pull-request path. Pull requests stay limited to lint, typecheck,
-workspace unit tests, build, production dependency audit, and the desktop
-artifact gate when relevant.
+the fast pull-request path. Ordinary pull requests stay limited to lint,
+typecheck, build, production dependency audit, security gates, and test-scope
+recording. Workspace tests, coverage, desktop artifacts, and Docker contracts
+run only at scheduled, manual, or `ci:full` milestones.
 
 The 2026-06-04 audit found the workflow failing before job creation because
 job-level `env` used the `runner.temp` context. GitHub does not expose the
@@ -30,6 +31,7 @@ Workflow file:
 
 Triggers:
 
+- Pull request carrying `ci:full`, rerun on each synchronized candidate head.
 - Weekly schedule: Monday at 08:17 UTC.
 - Manual dispatch: `workflow_dispatch`.
 

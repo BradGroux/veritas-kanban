@@ -50,9 +50,11 @@ live repository install into a production-only dependency state.
 
 ## GitHub Workflows
 
-`Desktop Artifacts` runs on desktop/package/release-workflow pull requests,
-after server/web/shared/desktop changes merge to `main`, and on manual
-dispatch. It builds unsigned artifacts on:
+`Desktop Artifacts` runs only for a pull request carrying `ci:full` or through
+manual dispatch. Ordinary pull requests and `main` pushes do not package
+desktop applications. A release candidate keeps `ci:full` applied through its
+final synchronization so the artifacts correspond to the reviewed head. The
+workflow builds unsigned artifacts on:
 
 - `macos-15`: DMG, ZIP, blockmap, and update YAML.
 - `ubuntu-24.04`: x64 AppImage, deb, rpm, blockmap, and update YAML.
@@ -187,7 +189,8 @@ policy is tracked in
 - Run `pnpm desktop:package:windows:unsigned` on Windows or the
   `Desktop Artifacts` Windows job and inspect preview artifact names. This is
   not a v6 GA release gate.
-- Run `Desktop Artifacts` and download the uploaded DMG/ZIP/update metadata.
+- Apply `ci:full` to the release-candidate pull request, then download the
+  uploaded DMG/ZIP/update metadata from its `Desktop Artifacts` run.
 - Edit `docs/releases/vX.Y.Z.md`, run
   `pnpm validate:release -- --version X.Y.Z`, and publish that exact file with
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
