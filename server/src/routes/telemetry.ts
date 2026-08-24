@@ -46,7 +46,7 @@ router.post(
   validate({ body: TelemetryEventIngestionSchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, TelemetryEventIngestion>, res) => {
     const telemetry = getTelemetryService();
-    const eventInput = req.validated.body!;
+    const eventInput = req.validated.body;
 
     // Validation: Sanity check for run.completed durationMs
     // Cap at 7 days (604,800,000 ms) to prevent corrupt data
@@ -105,7 +105,7 @@ router.get(
   validate({ query: TelemetryEventsQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, TelemetryEventsQuery>, res) => {
     const telemetry = getTelemetryService();
-    const { type, since, until, taskId, project, limit } = req.validated.query!;
+    const { type, since, until, taskId, project, limit } = req.validated.query;
 
     const options: TelemetryQueryOptions = {};
 
@@ -132,7 +132,7 @@ router.get(
   validate({ params: TelemetryTaskParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<TelemetryTaskParams>, res) => {
     const telemetry = getTelemetryService();
-    const { taskId } = req.validated.params!;
+    const { taskId } = req.validated.params;
     const events = await telemetry.getTaskEvents(taskId);
     res.json(events);
   })
@@ -149,7 +149,7 @@ router.post(
   validate({ body: TelemetryBulkQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, TelemetryBulkQuery>, res) => {
     const telemetry = getTelemetryService();
-    const { taskIds, perTaskLimit } = req.validated.body!;
+    const { taskIds, perTaskLimit } = req.validated.body;
 
     const eventsMap = await telemetry.getBulkTaskEvents(taskIds, perTaskLimit);
 
@@ -190,7 +190,7 @@ router.get(
   validate({ query: TelemetryCountQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, TelemetryCountQuery>, res) => {
     const telemetry = getTelemetryService();
-    const { type, since, until } = req.validated.query!;
+    const { type, since, until } = req.validated.query;
 
     const count = await telemetry.countEvents(type.length === 1 ? type[0] : type, since, until);
 
@@ -216,7 +216,7 @@ router.get(
   validate({ query: TelemetryExportQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, TelemetryExportQuery>, res) => {
     const telemetry = getTelemetryService();
-    const { format, taskId, project, from, to } = req.validated.query!;
+    const { format, taskId, project, from, to } = req.validated.query;
 
     // Build query options
     const options: TelemetryQueryOptions = {};

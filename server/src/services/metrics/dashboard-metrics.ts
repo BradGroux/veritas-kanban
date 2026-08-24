@@ -49,6 +49,16 @@ const DASHBOARD_TREND_EVENT_TYPES: TelemetryEventType[] = [
 ];
 const UTILIZATION_EVENT_TYPES: TelemetryEventType[] = ['run.started', 'run.completed'];
 
+function getOrInitialize<K, V>(map: Map<K, V>, key: K, create: () => V): V {
+  const existing = map.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = create();
+  map.set(key, created);
+  return created;
+}
+
 /**
  * Get all metrics in one call (for dashboard).
  * Optimized: streams files once and extracts all metrics in single pass.
@@ -95,10 +105,12 @@ export async function computeAllMetrics(
       const runEvent = event as RunTelemetryEvent;
       const agent = runEvent.agent || 'veritas';
 
-      if (!runAcc.byAgent.has(agent)) {
-        runAcc.byAgent.set(agent, { successes: 0, failures: 0, errors: 0, durations: [] });
-      }
-      const agentAcc = runAcc.byAgent.get(agent)!;
+      const agentAcc = getOrInitialize(runAcc.byAgent, agent, () => ({
+        successes: 0,
+        failures: 0,
+        errors: 0,
+        durations: [],
+      }));
 
       if (eventType === 'run.error') {
         runAcc.errors++;
@@ -136,16 +148,13 @@ export async function computeAllMetrics(
       tokenAcc.cacheTokens += cacheTokens;
       tokenAcc.tokensPerRun.push(totalTokens);
 
-      if (!tokenAcc.byAgent.has(agent)) {
-        tokenAcc.byAgent.set(agent, {
-          totalTokens: 0,
-          inputTokens: 0,
-          outputTokens: 0,
-          cacheTokens: 0,
-          runs: 0,
-        });
-      }
-      const agentTokenAcc = tokenAcc.byAgent.get(agent)!;
+      const agentTokenAcc = getOrInitialize(tokenAcc.byAgent, agent, () => ({
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheTokens: 0,
+        runs: 0,
+      }));
       agentTokenAcc.totalTokens += totalTokens;
       agentTokenAcc.inputTokens += tokenEvent.inputTokens;
       agentTokenAcc.outputTokens += tokenEvent.outputTokens;
@@ -393,23 +402,20 @@ export async function computeTrends(
     to,
     (event) => {
       const dateStr = event.timestamp.slice(0, 10);
-      if (!dailyData.has(dateStr)) {
-        dailyData.set(dateStr, {
-          runs: 0,
-          successes: 0,
-          failures: 0,
-          errors: 0,
-          totalTokens: 0,
-          inputTokens: 0,
-          outputTokens: 0,
-          durations: [],
-          costEstimate: 0,
-          tasksCreated: 0,
-          statusChanges: 0,
-          tasksArchived: 0,
-        });
-      }
-      const dayAcc = dailyData.get(dateStr)!;
+      const dayAcc = getOrInitialize(dailyData, dateStr, () => ({
+        runs: 0,
+        successes: 0,
+        failures: 0,
+        errors: 0,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        durations: [],
+        costEstimate: 0,
+        tasksCreated: 0,
+        statusChanges: 0,
+        tasksArchived: 0,
+      }));
 
       // Count task activity events
       if (event.type === 'task.created') {
@@ -458,7 +464,8 @@ export async function computeTrends(
   const sortedDates = [...dailyData.keys()].sort();
 
   for (const date of sortedDates) {
-    const data = dailyData.get(date)!;
+    const data = dailyData.get(date);
+    if (!data) continue;
     const avgDurationMs =
       data.durations.length > 0
         ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
@@ -527,20 +534,17 @@ export async function computeAgentComparison(
         const runEvent = event as RunTelemetryEvent;
         const agent = runEvent.agent || 'veritas';
 
-        if (!agentData.has(agent)) {
-          agentData.set(agent, {
-            runs: 0,
-            successes: 0,
-            failures: 0,
-            errors: 0,
-            durations: [],
-            totalTokens: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-            costEstimate: 0,
-          });
-        }
-        const acc = agentData.get(agent)!;
+        const acc = getOrInitialize(agentData, agent, () => ({
+          runs: 0,
+          successes: 0,
+          failures: 0,
+          errors: 0,
+          durations: [],
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          costEstimate: 0,
+        }));
 
         if (eventType === 'run.error') {
           acc.runs++;
@@ -566,20 +570,17 @@ export async function computeAgentComparison(
         const tokenEvent = event as TokenTelemetryEvent;
         const agent = tokenEvent.agent || 'veritas';
 
-        if (!agentData.has(agent)) {
-          agentData.set(agent, {
-            runs: 0,
-            successes: 0,
-            failures: 0,
-            errors: 0,
-            durations: [],
-            totalTokens: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-            costEstimate: 0,
-          });
-        }
-        const acc = agentData.get(agent)!;
+        const acc = getOrInitialize(agentData, agent, () => ({
+          runs: 0,
+          successes: 0,
+          failures: 0,
+          errors: 0,
+          durations: [],
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          costEstimate: 0,
+        }));
         const totalTokens =
           tokenEvent.totalTokens ?? tokenEvent.inputTokens + tokenEvent.outputTokens;
 

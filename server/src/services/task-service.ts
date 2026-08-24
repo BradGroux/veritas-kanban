@@ -1149,7 +1149,7 @@ export class TaskService {
     });
 
     fireHook('onArchived', freshArchivedTask).catch((err) => {
-      log.warn({ taskId: freshArchivedTask!.id }, 'onArchived hook failed: %s', err);
+      log.warn({ taskId: freshArchivedTask.id }, 'onArchived hook failed: %s', err);
     });
 
     return true;
@@ -1355,6 +1355,7 @@ export class TaskService {
     }
 
     const now = new Date();
+    const activeEntryId = task.timeTracking.activeEntryId;
     const entries = task.timeTracking.entries.map(
       (entry: {
         id: string;
@@ -1364,7 +1365,7 @@ export class TaskService {
         description?: string;
         manual?: boolean;
       }) => {
-        if (entry.id === task.timeTracking!.activeEntryId) {
+        if (entry.id === activeEntryId) {
           const startTime = new Date(entry.startTime);
           const duration = Math.floor((now.getTime() - startTime.getTime()) / 1000);
           return {
@@ -1593,7 +1594,8 @@ export class TaskService {
     const stack = [startId];
 
     while (stack.length > 0) {
-      const currentId = stack.pop()!;
+      const currentId = stack.pop();
+      if (!currentId) continue;
 
       if (currentId === targetId) {
         return true; // Found a cycle

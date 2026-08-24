@@ -56,7 +56,7 @@ export class AnalyticsService {
       const timeRanges = allTasks
         .filter((t) => t.timeTracking?.entries && t.timeTracking.entries.length > 0)
         .map((t) => {
-          const entries = t.timeTracking!.entries;
+          const entries = t.timeTracking?.entries ?? [];
           const start = new Date(entries[0].startTime);
           const lastEntry = entries[entries.length - 1];
           const end = lastEntry.endTime ? new Date(lastEntry.endTime) : new Date();
@@ -159,7 +159,7 @@ export class AnalyticsService {
     // Build time periods from all tasks
     const timePeriods: TimePeriod[] = [];
     for (const task of tasksWithTime) {
-      const entries = task.timeTracking!.entries;
+      const entries = task.timeTracking?.entries ?? [];
       for (const entry of entries) {
         const startMs = new Date(entry.startTime).getTime();
         // Handle active entries (no endTime)
@@ -443,7 +443,8 @@ export class AnalyticsService {
             taskCount: 1,
           });
         } else {
-          const existing = agentMap.get(agent)!;
+          const existing = agentMap.get(agent);
+          if (!existing) continue;
           existing.startTime = Math.min(existing.startTime, startMs);
           existing.endTime = Math.max(existing.endTime, endMs);
           existing.totalDuration += duration;

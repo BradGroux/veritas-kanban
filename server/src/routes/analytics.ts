@@ -31,7 +31,7 @@ router.get(
   '/timeline',
   validate({ query: TimelineQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, TimelineQuery>, res) => {
-    const timeline = await analyticsService.getTimeline(req.validated.query!);
+    const timeline = await analyticsService.getTimeline(req.validated.query);
     res.json(timeline);
   })
 );
@@ -56,7 +56,7 @@ router.get(
   '/metrics',
   validate({ query: MetricsQuerySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, MetricsQuery>, res) => {
-    const metrics = await analyticsService.getMetrics(req.validated.query!);
+    const metrics = await analyticsService.getMetrics(req.validated.query);
     res.json(metrics);
   })
 );

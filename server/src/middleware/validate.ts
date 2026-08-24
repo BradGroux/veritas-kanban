@@ -72,10 +72,12 @@ export function validate(schemas: ValidationSchemas) {
  * Type helper for accessing validated request data.
  * Use with type assertion: (req as ValidatedRequest<...>)
  */
+type ValidatedSegment<Name extends string, Value> = unknown extends Value
+  ? Record<never, never>
+  : Record<Name, Value>;
+
 export type ValidatedRequest<TParams = unknown, TQuery = unknown, TBody = unknown> = Request & {
-  validated: {
-    params?: TParams;
-    query?: TQuery;
-    body?: TBody;
-  };
+  validated: ValidatedSegment<'params', TParams> &
+    ValidatedSegment<'query', TQuery> &
+    ValidatedSegment<'body', TBody>;
 };

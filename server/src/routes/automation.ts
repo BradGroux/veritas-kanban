@@ -31,7 +31,7 @@ router.post(
     // Validate task can start automation
     const validation = automationService.validateCanStart(task);
     if (!validation.valid) {
-      throw new ValidationError(validation.error!);
+      throw new ValidationError(validation.error ?? 'Task cannot start automation');
     }
 
     // Parse input
@@ -48,9 +48,16 @@ router.post(
     // Get update payload and update task
     const payload = automationService.getStartPayload(input.sessionKey);
     const updated = await taskService.updateTask(task.id, payload);
+    if (!updated) {
+      throw new NotFoundError('Task not found');
+    }
+    const attemptId = payload.attempt?.id;
+    if (!attemptId) {
+      throw new ValidationError('Automation start did not create an attempt');
+    }
 
     // Build and return result
-    const result = automationService.buildStartResult(updated!, payload.attempt!.id);
+    const result = automationService.buildStartResult(updated, attemptId);
     res.json(result);
   })
 );
@@ -67,7 +74,7 @@ router.post(
     // Validate task can be completed
     const validation = automationService.validateCanComplete(task);
     if (!validation.valid) {
-      throw new ValidationError(validation.error!);
+      throw new ValidationError(validation.error ?? 'Task cannot complete automation');
     }
 
     // Parse input
@@ -89,9 +96,12 @@ router.post(
       input.status
     );
     const updated = await taskService.updateTask(task.id, payload);
+    if (!updated) {
+      throw new NotFoundError('Task not found');
+    }
 
     // Build and return result
-    const result = automationService.buildCompleteResult(updated!, input.status);
+    const result = automationService.buildCompleteResult(updated, input.status);
     res.json(result);
   })
 );
