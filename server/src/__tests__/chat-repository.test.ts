@@ -203,6 +203,17 @@ describe('FileChatRepository', () => {
     await expect(repository.getSession('chat_oversized')).rejects.toThrow(/bounded regular file/);
     await expect(repository.getSession('x'.repeat(256))).rejects.toThrow();
     await expect(
+      (
+        repository as unknown as {
+          readOptionalBoundedFile: (
+            filePath: string,
+            maximumBytes: number,
+            label: string
+          ) => Promise<string | null>;
+        }
+      ).readOptionalBoundedFile(path.join(root, 'outside.md'), 1024, 'Chat session')
+    ).rejects.toThrow(/outside its repository/);
+    await expect(
       repository.appendSquadMessage({
         id: 'msg_invalid',
         agent: 'CASE',

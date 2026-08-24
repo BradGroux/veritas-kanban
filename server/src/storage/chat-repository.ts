@@ -156,7 +156,11 @@ export class FileChatRepository implements ChatRepository, SquadMetadataReposito
     const filePath = this.sessionPath(sessionId, taskMatch?.[1]);
     return withFileLock(filePath, async () => {
       try {
-        await unlink(filePath);
+        const deletionPath = path.join(
+          taskMatch ? this.chatsDir : this.sessionsDir,
+          path.basename(filePath)
+        );
+        await unlink(deletionPath);
         return true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
@@ -448,8 +452,17 @@ export class FileChatRepository implements ChatRepository, SquadMetadataReposito
   ): Promise<string | null> {
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      handle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-      const [pathStats, stats] = await Promise.all([lstat(filePath), handle.stat()]);
+      const parent = path.dirname(filePath);
+      const allowedParent =
+        parent === this.sessionsDir
+          ? this.sessionsDir
+          : parent === this.squadDir
+            ? this.squadDir
+            : this.chatsDir;
+      const boundedPath = path.join(allowedParent, path.basename(filePath));
+      if (boundedPath !== filePath) throw new Error('Chat storage path is outside its repository');
+      handle = await open(boundedPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      const [pathStats, stats] = await Promise.all([lstat(boundedPath), handle.stat()]);
       if (
         pathStats.isSymbolicLink() ||
         pathStats.dev !== stats.dev ||
