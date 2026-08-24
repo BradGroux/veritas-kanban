@@ -14,12 +14,15 @@ import type { FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import {
   access,
+  copyFile as copyFileAsync,
   lstat as lstatAsync,
   mkdir as mkdirAsync,
   readFile as readFileAsync,
   readdir as readdirAsync,
   rename as renameAsync,
   rm as rmAsync,
+  stat as statAsync,
+  statfs as statfsAsync,
   unlink as unlinkAsync,
   writeFile as writeFileAsync,
 } from 'node:fs/promises';
@@ -70,12 +73,16 @@ export const createWriteStream = fs.createWriteStream;
 // ---------------------------------------------------------------------------
 
 export const mkdir = mkdirAsync;
+export { access };
+export const copyFile = copyFileAsync;
 export const lstat = lstatAsync;
 export const readFile = readFileAsync;
 export const readdir = readdirAsync;
 export const realpath = fs.promises.realpath;
 export const rename = renameAsync;
 export const rm = rmAsync;
+export const stat = statAsync;
+export const statfs = statfsAsync;
 export const unlink = unlinkAsync;
 export const writeFile = writeFileAsync;
 

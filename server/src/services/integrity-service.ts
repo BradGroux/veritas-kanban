@@ -1,7 +1,7 @@
-import fs from 'fs/promises';
 import path from 'path';
 import matter, { type MarkdownFrontmatterFile } from '../utils/frontmatter.js';
 import { createLogger } from '../lib/logger.js';
+import * as fs from '../storage/fs-helpers.js';
 
 const log = createLogger('integrity');
 

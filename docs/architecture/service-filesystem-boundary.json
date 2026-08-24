@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 18,
+  "maximumEntries": 16,
   "entries": [
     {
       "path": "server/src/services/attachment-service.ts",
@@ -43,18 +43,6 @@
       "category": "transient-process-io",
       "owner": "#1189",
       "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/integrity-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/maintenance-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
     },
     {
       "path": "server/src/services/managed-list-service.ts",
