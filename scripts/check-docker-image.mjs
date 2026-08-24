@@ -5,7 +5,11 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const image = process.env.VERITAS_DOCKER_IMAGE || process.argv[2] || 'veritas-kanban:contract';
-const maxBytes = Number(process.env.VERITAS_DOCKER_MAX_BYTES || '200000000');
+const configuredMaxBytes = process.env.VERITAS_DOCKER_MAX_BYTES;
+const defaultMaxBytesByArchitecture = {
+  arm64: 200_000_000,
+  amd64: 600_000_000,
+};
 const containerName = `veritas-kanban-contract-${process.pid}`;
 const volumeName = `${containerName}-data`;
 const adminKey = randomBytes(24).toString('hex');
@@ -127,6 +131,14 @@ const runtimeProbe = String.raw`
 let started = false;
 let volumeCreated = false;
 try {
+  const architecture = run(['image', 'inspect', image, '--format', '{{.Architecture}}']);
+  const maxBytes = configuredMaxBytes
+    ? Number(configuredMaxBytes)
+    : defaultMaxBytesByArchitecture[architecture];
+  assert(
+    maxBytes !== undefined,
+    `No Docker image size budget is defined for architecture ${architecture}; set VERITAS_DOCKER_MAX_BYTES explicitly`
+  );
   assert(Number.isFinite(maxBytes) && maxBytes > 0, 'VERITAS_DOCKER_MAX_BYTES must be positive');
 
   const imageBytes = Number(run(['image', 'inspect', image, '--format', '{{.Size}}']));
@@ -187,7 +199,7 @@ try {
   started = false;
 
   console.log(
-    `Docker image contract passed: ${imageBytes.toLocaleString()} bytes (< ${maxBytes.toLocaleString()})`
+    `Docker image contract passed on ${architecture}: ${imageBytes.toLocaleString()} bytes (< ${maxBytes.toLocaleString()})`
   );
   console.log(
     'Runtime smoke passed: non-root user, version, mounted paths, SQLite, backup, auth, web assets, health, bcrypt, and clean shutdown'

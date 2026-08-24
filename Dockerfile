@@ -9,7 +9,7 @@
 #   5. production-deps — Install the server-only runtime closure
 #   6. production  — Minimal runtime image
 #
-# Target image size: < 200,000,000 bytes
+# Target image size: < 200,000,000 bytes on arm64; < 600,000,000 bytes on amd64
 # =============================================================================
 
 # ---------------------------------------------------------------------------

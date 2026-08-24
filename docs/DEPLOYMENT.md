@@ -67,7 +67,12 @@ Data is persisted in a Docker named volume (`kanban-data`), so it survives conta
 
 ### Dockerfile Overview
 
-The multi-stage Dockerfile produces a production image smaller than 625,000,000 bytes:
+The multi-stage Dockerfile enforces architecture-specific production image budgets:
+
+| Architecture | Maximum compressed image size | Measured release candidate |
+| ------------ | ----------------------------- | -------------------------- |
+| `arm64`      | 200,000,000 bytes             | 195,910,880 bytes          |
+| `amd64`      | 600,000,000 bytes             | 571,590,173 bytes          |
 
 | Stage          | Purpose                                                                  |
 | -------------- | ------------------------------------------------------------------------ |
@@ -82,15 +87,16 @@ CLI dependencies, or MCP dependencies. It retains only the server and shared
 package identity manifests required for module resolution and version health.
 It runs as the non-root `veritas` user (UID 1001).
 
-The measured release image is about 600 MB. Roughly 302 MB of its unpacked filesystem is the
-Linux Codex executable bundled by `@openai/codex-sdk`; retaining it keeps the `codex-sdk` provider
-functional without an operator-supplied binary. The previous 200 MB target was incompatible with
-that required runtime. The 625,000,000-byte ceiling leaves limited patch-version headroom while
-still failing material dependency growth.
+The `amd64` image is larger because the Linux Codex runtime bundled by `@openai/codex-sdk`
+occupies about 302 MB of its unpacked filesystem, including a roughly 245 MB executable.
+Retaining it keeps the `codex-sdk` provider functional without an operator-supplied binary.
+The budgets leave about 2% headroom on `arm64` and 5% on `amd64`, so material dependency growth
+still fails the contract instead of being normalized by one loose cross-platform ceiling.
 
 CI builds the production target and runs `pnpm check:docker-image`. The contract fails when the
-image reaches 625,000,000 bytes or when the runtime smoke cannot prove non-root execution, SQLite
-startup, API authentication, static web serving, health checks, and the native `bcrypt` module.
+image reaches its architecture budget or when the runtime smoke cannot prove non-root execution,
+SQLite startup, API authentication, static web serving, health checks, and the native `bcrypt`
+module. `VERITAS_DOCKER_MAX_BYTES` can set an explicit budget for another architecture.
 
 **Path Resolution (v2.1.3):** All services use the shared `paths.ts` utility for consistent path resolution. The resolution priority is: `DATA_DIR` / `VERITAS_DATA_DIR` env var → auto-discovery of monorepo root (walks up from cwd looking for `pnpm-workspace.yaml`) → fallback to cwd. A filesystem root guard prevents silent `/` resolution, which previously caused `EACCES: permission denied` errors in Docker. The production image uses `WORKDIR /app/server` for backwards compatibility.
 
