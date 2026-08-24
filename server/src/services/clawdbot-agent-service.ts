@@ -170,7 +170,6 @@ import type { AgentBudgetThresholdEvent } from '@veritas-kanban/shared';
 import { getAgentProfilePackageService } from './agent-profile-package-service.js';
 import {
   ProviderRuntimeManifestService,
-  type ProviderRuntimeProbeRequest,
 } from './provider-runtime-manifest-service.js';
 import type { WorkspaceFileRepository } from '../storage/interfaces.js';
 import { LocalWorkspaceFileRepository } from '../storage/workspace-file-repository.js';
@@ -178,7 +177,11 @@ import {
   getProviderRuntimeAdapterDefinition,
   type ProviderRuntimeSurface,
 } from './provider-runtime-adapter-registry.js';
-import { getInstalledPackageVersion } from '../utils/package-version.js';
+import {
+  buildProviderRuntimeProbeRequest,
+  resolveExecutableAgentProvider,
+  type AgentProviderProbeContext,
+} from './provider-runtime-resolution.js';
 import {
   assertProviderRuntimeControl,
   assertProviderRuntimeManifestSnapshot,
@@ -231,7 +234,6 @@ import {
 import {
   buildCodexAppServerArgs,
   buildSafeCodexAppServerEnv,
-  CODEX_APP_SERVER_CERTIFIED_BUILD,
   CODEX_APP_SERVER_MAX_RECORD_BYTES,
   classifyCodexAppServerNotification,
   classifyCodexAppServerServerRequest,
@@ -367,12 +369,6 @@ export interface AgentProviderAdmissionEvidence {
 export interface AgentProviderStopContext {
   taskId: string;
   pending: PendingAgent;
-}
-
-export interface AgentProviderProbeContext {
-  agentConfig?: AgentConfig;
-  health: AgentHealthStatus;
-  cwd?: string;
 }
 
 export interface AgentProviderAdapter {
@@ -1953,7 +1949,7 @@ export class ClawdbotAgentService {
             model: profileLaunch.model ?? agentConfig.model,
           }
         : agentConfig;
-    const provider = this.resolveAgentProvider(profileAgentConfig, agent);
+    const provider = resolveExecutableAgentProvider(profileAgentConfig, agent);
     const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
     const adapter = this.resolveProviderAdapter(provider);
     const budgetService = getAgentBudgetService();
@@ -2264,7 +2260,7 @@ export class ClawdbotAgentService {
             model: profileLaunch.model ?? agentConfig.model,
           }
         : agentConfig;
-    const provider = this.resolveAgentProvider(profileAgentConfig, agent);
+    const provider = resolveExecutableAgentProvider(profileAgentConfig, agent);
     const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
     const adapter = this.resolveProviderAdapter(provider);
     const budgetService = getAgentBudgetService();
@@ -5695,7 +5691,7 @@ export class ClawdbotAgentService {
     agent: AgentType = agentConfig.type,
     surface: ProviderRuntimeSurface = 'task'
   ): Promise<ProviderRuntimeManifest> {
-    const provider = this.resolveAgentProvider(agentConfig, agent);
+    const provider = resolveExecutableAgentProvider(agentConfig, agent);
     const health = await this.assertAgentAvailable(agent, agentConfig);
     return this.dependencyExecution.execute(
       providerDependencyIdentity(provider, agentConfig.model),
@@ -5737,100 +5733,6 @@ export class ClawdbotAgentService {
     return health;
   }
 
-  private resolveAgentProvider(
-    agentConfig: AgentConfig | undefined,
-    agent: AgentType
-  ): ExecutableAgentProvider {
-    let provider: ExecutableAgentProvider | undefined;
-    if (agentConfig?.provider) {
-      if (
-        agentConfig.provider === 'openclaw' ||
-        agentConfig.provider === 'codex-sdk' ||
-        agentConfig.provider === 'codex-cli' ||
-        agentConfig.provider === 'codex-app-server' ||
-        agentConfig.provider === 'claude-code' ||
-        agentConfig.provider === 'acp-stdio' ||
-        agentConfig.provider === 'hermes-cli'
-      ) {
-        provider = agentConfig.provider;
-      } else {
-        throw new ConflictError(
-          `Provider "${agentConfig.provider}" is configured but has no execution adapter`,
-          {
-            agent,
-            provider: agentConfig.provider,
-            reason: 'No executable provider adapter is registered',
-          }
-        );
-      }
-    } else if (
-      agent === 'codex-app-server' &&
-      path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'codex'
-    ) {
-      provider = 'codex-app-server';
-    } else if (
-      agent === 'claude-code' &&
-      path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'claude'
-    ) {
-      provider = 'claude-code';
-    } else if (
-      agent === 'codex' &&
-      path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'codex'
-    ) {
-      provider = 'codex-cli';
-    } else if (
-      agent === 'hermes' &&
-      path.basename(agentConfig?.command.trim().split(/\s+/)[0] ?? '') === 'hermes'
-    ) {
-      provider = 'hermes-cli';
-    }
-
-    if (!provider) {
-      throw new ConflictError(`Agent "${agent}" has no executable provider adapter`, {
-        agent,
-        command: agentConfig?.command,
-        reason: 'No executable provider adapter is configured',
-        remediation:
-          'Select an agent profile with an explicit executable provider or configure a supported adapter.',
-      });
-    }
-
-    // Adapter identity is derived from system-owned profile definitions at the
-    // dispatch boundary. A caller-provided supportProfile may carry future
-    // certification evidence, but it cannot authorize a different adapter.
-    const profile = agentConfig ? normalizeHarnessSupportProfile(agentConfig) : undefined;
-    if (profile?.supportTier === 'degraded') {
-      throw new ConflictError(
-        `Harness support profile "${profile.id}" has an unsafe launch configuration`,
-        {
-          agent,
-          profileId: profile.id,
-          adapterId: profile.adapterId,
-          provider,
-          reason: 'Credential material is not allowed in harness launch commands or arguments',
-          remediation: profile.remediation,
-        }
-      );
-    }
-    if (profile && profile.adapterId !== provider) {
-      throw new ConflictError(
-        `Harness support profile "${profile.id}" cannot dispatch through "${provider}"`,
-        {
-          agent,
-          profileId: profile.id,
-          adapterId: profile.adapterId,
-          provider,
-          reason: profile.adapterId
-            ? 'Harness support profile adapter does not match the configured provider'
-            : 'Harness support profile has no executable adapter',
-          remediation: profile.remediation,
-        }
-      );
-    }
-
-    return provider;
-  }
-
   private resolveProviderAdapter(
     provider: ExecutableAgentProvider,
     surface: ProviderRuntimeSurface = 'task'
@@ -5838,7 +5740,7 @@ export class ClawdbotAgentService {
     const definition = getProviderRuntimeAdapterDefinition(provider, surface);
     const probe = (context: AgentProviderProbeContext) =>
       this.providerRuntimeManifests.probe(
-        this.buildProviderRuntimeProbeRequest(provider, context, definition)
+        buildProviderRuntimeProbeRequest(provider, context, definition)
       );
 
     if (provider === 'codex-cli') {
@@ -6298,7 +6200,7 @@ export class ClawdbotAgentService {
       ],
       runtimeProfileId: supportProfile.id,
     });
-    const base = this.buildProviderRuntimeProbeRequest('acp-stdio', context, definition);
+    const base = buildProviderRuntimeProbeRequest('acp-stdio', context, definition);
     const providerVersion = acpProviderVersion(runtime);
     return this.providerRuntimeManifests.probe({
       ...base,
@@ -6322,65 +6224,6 @@ export class ClawdbotAgentService {
       },
       capabilities: negotiatedAcpCapabilities(definition.capabilities, runtime),
     });
-  }
-
-  private buildProviderRuntimeProbeRequest(
-    provider: ExecutableAgentProvider,
-    context: AgentProviderProbeContext,
-    definition: ReturnType<typeof getProviderRuntimeAdapterDefinition>
-  ): ProviderRuntimeProbeRequest {
-    const sdkVersion =
-      provider === 'codex-sdk' ? getInstalledPackageVersion('@openai/codex-sdk') : undefined;
-    const configuredOpenClawVersion =
-      provider === 'openclaw' ? process.env.OPENCLAW_GATEWAY_VERSION?.trim() : undefined;
-    const providerVersion =
-      sdkVersion ||
-      configuredOpenClawVersion ||
-      (provider === 'openclaw' ? undefined : context.health.providerVersion);
-    const providerBuild =
-      provider === 'codex-sdk' && context.health.providerVersion
-        ? `codex-cli:${context.health.providerVersion}`
-        : provider === 'codex-app-server'
-          ? CODEX_APP_SERVER_CERTIFIED_BUILD
-          : undefined;
-    const diagnostics: string[] = [...(context.health.diagnostics ?? [])];
-
-    if (!providerVersion) {
-      diagnostics.push(
-        provider === 'openclaw'
-          ? 'OpenClaw runtime version was not registered; set OPENCLAW_GATEWAY_VERSION or register a host manifest.'
-          : 'The provider version command did not return verifiable output.'
-      );
-    }
-
-    return {
-      provider,
-      adapter: definition.id,
-      protocolVersion: definition.protocolVersion,
-      command:
-        provider === 'openclaw'
-          ? process.env.OPENCLAW_GATEWAY_URL ||
-            process.env.CLAWDBOT_GATEWAY ||
-            process.env.CLAWDBOT_GATEWAY_URL ||
-            'openclaw'
-          : context.agentConfig?.command,
-      models: context.agentConfig?.model ? [context.agentConfig.model] : [],
-      identity: {
-        providerVersion,
-        providerBuild,
-        verified: provider === 'openclaw' ? false : Boolean(providerVersion),
-        source:
-          provider === 'codex-sdk'
-            ? 'installed-package:@openai/codex-sdk'
-            : configuredOpenClawVersion
-              ? 'environment:OPENCLAW_GATEWAY_VERSION'
-              : context.health.providerVersionSource || 'agent-health',
-        authenticated: context.health.authenticated,
-        executableFingerprint: context.health.executablePath,
-        diagnostics,
-      },
-      capabilities: definition.capabilities,
-    };
   }
 
   private async attachSpawnedProcess(
