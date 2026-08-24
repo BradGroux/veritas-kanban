@@ -3,6 +3,7 @@ import type { AgentConfig } from '@veritas-kanban/shared';
 import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { AgentHealthChecker } from '../services/agent-health-service.js';
 import { normalizeHarnessSupportProfile } from '../services/harness-support-profile-registry.js';
+import { resolveExecutableAgentProvider } from '../services/provider-runtime-resolution.js';
 
 const originalOpenClawVersion = process.env.OPENCLAW_GATEWAY_VERSION;
 
@@ -46,6 +47,21 @@ function config(provider: AgentConfig['provider']): AgentConfig {
 }
 
 describe('ClawdbotAgentService provider runtime adapters', () => {
+  it('preserves the known legacy Codex command migration', () => {
+    expect(
+      resolveExecutableAgentProvider(
+        {
+          type: 'codex',
+          name: 'Codex',
+          command: '/usr/local/bin/codex',
+          args: [],
+          enabled: true,
+        },
+        'codex'
+      )
+    ).toBe('codex-cli');
+  });
+
   it.each([['amp', 'amp']] as const)(
     'fails closed when the provider-less %s display profile is probed',
     async (type, command) => {
