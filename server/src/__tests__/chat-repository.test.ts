@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ChatMessage, ChatSession, SquadMessage } from '@veritas-kanban/shared';
 import { FileChatRepository } from '../storage/chat-repository.js';
+import { SqliteChatRepository } from '../storage/sqlite/chat-repository.js';
 
 function session(id: string, updated = '2026-08-23T00:00:00.000Z'): ChatSession {
   return {
@@ -68,13 +69,31 @@ describe('FileChatRepository', () => {
       ]),
     });
     await expect(repository.getSessionForTask('123')).resolves.toMatchObject({ id: 'task_123' });
+
+    await mkdir(path.join(chatsDir, 'sessions', 'nested.md'));
+    await writeFile(path.join(chatsDir, 'sessions', 'ignored.txt'), 'ignored', 'utf8');
+    await symlink(
+      path.join(chatsDir, 'sessions', 'chat_old.md'),
+      path.join(chatsDir, 'sessions', 'alias.md')
+    );
     await expect(repository.listBoardSessions()).resolves.toMatchObject([
       { id: 'chat_new' },
       { id: 'chat_old' },
     ]);
 
+    const malformedPath = path.join(chatsDir, 'sessions', 'chat_old.md');
+    await writeFile(
+      malformedPath,
+      `${await readFile(malformedPath, 'utf8')}\n---\nnot a message header\nignored\n`,
+      'utf8'
+    );
+    await expect(repository.getSession('chat_old')).resolves.toMatchObject({ messages: [] });
+
     await expect(repository.deleteSession('chat_new')).resolves.toBe(true);
     await expect(repository.deleteSession('chat_new')).resolves.toBe(false);
+
+    await mkdir(path.join(chatsDir, 'sessions', 'chat_directory.md'));
+    await expect(repository.deleteSession('chat_directory')).rejects.toThrow();
   });
 
   it('round-trips squad logs, legacy formatting, filters, and metadata', async () => {
@@ -133,12 +152,56 @@ describe('FileChatRepository', () => {
     });
   });
 
+  it('skips missing and malformed squad log entries', async () => {
+    await repository.listSquadMessages();
+    const squadPath = path.join(chatsDir, 'squad', '2026-08-23.md');
+    await writeFile(
+      squadPath,
+      [
+        '# Squad Chat - 2026-08-23',
+        '',
+        '## only | two',
+        '',
+        'ignored',
+        '',
+        '---',
+        '',
+        '## | msg_missing_agent | 2026-08-23T00:00:00.000Z',
+        '',
+        'ignored',
+        '',
+        '---',
+        '',
+        '## CASE | msg_missing_timestamp | [system]',
+        '',
+        'ignored',
+        '',
+        '---',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await expect(repository.listSquadMessages()).resolves.toEqual([]);
+
+    const internals = repository as unknown as {
+      readOptionalBoundedFile: () => Promise<null>;
+    };
+    internals.readOptionalBoundedFile = vi.fn(async () => null);
+    await expect(repository.listSquadMessages()).resolves.toEqual([]);
+  });
+
   it('rejects traversal, symbolic links, oversized sessions, and invalid squad timestamps', async () => {
     await expect(repository.getSession('../outside')).rejects.toThrow();
     await expect(repository.getSessionForTask('../outside')).rejects.toThrow();
     await expect(
       repository.saveSession({ ...session('chat_large'), title: 'x'.repeat(16 * 1024 * 1024) })
     ).rejects.toThrow(/storage limit/);
+
+    const oversizedPath = path.join(chatsDir, 'sessions', 'chat_oversized.md');
+    await writeFile(oversizedPath, '', 'utf8');
+    await truncate(oversizedPath, 16 * 1024 * 1024 + 1);
+    await expect(repository.getSession('chat_oversized')).rejects.toThrow(/bounded regular file/);
+    await expect(repository.getSession('x'.repeat(256))).rejects.toThrow();
     await expect(
       repository.appendSquadMessage({
         id: 'msg_invalid',
@@ -160,5 +223,39 @@ describe('FileChatRepository', () => {
     await symlink(target, linkedRoot);
     const linkedRepository = new FileChatRepository(linkedRoot);
     await expect(linkedRepository.listBoardSessions()).rejects.toThrow(/regular directories/);
+  });
+});
+
+describe('SqliteChatRepository append transaction outcomes', () => {
+  it('commits a missing-session no-op and rolls back malformed stored state', () => {
+    const missingExec = vi.fn();
+    const missing = new SqliteChatRepository({
+      getConnection: () => ({
+        exec: missingExec,
+        prepare: () => ({ get: () => undefined }),
+      }),
+    } as never);
+
+    expect(missing.appendSessionMessage('missing', message('msg_1', 'missing'))).toBe(false);
+    expect(missingExec.mock.calls.map(([statement]) => statement)).toEqual([
+      'BEGIN IMMEDIATE;',
+      'COMMIT;',
+    ]);
+
+    const malformedExec = vi.fn();
+    const malformed = new SqliteChatRepository({
+      getConnection: () => ({
+        exec: malformedExec,
+        prepare: () => ({ get: () => ({ id: 'chat_broken', session_json: '{' }) }),
+      }),
+    } as never);
+
+    expect(() =>
+      malformed.appendSessionMessage('chat_broken', message('msg_2', 'broken'))
+    ).toThrow();
+    expect(malformedExec.mock.calls.map(([statement]) => statement)).toEqual([
+      'BEGIN IMMEDIATE;',
+      'ROLLBACK;',
+    ]);
   });
 });

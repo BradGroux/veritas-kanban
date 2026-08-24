@@ -370,8 +370,7 @@ export class FileChatRepository implements ChatRepository, SquadMetadataReposito
       if (headerParts.length < 3) continue;
       const [agentPart, id, metaPart, taskPart] = headerParts;
       if (!agentPart || !id || !metaPart) continue;
-      const agentMatch = agentPart.match(/^(.+?)(?:\s+\((.+?)\))?$/);
-      if (!agentMatch) continue;
+      const agentMatch = agentPart.match(/^(.+?)(?:\s+\((.+?)\))?$/)!;
       const bracketMatches = [...metaPart.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]);
       let timestamp = metaPart.replace(/\[.*?\]/g, '').trim();
       let duration: string | undefined;
