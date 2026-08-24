@@ -39,6 +39,13 @@ import { withFileLock } from './file-lock.js';
 import { redactString } from '../lib/redact.js';
 import { ensureWithinBase, sanitizeCommentText, validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import {
+  createSafeRecord,
+  deleteSafeRecordValue,
+  getSafeRecordValue,
+  safeRecordFrom,
+  setSafeRecordValue,
+} from '../utils/safe-record.js';
 import { atomicWriteFile, mkdir, readFile } from '../storage/fs-helpers.js';
 import {
   BuzzCompatibilityService,
@@ -456,7 +463,7 @@ export class CommunicationAdapterService {
 
   async getAdapter(adapterId: string): Promise<CommunicationAdapterRecord | null> {
     await this.ensureLoaded();
-    const adapter = this.state.adapters[adapterId];
+    const adapter = getSafeRecordValue(this.state.adapters, adapterId, 'Communication adapter ID');
     return adapter ? this.publicAdapter(adapter) : null;
   }
 
@@ -506,7 +513,11 @@ export class CommunicationAdapterService {
     await this.ensureLoaded();
     const adapter = this.requireAdapter(adapterId);
     if (adapter.kind !== 'buzz') throw new Error('Workflow triggers require a Buzz adapter');
-    const mapping = this.state.buzzChannelMappings[input.mappingId];
+    const mapping = getSafeRecordValue(
+      this.state.buzzChannelMappings,
+      input.mappingId,
+      'Buzz channel mapping ID'
+    );
     if (!mapping || mapping.adapterId !== adapterId || !mapping.enabled) {
       throw new Error('Workflow triggers require an active Buzz channel mapping');
     }
@@ -586,7 +597,12 @@ export class CommunicationAdapterService {
       updatedAt: timestamp,
       createdBy: existing?.createdBy ?? trimOrUndefined(input.actor),
     };
-    this.state.buzzChannelMappings[mapping.id] = mapping;
+    setSafeRecordValue(
+      this.state.buzzChannelMappings,
+      mapping.id,
+      mapping,
+      'Buzz channel mapping ID'
+    );
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'configure',
@@ -618,7 +634,12 @@ export class CommunicationAdapterService {
     );
     if (!existing) throw new Error('Buzz channel mapping not found');
     const mapping = { ...existing, enabled: false, updatedAt: nowIso() };
-    this.state.buzzChannelMappings[mapping.id] = mapping;
+    setSafeRecordValue(
+      this.state.buzzChannelMappings,
+      mapping.id,
+      mapping,
+      'Buzz channel mapping ID'
+    );
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'disconnect',
@@ -645,7 +666,7 @@ export class CommunicationAdapterService {
     await this.ensureLoaded();
 
     const timestamp = nowIso();
-    const existing = this.state.adapters[adapterId];
+    const existing = getSafeRecordValue(this.state.adapters, adapterId, 'Communication adapter ID');
     const kind = input.kind ?? existing?.kind ?? 'msteams';
     if (existing && input.kind && input.kind !== existing.kind) {
       throw new Error('Communication adapter kind cannot be changed after creation');
@@ -681,7 +702,7 @@ export class CommunicationAdapterService {
       lastHealth: existing?.lastHealth,
     };
 
-    this.state.adapters[adapterId] = adapter;
+    setSafeRecordValue(this.state.adapters, adapterId, adapter, 'Communication adapter ID');
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'configure',
@@ -714,7 +735,7 @@ export class CommunicationAdapterService {
       lastHealth: undefined,
       compatibility: undefined,
     };
-    this.state.adapters[adapterId] = disconnected;
+    setSafeRecordValue(this.state.adapters, adapterId, disconnected, 'Communication adapter ID');
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'disconnect',
@@ -875,7 +896,9 @@ export class CommunicationAdapterService {
     const replyKey = input.externalReplyId
       ? `${adapterId}:${externalThreadId}:${input.externalReplyId}`
       : undefined;
-    const existingReplyMessageId = replyKey ? this.state.replyIds[replyKey] : undefined;
+    const existingReplyMessageId = replyKey
+      ? getSafeRecordValue(this.state.replyIds, replyKey, 'Communication reply ID')
+      : undefined;
     if (existingReplyMessageId) {
       const squadMessage = await this.findSquadMessage(existingReplyMessageId);
       const delivery = this.recordDelivery({
@@ -927,7 +950,7 @@ export class CommunicationAdapterService {
     );
 
     if (replyKey) {
-      this.state.replyIds[replyKey] = squadMessage.id;
+      setSafeRecordValue(this.state.replyIds, replyKey, squadMessage.id, 'Communication reply ID');
     }
 
     const delivery = this.recordDelivery({
@@ -993,7 +1016,11 @@ export class CommunicationAdapterService {
     if (adapter.kind !== 'buzz' || !adapter.enabled) {
       throw new Error('Buzz adapter is not enabled');
     }
-    const mapping = this.state.buzzChannelMappings[mappingInput.id];
+    const mapping = getSafeRecordValue(
+      this.state.buzzChannelMappings,
+      mappingInput.id,
+      'Buzz channel mapping ID'
+    );
     if (
       !mapping ||
       !mapping.enabled ||
@@ -1027,9 +1054,9 @@ export class CommunicationAdapterService {
     const coordinate = inbound.coordinate;
     const eventId = inbound.event.id;
     const key = buzzEventKey(mapping.community, eventId);
-    const outbound = this.state.buzzOutbound[eventId];
+    const outbound = getSafeRecordValue(this.state.buzzOutbound, eventId, 'Buzz event ID');
     const adapterOrigin = isVeritasBuzzOrigin(inbound.event, adapter.publicKey);
-    const existing = this.state.buzzEvents[key];
+    const existing = getSafeRecordValue(this.state.buzzEvents, key, 'Buzz event key');
     if (existing && !outbound && !adapterOrigin) {
       if (inbound.event.kind === BUZZ_MESSAGE_KIND) {
         await this.processBuzzWorkflowTrigger({
@@ -1059,7 +1086,7 @@ export class CommunicationAdapterService {
       return delivery;
     }
 
-    delete this.state.buzzPendingEvents[key];
+    deleteSafeRecordValue(this.state.buzzPendingEvents, key, 'Buzz event key');
     if (outbound || adapterOrigin) {
       if (inbound.event.kind === BUZZ_MESSAGE_KIND) {
         await this.processBuzzWorkflowTrigger({
@@ -1132,19 +1159,28 @@ export class CommunicationAdapterService {
       throw new Error('Buzz event kind is not supported by the message projection');
     }
     const replyReference = coordinate.rootEventId
-      ? this.state.buzzEvents[buzzEventKey(mapping.community, coordinate.rootEventId)]
+      ? getSafeRecordValue(
+          this.state.buzzEvents,
+          buzzEventKey(mapping.community, coordinate.rootEventId),
+          'Buzz event key'
+        )
       : undefined;
     const replyToId = coordinate.rootEventId
       ? replyReference?.squadMessageId
       : mapping.target.squadMessageId;
     if (coordinate.rootEventId && !replyToId) {
-      this.state.buzzPendingEvents[key] = {
+      setSafeRecordValue(
+        this.state.buzzPendingEvents,
         key,
-        adapterId,
-        mappingId: mapping.id,
-        event: inbound.event,
-        recordedAt: nowIso(),
-      };
+        {
+          key,
+          adapterId,
+          mappingId: mapping.id,
+          event: inbound.event,
+          recordedAt: nowIso(),
+        },
+        'Buzz event key'
+      );
       this.trimBuzzPendingEvents();
       const delivery = this.recordDelivery({
         adapterId,
@@ -1235,7 +1271,12 @@ export class CommunicationAdapterService {
       createdBy: coordinate.authorPubkey,
       buzz: coordinate,
     });
-    this.state.replyIds[`${adapterId}:${externalThreadId}:${eventId}`] = squadMessage.id;
+    setSafeRecordValue(
+      this.state.replyIds,
+      `${adapterId}:${externalThreadId}:${eventId}`,
+      squadMessage.id,
+      'Communication reply ID'
+    );
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'event-ingest',
@@ -1434,7 +1475,7 @@ export class CommunicationAdapterService {
         createdAt: timestamp,
         updatedAt: timestamp,
       };
-      this.state.buzzOutbound[prepared.event.id] = outbound;
+      setSafeRecordValue(this.state.buzzOutbound, prepared.event.id, outbound, 'Buzz event ID');
       this.recordBuzzEvent({
         key: buzzEventKey(channelMapping.community, prepared.event.id),
         adapterId: adapter.id,
@@ -1719,7 +1760,7 @@ export class CommunicationAdapterService {
       createdBy: existing?.createdBy ?? input.createdBy,
       buzz: input.buzz ?? existing?.buzz,
     };
-    this.state.mappings[mapping.id] = mapping;
+    setSafeRecordValue(this.state.mappings, mapping.id, mapping, 'Communication mapping ID');
     return mapping;
   }
 
@@ -1757,13 +1798,15 @@ export class CommunicationAdapterService {
   }
 
   private recordBuzzEvent(record: BuzzEventRecord): void {
-    this.state.buzzEvents[record.key] = record;
+    setSafeRecordValue(this.state.buzzEvents, record.key, record, 'Buzz event key');
     const records = Object.values(this.state.buzzEvents);
     if (records.length <= MAX_BUZZ_EVENTS) return;
     records
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
       .slice(0, records.length - MAX_BUZZ_EVENTS)
-      .forEach((candidate) => delete this.state.buzzEvents[candidate.key]);
+      .forEach((candidate) =>
+        deleteSafeRecordValue(this.state.buzzEvents, candidate.key, 'Buzz event key')
+      );
   }
 
   private trimBuzzPendingEvents(): void {
@@ -1772,7 +1815,9 @@ export class CommunicationAdapterService {
     records
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
       .slice(0, records.length - MAX_BUZZ_PENDING_EVENTS)
-      .forEach((candidate) => delete this.state.buzzPendingEvents[candidate.key]);
+      .forEach((candidate) =>
+        deleteSafeRecordValue(this.state.buzzPendingEvents, candidate.key, 'Buzz event key')
+      );
   }
 
   private trimBuzzOutboundRecords(): void {
@@ -1783,26 +1828,31 @@ export class CommunicationAdapterService {
       .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
     for (const record of removable) {
       if (Object.keys(this.state.buzzOutbound).length <= MAX_BUZZ_OUTBOUND_RECORDS) break;
-      delete this.state.buzzOutbound[record.eventId];
+      deleteSafeRecordValue(this.state.buzzOutbound, record.eventId, 'Buzz event ID');
     }
   }
 
   private commitBuzzCursor(mapping: BuzzChannelMapping, event: VerifiedEvent): void {
     const key = buzzCursorKey(mapping.adapterId, mapping.community, mapping.channelId);
-    const existing = this.state.buzzCursors[key];
+    const existing = getSafeRecordValue(this.state.buzzCursors, key, 'Buzz cursor key');
     const shouldAdvance =
       !existing ||
       event.created_at > existing.createdAt ||
       (event.created_at === existing.createdAt && event.id.localeCompare(existing.eventId) > 0);
     if (!shouldAdvance) return;
-    this.state.buzzCursors[key] = {
-      adapterId: mapping.adapterId,
-      community: mapping.community,
-      channelId: mapping.channelId,
-      createdAt: event.created_at,
-      eventId: event.id,
-      committedAt: nowIso(),
-    };
+    setSafeRecordValue(
+      this.state.buzzCursors,
+      key,
+      {
+        adapterId: mapping.adapterId,
+        community: mapping.community,
+        channelId: mapping.channelId,
+        createdAt: event.created_at,
+        eventId: event.id,
+        committedAt: nowIso(),
+      },
+      'Buzz cursor key'
+    );
   }
 
   private async replayPendingBuzzReplies(
@@ -1831,22 +1881,27 @@ export class CommunicationAdapterService {
   }
 
   private updateLastBuzzSend(adapterId: string, delivery: CommunicationDeliveryAudit): void {
-    const current = this.state.buzzRuntime[adapterId] ?? {
+    const current = getSafeRecordValue(this.state.buzzRuntime, adapterId, 'Buzz runtime ID') ?? {
       relayConnected: false,
       subscriptionActive: false,
       mappedChannels: 0,
       reconnectAttempts: 0,
     };
-    this.state.buzzRuntime[adapterId] = {
-      ...current,
-      lastSendAt: delivery.createdAt,
-      lastSendStatus: delivery.status,
-    };
+    setSafeRecordValue(
+      this.state.buzzRuntime,
+      adapterId,
+      {
+        ...current,
+        lastSendAt: delivery.createdAt,
+        lastSendStatus: delivery.status,
+      },
+      'Buzz runtime ID'
+    );
   }
 
   private async refreshBuzzWorker(adapterId: string): Promise<void> {
     await this.stopBuzzWorker(adapterId);
-    const adapter = this.state.adapters[adapterId];
+    const adapter = getSafeRecordValue(this.state.adapters, adapterId, 'Communication adapter ID');
     if (!adapter || adapter.kind !== 'buzz') return;
     const validated = validateStoredBuzzConfig(adapter);
     const mappings = Object.values(this.state.buzzChannelMappings).filter(
@@ -1863,11 +1918,21 @@ export class CommunicationAdapterService {
       mappedChannels: mappings.length,
       reconnectAttempts: 0,
     };
-    this.state.buzzRuntime[adapterId] = {
-      ...baseRuntime,
-      lastSendAt: this.state.buzzRuntime[adapterId]?.lastSendAt,
-      lastSendStatus: this.state.buzzRuntime[adapterId]?.lastSendStatus,
-    };
+    const previousRuntime = getSafeRecordValue(
+      this.state.buzzRuntime,
+      adapterId,
+      'Buzz runtime ID'
+    );
+    setSafeRecordValue(
+      this.state.buzzRuntime,
+      adapterId,
+      {
+        ...baseRuntime,
+        lastSendAt: previousRuntime?.lastSendAt,
+        lastSendStatus: previousRuntime?.lastSendStatus,
+      },
+      'Buzz runtime ID'
+    );
     if (
       !validated ||
       !adapter.enabled ||
@@ -1892,17 +1957,25 @@ export class CommunicationAdapterService {
         onEvent: async (mapping, event) => {
           if (this.buzzWorkerGenerations.get(adapterId) !== generation) return;
           await this.ingestBuzzEvent(adapterId, mapping, event);
-          return this.state.buzzCursors[
-            buzzCursorKey(mapping.adapterId, mapping.community, mapping.channelId)
-          ];
+          return getSafeRecordValue(
+            this.state.buzzCursors,
+            buzzCursorKey(mapping.adapterId, mapping.community, mapping.channelId),
+            'Buzz cursor key'
+          );
         },
         onHealth: async (patch) => {
           if (this.buzzWorkerGenerations.get(adapterId) !== generation) return;
-          this.state.buzzRuntime[adapterId] = {
-            ...(this.state.buzzRuntime[adapterId] ?? baseRuntime),
-            ...patch,
-            mappedChannels: mappings.length,
-          };
+          setSafeRecordValue(
+            this.state.buzzRuntime,
+            adapterId,
+            {
+              ...(getSafeRecordValue(this.state.buzzRuntime, adapterId, 'Buzz runtime ID') ??
+                baseRuntime),
+              ...patch,
+              mappedChannels: mappings.length,
+            },
+            'Buzz runtime ID'
+          );
           this.applyBuzzRuntimeHealth(adapterId);
           await this.saveState();
         },
@@ -1922,9 +1995,9 @@ export class CommunicationAdapterService {
   }
 
   private applyBuzzRuntimeHealth(adapterId: string): void {
-    const adapter = this.state.adapters[adapterId];
+    const adapter = getSafeRecordValue(this.state.adapters, adapterId, 'Communication adapter ID');
     if (!adapter || adapter.kind !== 'buzz') return;
-    const runtime = this.state.buzzRuntime[adapterId];
+    const runtime = getSafeRecordValue(this.state.buzzRuntime, adapterId, 'Buzz runtime ID');
     if (!runtime) return;
     const compatibility = adapter.compatibility;
     const compatibilityHealthy = compatibility?.status === 'healthy';
@@ -1984,7 +2057,7 @@ export class CommunicationAdapterService {
   }
 
   private requireAdapter(adapterId: string): InternalCommunicationAdapterRecord {
-    const adapter = this.state.adapters[adapterId];
+    const adapter = getSafeRecordValue(this.state.adapters, adapterId, 'Communication adapter ID');
     if (!adapter) {
       throw new Error(`Communication adapter ${adapterId} not found`);
     }
@@ -2064,42 +2137,27 @@ export class CommunicationAdapterService {
       const parsed = JSON.parse(raw) as Partial<CommunicationAdapterState>;
       this.state = {
         version: 2,
-        adapters:
-          parsed.adapters && typeof parsed.adapters === 'object'
-            ? (parsed.adapters as Record<string, InternalCommunicationAdapterRecord>)
-            : {},
-        mappings:
-          parsed.mappings && typeof parsed.mappings === 'object'
-            ? (parsed.mappings as Record<string, CommunicationThreadMapping>)
-            : {},
-        buzzChannelMappings:
-          parsed.buzzChannelMappings && typeof parsed.buzzChannelMappings === 'object'
-            ? (parsed.buzzChannelMappings as Record<string, BuzzChannelMapping>)
-            : {},
-        buzzCursors:
-          parsed.buzzCursors && typeof parsed.buzzCursors === 'object'
-            ? (parsed.buzzCursors as Record<string, BuzzCursor>)
-            : {},
-        buzzEvents:
-          parsed.buzzEvents && typeof parsed.buzzEvents === 'object'
-            ? (parsed.buzzEvents as Record<string, BuzzEventRecord>)
-            : {},
-        buzzPendingEvents:
-          parsed.buzzPendingEvents && typeof parsed.buzzPendingEvents === 'object'
-            ? (parsed.buzzPendingEvents as Record<string, BuzzPendingEvent>)
-            : {},
-        buzzOutbound:
-          parsed.buzzOutbound && typeof parsed.buzzOutbound === 'object'
-            ? (parsed.buzzOutbound as Record<string, BuzzOutboundRecord>)
-            : {},
-        buzzRuntime:
-          parsed.buzzRuntime && typeof parsed.buzzRuntime === 'object'
-            ? (parsed.buzzRuntime as Record<string, BuzzRuntimeHealth>)
-            : {},
-        replyIds:
-          parsed.replyIds && typeof parsed.replyIds === 'object'
-            ? (parsed.replyIds as Record<string, string>)
-            : {},
+        adapters: safeRecordFrom<InternalCommunicationAdapterRecord>(
+          parsed.adapters,
+          'Communication adapters'
+        ),
+        mappings: safeRecordFrom<CommunicationThreadMapping>(parsed.mappings, 'Thread mappings'),
+        buzzChannelMappings: safeRecordFrom<BuzzChannelMapping>(
+          parsed.buzzChannelMappings,
+          'Buzz channel mappings'
+        ),
+        buzzCursors: safeRecordFrom<BuzzCursor>(parsed.buzzCursors, 'Buzz cursors'),
+        buzzEvents: safeRecordFrom<BuzzEventRecord>(parsed.buzzEvents, 'Buzz events'),
+        buzzPendingEvents: safeRecordFrom<BuzzPendingEvent>(
+          parsed.buzzPendingEvents,
+          'Buzz pending events'
+        ),
+        buzzOutbound: safeRecordFrom<BuzzOutboundRecord>(
+          parsed.buzzOutbound,
+          'Buzz outbound records'
+        ),
+        buzzRuntime: safeRecordFrom<BuzzRuntimeHealth>(parsed.buzzRuntime, 'Buzz runtime state'),
+        replyIds: safeRecordFrom<string>(parsed.replyIds, 'Communication reply IDs'),
         deliveries: Array.isArray(parsed.deliveries)
           ? (parsed.deliveries as CommunicationDeliveryAudit[]).slice(-MAX_DELIVERIES)
           : [],
@@ -2130,15 +2188,15 @@ export class CommunicationAdapterService {
   private emptyState(): CommunicationAdapterState {
     return {
       version: 2,
-      adapters: {},
-      mappings: {},
-      buzzChannelMappings: {},
-      buzzCursors: {},
-      buzzEvents: {},
-      buzzPendingEvents: {},
-      buzzOutbound: {},
-      buzzRuntime: {},
-      replyIds: {},
+      adapters: createSafeRecord<InternalCommunicationAdapterRecord>(),
+      mappings: createSafeRecord<CommunicationThreadMapping>(),
+      buzzChannelMappings: createSafeRecord<BuzzChannelMapping>(),
+      buzzCursors: createSafeRecord<BuzzCursor>(),
+      buzzEvents: createSafeRecord<BuzzEventRecord>(),
+      buzzPendingEvents: createSafeRecord<BuzzPendingEvent>(),
+      buzzOutbound: createSafeRecord<BuzzOutboundRecord>(),
+      buzzRuntime: createSafeRecord<BuzzRuntimeHealth>(),
+      replyIds: createSafeRecord<string>(),
       deliveries: [],
       updatedAt: nowIso(),
     };
@@ -2257,7 +2315,7 @@ export class CommunicationAdapterService {
       compatibility: evidenceIsCurrent ? existing?.compatibility : undefined,
     };
 
-    this.state.adapters[adapterId] = adapter;
+    setSafeRecordValue(this.state.adapters, adapterId, adapter, 'Communication adapter ID');
     const delivery = this.recordDelivery({
       adapterId,
       operation: 'configure',

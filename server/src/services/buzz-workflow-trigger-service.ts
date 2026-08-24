@@ -14,6 +14,12 @@ import {
 import { atomicWriteFile, mkdir, readFile } from '../storage/fs-helpers.js';
 import { redactString } from '../lib/redact.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
+import {
+  createSafeRecord,
+  getSafeRecordValue,
+  safeRecordFrom,
+  setSafeRecordValue,
+} from '../utils/safe-record.js';
 import { withFileLock } from './file-lock.js';
 import {
   getRuntimeHookBusService,
@@ -115,7 +121,7 @@ export class BuzzWorkflowTriggerService {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    this.state.rules[rule.id] = rule;
+    setSafeRecordValue(this.state.rules, rule.id, rule, 'Buzz workflow rule ID');
     await this.saveState();
     return structuredClone(rule);
   }
@@ -124,7 +130,7 @@ export class BuzzWorkflowTriggerService {
     validatePathSegment(adapterId);
     validatePathSegment(ruleId);
     await this.ensureLoaded();
-    const rule = this.state.rules[ruleId];
+    const rule = getSafeRecordValue(this.state.rules, ruleId, 'Buzz workflow rule ID');
     if (!rule || rule.adapterId !== adapterId) {
       throw new Error(`Buzz workflow trigger rule ${ruleId} not found`);
     }
@@ -178,17 +184,27 @@ export class BuzzWorkflowTriggerService {
       return this.appendAudit(rule, event, causalKey, 'echo');
     }
 
-    const dispatch = this.state.dispatches[causalKey];
+    const dispatch = getSafeRecordValue(
+      this.state.dispatches,
+      causalKey,
+      'Buzz workflow dispatch key'
+    );
     if (dispatch?.status === 'dispatched') {
       return this.appendAudit(rule, event, causalKey, 'duplicate', dispatch.runId);
     }
 
-    this.state.dispatches[causalKey] = {
+    const acceptedDispatch: BuzzWorkflowTriggerDispatch = {
       causalKey,
       workflowId: rule.workflowId,
       status: 'accepted',
       updatedAt: this.now().toISOString(),
     };
+    setSafeRecordValue(
+      this.state.dispatches,
+      causalKey,
+      acceptedDispatch,
+      'Buzz workflow dispatch key'
+    );
     await this.appendAudit(rule, event, causalKey, 'accepted');
 
     const existingRun = await this.findExistingRun(rule.workflowId, causalKey);
@@ -200,8 +216,8 @@ export class BuzzWorkflowTriggerService {
       this.ensureHooks();
       const hookResult = await this.hooks().dispatch(this.hookEnvelope(rule, event, causalKey));
       if (!hookResult.allowed) {
-        this.state.dispatches[causalKey].status = 'failed';
-        this.state.dispatches[causalKey].updatedAt = this.now().toISOString();
+        acceptedDispatch.status = 'failed';
+        acceptedDispatch.updatedAt = this.now().toISOString();
         return this.appendAudit(
           rule,
           event,
@@ -231,8 +247,8 @@ export class BuzzWorkflowTriggerService {
       });
       return this.recordDispatched(rule, event, causalKey, run.id);
     } catch (error) {
-      this.state.dispatches[causalKey].status = 'failed';
-      this.state.dispatches[causalKey].updatedAt = this.now().toISOString();
+      acceptedDispatch.status = 'failed';
+      acceptedDispatch.updatedAt = this.now().toISOString();
       return this.appendAudit(
         rule,
         event,
@@ -281,13 +297,18 @@ export class BuzzWorkflowTriggerService {
     causalKey: string,
     runId: string
   ): Promise<BuzzWorkflowTriggerAudit> {
-    this.state.dispatches[causalKey] = {
+    setSafeRecordValue(
+      this.state.dispatches,
       causalKey,
-      workflowId: rule.workflowId,
-      status: 'dispatched',
-      runId,
-      updatedAt: this.now().toISOString(),
-    };
+      {
+        causalKey,
+        workflowId: rule.workflowId,
+        status: 'dispatched',
+        runId,
+        updatedAt: this.now().toISOString(),
+      },
+      'Buzz workflow dispatch key'
+    );
     return this.appendAudit(rule, event, causalKey, 'dispatched', runId);
   }
 
@@ -393,14 +414,11 @@ export class BuzzWorkflowTriggerService {
       ) as Partial<BuzzWorkflowTriggerState>;
       this.state = {
         version: 1,
-        rules:
-          parsed.rules && typeof parsed.rules === 'object'
-            ? (parsed.rules as Record<string, BuzzWorkflowTriggerRule>)
-            : {},
-        dispatches:
-          parsed.dispatches && typeof parsed.dispatches === 'object'
-            ? (parsed.dispatches as Record<string, BuzzWorkflowTriggerDispatch>)
-            : {},
+        rules: safeRecordFrom<BuzzWorkflowTriggerRule>(parsed.rules, 'Buzz workflow rules'),
+        dispatches: safeRecordFrom<BuzzWorkflowTriggerDispatch>(
+          parsed.dispatches,
+          'Buzz workflow dispatches'
+        ),
         audits: Array.isArray(parsed.audits)
           ? (parsed.audits as BuzzWorkflowTriggerAudit[]).slice(-MAX_AUDITS)
           : [],
@@ -430,8 +448,8 @@ export class BuzzWorkflowTriggerService {
   private emptyState(): BuzzWorkflowTriggerState {
     return {
       version: 1,
-      rules: {},
-      dispatches: {},
+      rules: createSafeRecord<BuzzWorkflowTriggerRule>(),
+      dispatches: createSafeRecord<BuzzWorkflowTriggerDispatch>(),
       audits: [],
       updatedAt: this.now().toISOString(),
     };

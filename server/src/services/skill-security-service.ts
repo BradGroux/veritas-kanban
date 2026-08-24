@@ -29,6 +29,7 @@ import type {
 } from '@veritas-kanban/shared';
 import type { WorkflowDefinition } from '../types/workflow.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { getSafeRecordValue, safeRecordFrom, setSafeRecordValue } from '../utils/safe-record.js';
 import { redactString } from '../lib/redact.js';
 import { auditLog } from './audit-service.js';
 import { profileSkillResource } from './skill-capability-service.js';
@@ -839,7 +840,11 @@ export class SkillSecurityService {
         ).length,
         latestReportId: latestReport?.id,
         latestReportPath: latestReport?.persistedJsonPath,
-        remediationTaskId: state.remediationTasks[resource.id],
+        remediationTaskId: getSafeRecordValue(
+          state.remediationTasks,
+          resource.id,
+          'Skill resource ID'
+        ),
         exception,
       };
       return item;
@@ -933,7 +938,7 @@ export class SkillSecurityService {
     });
 
     const state = await this.readState();
-    state.remediationTasks[skillId] = task.id;
+    setSafeRecordValue(state.remediationTasks, skillId, task.id, 'Skill resource ID');
     await this.writeState(state);
 
     await auditLog({
@@ -1114,11 +1119,14 @@ export class SkillSecurityService {
       const parsed = JSON.parse(content) as Partial<SkillSecurityState>;
       return {
         exceptions: parsed.exceptions ?? [],
-        remediationTasks: parsed.remediationTasks ?? {},
+        remediationTasks: safeRecordFrom<string>(
+          parsed.remediationTasks,
+          'Skill remediation tasks'
+        ),
       };
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-        return { exceptions: [], remediationTasks: {} };
+        return { exceptions: [], remediationTasks: safeRecordFrom<string>(undefined) };
       }
       throw err;
     }

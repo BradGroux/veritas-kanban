@@ -20,6 +20,7 @@ import type {
 } from '@veritas-kanban/shared';
 import { getNotificationService, parseMentions } from './notification-service.js';
 import { validatePathSegment } from '../utils/sanitize.js';
+import { getSafeRecordValue, setSafeRecordValue } from '../utils/safe-record.js';
 import { createLogger } from '../lib/logger.js';
 import { redactString } from '../lib/redact.js';
 import { getChatsDir } from '../utils/paths.js';
@@ -248,7 +249,7 @@ export class ChatService {
   private async applySquadMetadata(messages: SquadMessage[]): Promise<SquadMessage[]> {
     const metadata = await this.readSquadMetadata();
     const merged = messages.map((message) => {
-      const overlay = metadata.messages[message.id];
+      const overlay = getSafeRecordValue(metadata.messages, message.id, 'Squad message ID');
       if (!overlay) return message;
 
       const { updatedAt: _updatedAt, ...messageOverlay } = overlay;
@@ -425,7 +426,7 @@ export class ChatService {
 
     if (this.hasSquadMessageMetadata(messageMetadata)) {
       await this.updateSquadMetadata((metadata) => {
-        metadata.messages[messageId] = messageMetadata;
+        setSafeRecordValue(metadata.messages, messageId, messageMetadata, 'Squad message ID');
       });
     }
 
@@ -536,7 +537,7 @@ export class ChatService {
   async getSquadUnreadState(actor: string): Promise<SquadUnreadState> {
     const normalizedActor = this.normalizeActor(actor);
     const metadata = await this.readSquadMetadata();
-    const readState = metadata.reads[normalizedActor];
+    const readState = getSafeRecordValue(metadata.reads, normalizedActor, 'Squad actor');
     const lastReadTime = readState?.lastReadAt ? Date.parse(readState.lastReadAt) : 0;
     const messages = await this.getSquadMessages({ includeSystem: true });
     const unreadMessages = messages.filter((message) => {
@@ -569,12 +570,17 @@ export class ChatService {
     const timestamp = targetMessage?.timestamp ?? new Date().toISOString();
 
     await this.updateSquadMetadata((metadata) => {
-      metadata.reads[normalizedActor] = {
-        actor: input.actor,
-        lastReadAt: timestamp,
-        lastReadMessageId: targetMessage?.id,
-        updatedAt: new Date().toISOString(),
-      };
+      setSafeRecordValue(
+        metadata.reads,
+        normalizedActor,
+        {
+          actor: input.actor,
+          lastReadAt: timestamp,
+          lastReadMessageId: targetMessage?.id,
+          updatedAt: new Date().toISOString(),
+        },
+        'Squad actor'
+      );
     });
 
     return this.getSquadUnreadState(input.actor);
@@ -588,13 +594,18 @@ export class ChatService {
     if (!existing) return null;
 
     await this.updateSquadMetadata((metadata) => {
-      const current = metadata.messages[messageId] ?? {};
-      metadata.messages[messageId] = {
-        ...current,
-        pinned: update.pinned ?? current.pinned,
-        decision: update.decision ?? current.decision,
-        updatedAt: new Date().toISOString(),
-      };
+      const current = getSafeRecordValue(metadata.messages, messageId, 'Squad message ID') ?? {};
+      setSafeRecordValue(
+        metadata.messages,
+        messageId,
+        {
+          ...current,
+          pinned: update.pinned ?? current.pinned,
+          decision: update.decision ?? current.decision,
+          updatedAt: new Date().toISOString(),
+        },
+        'Squad message ID'
+      );
     });
 
     return this.findSquadMessage(messageId);
@@ -609,7 +620,8 @@ export class ChatService {
     if (!existing) return null;
 
     await this.updateSquadMetadata((metadata) => {
-      const current = metadata.messages[input.messageId] ?? {};
+      const current =
+        getSafeRecordValue(metadata.messages, input.messageId, 'Squad message ID') ?? {};
       const reactions = (current.reactions ?? []).filter(
         (reaction) =>
           !(
@@ -622,11 +634,16 @@ export class ChatService {
         reaction: input.reaction,
         createdAt: new Date().toISOString(),
       });
-      metadata.messages[input.messageId] = {
-        ...current,
-        reactions,
-        updatedAt: new Date().toISOString(),
-      };
+      setSafeRecordValue(
+        metadata.messages,
+        input.messageId,
+        {
+          ...current,
+          reactions,
+          updatedAt: new Date().toISOString(),
+        },
+        'Squad message ID'
+      );
     });
 
     return this.findSquadMessage(input.messageId);

@@ -13,6 +13,7 @@ import {
   type RunEgressPolicy,
 } from '@veritas-kanban/shared';
 import { ConflictError } from '../middleware/error-handler.js';
+import { setSafeRecordValue } from '../utils/safe-record.js';
 import { EgressPolicyService, getEgressPolicyService } from './egress-policy-service.js';
 
 const LOOPBACK_HOST = '127.0.0.1';
@@ -383,7 +384,7 @@ async function handleHttpRequest(
   });
   upstream.once('response', (upstreamResponse) => {
     response.writeHead(
-      upstreamResponse.statusCode ?? 502,
+      normalizeUpstreamStatusCode(upstreamResponse.statusCode),
       forwardHeaders(upstreamResponse.headers, undefined, false)
     );
     upstreamResponse.pipe(response);
@@ -955,6 +956,11 @@ function portFor(url: URL, fallback: number): number {
   return url.port ? Number.parseInt(url.port, 10) : fallback;
 }
 
+function normalizeUpstreamStatusCode(statusCode: number | undefined): number {
+  if (typeof statusCode !== 'number' || !Number.isInteger(statusCode)) return 502;
+  return statusCode >= 100 && statusCode <= 599 ? statusCode : 502;
+}
+
 function forwardHeaders(
   headers: IncomingHttpHeaders,
   host: string | undefined,
@@ -966,7 +972,7 @@ function forwardHeaders(
     if (lower === 'proxy-authorization' || lower === 'proxy-connection') continue;
     if (!preserveUpgrade && HOP_BY_HOP_HEADERS.has(lower)) continue;
     if (value === undefined) continue;
-    result[lower] = value;
+    setSafeRecordValue(result, lower, value, 'HTTP header name');
   }
   if (host) result.host = host;
   return result;
