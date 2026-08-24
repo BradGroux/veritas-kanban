@@ -5799,6 +5799,13 @@ POST /api/scoring/profiles
 
 **Response:** `201` with created profile.
 
+Scoring profiles accept `KeywordContains`, `NumericRange`, bounded `RegexMatch`, and declarative
+`OccurrenceRatio` scorers. Regex patterns are limited to 256 characters and execute through a
+globally bounded four-worker pool and wait queue with a 100 ms limit. Valid JavaScript regex flags
+supported by the active Node runtime remain accepted. `OccurrenceRatio` counts literal `needles`
+and normalizes them with a fixed `denominator` or numeric `denominatorPath`; it does not execute
+expression strings. Persisted legacy custom-expression profiles must be migrated before evaluation.
+
 #### Get Scoring Profile
 
 ```

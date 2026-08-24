@@ -4,75 +4,13 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { BadRequestError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { scoringService } from '../services/scoring-service.js';
 import { paramStr, qNum, qStr } from '../lib/query-helpers.js';
+import {
+  createScoringProfileSchema,
+  evaluateScoringSchema,
+  updateScoringProfileSchema,
+} from '../schemas/scoring-schemas.js';
 
 const router: RouterType = Router();
-
-const scorerSchema = z.discriminatedUnion('type', [
-  z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    description: z.string().optional(),
-    weight: z.number().min(0),
-    target: z.enum(['action', 'output', 'combined']).optional(),
-    type: z.literal('RegexMatch'),
-    pattern: z.string().min(1),
-    flags: z.string().optional(),
-    scoreOnMatch: z.number().min(0).max(1).optional(),
-    scoreOnMiss: z.number().min(0).max(1).optional(),
-    invert: z.boolean().optional(),
-  }),
-  z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    description: z.string().optional(),
-    weight: z.number().min(0),
-    target: z.enum(['action', 'output', 'combined']).optional(),
-    type: z.literal('KeywordContains'),
-    keywords: z.array(z.string().min(1)).min(1),
-    matchMode: z.enum(['all', 'any']).optional(),
-    caseSensitive: z.boolean().optional(),
-    partialCredit: z.boolean().optional(),
-  }),
-  z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    description: z.string().optional(),
-    weight: z.number().min(0),
-    target: z.enum(['action', 'output', 'combined']).optional(),
-    type: z.literal('NumericRange'),
-    valuePath: z.string().min(1),
-    min: z.number().optional(),
-    max: z.number().optional(),
-    scoreOnMiss: z.number().min(0).max(1).optional(),
-  }),
-  z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    description: z.string().optional(),
-    weight: z.number().min(0),
-    target: z.enum(['action', 'output', 'combined']).optional(),
-    type: z.literal('CustomExpression'),
-    expression: z.string().min(1),
-  }),
-]);
-
-const createProfileSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  scorers: z.array(scorerSchema).min(1),
-  compositeMethod: z.enum(['weightedAvg', 'minimum', 'geometricMean']),
-});
-
-const updateProfileSchema = createProfileSchema.partial();
-
-const evaluateSchema = z.object({
-  profileId: z.string().min(1),
-  action: z.string().optional(),
-  output: z.string().min(1),
-  agent: z.string().optional(),
-  taskId: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
 
 const parseOrThrow = <T>(schema: z.ZodType<T>, value: unknown): T => {
   try {
@@ -107,7 +45,7 @@ router.get(
 router.post(
   '/profiles',
   asyncHandler(async (req, res) => {
-    const input = parseOrThrow(createProfileSchema, req.body);
+    const input = parseOrThrow(createScoringProfileSchema, req.body);
     const profile = await scoringService.createProfile(input);
     res.status(201).json(profile);
   })
@@ -116,7 +54,7 @@ router.post(
 router.put(
   '/profiles/:id',
   asyncHandler(async (req, res) => {
-    const input = parseOrThrow(updateProfileSchema, req.body);
+    const input = parseOrThrow(updateScoringProfileSchema, req.body);
     let profile;
     try {
       profile = await scoringService.updateProfile(paramStr(req.params.id), input);
@@ -154,7 +92,7 @@ router.delete(
 router.post(
   '/evaluate',
   asyncHandler(async (req, res) => {
-    const input = parseOrThrow(evaluateSchema, req.body);
+    const input = parseOrThrow(evaluateScoringSchema, req.body);
     const result = await scoringService.evaluate(input);
     res.status(201).json(result);
   })
