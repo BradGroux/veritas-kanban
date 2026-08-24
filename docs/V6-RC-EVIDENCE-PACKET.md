@@ -6,10 +6,10 @@ stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.1 remains the supported stable v6 release until 6.1.2 is
-published and verified. Do not use 6.0.0 for installation or upgrade validation.
+Veritas Kanban 6.1.2 is the supported stable v6 release. Do not use 6.0.0 for
+installation or upgrade validation.
 
-Documentation freshness: 2026-08-24 for the Veritas Kanban 6.1.2 candidate.
+Documentation freshness: 2026-08-24 for the published Veritas Kanban 6.1.2 release.
 
 ## 6.1.2 Audit Release Candidate
 
@@ -19,10 +19,10 @@ Documentation freshness: 2026-08-24 for the Veritas Kanban 6.1.2 candidate.
 | Source branch            | `release/6.1.2-audit`                                                                                                                                                                                                                              |
 | Source baseline          | `3851fea93ecfe5119e4092739662443d29059ac7`, `main` after release-gate fix PR #1243                                                                                                                                                                 |
 | Validated candidate      | `2a21178df97a00395cfc6c43774a57496a5c1f6a`, the frozen release PR head before this evidence-only update                                                                                                                                            |
-| Included issues          | Audit tracker [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174), findings #1162-#1173, and CodeQL baseline #1231                                                                                                                    |
-| Public implementation    | #1162, #1163, and #1165-#1173 are closed through merged work; #1164 implementation is merged and remains open only for final regression evidence; coordinated remediation and release-gate fixes are merged through #1236, #1239, #1241, and #1243 |
-| Private security blocker | Remediation is integrated into the candidate. Release verification and disclosure disposition remain pending, and no exploit-relevant detail is included here                                                                                      |
-| Publication state        | Not published. The final matrix is complete on the frozen candidate; merge, tag, GitHub release, signed desktop workflow, Homebrew cask, and advisory disposition remain pending                                                                   |
+| Included issues          | Audit tracker [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174), closed findings #1162-#1173, and closed CodeQL baseline #1231                                                                                                           |
+| Public implementation    | #1162-#1173 are closed through merged work. Coordinated remediation and release-gate fixes are merged through #1236, #1239, #1241, and #1243                                                                                                              |
+| Security disposition     | Remediation is integrated into supported 6.1.2 artifacts. The approved [repository security advisory](https://github.com/BradGroux/veritas-kanban/security/advisories/GHSA-4r99-qpvh-wrqf) was published after artifact verification                                     |
+| Publication state        | Complete. Release PR #1237, annotated `v6.1.2`, the stable GitHub release, signed/notarized assets, updater metadata, post-publication validator, Homebrew cask/install, and advisory disposition are verified                                               |
 
 ### 6.1.2 issue and pull request traceability
 
@@ -53,20 +53,20 @@ evidence-backed dispositions. The post-merge default-branch Security Gates run
 completed successfully at `1cdcd6ec60e3f48b6017146b2583fa82f7061c68`
 with zero open alerts.
 
-The 2026-08-24 pre-release GitHub security readback confirms Dependabot
-vulnerability alerts and security updates are enabled, secret scanning and
-push protection are enabled, and open Dependabot, secret-scanning, and
-default-branch CodeQL alert counts are all zero. Every external workflow action
-reference is pinned to a full commit SHA. These drift-prone settings are
-rechecked against the final release merge before publication.
+The 2026-08-24 pre-release and post-publication GitHub security readbacks
+confirm Dependabot security updates, secret scanning, and push protection are
+enabled, and open Dependabot, secret-scanning, and default-branch CodeQL alert
+counts are all zero. Every external workflow action reference is pinned to a
+full commit SHA. The final readback was taken after the exact-main Security
+Gates run passed.
 
 Final-milestone preflight on 2026-08-24 found local Node 26.7.0, pnpm 11.1.1,
 Git 2.55.0, and an available Docker 29.2.1 server. The Node 22 floor remains
 the `ci:full` runner gate; no separate local Node 22 installation is present.
 The required macOS signing secret names and the complete App Store Connect
-notarization secret-name set are configured, without reading their values. No
-Veritas Kanban app or Homebrew cask is currently installed on the validation
-host, so the post-publication installation will not replace an active install.
+notarization secret-name set are configured, without reading their values. The
+validation host had no existing Veritas Kanban app or cask before publication.
+The live Homebrew install therefore replaced no active application or user data.
 
 ### 6.1.2 verification matrix
 
@@ -83,7 +83,7 @@ evidence update is documentation-only and does not alter the validated runtime.
 | Build, Mantine QA, CLI/MCP smoke                                                          | Local clean worktree and CI Node 22                                                                                               | Pass. Build and Mantine QA passed; initial JS/CSS were 242.3/53.7 KiB gzip. CLI/MCP compatibility had zero failures or warnings; two live read/write checks were explicitly skipped because the isolated profile had no `VK_API_KEY`                                                                                                                                                                                                                               |
 | Desktop tests, build, readiness, native lifecycle, and unsigned package                   | macOS arm64 isolated profile and [artifact run 32732019898](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019898) | Pass. Desktop 67/67, Electron artifacts 4/4, readiness 7/7, package smoke, visible setup/readiness, single-instance, close/reopen, and clean quit all passed. Mounted DMG and ZIP report 6.1.2 arm64. DMG: 265,821,857 bytes, SHA-256 `562aa08c1d93653227aa0deee7cc0020f42bfe4ead9e404005fbe67a87822d7a`; ZIP: 270,676,980 bytes, SHA-256 `e1dc99f95e1c3396cda78c5e38582cdc7554baf2757aa57cfee411ba6a94de60`. CI macOS/Linux/Windows unsigned artifacts all passed |
 | Production Docker build, image-size contract, and runtime smoke                           | amd64 [Docker contract run 32732019831](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019831)                     | Pass. Image size 571,628,184 bytes, below 600,000,000; non-root user, version, mounted paths, SQLite, backup, auth, static web, health, bcrypt, and clean shutdown passed                                                                                                                                                                                                                                                                                          |
-| Release-format and release validators                                                     | Version 6.1.2                                                                                                                     | Pass with one classified host limitation. Canonical release format passed 3/3 and every source/build-output check passed. The local Docker-enabled wrapper reached image assembly before Docker Desktop returned an `overlayfs` containerd metadata I/O error on a full host filesystem; the clean CI Docker build and complete runtime contract passed on the same frozen source. Live GitHub/tag/body validation remains a post-publication gate                 |
+| Release-format and release validators                                                     | Version 6.1.2                                                                                                                     | Pass with one classified host limitation. Canonical release format passed 3/3 and every source/build-output check passed. Post-publication GitHub, tag, and body validation passed. The local Docker-enabled wrapper reached image assembly before Docker Desktop returned an `overlayfs` containerd metadata I/O error on a full host filesystem; the clean CI Docker build and complete runtime contract passed on the same frozen source |
 
 ## 6.1.1 Maintenance Release Candidate
 
@@ -394,11 +394,26 @@ runtime profile is retained in this packet.
 
 ## 6.1.2 Publication Evidence
 
-Publication has not started. This section will record the release PR merge SHA,
-annotated tag object and peeled commit, GitHub release URL and exact body
-readback, Desktop Release workflow, signed/notarized artifact names, sizes,
-SHA-256 values, blockmaps, updater metadata, Gatekeeper/stapling/launch proof,
-Homebrew PR and merge SHA, live cask validation, and approved advisory state.
+Source publication, signed-macOS verification, full-width release-note
+validation, isolated installed-app readiness, Homebrew distribution, and the
+approved advisory disposition are complete.
+
+| Publication item | Result |
+| --- | --- |
+| Release PR and merge | [#1237](https://github.com/BradGroux/veritas-kanban/pull/1237); frozen full-matrix head `2a21178df97a00395cfc6c43774a57496a5c1f6a`; final evidence-only head `ec1d3a7e106e2dd2753d41b5e351cdf665e2cd7c`; verified squash merge `dfae7911cc282e32262a006e2171ce5fe4865714` |
+| Annotated `v6.1.2` tag object and peeled commit | `819aad9ae8eae3f2f40593d4567647963f7bfbc3`; `dfae7911cc282e32262a006e2171ce5fe4865714` |
+| GitHub release URL and body | [Veritas Kanban 6.1.2](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.2); stable release published 2026-08-24; the live body exactly matches `docs/releases/v6.1.2.md` |
+| Exact-main CI and security | [CI run 32734012479](https://github.com/BradGroux/veritas-kanban/actions/runs/32734012479) and [Security Gates run 32734012461](https://github.com/BradGroux/veritas-kanban/actions/runs/32734012461) passed on the exact release merge; CodeQL, Dependabot, secret scanning, push protection, gitleaks, and immutable-action gates have no unresolved release blockers |
+| Desktop Release workflow | [Run 32734749604](https://github.com/BradGroux/veritas-kanban/actions/runs/32734749604); exact release merge SHA; signed and notarized macOS job passed in 11m1s |
+| Signed/notarized DMG | `Veritas-Kanban-6.1.2-mac-arm64.dmg`; 267,430,041 bytes; SHA-256/GitHub digest and published sidecar value `1b2a75c241642a8af14e48827dfc48c5e7846f2709af2359dc1ae34ba2588baa`; Apple notarization accepted, stapling validated, and Gatekeeper accepted Notarized Developer ID `RLBHD62MPW` |
+| Signed/notarized ZIP | `Veritas-Kanban-6.1.2-mac-arm64.zip`; 271,666,610 bytes; SHA-256/GitHub digest and published sidecar value `81ea146d20d2ab279331e73c01bc3c4eafdda8a4082be3607e9ca535a7d2be85`; the independently downloaded Homebrew cache matched this digest and contained bundle version 6.1.2 |
+| DMG/ZIP blockmaps and SHA-256 sidecars | Blockmap digests `9c99a416dbc518306456bf7025cbe478ea1242a40eb8acf349eb3dc67946ee97` and `77e55eb209f04b10bc1d38e2600032a1b2e808b4eeb11389d9e02819d306c935`; sidecar-file digests `30a6aa1831ed8f8f9c93c0e7e705c5f5e18805d092033732352f4513b6077c5a` and `9608ca6f5b365d9f74d0e6f9b3f71164dee4212af136b8cc8adf5650908b9790` |
+| `latest-mac.yml` | Version 6.1.2; 530 bytes; SHA-256 `591073ea888481ffdf1b0d2dc1d026b751422d44954ff2084bf7f8e64151992b`; ZIP and DMG names, sizes, and SHA-512 values match the published assets |
+| Installed signed-app isolated launch | Homebrew installed 6.1.2 without replacing an existing app or cask. `CFBundleShortVersionString` and `CFBundleVersion` report 6.1.2; deep strict code-signature validation, hardened runtime, Gatekeeper acceptance, and stapling validation pass. A disposable user-data root launched the installed app on isolated port 3101; exact-version readiness passed in 209ms and proved the packaged app owned the listener. `/api/health` reported 6.1.2, first-run onboarding showed all local readiness checks healthy, native menus rendered, and the task-owned process tree and listener stopped without touching the separate development build |
+| Release validator | Post-publication `pnpm validate:release -- --version 6.1.2 --github --repo BradGroux/veritas-kanban` passes and proves the live release and body match the annotated tag and canonical checked-in file |
+| Homebrew cask | [Issue #50](https://github.com/BradGroux/homebrew-tap/issues/50); [PR #51](https://github.com/BradGroux/homebrew-tap/pull/51); reviewed head `a3269d43eb657c0480e549e4d1fc15bc21baddea`; verified merge `2b29b79a26b269ed832f38b7173c7459c3db508d`; registered `bradgroux/tap/veritas-kanban` resolves 6.1.2 with the published ZIP checksum and passes Ruby syntax, cask style, strict online audit, dry-run install, livecheck, actual installation, signature/stapling/Gatekeeper verification, and exact-version packaged readiness |
+| Advisory disposition | Owner approved publication after supported artifacts were available. The [repository security advisory](https://github.com/BradGroux/veritas-kanban/security/advisories/GHSA-4r99-qpvh-wrqf) was published 2026-08-24 with the affected range and `>= 6.1.2` patched version verified |
+| Classified host limitation | The first local Docker wrapper and first Homebrew audit encountered the validation host's exhausted filesystem. No gate was weakened: clean CI proved the Docker contract, owner-approved removal of 1.67 GB of regenerable release output restored capacity, and the same live Homebrew audit/install then passed. No source, evidence, active development build, or user workspace was removed |
 
 ## 6.1.1 Publication Evidence
 

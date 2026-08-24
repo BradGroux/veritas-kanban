@@ -67,9 +67,9 @@ storage, provider-runtime, CI, container, and supportability audit tracked in
   bounded file reads and writes, and sandbox metadata reads identified by the
   initial CodeQL baseline (#1231, #1232-#1235).
 - Integrated coordinated validation hardening for a privately reported input
-  boundary. Technical details remain under the repository security-advisory
-  process until supported artifacts are available and disclosure is approved
-  (#1236).
+  boundary. The repository security advisory was published after supported
+  6.1.2 artifacts were verified and disclosure was approved (#1236,
+  [GHSA-4r99-qpvh-wrqf](https://github.com/BradGroux/veritas-kanban/security/advisories/GHSA-4r99-qpvh-wrqf)).
 - Corrected recovery-key alphabet generation and WebSocket upgrade header
   forwarding defects exposed by the final release validation (#1238, #1239).
 - Serialized complete same-task update and lifecycle operations before their

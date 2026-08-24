@@ -65,18 +65,18 @@ update the authoritative registry record.
 
 ### Last Sweep
 
-| Date       | Scope                                                               | Agent   |
-| ---------- | ------------------------------------------------------------------- | ------- |
-| 2026-08-24 | v6.1.2 audit, storage, provider, CI, security, release, and SOP docs | Release |
-| 2026-08-22 | v6.1.1 maintenance, dependency, release, upgrade, and evidence docs | Release |
-| 2026-07-26 | v6.1.0 roadmap, harness, governance, knowledge, and release docs    | Release |
-| 2026-07-24 | v6.0.2 desktop recovery, version support, release, and evidence     | Release |
-| 2026-07-24 | v6.0.1 stabilization, release, upgrade, API, MCP, and evidence      | Release |
-| 2026-07-24 | v6.0.0 harness, Buzz, release, upgrade, compatibility, and evidence | Release |
-| 2026-07-12 | v5.2.2 UI-audit fixes, release gates, desktop state, and evidence   | Release |
-| 2026-06-05 | v5.0.0 stable release docs, install paths, release assets, RC notes | Codex   |
-| 2026-03-25 | Full v3→v4 version references, governance docs, CHANGELOG, examples | VERITAS |
-| 2026-03-21 | v4.0 release documentation                                          | TARS    |
+| Date       | Scope                                                                                      | Agent   |
+| ---------- | ------------------------------------------------------------------------------------------ | ------- |
+| 2026-08-24 | README; v6.1.2 audit, storage, provider, CI, security, release, distribution, and SOP docs | Release |
+| 2026-08-22 | v6.1.1 maintenance, dependency, release, upgrade, and evidence docs                        | Release |
+| 2026-07-26 | v6.1.0 roadmap, harness, governance, knowledge, and release docs                           | Release |
+| 2026-07-24 | v6.0.2 desktop recovery, version support, release, and evidence                            | Release |
+| 2026-07-24 | v6.0.1 stabilization, release, upgrade, API, MCP, and evidence                             | Release |
+| 2026-07-24 | v6.0.0 harness, Buzz, release, upgrade, compatibility, and evidence                        | Release |
+| 2026-07-12 | v5.2.2 UI-audit fixes, release gates, desktop state, and evidence                          | Release |
+| 2026-06-05 | v5.0.0 stable release docs, install paths, release assets, RC notes                        | Codex   |
+| 2026-03-25 | Full v3→v4 version references, governance docs, CHANGELOG, examples                        | VERITAS |
+| 2026-03-21 | v4.0 release documentation                                                                 | TARS    |
 
 ## Automation Plan
 

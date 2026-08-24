@@ -2,7 +2,7 @@
 
 Veritas Kanban 6.1.2 completes the reliability, security, persistence, provider-runtime, CI, container, and supportability audit tracked by [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174). It is a backward-compatible patch release for 6.1.1.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.2 becomes the supported stable v6 release only after the annotated tag, signed assets, updater metadata, and Homebrew cask are published and verified.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.2 is the supported stable v6 release; its annotated tag, signed assets, updater metadata, and Homebrew cask are published and verified.
 
 ## Audit Outcomes And Traceability
 
@@ -40,9 +40,9 @@ Ordinary pull requests now run source-policy, lint, typecheck, build, dependency
 
 The complete final release matrix is recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md). Historical test counts are not reused as 6.1.2 evidence.
 
-The production Docker closure excludes unrelated workspace dependencies, runs as a non-root user, and has architecture-specific size ceilings. The implementation baseline measured 195,910,880 bytes on arm64 against a 200,000,000-byte ceiling and 571,590,173 bytes on amd64 against a 600,000,000-byte ceiling; the release candidate is remeasured before publication.
+The production Docker closure excludes unrelated workspace dependencies, runs as a non-root user, and has architecture-specific size ceilings. The implementation baseline measured 195,910,880 bytes on arm64 against a 200,000,000-byte ceiling. The final release candidate measured 571,628,184 bytes on amd64 against its 600,000,000-byte ceiling.
 
-Four verified unused direct dependencies were removed. The server lint-warning budget dropped from 600 to 458 without weakening rules or adding broad suppressions. A coordinated private remediation is integrated through #1236; technical details stay in the advisory workflow pending supported artifacts and explicit disclosure approval. Final milestone validation also corrected recovery-key alphabet generation, WebSocket upgrade header forwarding, same-task lifecycle ordering, and sanitized URI prefix handling through #1239, #1241, and #1243.
+Four verified unused direct dependencies were removed. The server lint-warning budget dropped from 600 to 458 without weakening rules or adding broad suppressions. A coordinated security remediation is integrated through #1236 and the [repository security advisory](https://github.com/BradGroux/veritas-kanban/security/advisories/GHSA-4r99-qpvh-wrqf) was published after the supported 6.1.2 artifacts were verified. Final milestone validation also corrected recovery-key alphabet generation, WebSocket upgrade header forwarding, same-task lifecycle ordering, and sanitized URI prefix handling through #1239, #1241, and #1243.
 
 The initial 195-alert CodeQL baseline was reviewed alert by alert: 67 findings were fixed and 128 non-exploitable alerts received evidence-backed dispositions. Validated request, logging, persisted-key, file-handling, and sandbox-read findings were fixed in #1232-#1235. Alerts that were limited to test fixtures or were already contained by explicit authentication, path, descriptor, ownership, or atomic-write controls received documented dispositions rather than speculative code churn. The post-merge default-branch analysis reports zero open alerts.
 
@@ -61,7 +61,7 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.2 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.2) after publication. Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.2 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.2). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
@@ -77,7 +77,7 @@ Deterministic compatibility does not prove provider authentication, subscription
 
 ## Release Artifacts
 
-The supported stable desktop release publishes signed and notarized `Veritas-Kanban-6.1.2-mac-arm64.dmg` and `Veritas-Kanban-6.1.2-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.2` tag. Exact sizes, hashes, signing, notarization, stapling, Gatekeeper, launch, updater, workflow, release, and Homebrew evidence are recorded after publication in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
+The supported stable desktop release provides signed and notarized `Veritas-Kanban-6.1.2-mac-arm64.dmg` and `Veritas-Kanban-6.1.2-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.2` tag. Exact sizes, hashes, signing, notarization, stapling, Gatekeeper, launch, updater, workflow, release, and Homebrew evidence are recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
 ## Documentation And Evidence
 

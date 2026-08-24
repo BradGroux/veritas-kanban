@@ -14,7 +14,7 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-![Veritas Kanban v5 board, workflow, and audit tour](docs/assets/v5/v5-board-to-workflow.gif)
+![Veritas Kanban board, workflow, and audit tour](docs/assets/v5/v5-board-to-workflow.gif)
 
 > 🎬 [Watch the full demo video](https://bradgroux.github.io/veritas-kanban/demo/)
 
@@ -40,7 +40,7 @@ Want to take the easy way out? Ask your agent:
 Clone and set up veritas-kanban locally using the board-only setup path first. Install dependencies with pnpm, copy server/.env.example to server/.env, and start the dev server. Verify the UI at localhost:3000 and the API health endpoint at localhost:3001/api/health. Do not configure OpenClaw, MCP, Squad Chat webhooks, workflows, or notifications unless I explicitly ask for that layer.
 ```
 
-Want to do it yourself? Get up and running in under 5 minutes:
+Want to do it yourself? Choose the packaged Mac app or a local source checkout:
 
 For the packaged Mac desktop app:
 
@@ -103,14 +103,13 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
-- [v5 Identity and RBAC Model](docs/IDENTITY-RBAC.md) — users, workspaces, memberships, roles, agent tokens, permission matrix, migration, and UX flows.
-- [v5 Mantine Migration Plan](docs/UI-MANTINE-MIGRATION.md) — component inventory, migration order, retained custom surfaces, rollback strategy, and cleanup gates.
+- [Identity and RBAC Model](docs/IDENTITY-RBAC.md) — users, workspaces, memberships, roles, agent tokens, permission matrix, migration, and UX flows.
 - [v6 GA Checklist](docs/V6-GA-CHECKLIST.md) — release gates for harness certification, migration, runtime, desktop, and distribution evidence.
 - [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) — release-safe views of provider support, Buzz setup, approvals, and run evidence.
 - [v6 Upgrade, Install, Remote, And Admin Guide](docs/V6-UPGRADE-INSTALL-ADMIN-GUIDE.md) — fresh install, v5-to-v6 upgrade, harness setup, desktop, backup, and diagnostics paths.
 - [v6 Compatibility And Release Policy](docs/V6-COMPATIBILITY-AND-RELEASE-POLICY.md) — provider support tiers, tested builds, platform combinations, update channels, and rollback limits.
 - [v6 Release Notes](docs/V6-RELEASE-NOTES.md) — user-facing highlights, stabilization fixes, install/upgrade steps, behavior changes, and known limits.
-- [v5 Desktop Architecture ADR](docs/architecture/ADR-0001-v5-desktop-architecture.md) — shell decision, native/server boundaries, connection modes, lifecycle, packaging, and security model.
+- [Desktop Architecture ADR](docs/architecture/ADR-0001-v5-desktop-architecture.md) — shell decision, native/server boundaries, connection modes, lifecycle, packaging, and security model.
 - [Post-GA Desktop Agent Workbench Spec](docs/DESKTOP-AGENT-WORKBENCH.md) — desktop workbench UX, run controls, approvals, evidence, native affordances, and safety coverage.
 - [Post-GA Native Mobile Offline ADR](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md) — native mobile authority model, offline queue semantics, conflict handling, and security review.
 - [Post-GA Cloud Sync And Hosted SaaS ADR](docs/architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md) — optional hosted model, tenant isolation, lifecycle, support, cost, and migration boundaries.
@@ -155,7 +154,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 8. **Isolate environments.** Run agents in containers, VMs, or sandboxed environments when possible. Keep agent workspaces separate from sensitive data, use deny-by-default network presets for untrusted work, and broker credentials instead of exposing broad environment variables.
 
-**The bottom line:** Agentic AI is transformational, but it amplifies both your capabilities and your mistakes. Plan accordingly, start small, and add autonomy gradually as you build confidence in your guardrails.
+**The bottom line:** Agents amplify both useful work and mistakes. Start locally, keep permissions narrow, and add autonomy only after the smaller setup is understood and verified.
 
 ---
 
@@ -179,9 +178,9 @@ keep the board, header, close control, and keyboard recovery paths reachable.
 
 ![Squad Chat threaded coordination](docs/assets/v5/v5-squad-chat-threaded-coordination.png)
 
-### 🧭 Veritas Cutover + Hermes Support
+### 🧭 Provider And Cutover Operations
 
-Veritas now documents the GitHub-backed operating model for Codex and HermesAgent work. The new cutover guide names Veritas as the source of truth, routes HermesAgent/Hermes Gateway as the control plane for agent execution, keeps Mission Control focused on display/control, and makes GitHub Issues/PRs/reviews/CI the implementation record. It also adds the active Hermes roster, required QA evidence gates, and copy/paste task templates for product specs, research/revenue intake, and approval-gated client workflows.
+The cutover guide documents a GitHub-backed operating model for Codex and HermesAgent work. Veritas remains the source of truth, HermesAgent/Hermes Gateway can provide the execution control plane, and GitHub Issues, pull requests, reviews, and CI remain the durable implementation record. Copy/paste task templates cover product specs, research intake, and approval-gated client workflows.
 
 ### 🧠 OpenAI Codex Integration
 
@@ -377,12 +376,12 @@ complete configured storage root, not only the Git-tracked board files.
 
 | Layer               | Technology                            | Version                                     |
 | ------------------- | ------------------------------------- | ------------------------------------------- |
-| **Frontend**        | React, Vite, Tailwind CSS, Mantine UI | React 19, Vite 8, Tailwind 4.3, Mantine 9.3 |
+| **Frontend**        | React, Vite, Tailwind CSS, Mantine UI | React 19, Vite 8, Tailwind 4.3, Mantine 9.5 |
 | **Backend**         | Express, WebSocket                    | Express 5.2                                 |
 | **Language**        | TypeScript (strict mode)              | 6.0                                         |
 | **Storage**         | Markdown files with YAML frontmatter  | yaml + local frontmatter helper             |
 | **Git**             | simple-git, worktree management       | —                                           |
-| **Testing**         | Playwright (E2E), Vitest (unit)       | Playwright 1.61, Vitest 4.1                 |
+| **Testing**         | Playwright (E2E), Vitest (unit)       | Playwright 1.62, Vitest 4.1                 |
 | **Runtime**         | Node.js                               | 22.22.1+                                    |
 | **Package Manager** | pnpm                                  | 11.1.1 (pinned)                             |
 
@@ -487,7 +486,7 @@ veritas-kanban/                  ← pnpm monorepo
     └── agent-requests/
 ```
 
-**Data flow:** Web ↔ REST API / WebSocket ↔ Server ↔ Markdown/YAML files on disk
+**Data flow:** Web ↔ REST API / WebSocket ↔ Server ↔ configured file or SQLite storage
 
 ---
 
@@ -516,7 +515,7 @@ curl -H "X-API-Version: v1" http://localhost:3001/api/tasks
 
 > 📖 **Comprehensive CLI guide:** [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) — installation, every command, scripting examples, and tips.
 
-Manage your entire task lifecycle with two commands.
+Handle the common start-and-complete task lifecycle with two commands.
 
 ```bash
 # Install globally
@@ -799,7 +798,7 @@ Verify discovery with `openclaw mcp list`. See [Troubleshooting](docs/TROUBLESHO
 **Troubleshooting MCP connection issues:**
 
 - **Always restart the MCP client after MCP config changes** — MCP servers are discovered at startup
-- **Verify tools are available:** Run `openclaw mcp list` to confirm 41 Veritas Kanban tools appear
+- **Verify tools are available:** Run `openclaw mcp list` to confirm 42 Veritas Kanban tools appear
 - **When reporting issues, provide:**
   - OpenClaw version (`openclaw --version`)
   - VK version and health (`curl http://localhost:3001/api/health`)
@@ -851,27 +850,27 @@ pnpm validate:release # Release readiness checks
 
 ## 📚 Documentation
 
-| Document                                       | Description                                      |
-| ---------------------------------------------- | ------------------------------------------------ |
-| [Features](docs/FEATURES.md)                   | Complete feature reference                       |
-| [v6 Visual Tour](docs/V6-VISUAL-TOUR.md)       | Provider, Buzz, approval, and run evidence views |
-| [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs                  |
-| [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                    |
-| [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker     |
-| [Deployment](docs/DEPLOYMENT.md)               | Docker, bare metal, env config                   |
-| [Troubleshooting](docs/TROUBLESHOOTING.md)     | Common issues & solutions                        |
-| [Contributing](CONTRIBUTING.md)                | How to contribute, PR guidelines                 |
-| [Security Policy](SECURITY.md)                 | Vulnerability reporting                          |
-| [Code of Conduct](CODE_OF_CONDUCT.md)          | Community guidelines                             |
-| [Changelog](CHANGELOG.md)                      | Release history                                  |
-| [Sprint Docs](docs/)                           | Sprint planning & audit reports                  |
+| Document                                       | Description                                         |
+| ---------------------------------------------- | --------------------------------------------------- |
+| [Features](docs/FEATURES.md)                   | Complete feature reference                          |
+| [v6 Visual Tour](docs/V6-VISUAL-TOUR.md)       | Provider, Buzz, approval, and run evidence views    |
+| [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs                     |
+| [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                       |
+| [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker        |
+| [Deployment](docs/DEPLOYMENT.md)               | Docker, bare metal, env config                      |
+| [Troubleshooting](docs/TROUBLESHOOTING.md)     | Common issues and solutions                         |
+| [Contributing](CONTRIBUTING.md)                | How to contribute and pull request guidelines       |
+| [Security Policy](SECURITY.md)                 | Vulnerability reporting                             |
+| [Code of Conduct](CODE_OF_CONDUCT.md)          | Community guidelines                                |
+| [Changelog](CHANGELOG.md)                      | Release history                                     |
+| [Documentation Index](docs/)                   | Operator, developer, architecture, and release docs |
 
 ---
 
-## 📸 v5 Visuals
+## 📸 Visuals
 
 <details>
-<summary><strong>Click to expand v5 screenshots and GIFs</strong></summary>
+<summary><strong>Click to expand screenshots and GIFs</strong></summary>
 
 These captures use release-safe dummy content against the current app surfaces. See the [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) for the current release views and retained v5 shell captures.
 
@@ -905,19 +904,22 @@ These captures use release-safe dummy content against the current app surfaces. 
 
 ## 🗺️ Roadmap
 
-Current planning lives in GitHub, not in a stale README checklist:
+Current work and priorities live in GitHub, not in a version-specific README checklist:
 
 - [Open issues](https://github.com/BradGroux/veritas-kanban/issues)
-- [v5.0 roadmap issues](https://github.com/BradGroux/veritas-kanban/issues?q=is%3Aissue%20state%3Aopen%20label%3Arelease%3Av5.0)
-- [v5.0 SQLite schema and migration strategy](docs/SQLITE-SCHEMA.md)
-- [v5.0 SQLite migration recovery drill](docs/MIGRATION-RECOVERY.md)
-- [v5.0 desktop architecture decision](docs/architecture/ADR-0001-v5-desktop-architecture.md)
-- [post-GA desktop agent workbench spec](docs/DESKTOP-AGENT-WORKBENCH.md)
+- [Release history](CHANGELOG.md)
+- [GitHub releases](https://github.com/BradGroux/veritas-kanban/releases)
+
+Longer-lived product and architecture direction is recorded separately:
+
+- [v6 agent runtime control plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
+- [phase capability profiles](docs/architecture/PHASE-CAPABILITY-PROFILES.md)
+- [tool control plane v1](docs/architecture/TOOL-CONTROL-PLANE-V1.md)
+- [post-GA desktop agent workbench](docs/DESKTOP-AGENT-WORKBENCH.md)
 - [post-GA native mobile offline decision](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md)
 - [post-GA cloud sync and hosted SaaS decision](docs/architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md)
-- [Release history](CHANGELOG.md)
 
-Use issues for current work and the changelog for shipped work.
+Use issues for current work, architecture records for durable direction, and the changelog and releases for shipped work.
 
 ---
 
