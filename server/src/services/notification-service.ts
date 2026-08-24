@@ -6,12 +6,10 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { withFileLock } from './file-lock.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteNotificationRepository } from '../storage/sqlite/notification-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
+import { NotificationFileRepository } from '../storage/notification-file-repository.js';
 
 const DATA_DIR = getRuntimeDir();
 
@@ -98,17 +96,18 @@ export class NotificationService {
   private notifications: Notification[] = [];
   private subscriptions: ThreadSubscription[] = [];
   private loaded = false;
-  private readonly notificationsFile: string;
-  private readonly subscriptionsFile: string;
+  private readonly fileRepository: NotificationFileRepository;
   private readonly repository: SqliteNotificationRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
 
   constructor(options: NotificationServiceOptions = {}) {
     const dataDir = options.dataDir ?? DATA_DIR;
-    this.notificationsFile = options.notificationsFile ?? path.join(dataDir, 'notifications.json');
-    this.subscriptionsFile =
-      options.subscriptionsFile ?? path.join(dataDir, 'thread-subscriptions.json');
+    this.fileRepository = new NotificationFileRepository({
+      dataDir,
+      notificationsFile: options.notificationsFile,
+      subscriptionsFile: options.subscriptionsFile,
+    });
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
 
@@ -130,18 +129,8 @@ export class NotificationService {
       return;
     }
 
-    try {
-      const nData = await fs.readFile(this.notificationsFile, 'utf-8');
-      this.notifications = JSON.parse(nData);
-    } catch {
-      this.notifications = [];
-    }
-    try {
-      const sData = await fs.readFile(this.subscriptionsFile, 'utf-8');
-      this.subscriptions = JSON.parse(sData);
-    } catch {
-      this.subscriptions = [];
-    }
+    this.notifications = await this.fileRepository.loadNotifications<Notification>();
+    this.subscriptions = await this.fileRepository.loadSubscriptions<ThreadSubscription>();
     this.loaded = true;
   }
 
@@ -151,9 +140,7 @@ export class NotificationService {
       return;
     }
 
-    await withFileLock(this.notificationsFile, async () => {
-      await fs.writeFile(this.notificationsFile, JSON.stringify(this.notifications, null, 2));
-    });
+    await this.fileRepository.saveNotifications(this.notifications);
   }
 
   private async saveSubscriptions(): Promise<void> {
@@ -162,9 +149,7 @@ export class NotificationService {
       return;
     }
 
-    await withFileLock(this.subscriptionsFile, async () => {
-      await fs.writeFile(this.subscriptionsFile, JSON.stringify(this.subscriptions, null, 2));
-    });
+    await this.fileRepository.saveSubscriptions(this.subscriptions);
   }
 
   /**
