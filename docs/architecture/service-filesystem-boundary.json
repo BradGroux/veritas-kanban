@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 31,
+  "maximumEntries": 29,
   "entries": [
     {
       "path": "server/src/services/attachment-service.ts",
@@ -81,12 +81,6 @@
       "rationale": "Managed-content storage migration is tracked in issue #1188."
     },
     {
-      "path": "server/src/services/metrics/telemetry-reader.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
       "path": "server/src/services/notification-service.ts",
       "category": "authoritative-persistence",
       "owner": "#1187",
@@ -148,12 +142,6 @@
     },
     {
       "path": "server/src/services/task-identity-diagnostics.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1187",
-      "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/telemetry-service.ts",
       "category": "authoritative-persistence",
       "owner": "#1187",
       "rationale": "Operational evidence storage migration is tracked in issue #1187."

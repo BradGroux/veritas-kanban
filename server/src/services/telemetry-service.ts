@@ -1,10 +1,4 @@
-import fs from 'fs/promises';
-import { createReadStream, createWriteStream } from '../storage/fs-helpers.js';
-import path from 'path';
 import { getTelemetryDir } from '../utils/paths.js';
-import { createGzip, createGunzip } from 'zlib';
-import { pipeline } from 'stream/promises';
-import readline from 'readline';
 import { nanoid } from 'nanoid';
 import type {
   TelemetryEvent,
@@ -17,6 +11,7 @@ import { createLogger } from '../lib/logger.js';
 import type { TelemetryRepository } from '../storage/interfaces.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteTelemetryRepository } from '../storage/sqlite/telemetry-repository.js';
+import { TelemetryFileRepository } from '../storage/telemetry-file-repository.js';
 const log = createLogger('telemetry-service');
 
 // Default paths - resolve via shared paths helper (respects DATA_DIR/VERITAS_DATA_DIR)
@@ -53,9 +48,11 @@ export class TelemetryService {
   private repository: TelemetryRepository | null = null;
   private sqliteDatabase: SqliteDatabase | null = null;
   private ownsSqliteDatabase = false;
+  private readonly fileRepository: TelemetryFileRepository;
 
   constructor(options: TelemetryServiceOptions = {}) {
     this.telemetryDir = options.telemetryDir || TELEMETRY_DIR;
+    this.fileRepository = new TelemetryFileRepository(this.telemetryDir);
 
     // Read retention from env var, falling back to options, then default
     const envRetention = process.env.TELEMETRY_RETENTION_DAYS;
@@ -102,7 +99,7 @@ export class TelemetryService {
       return;
     }
 
-    await fs.mkdir(this.telemetryDir, { recursive: true });
+    await this.fileRepository.ensureReady();
     await this.cleanupOldEvents();
     this.initialized = true;
   }
@@ -372,11 +369,11 @@ export class TelemetryService {
     }
 
     await this.init();
-    const files = await fs.readdir(this.telemetryDir);
+    const files = await this.fileRepository.listFiles();
 
     for (const file of files) {
       if (file.endsWith('.ndjson') || file.endsWith('.ndjson.gz')) {
-        await fs.unlink(path.join(this.telemetryDir, file));
+        await this.fileRepository.remove(file);
       }
     }
   }
@@ -482,10 +479,9 @@ export class TelemetryService {
    */
   private async writeEvent(event: TelemetryEvent): Promise<void> {
     const filename = this.getFilenameForDate(new Date(event.timestamp));
-    const filepath = path.join(this.telemetryDir, filename);
     const line = JSON.stringify(event) + '\n';
 
-    await fs.appendFile(filepath, line, 'utf-8');
+    await this.fileRepository.append(filename, line);
   }
 
   /**
@@ -497,49 +493,15 @@ export class TelemetryService {
     filename: string,
     callback: (event: AnyTelemetryEvent) => boolean | void
   ): Promise<void> {
-    const filepath = path.join(this.telemetryDir, filename);
-    const isGzipped = filename.endsWith('.gz');
-
-    try {
-      await fs.access(filepath);
-    } catch {
-      return; // File doesn't exist
-    }
-
-    return new Promise((resolve, reject) => {
-      let stream = createReadStream(filepath);
-
-      if (isGzipped) {
-        const gunzip = createGunzip();
-        stream = stream.pipe(gunzip) as unknown as ReturnType<typeof createReadStream>;
+    if (!(await this.fileRepository.exists(filename))) return;
+    await this.fileRepository.streamLines(filename, (line) => {
+      if (!line.trim()) return;
+      try {
+        const event = JSON.parse(line) as AnyTelemetryEvent;
+        return callback(event);
+      } catch {
+        log.error({ err: line }, '[Telemetry] Failed to parse line');
       }
-
-      const rl = readline.createInterface({
-        input: stream as NodeJS.ReadableStream,
-        crlfDelay: Infinity,
-      });
-
-      let stopped = false;
-
-      rl.on('line', (line) => {
-        if (stopped || !line.trim()) return;
-
-        try {
-          const event = JSON.parse(line) as AnyTelemetryEvent;
-          const shouldContinue = callback(event);
-          if (shouldContinue === false) {
-            stopped = true;
-            rl.close();
-            stream.destroy();
-          }
-        } catch {
-          log.error({ err: line }, '[Telemetry] Failed to parse line');
-        }
-      });
-
-      rl.on('close', () => resolve());
-      rl.on('error', reject);
-      stream.on('error', reject);
     });
   }
 
@@ -559,7 +521,7 @@ export class TelemetryService {
    * Get list of event files within a date range (includes both .ndjson and .ndjson.gz)
    */
   private async getEventFiles(since?: string, until?: string): Promise<string[]> {
-    const files = await fs.readdir(this.telemetryDir);
+    const files = await this.fileRepository.listFiles();
     const eventFiles = files.filter(
       (f) => f.startsWith('events-') && (f.endsWith('.ndjson') || f.endsWith('.ndjson.gz'))
     );
@@ -607,7 +569,7 @@ export class TelemetryService {
     compressCutoff.setDate(compressCutoff.getDate() - this.compressAfterDays);
     const compressCutoffStr = compressCutoff.toISOString().slice(0, 10);
 
-    const files = await fs.readdir(this.telemetryDir);
+    const files = await this.fileRepository.listFiles();
     let deleted = 0;
     let compressed = 0;
 
@@ -617,11 +579,9 @@ export class TelemetryService {
 
       const fileDate = match[1];
       const isCompressed = !!match[2];
-      const filepath = path.join(this.telemetryDir, filename);
-
       // Delete files older than retention period
       if (fileDate < retentionCutoffStr) {
-        await fs.unlink(filepath);
+        await this.fileRepository.remove(filename);
         deleted++;
         continue;
       }
@@ -629,7 +589,7 @@ export class TelemetryService {
       // Compress uncompressed files older than compress threshold
       if (this.compressAfterDays > 0 && !isCompressed && fileDate < compressCutoffStr) {
         try {
-          await this.compressFile(filepath);
+          await this.fileRepository.compress(filename);
           compressed++;
         } catch (err) {
           log.error({ err: err }, `[Telemetry] Failed to compress ${filename}`);
@@ -643,15 +603,6 @@ export class TelemetryService {
           `(retention=${this.config.retention}d, compress=${this.compressAfterDays}d)`
       );
     }
-  }
-
-  /**
-   * Compress an NDJSON file to gzip and remove the original.
-   */
-  private async compressFile(filepath: string): Promise<void> {
-    const gzPath = filepath + '.gz';
-    await pipeline(createReadStream(filepath), createGzip(), createWriteStream(gzPath));
-    await fs.unlink(filepath);
   }
 
   dispose(): void {

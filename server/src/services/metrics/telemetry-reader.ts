@@ -2,15 +2,11 @@
  * Telemetry file I/O utilities.
  * Handles reading NDJSON event files (plain and gzipped) with streaming support.
  */
-import { createReadStream } from '../../storage/fs-helpers.js';
-import fs from 'fs/promises';
-import path from 'path';
-import readline from 'readline';
-import { createGunzip } from 'zlib';
 import type { SQLInputValue } from 'node:sqlite';
 import type { AnyTelemetryEvent, TelemetryEventType, StreamEventHandler } from './types.js';
 import { createLogger } from '../../lib/logger.js';
 import { SqliteDatabase } from '../../storage/sqlite/database.js';
+import { TelemetryFileRepository } from '../../storage/telemetry-file-repository.js';
 const log = createLogger('telemetry-reader');
 
 interface SqliteTelemetryPayloadRow {
@@ -27,14 +23,15 @@ interface SqliteTelemetryStartRow {
  */
 export async function getEventFiles(telemetryDir: string, since: string | null): Promise<string[]> {
   try {
-    const files = await fs.readdir(telemetryDir);
+    const repository = new TelemetryFileRepository(telemetryDir);
+    const files = await repository.listFiles();
     const eventFiles = files.filter(
       (f) => f.startsWith('events-') && (f.endsWith('.ndjson') || f.endsWith('.ndjson.gz'))
     );
 
     if (!since) {
       // Return all event files (for 'all' period)
-      return eventFiles.map((f) => path.join(telemetryDir, f));
+      return eventFiles.map((f) => repository.eventPath(f));
     }
 
     const sinceDate = since.slice(0, 10);
@@ -44,7 +41,7 @@ export async function getEventFiles(telemetryDir: string, since: string | null):
         if (!match) return false;
         return match[1] >= sinceDate;
       })
-      .map((f) => path.join(telemetryDir, f));
+      .map((f) => repository.eventPath(f));
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return [];
@@ -56,21 +53,8 @@ export async function getEventFiles(telemetryDir: string, since: string | null):
 /**
  * Create a readline interface for an event file (handles both .ndjson and .ndjson.gz)
  */
-export function createLineReader(filePath: string): readline.Interface {
-  if (filePath.endsWith('.gz')) {
-    const fileStream = createReadStream(filePath);
-    const gunzip = createGunzip();
-    const decompressed = fileStream.pipe(gunzip);
-    return readline.createInterface({
-      input: decompressed,
-      crlfDelay: Infinity,
-    });
-  }
-  const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-  return readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity,
-  });
+export function createLineReader(filePath: string) {
+  return TelemetryFileRepository.createLineReader(filePath);
 }
 
 /**
