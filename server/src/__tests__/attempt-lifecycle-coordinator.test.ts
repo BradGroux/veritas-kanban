@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Task, TaskAttempt, TaskEnvelope, UpdateTaskInput } from '@veritas-kanban/shared';
+import type {
+  ProviderRuntimeManifest,
+  Task,
+  TaskAttempt,
+  TaskEnvelope,
+  UpdateTaskInput,
+} from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from './fixtures/provider-runtime-manifest.js';
 import {
   AttemptLifecycleCoordinator,
@@ -26,7 +32,10 @@ function baseTask(): Task {
   };
 }
 
-async function taskEnvelope(task: Task): Promise<TaskEnvelope> {
+async function taskEnvelope(
+  task: Task,
+  providerRuntimeManifest: ProviderRuntimeManifest
+): Promise<TaskEnvelope> {
   return new TaskEnvelopeService({
     captureLaunchBaseline: async (_worktreePath, capturedAt) => ({
       capturedAt,
@@ -79,7 +88,7 @@ class MemoryAttemptLifecycleStore implements AttemptLifecycleStore {
 async function completionFixture(summary = 'Lifecycle work completed.') {
   const task = baseTask();
   const providerRuntimeManifest = providerRuntimeManifestFixture();
-  const envelope = await taskEnvelope(task);
+  const envelope = await taskEnvelope(task, providerRuntimeManifest);
   const attempt: TaskAttempt = {
     id: envelope.attempt.id,
     agent: 'codex',
