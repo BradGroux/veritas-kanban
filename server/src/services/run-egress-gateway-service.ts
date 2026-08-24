@@ -508,10 +508,11 @@ async function handleUpgrade(
   upstream.write(
     `${request.method ?? 'GET'} ${target.pathname}${target.search} HTTP/${request.httpVersion}\r\n`
   );
-  for (const [name, value] of Object.entries(forwardHeaders(request.headers, target.host, true))) {
-    for (const item of Array.isArray(value) ? value : [value]) {
-      if (item !== undefined) upstream.write(`${name}: ${item}\r\n`);
-    }
+  const headers = forwardHeaders(request.headers, target.host, true);
+  for (let index = 0; index < headers.length; index += 2) {
+    const name = headers[index];
+    const value = headers[index + 1];
+    if (name !== undefined && value !== undefined) upstream.write(`${name}: ${value}\r\n`);
   }
   upstream.write('\r\n');
   if (transport.head.length > 0) client.write(transport.head);
