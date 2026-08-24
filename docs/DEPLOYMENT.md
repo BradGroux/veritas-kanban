@@ -69,10 +69,13 @@ Data is persisted in a Docker named volume (`kanban-data`), so it survives conta
 
 The multi-stage Dockerfile enforces architecture-specific production image budgets:
 
-| Architecture | Maximum compressed image size | Measured release candidate |
-| ------------ | ----------------------------- | -------------------------- |
-| `arm64`      | 200,000,000 bytes             | 195,910,880 bytes          |
-| `amd64`      | 600,000,000 bytes             | 571,590,173 bytes          |
+| Architecture | Maximum compressed image size | 6.1.2 implementation baseline |
+| ------------ | ----------------------------- | ----------------------------- |
+| `arm64`      | 200,000,000 bytes             | 195,910,880 bytes             |
+| `amd64`      | 600,000,000 bytes             | 571,590,173 bytes             |
+
+The final release candidate is remeasured at the release milestone; these
+implementation baselines are not substituted for final artifact evidence.
 
 | Stage          | Purpose                                                                  |
 | -------------- | ------------------------------------------------------------------------ |
@@ -251,10 +254,10 @@ If you need to debug inside a container, use `docker exec` to inspect — don't 
 
 ### Prerequisites
 
-| Requirement | Version |
-| ----------- | ------- |
-| Node.js     | 22.0.0+ |
-| pnpm        | 11.1.1+ |
+| Requirement | Version         |
+| ----------- | --------------- |
+| Node.js     | 22.22.1+        |
+| pnpm        | 11.1.1 (pinned) |
 
 Install pnpm if not present:
 

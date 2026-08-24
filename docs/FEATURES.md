@@ -634,11 +634,11 @@ Reusable resources mountable across projects with full CRUD API and Settings tab
 Automated staleness detection for project documentation with real-time tracking and alerting. Added in v3.2.
 
 - **Freshness tracking** — Track document staleness with freshness scores, alerts, and optional auto-review task creation
-- **Freshness headers** — YAML frontmatter with `fresh-days`, `owner`, `last-verified` fields
+- **Tracked metadata** — Registry records store review dates, owners, paths, thresholds, and tags without rewriting source documents
 - **Steward workflow** — Assigned doc owners responsible for periodic review
 - **Staleness API** — Query which docs need review based on freshness thresholds at `/api/doc-freshness`
 - **Configurable thresholds** — Set staleness thresholds via Settings → Doc Freshness
-- **3-phase automation** — Manual → scheduled checks → CI integration
+- **3-phase automation** — Manual registry review → scheduled checks → CI integration
 - **Inspired by** @mvoutov's BoardKit Orchestrator ("stale docs = hallucinating AI")
 
 ---
@@ -2343,13 +2343,13 @@ TRUST_PROXY=true
 
 ## Storage & Architecture
 
-Abstract storage layer that decouples business logic from the filesystem.
+Deep storage modules decouple business logic from filesystem and SQLite details.
 
-- **Repository pattern** — 5 repository interfaces abstract data access: `ActivityRepository`, `TemplateRepository`, `StatusHistoryRepository`, `ManagedListRepository`, `TelemetryRepository`
-- **StorageProvider** — Central provider extended with all repository implementations; services depend on interfaces, not filesystem calls
-- **`fs-helpers.ts`** — Centralized filesystem access module; the only file in the codebase that imports `fs` directly
-- **Service migration** — All 10 services migrated off direct `fs` imports to use the repository interfaces
-- **Extensibility** — Repository interfaces enable future storage backends (database, cloud storage) without changing service logic
+- **Repository contracts** — Persisted activity, progress, status history, deliverables, workflows, broadcasts, conflicts, delegation, ceremony, error analysis, permissions, lifecycle configuration, schedules, reflection, chat, tasks, telemetry, and managed content use explicit interfaces.
+- **File and SQLite parity** — Both backends preserve validated schemas, containment, locking, atomic mutation, pagination, and migration behavior appropriate to each domain.
+- **Service boundary gate** — Production services cannot introduce direct filesystem imports; authoritative reads and writes flow through the storage layer.
+- **Canonical runtime paths** — `DATA_DIR` and `VERITAS_DATA_DIR`, legacy discovery, backup, integrity, migration, health, and Docker mounts resolve through the same path contract.
+- **Extensibility** — Business services depend on domain operations instead of storage layout, allowing backend changes without duplicating product rules.
 
 ---
 
@@ -2371,7 +2371,8 @@ Production-ready deployment and development tooling.
 
 - **GitHub Actions** — CI pipeline on push to `main` and pull requests
 - **Concurrency control** — In-progress runs cancelled when new commits push
-- **Pipeline jobs** — Lint and warning budget, type check, workspace unit tests, production build, and security audit
+- **Fast pull-request jobs** — Source-policy selection, lint and warning budget, typecheck, production build, dependency audit, CodeQL, and gitleaks
+- **Milestone jobs** — Workspace tests, critical-path coverage, Playwright, desktop artifacts, load checks, and Docker contracts run for `ci:full`, scheduled, or manual milestones
 - **Scheduled QA** — Weekly and manually triggered Playwright and k6 gates run outside the fast PR path
 - **Release validation** — `pnpm validate:release` checks root/shared/server/web/CLI/MCP/desktop versions, the release-major document set, built artifacts, and optional GitHub tag/release state
 - **pnpm caching** — Dependency cache for faster CI runs
@@ -2397,12 +2398,14 @@ Production-ready deployment and development tooling.
 
 ## Testing
 
-Multi-layer testing strategy.
+Multi-layer, milestone-scoped verification strategy. Exact release counts live
+in `docs/V6-RC-EVIDENCE-PACKET.md`; historical counts are not treated as current
+proof.
 
 ### Unit Tests (Vitest)
 
-- **119 test files** · **1,699 tests passing** across server and frontend
-- **Server (105 files, 1,570 tests):**
+- **Workspace coverage** — Server, web, CLI, MCP, shared contracts, and desktop packages are included in the canonical release gate.
+- **Server coverage includes:**
   - All middleware (auth, rate limiting, request ID, API versioning, cache control, validation, response envelope, request timeout)
   - Core services (task, template, telemetry, notification, activity, sprint, diff, conflict, summary, status history, digest, attachment, text extraction, migration, managed list, broadcast, automation, blocking, failure alert, metrics, settings, JWT rotation, MIME validation, preview, trace, circuit breaker)
   - Route handlers (tasks, task archive, task comments, task subtasks, task time, auth, agent status, automation, config, notifications, templates, health, misc routes)
@@ -2411,7 +2414,7 @@ Multi-layer testing strategy.
   - Prometheus metrics (counters, gauges, histograms, registry, collector middleware)
   - Environment variable validation
   - Circuit breaker transitions (18 tests covering open/half-open/closed states — added in v3.3.2)
-- **Frontend (14 files, 129 tests):**
+- **Frontend coverage includes:**
   - API client helpers and task operations
   - Custom hooks: useWebSocket, useKeyboard (keyboard shortcuts)
   - Components: KanbanBoard, TaskCard, ErrorBoundary, AgentStatusIndicator, WebSocketIndicator
@@ -2420,9 +2423,8 @@ Multi-layer testing strategy.
 
 ### End-to-End Tests (Playwright)
 
-- **7 spec files** covering critical user flows
-- **19/19 tests passing**
-- **Test suites:**
+- **Chromium and WebKit projects** cover critical user flows at declared QA and release milestones.
+- **Test suites include:**
   - Health check
   - Settings management
   - Task creation

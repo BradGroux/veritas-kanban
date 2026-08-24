@@ -10,7 +10,7 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-6.1.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.1.2-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -211,9 +211,13 @@ Not just cards on a board. Tasks have dependency graphs with cycle detection, cr
 
 Isolated worktrees per task — no branch switching, no conflicts. Built-in code review with unified diff viewer and inline comments. Approval workflows (approve, request changes, reject). Visual merge conflict resolution. Create GitHub PRs directly from the task detail panel. Bidirectional GitHub Issues sync with label mapping.
 
-### 📁 Zero Infrastructure
+### 📁 Local-First Storage
 
-Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no Redis, and no Docker required for local use. Clone, `pnpm install`, `pnpm dev` — done. Everything is `grep`-friendly, version-controllable, and human-readable. Back up your entire board with `git push`.
+File storage remains the zero-infrastructure default: tasks are Markdown,
+settings are JSON, and workflows are YAML. SQLite is available for governed
+multi-user and higher-integrity deployments; Redis and Docker are not required
+for local use. Clone, `pnpm install`, and `pnpm dev` to start. Back up the
+complete configured storage root, not only the Git-tracked board files.
 
 ### 🔌 Optional Integration Surfaces
 
@@ -324,7 +328,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 - **Activity page** — Status history with clickable task navigation, color-coded badges, and daily summary
 - **Daily standup summary** — Generate standup reports via API or CLI (`vk summary standup`)
 - **Task Templates** — Create reusable templates with defaults, subtasks, and multi-task blueprints
-- **Documentation freshness** — Steward workflow with freshness headers and automated staleness detection
+- **Documentation freshness** — Registry-backed review dates, thresholds, scores, and staleness alerts
 - **Cost prediction** — Multi-factor cost estimation for tasks
 
 #### Dashboard
@@ -379,8 +383,8 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 | **Storage**         | Markdown files with YAML frontmatter  | yaml + local frontmatter helper             |
 | **Git**             | simple-git, worktree management       | —                                           |
 | **Testing**         | Playwright (E2E), Vitest (unit)       | Playwright 1.61, Vitest 4.1                 |
-| **Runtime**         | Node.js                               | 22+                                         |
-| **Package Manager** | pnpm                                  | 11.1.1+                                     |
+| **Runtime**         | Node.js                               | 22.22.1+                                    |
+| **Package Manager** | pnpm                                  | 11.1.1 (pinned)                             |
 
 ---
 

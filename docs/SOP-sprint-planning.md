@@ -107,7 +107,7 @@ Example: 6 tasks × 4 subtasks × 0.5d = 12 agent-days. With 3 agents @ 4 days f
 | US-1602: Task Workflow SOP         | docs | high     | Defines lifecycle.        |
 | US-1603: Sprint Planning SOP       | docs | medium   | This document.            |
 | US-1604: Multi-Agent Orchestration | docs | medium   | PM + workers.             |
-| US-1605: Cross-Model Review        | docs | medium   | Opposite model gate.      |
+| US-1605: Review Policy             | docs | medium   | Optional review criteria. |
 | US-1606: Best Practices            | docs | medium   | Patterns + anti-patterns. |
 
 Clone this pattern for your own projects; rename sprint `US-YYYY` and fill tasks accordingly.

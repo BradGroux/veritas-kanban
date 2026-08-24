@@ -1,7 +1,7 @@
 # Veritas Kanban — API Reference
 
-**Version**: 6.1.1
-**Last Updated**: 2026-07-25
+**Version**: 6.1.2
+**Last Updated**: 2026-08-24
 **Base URL**: `http://localhost:3001/api`
 **Canonical prefix**: `/api/v1` (alias: `/api`)
 

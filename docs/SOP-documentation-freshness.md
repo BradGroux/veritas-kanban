@@ -29,6 +29,11 @@ Every project should maintain these files:
 | `prompt-registry/*.md`   | Workflow prompts                       | When prompts drift or improve        |
 | `README.md`              | Project overview, quick start          | After major releases                 |
 
+Register maintained living documents in Settings → Doc Freshness. The registry
+record, not an optional Markdown comment, is authoritative for the last review,
+reviewer, maximum age, score, and alerts. Historical evidence and release notes
+do not need synthetic freshness headers.
+
 ### Optional Model-Specific Files
 
 - `GPT.md` — GPT-specific notes (if behavior differs from Claude)
@@ -45,7 +50,9 @@ Update docs **within the same session** when:
 
 1. **A bug was caused by missing context** — Add durable shared context to
    `AGENTS.md`, or a harness-specific supplement when it truly differs
-2. **Cross-model review catches a pattern** — Document the pattern
+2. **Focused review catches a pattern** — Document the pattern regardless of
+   whether the reviewer is a maintainer, an independent agent, or a configured
+   governance gate
 3. **A workaround is discovered** — Add it to Troubleshooting or the nearest
    applicable instruction file
 4. **API behavior changes** — Update relevant docs
@@ -86,7 +93,8 @@ Run this monthly or after major releases:
 
 - [ ] Prompts reference current API endpoints
 - [ ] No prompts for removed features
-- [ ] Cross-model review prompt matches current checklist
+- [ ] Optional review prompts match the current checklist and are not described
+      as default delivery gates
 
 ### README.md
 

@@ -44,7 +44,13 @@ When completing a task that changes user-facing behavior:
 
 ### Freshness Indicators
 
-Each doc should include a freshness header:
+The Settings → Doc Freshness registry is the authoritative freshness source.
+Each tracked record stores its path, last review date, reviewer, maximum age,
+tags, and notes. The service computes scores and alerts from those records; it
+does not scan or rewrite Markdown headers.
+
+A maintained living document may also include this optional human-readable
+marker when repository reviewers find it useful:
 
 ```markdown
 <!-- doc-freshness: 2026-03-25 | v4.0.0 | @veritas -->
@@ -52,12 +58,16 @@ Each doc should include a freshness header:
 
 Format: `date | version | last-updater`
 
-When a doc is older than the current version, it may need review.
+The optional marker is not required for release notes, historical evidence,
+generated references, or every file under `docs/`. When a tracked document is
+older than its configured maximum age or its maintained version, review it and
+update the authoritative registry record.
 
 ### Last Sweep
 
 | Date       | Scope                                                               | Agent   |
 | ---------- | ------------------------------------------------------------------- | ------- |
+| 2026-08-24 | v6.1.2 audit, storage, provider, CI, security, release, and SOP docs | Release |
 | 2026-08-22 | v6.1.1 maintenance, dependency, release, upgrade, and evidence docs | Release |
 | 2026-07-26 | v6.1.0 roadmap, harness, governance, knowledge, and release docs    | Release |
 | 2026-07-24 | v6.0.2 desktop recovery, version support, release, and evidence     | Release |
@@ -73,7 +83,7 @@ When a doc is older than the current version, it may need review.
 ### Phase 1: Manual (Current)
 
 - Doc update checklist in PR template
-- Freshness headers in docs
+- Doc Freshness registry records, with optional source markers where useful
 - Agent instructions include "update docs" step
 
 ### Phase 2: Hook-Based
@@ -112,7 +122,8 @@ project template, and harness-specific files only supplement the canonical
 rules. Key rules:
 
 1. **Always update docs alongside code** — no code-only PRs for user-facing changes
-2. **Use freshness headers** — every doc starts with `<!-- doc-freshness: ... -->`
+2. **Track maintained living docs** — use the Doc Freshness registry; optional
+   source headers are a reviewer aid, not the system of record
 3. **JSDoc is documentation** — route handlers and services must have JSDoc
 4. **Examples must work** — if you change an API, update the examples
 5. **CHANGELOG is mandatory** — every release gets an entry

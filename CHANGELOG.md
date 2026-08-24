@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.2] - 2026-08-24
+
+Veritas Kanban 6.1.2 completes the repository-wide reliability, security,
+storage, provider-runtime, CI, container, and supportability audit tracked in
+#1174. It is a backward-compatible patch release for 6.1.1.
+
+### Added
+
+- Added deterministic, milestone-scoped CI selection so ordinary pull requests
+  keep test, coverage, E2E, desktop artifact, load, and Docker-contract jobs
+  dormant while `ci:full`, scheduled, and manual release milestones run the
+  complete gates (#1172, #1227, #1228).
+- Added risk-weighted critical-path coverage baselines and ratchets for provider
+  dispatch, attempt lifecycle, authentication, storage, web API/session, CLI,
+  MCP, and desktop trust boundaries (#1169, #1183).
+- Added continuous CodeQL, dependency, and secret-scanning policy enforcement,
+  immutable GitHub Actions references, and repository guards that prevent those
+  controls from silently regressing (#1167, #1168, #1179, #1180).
+- Triaged the initial CodeQL baseline, fixed validated request, logging,
+  persisted-key, file-handling, and sandbox-read findings, and documented the
+  evidence-backed disposition of non-exploitable alerts (#1231, #1232-#1235).
+- Added a production Docker runtime size contract with architecture-specific
+  ceilings, non-root runtime checks, health/auth/SQLite/static-web smoke
+  coverage, and a reduced build context (#1166, #1222).
+
+### Changed
+
+- Centralized `DATA_DIR` and `VERITAS_DATA_DIR` resolution, legacy-location
+  discovery, migration, backup, integrity, and Docker-mounted runtime behavior
+  behind the canonical path contract (#1162, #1184).
+- Restored the service/storage boundary across activity, progress, status
+  history, scheduled deliverables, workflows, broadcasts, conflicts,
+  delegation, ceremony, error analyses, permissions, lifecycle configuration,
+  scheduler, reflection, chat, task, telemetry, and managed-content persistence.
+  File and SQLite implementations retain their existing compatibility,
+  containment, locking, and atomic-write contracts (#1163, #1190-#1220).
+- Decomposed the provider control path into explicit launch compilation, Codex
+  event interpretation, runtime resolution, completion, attempt mutation, and
+  adapter-registry contracts. Executable providers remain explicit and unknown
+  or mismatched profiles continue to fail closed without an OpenClaw fallback
+  (#1164, #1223-#1230).
+- Routed frontend JSON, blob, and stream operations through credential-aware API
+  helpers, preserving cross-origin cookie authentication, base paths, and
+  server error envelopes (#1165, #1218).
+- Removed four verified unused direct dependencies, regenerated the workspace
+  dependency graph with pnpm 11.1.1, and reduced the server lint-warning budget
+  from 600 to 458 without broad suppressions (#1170, #1173, #1217, #1221).
+- Replaced loader-fragile Vite/Vitest path handling with native ESM-compatible
+  configuration and made root workspace test discovery deterministic (#1171,
+  #1172, #1175, #1177, #1178, #1181).
+
+### Fixed
+
+- Eliminated split runtime-state locations and service-layer persistence leaks
+  that could send live data, backups, health checks, or migrations to different
+  roots under custom data-directory configurations (#1162, #1163).
+- Hardened request rate limits, structured logging, persisted dynamic keys,
+  bounded file reads and writes, and sandbox metadata reads identified by the
+  initial CodeQL baseline (#1231, #1232-#1235).
+- Integrated coordinated validation hardening for a privately reported input
+  boundary. Technical details remain under the repository security-advisory
+  process until supported artifacts are available and disclosure is approved
+  (#1236).
+
+### Compatibility and operations
+
+- The public REST API remains `v1`. Package, CLI, MCP, desktop, provider-profile,
+  and configuration contracts remain backward compatible with 6.1.1.
+- SQLite migrations remain at 30 through 33; upgrading from 6.1.1 does not run a
+  new schema migration. Runtime path normalization may move legacy files into
+  the configured canonical data directory. Keep a complete stopped-writer
+  backup until the upgraded runtime is accepted.
+- Rollback is restore-first: stop every writer, reinstall the prior signed
+  application only when its data contracts remain compatible, and otherwise
+  restore the complete pre-upgrade workspace. Never copy an older database over
+  a running instance.
+
 ## [6.1.1] - 2026-08-22
 
 Veritas Kanban 6.1.1 restores reliable Task Detail scrolling after the Mantine
@@ -2463,7 +2540,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.1...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.2...HEAD
+[6.1.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.1...v6.1.2
 [6.1.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.2...v6.1.0
 [6.0.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.1...v6.0.2

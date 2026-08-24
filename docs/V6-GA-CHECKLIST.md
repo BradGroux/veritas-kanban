@@ -1,13 +1,39 @@
 # Veritas Kanban v6 GA Checklist
 
 This checklist contains the active stable-release gate for Veritas Kanban
-6.1.1 and retains the completed 6.1.0 and 6.0.2 evidence below. Command results, platform
+6.1.2 and retains the completed 6.1.1, 6.1.0, and 6.0.2 evidence below. Command results, platform
 details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
+Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
 
-## 6.1.1 Release Gate
+## 6.1.2 Release Gate
+
+- [x] Audit issues #1162, #1163, and #1165-#1173 are closed through merged,
+      evidence-linked pull requests; #1164 implementation is merged and awaits
+      the single final regression milestone before closure.
+- [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.1.2.
+- [x] README, canonical instructions, API reference, compatibility policy,
+      upgrade guide, release notes, canonical GitHub body, freshness record, and
+      changelog are synchronized for 6.1.2.
+- [x] Runtime paths, storage repositories, provider adapters and lifecycle,
+      credential-aware frontend requests, immutable actions, continuous
+      scanning, critical coverage, dependency cleanup, lint ratchets, and the
+      production Docker contract are represented in release documentation.
+- [x] Independent and cross-model review remain optional; they are not part of
+      the default delivery or release gate.
+- [x] The coordinated private security fix is integrated into the candidate and
+      remains private until supported artifacts exist and disclosure is approved.
+- [ ] One clean final candidate passes the complete Node-floor and current-Node
+      verification matrix with exact counts, skips, retries, image size, and
+      limitations recorded in the evidence packet.
+- [ ] The release PR merges and its exact merge is published as annotated
+      `v6.1.2` with a live body matching `docs/releases/v6.1.2.md`.
+- [ ] Signed/notarized macOS assets, updater metadata, installed-app readiness,
+      the live Homebrew cask, and the private advisory disposition are verified.
+- [ ] Release tracker #1174 closes only after every publication readback passes.
+
+## Historical 6.1.1 Completed Release Gate
 
 - [x] Issue #1153 and pull requests #1148, #1149, #1150, #1154, and #1155
       received an evidence-backed maintainer disposition.
@@ -58,36 +84,53 @@ Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
 Apply `ci:full` to the release pull request and keep it applied through the
 final candidate synchronization. That single milestone runs the complete
 workspace suite, critical-path coverage, unsigned desktop artifacts, and
-Docker image contract. Run the following commands once from the clean 6.1.1
-release candidate:
+Docker image contract. Run the following commands once from the clean 6.1.2
+release candidate at the supported Node floor and current supported Node:
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm check:pnpm-settings
+pnpm check:security-artifacts
+pnpm check:delivery-cadence
+pnpm test:ci-scope
 pnpm audit --prod --audit-level=high
+pnpm audit:all
+pnpm check:gitleaks
 pnpm lint
 pnpm lint:budget
+pnpm lint:report
 pnpm qa:mantine
 pnpm typecheck
 pnpm build
+pnpm test
 pnpm test:unit
 pnpm test:e2e
 pnpm smoke:cli-mcp
-pnpm test:buzz:compatibility
 pnpm desktop:test
 pnpm desktop:build
 pnpm desktop:check:electron-artifacts
+pnpm desktop:test:readiness
+pnpm desktop:dev:fresh
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
-pnpm validate:release -- --version 6.1.1
-pnpm validate:release -- --version 6.1.1 --docker-build
+pnpm test:release-format
+pnpm validate:release -- --version 6.1.2 --skip-build-output
+pnpm validate:release -- --version 6.1.2 --docker-build
 ```
+
+Mount and inspect the unsigned DMG and ZIP, exercise the visible native
+single-instance/reopen/clean-close/quit lifecycle with an isolated profile, and
+run the production image as its non-root user against an isolated volume.
+Record health, auth, SQLite, static-web, canonical-path, backup, integrity,
+image-size, and clean-shutdown evidence. The same candidate must pass these
+gates at Node 22.22.1 and the current supported Node runtime.
 
 ## Distribution And Post-Publication
 
-All 6.1.1 publication gates are complete. The live GitHub body matches
-`docs/releases/v6.1.1.md`; the post-publication release validator passes; and
-the Homebrew cask uses the independently verified published ZIP checksum.
+The 6.1.2 publication gate is pending the final candidate, release merge, tag,
+signed/notarized artifacts, independent launch verification, post-publication
+validator, live Homebrew cask, and approved advisory disposition. Completed
+6.1.1 evidence remains recorded below and in the evidence packet.
 
 ## Historical 6.0.2 Source And Scope
 

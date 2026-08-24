@@ -8,7 +8,7 @@ Companion docs:
 
 - [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
 - [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
-- [SOP: Cross-Model Code Review](SOP-cross-model-code-review.md)
+- [Optional Independent Code Review](SOP-cross-model-code-review.md)
 - [AGENTS.md Template](AGENTS-TEMPLATE.md)
 
 ## Product Goal

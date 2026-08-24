@@ -103,7 +103,7 @@ Don't use it when:
 
 ### Prerequisites
 
-- Node.js ≥ 22
+- Node.js ≥ 22.22.1
 - The Veritas Kanban server running (`pnpm dev` or production)
 - pnpm (for building from source)
 - No OpenClaw requirement unless OpenClaw is the MCP client or agent runner you choose
@@ -844,10 +844,10 @@ Configure telemetry retention in `server/.env`:
 
 | Component          | Version      | Notes                       |
 | ------------------ | ------------ | --------------------------- |
-| MCP server package | `6.1.1`      | Matches VK server version   |
+| MCP server package | `6.1.2`      | Matches VK server version   |
 | MCP SDK            | `1.29.0`     | `@modelcontextprotocol/sdk` |
 | MCP protocol       | `2025-11-25` | Latest stable spec          |
-| Node.js            | `≥ 22`       | Matches the repo runtime    |
+| Node.js            | `≥ 22.22.1`  | Matches the repo runtime    |
 | TypeScript         | `6.0+`       | Build dependency only       |
 
 **Breaking change policy:**
@@ -888,4 +888,4 @@ The `findTask` utility matches the last N characters of a task ID (minimum 6). I
 
 ---
 
-_Last updated: 2026-08-22 · VK v6.1.1 · 42 tools / 9 categories_
+_Last updated: 2026-08-24 · VK v6.1.2 · 42 tools / 9 categories_

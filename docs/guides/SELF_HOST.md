@@ -32,15 +32,15 @@ This guide walks you through every self-hosting scenario — from running locall
 
 | Requirement | Version | Install                                                      |
 | ----------- | ------- | ------------------------------------------------------------ |
-| Node.js     | 22.0.0+ | https://nodejs.org or `nvm install 22`                       |
-| pnpm        | 11.1.1+ | `corepack enable && corepack prepare pnpm@11.1.1 --activate` |
-| Git         | any     | https://git-scm.com                                          |
+| Node.js     | 22.22.1+ | https://nodejs.org or `nvm install 22`                       |
+| pnpm        | 11.1.1   | `corepack enable && corepack prepare pnpm@11.1.1 --activate` |
+| Git         | 2.38+    | https://git-scm.com                                          |
 
 Verify:
 
 ```bash
-node --version   # v22.x.x
-pnpm --version   # 11.x.x
+node --version   # v22.22.1 or newer
+pnpm --version   # 11.1.1
 ```
 
 ---
@@ -468,6 +468,10 @@ The `DATA_DIR=/app/data` volume holds all persistent data:
     └── logs/          # Application logs
 ```
 
+This tree is illustrative, not exhaustive. Veritas also stores workflows,
+runtime evidence, telemetry, provider records, and other governed domains under
+the same canonical root. Back up the entire stopped-writer volume.
+
 **Without a named volume, data is lost on every `docker compose down`.** Always use a volume or bind mount.
 
 For `VERITAS_STORAGE=sqlite`, persistence is not enough: the authoritative
@@ -614,8 +618,8 @@ Set `PROMETHEUS_METRICS_TOKEN` on the Veritas server to the same secret, or use 
 
 | Variable                   | Default              | Description                                             |
 | -------------------------- | -------------------- | ------------------------------------------------------- |
-| `VERITAS_DATA_DIR`         | `.veritas-kanban`    | Config, logs, internal state (relative to project root) |
-| `DATA_DIR`                 | `/app/data` (Docker) | Mapped data dir inside Docker container                 |
+| `VERITAS_DATA_DIR`         | Project root         | Storage root used when `DATA_DIR` is unset              |
+| `DATA_DIR`                 | `/app/data` (Docker) | Preferred storage root; takes precedence                |
 | `TELEMETRY_RETENTION_DAYS` | `30`                 | Days to keep telemetry event files                      |
 | `TELEMETRY_COMPRESS_DAYS`  | `7`                  | Days after which telemetry files are gzip-compressed    |
 

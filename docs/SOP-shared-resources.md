@@ -134,12 +134,16 @@ Publish shared resources as a package:
 
 ## What to Share
 
-### Always Share
+### Common Shared Resources
 
-- Cross-model review prompt (consistency is critical)
 - Security review checklist
 - Definition of Done template
 - Sprint planning prompt
+
+### Share Only When Configured
+
+- Optional independent-review prompt when the consuming workspace explicitly
+  enables that workflow
 
 ### Share Carefully
 
@@ -236,7 +240,7 @@ Fixture contracts live in
 ```markdown
 ## Instructions
 
-Follow the standard code review process.
+Follow the configured independent review process.
 See prompt: `prompt-registry/cross-model-review.md`
 ```
 

@@ -1,15 +1,86 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the completed Veritas Kanban 6.1.1 maintenance release and
-retains historical evidence for the completed 6.1.0 release, the quarantined 6.0.0 prerelease, the 6.0.1
+This packet records the active Veritas Kanban 6.1.2 audit release candidate and
+retains historical evidence for the completed 6.1.1 and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.1 is the supported stable v6 release. Do not use 6.0.0 for
-installation or upgrade validation.
+Veritas Kanban 6.1.1 remains the supported stable v6 release until 6.1.2 is
+published and verified. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-08-22 for the completed Veritas Kanban 6.1.1 release.
+Documentation freshness: 2026-08-24 for the Veritas Kanban 6.1.2 candidate.
+
+## 6.1.2 Audit Release Candidate
+
+| Field | Value |
+| --- | --- |
+| Release version | 6.1.2 |
+| Source branch | `release/6.1.2-audit` |
+| Source baseline | `eee4dd9a2af3946e6c90d1076fc8caa6533ec8c3`, `main` after coordinated remediation PR #1236 |
+| Included issues | Audit tracker [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174), findings #1162-#1173, and CodeQL baseline #1231 |
+| Public implementation | #1162, #1163, and #1165-#1173 are closed through merged work; #1164 implementation is merged and remains open only for final regression evidence; coordinated remediation is merged through #1236 |
+| Private security blocker | Remediation is integrated into the candidate. Release verification and disclosure disposition remain pending, and no exploit-relevant detail is included here |
+| Publication state | Not published. The release PR, final matrix, tag, GitHub release, desktop workflow, artifacts, Homebrew cask, and advisory disposition are pending |
+
+### 6.1.2 issue and pull request traceability
+
+| Phase | Issue | Merged evidence |
+| --- | --- | --- |
+| Verification | #1172 deterministic and milestone-scoped test gates | #1175, #1177, #1181, #1228 |
+| Verification | #1171 native-loader Vite/Vitest configuration | #1178 |
+| Supply chain | #1167 immutable actions | #1179 |
+| Security gates | #1168 continuous scanning | #1180 |
+| Coverage | #1169 critical-path baselines and ratchets | #1183 |
+| Runtime paths | #1162 canonical `DATA_DIR` behavior | #1184 |
+| Persistence | #1163 storage boundary restoration | #1190-#1220 |
+| Provider runtime | #1164 lifecycle and provider decomposition | #1223-#1230 |
+| Frontend API | #1165 credential-aware requests | #1218 |
+| Dependencies | #1170 unused direct dependencies | #1217 |
+| Container | #1166 production runtime and size contract | #1222 |
+| Type safety | #1173 lint-debt ratchet | #1221 |
+| CodeQL baseline | #1231 initial alert triage, remediation, and disposition | #1232-#1235 |
+| Coordinated security | Private release blocker integrated without premature disclosure | #1236 |
+
+The initial CodeQL baseline contained 195 open alerts. All were reviewed: 67
+were closed through source remediation and 128 received specific,
+evidence-backed dispositions. The post-merge default-branch Security Gates run
+[`32700390853`](https://github.com/BradGroux/veritas-kanban/actions/runs/32700390853)
+completed successfully at `1cdcd6ec60e3f48b6017146b2583fa82f7061c68`
+with zero open alerts.
+
+The 2026-08-24 pre-release GitHub security readback confirms Dependabot
+vulnerability alerts and security updates are enabled, secret scanning and
+push protection are enabled, and open Dependabot, secret-scanning, and
+default-branch CodeQL alert counts are all zero. Every external workflow action
+reference is pinned to a full commit SHA. These drift-prone settings are
+rechecked against the final release merge before publication.
+
+Final-milestone preflight on 2026-08-24 found local Node 26.7.0, pnpm 11.1.1,
+Git 2.55.0, and an available Docker 29.2.1 server. The Node 22 floor remains
+the `ci:full` runner gate; no separate local Node 22 installation is present.
+The required macOS signing secret names and the complete App Store Connect
+notarization secret-name set are configured, without reading their values. No
+Veritas Kanban app or Homebrew cask is currently installed on the validation
+host, so the post-publication installation will not replace an active install.
+
+### 6.1.2 verification matrix
+
+The final matrix runs once on the fully integrated candidate. Pending rows are
+explicitly not release evidence and will be replaced with exact environments,
+counts, skips, retries, sizes, hashes, workflow links, and limitations.
+
+| Gate | Environment | Candidate result |
+| --- | --- | --- |
+| Frozen install, package-manager, security-artifact, delivery-cadence, and CI-scope policy | Node 22.22.1 and current supported Node; pnpm 11.1.1 | Pending final milestone |
+| Typecheck, lint, 458-warning budget, lint report, production/full audit, and gitleaks | Node 22.22.1 and current supported Node | Pending final milestone |
+| Root `pnpm test` and workspace `pnpm test:unit` | Clean isolated worktree | Pending exact counts, skips, and deterministic repeatability |
+| Critical-path coverage ratchets | `ci:full` release candidate | Pending exact package results and artifacts |
+| Playwright Chromium and WebKit | Isolated data directory | Pending exact cases, skips, and unexplained-retry count |
+| Build, Mantine QA, CLI/MCP, and credential-gated live smoke | Clean isolated worktree | Pending; live smoke may remain explicitly skipped without an isolated credential |
+| Desktop tests, build, readiness, fresh native lifecycle, unsigned DMG/ZIP, and mounted artifact inspection | macOS arm64 isolated profile | Pending exact results, artifact names, sizes, and hashes |
+| Production Docker build, image-size contract, non-root health/auth/SQLite/static-web/data-path/backup/integrity/clean-shutdown smoke | arm64 and amd64 release workflows where available | Pending release-candidate measurement; implementation baselines were 195,910,880 and 571,590,173 bytes |
+| Release-format and release validators | Version 6.1.2 | Pending final candidate and post-publication readback |
 
 ## 6.1.1 Maintenance Release Candidate
 
@@ -317,6 +388,14 @@ test.
 
 No private data, credential value, raw provider conversation, or unrestricted
 runtime profile is retained in this packet.
+
+## 6.1.2 Publication Evidence
+
+Publication has not started. This section will record the release PR merge SHA,
+annotated tag object and peeled commit, GitHub release URL and exact body
+readback, Desktop Release workflow, signed/notarized artifact names, sizes,
+SHA-256 values, blockmaps, updater metadata, Gatekeeper/stapling/launch proof,
+Homebrew PR and merge SHA, live cask validation, and approved advisory state.
 
 ## 6.1.1 Publication Evidence
 

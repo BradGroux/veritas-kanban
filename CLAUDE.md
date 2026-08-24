@@ -4,7 +4,7 @@
 > Claude-specific lessons and common mistakes caught by previous Claude runs. Do not duplicate
 > `AGENTS.md` content here.
 >
-> **Last updated:** 2026-08-22 (v6.1.1 release freshness)
+> **Last updated:** 2026-08-24 (v6.1.2 release freshness)
 > **Freshness check:** Update after mistakes; review monthly.
 
 ---
