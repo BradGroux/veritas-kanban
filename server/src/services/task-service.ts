@@ -41,6 +41,7 @@ import {
   type TaskIdentityScanSource,
 } from './task-identity-diagnostics.js';
 import { getCeremonyService, type CeremonyService } from './ceremony-service.js';
+import { MAX_TASK_REORDER_ITEMS } from '../schemas/task-mutation-schemas.js';
 
 const log = createLogger('task-cache');
 const TASK_SYNC_CONTEXT: TaskSyncContext = createTaskSyncToken('task-service');
@@ -1774,6 +1775,11 @@ export class TaskService {
    * Accepts an ordered array of task IDs and assigns sequential position values.
    */
   async reorderTasks(orderedIds: string[]): Promise<Task[]> {
+    if (orderedIds.length > MAX_TASK_REORDER_ITEMS) {
+      throw new ValidationError(
+        `Cannot reorder more than ${MAX_TASK_REORDER_ITEMS} tasks in one request`
+      );
+    }
     const tasks = await this.listTasks();
     const updated: Task[] = [];
 

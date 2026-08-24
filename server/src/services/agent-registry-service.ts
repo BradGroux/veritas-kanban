@@ -424,7 +424,7 @@ class AgentRegistryService {
     this.lastBusyAtByAgent.delete(agentId);
     if (existed) {
       this.persist();
-      log.info({ agentId }, `Agent deregistered: ${agentId}`);
+      log.info({ agentId }, 'Agent deregistered');
     }
     return existed;
   }

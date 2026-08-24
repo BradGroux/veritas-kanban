@@ -259,7 +259,7 @@ export class AttachmentService {
     try {
       await fs.unlink(filepath);
     } catch (err) {
-      log.error({ err: err }, `Failed to delete attachment file: ${filepath}`);
+      log.error({ err, filepath }, 'Failed to delete attachment file');
     }
 
     // Delete extracted text
@@ -320,7 +320,7 @@ export class AttachmentService {
     } catch (err) {
       // Ignore if source doesn't exist
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        log.error({ err: err }, `Failed to archive attachments for task ${taskId}`);
+        log.error({ err, taskId }, 'Failed to archive task attachments');
       }
     }
   }
@@ -344,7 +344,7 @@ export class AttachmentService {
     } catch (err) {
       // Ignore if source doesn't exist
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        log.error({ err: err }, `Failed to restore attachments for task ${taskId}`);
+        log.error({ err, taskId }, 'Failed to restore task attachments');
       }
     }
   }
@@ -358,7 +358,7 @@ export class AttachmentService {
     try {
       await fs.rm(taskDir, { recursive: true, force: true });
     } catch (err) {
-      log.error({ err: err }, `Failed to delete attachments directory for task ${taskId}`);
+      log.error({ err, taskId }, 'Failed to delete task attachments directory');
     }
   }
 
