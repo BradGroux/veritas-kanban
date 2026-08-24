@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
@@ -20,6 +19,7 @@ import type {
 import { ForbiddenError } from '../middleware/error-handler.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkProductRepository } from '../storage/sqlite/work-product-repository.js';
+import { JsonFileRepository } from '../storage/json-file-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
 
 const DATA_DIR = getRuntimeDir();
@@ -40,7 +40,7 @@ export interface WorkProductServiceOptions {
 }
 
 export class WorkProductService {
-  private readonly filePath: string;
+  private readonly fileRepository: JsonFileRepository<WorkProductFileState | WorkProduct[]>;
   private readonly versionLimit: number;
   private readonly repository: SqliteWorkProductRepository | null = null;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
@@ -50,7 +50,8 @@ export class WorkProductService {
 
   constructor(options: WorkProductServiceOptions = {}) {
     const dataDir = options.dataDir ?? DATA_DIR;
-    this.filePath = options.filePath ?? path.join(dataDir, 'work-products.json');
+    const filePath = options.filePath ?? path.join(dataDir, 'work-products.json');
+    this.fileRepository = new JsonFileRepository(filePath);
     this.versionLimit = options.versionLimit ?? DEFAULT_VERSION_LIMIT;
     const storageType =
       options.storageType ?? (process.env.VERITAS_STORAGE === 'sqlite' ? 'sqlite' : 'file');
@@ -809,8 +810,7 @@ export class WorkProductService {
     if (this.loaded) return;
 
     try {
-      const raw = await fs.readFile(this.filePath, 'utf-8');
-      const parsed = JSON.parse(raw) as WorkProductFileState | WorkProduct[];
+      const parsed = await this.fileRepository.read();
       this.fileState = Array.isArray(parsed) ? { products: parsed, versions: [] } : parsed;
     } catch {
       this.fileState = { products: [], versions: [] };
@@ -820,8 +820,7 @@ export class WorkProductService {
   }
 
   private async saveFileState(): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fs.writeFile(this.filePath, JSON.stringify(this.fileState, null, 2));
+    await this.fileRepository.write(this.fileState);
   }
 
   private createVersion(
