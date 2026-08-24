@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 37,
+  "maximumEntries": 36,
   "entries": [
     {
       "path": "server/src/services/agent-health-service.ts",
@@ -217,12 +217,6 @@
       "category": "authoritative-persistence",
       "owner": "#1187",
       "rationale": "Operational evidence storage migration is tracked in issue #1187."
-    },
-    {
-      "path": "server/src/services/workflow-run-service.ts",
-      "category": "authoritative-persistence",
-      "owner": "#1186",
-      "rationale": "Coordination-state storage migration is tracked in issue #1186."
     }
   ]
 }

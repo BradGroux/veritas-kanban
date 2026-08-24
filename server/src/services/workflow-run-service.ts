@@ -3,8 +3,6 @@
  * Phase 1: Core Engine (sequential steps, basic retry logic)
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import {
@@ -45,14 +43,16 @@ import { broadcastWorkflowStatus } from './broadcast-service.js';
 import { getTaskService } from './task-service.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteWorkflowRunRepository } from '../storage/sqlite/workflow-repositories.js';
+import {
+  FileWorkflowRunRepository,
+  type WorkflowRunRepository,
+} from '../storage/workflow-run-repository.js';
 import { getConfigService } from './config-service.js';
 import { getAgentBudgetService } from './agent-budget-service.js';
 import { getGovernanceTraceService } from './governance-trace-service.js';
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { RunRecoveryPolicyService } from './run-recovery-policy-service.js';
 import { getAgentRoutingService } from './agent-routing-service.js';
-import { atomicWriteFile } from '../storage/fs-helpers.js';
-import { withFileLock } from './file-lock.js';
 import {
   AdmissionControlService,
   getAdmissionControlService,
@@ -118,7 +118,7 @@ export class WorkflowRunService {
   private runsDir: string;
   private workflowService: ReturnType<typeof getWorkflowService>;
   private stepExecutor: WorkflowStepExecutor;
-  private readonly repository: SqliteWorkflowRunRepository | null = null;
+  private readonly repository: WorkflowRunRepository;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
   private readonly runRecoveryPolicy: RunRecoveryPolicyService;
@@ -147,15 +147,9 @@ export class WorkflowRunService {
       this.ownsSqliteDatabase = !resolvedOptions.sqliteDatabase;
       this.sqliteDatabase.open();
       this.repository = new SqliteWorkflowRunRepository(this.sqliteDatabase);
+    } else {
+      this.repository = new FileWorkflowRunRepository(this.runsDir);
     }
-
-    if (!this.repository) {
-      this.ensureDirectories();
-    }
-  }
-
-  private async ensureDirectories(): Promise<void> {
-    await fs.mkdir(this.runsDir, { recursive: true });
   }
 
   private normalizeRunId(runId: string): string {
@@ -2322,19 +2316,7 @@ export class WorkflowRunService {
    */
   async getRun(runId: string): Promise<WorkflowRun | null> {
     const safeRunId = this.normalizeRunId(runId);
-    if (this.repository) {
-      return this.repository.get(safeRunId);
-    }
-
-    const runPath = path.join(this.runsDir, safeRunId, 'run.json');
-
-    try {
-      const content = await fs.readFile(runPath, 'utf-8');
-      return JSON.parse(content) as WorkflowRun;
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') return null;
-      throw err;
-    }
+    return this.repository.get(safeRunId);
   }
 
   /**
@@ -2345,45 +2327,7 @@ export class WorkflowRunService {
     workflowId?: string;
     status?: string;
   }): Promise<WorkflowRun[]> {
-    if (this.repository) {
-      return this.repository.list(filters);
-    }
-
-    const runDirs = await fs.readdir(this.runsDir).catch(() => []);
-    const runs: WorkflowRun[] = [];
-
-    for (const dir of runDirs) {
-      if (!dir.startsWith('run_')) continue;
-
-      let run: WorkflowRun | null;
-      try {
-        run = await this.getRun(dir);
-      } catch (err) {
-        if (err instanceof ValidationError) {
-          log.warn({ runDir: dir }, 'Skipping run directory with invalid ID');
-          continue;
-        }
-        throw err;
-      }
-
-      if (!run) continue;
-
-      // Apply filters
-      if (filters?.taskId && run.taskId !== filters.taskId) continue;
-      if (filters?.workflowId && run.workflowId !== filters.workflowId) continue;
-      if (filters?.status && run.status !== filters.status) continue;
-
-      runs.push(run);
-    }
-
-    // Sort by startedAt descending
-    runs.sort(
-      (a, b) =>
-        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() ||
-        b.id.localeCompare(a.id)
-    );
-
-    return runs;
+    return this.repository.list(filters);
   }
 
   /**
@@ -2409,64 +2353,7 @@ export class WorkflowRunService {
       >
     >
   > {
-    if (this.repository) {
-      const metadata = this.repository.listMetadata(filters);
-      log.info({ count: metadata.length }, 'Listed run metadata');
-      return metadata;
-    }
-
-    const runDirs = await fs.readdir(this.runsDir).catch(() => []);
-    const metadata: Array<
-      Pick<
-        WorkflowRun,
-        | 'id'
-        | 'workflowId'
-        | 'workflowVersion'
-        | 'taskId'
-        | 'status'
-        | 'startedAt'
-        | 'completedAt'
-        | 'error'
-      >
-    > = [];
-
-    for (const dir of runDirs) {
-      if (!dir.startsWith('run_')) continue;
-
-      const runPath = path.join(this.runsDir, dir, 'run.json');
-
-      try {
-        const content = await fs.readFile(runPath, 'utf-8');
-        const run = JSON.parse(content) as WorkflowRun;
-
-        // Apply filters
-        if (filters?.taskId && run.taskId !== filters.taskId) continue;
-        if (filters?.workflowId && run.workflowId !== filters.workflowId) continue;
-        if (filters?.status && run.status !== filters.status) continue;
-
-        metadata.push({
-          id: run.id,
-          workflowId: run.workflowId,
-          workflowVersion: run.workflowVersion,
-          taskId: run.taskId,
-          status: run.status,
-          startedAt: run.startedAt,
-          completedAt: run.completedAt,
-          error: run.error,
-        });
-      } catch (err: unknown) {
-        log.warn({ runDir: dir, err }, 'Failed to read run metadata');
-        continue;
-      }
-    }
-
-    // Sort by startedAt descending
-    metadata.sort(
-      (a, b) =>
-        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() ||
-        b.id.localeCompare(a.id)
-    );
-
+    const metadata = await this.repository.listMetadata(filters);
     log.info({ count: metadata.length }, 'Listed run metadata');
     return metadata;
   }
@@ -2803,36 +2690,9 @@ export class WorkflowRunService {
       lastCheckpoint: new Date().toISOString(),
     };
 
-    if (this.repository) {
-      if (!this.repository.save(nextRun, expectedRevision)) {
-        throw new WorkflowRunChangedError(run.id, expectedRevision);
-      }
-      Object.assign(run, nextRun);
-      return;
+    if (!(await this.repository.save(nextRun, expectedRevision))) {
+      throw new WorkflowRunChangedError(run.id, expectedRevision);
     }
-
-    const runDir = path.join(this.runsDir, run.id);
-    await fs.mkdir(runDir, { recursive: true });
-
-    const runPath = path.join(runDir, 'run.json');
-    await withFileLock(runPath, async () => {
-      let current: WorkflowRun | null = null;
-      try {
-        current = JSON.parse(await fs.readFile(runPath, 'utf-8')) as WorkflowRun;
-      } catch (error) {
-        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') {
-          throw error;
-        }
-      }
-      const currentRevision = current?.revision ?? 0;
-      if (
-        (current && currentRevision !== expectedRevision) ||
-        (!current && expectedRevision !== 0)
-      ) {
-        throw new WorkflowRunChangedError(run.id, expectedRevision, current?.revision);
-      }
-      await atomicWriteFile(runPath, JSON.stringify(nextRun, null, 2));
-    });
     Object.assign(run, nextRun);
   }
 
@@ -2840,17 +2700,7 @@ export class WorkflowRunService {
    * Snapshot workflow YAML into run directory (for version immutability)
    */
   private async snapshotWorkflow(runId: string, workflow: WorkflowDefinition): Promise<void> {
-    if (this.repository) {
-      this.repository.saveWorkflowSnapshot(runId, workflow);
-      return;
-    }
-
-    const runDir = path.join(this.runsDir, runId);
-    await fs.mkdir(runDir, { recursive: true });
-
-    const snapshotPath = path.join(runDir, 'workflow.yml');
-    const yaml = await import('yaml');
-    await fs.writeFile(snapshotPath, yaml.stringify(workflow), 'utf-8');
+    await this.repository.saveWorkflowSnapshot(runId, workflow);
   }
 
   dispose(): void {
