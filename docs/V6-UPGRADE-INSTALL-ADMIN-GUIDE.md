@@ -9,7 +9,7 @@ in [Buzz Integration](BUZZ-INTEGRATION.md).
 Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
 
 Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.1.2
-supersedes 6.1.1 after the signed release and Homebrew cask are published.
+is the supported stable v6 release and supersedes 6.1.1.
 
 ## Fresh Mac Desktop Install
 

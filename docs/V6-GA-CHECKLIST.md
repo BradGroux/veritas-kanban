@@ -9,9 +9,8 @@ Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
 
 ## 6.1.2 Release Gate
 
-- [x] Audit issues #1162, #1163, and #1165-#1173 are closed through merged,
-      evidence-linked pull requests; #1164 implementation is merged and awaits
-      the single final regression milestone before closure.
+- [x] Audit issues #1162-#1173 are closed through merged, evidence-linked pull
+      requests and the single final regression milestone.
 - [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.1.2.
 - [x] README, canonical instructions, API reference, compatibility policy,
       upgrade guide, release notes, canonical GitHub body, freshness record, and
@@ -22,16 +21,17 @@ Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
       production Docker contract are represented in release documentation.
 - [x] Independent and cross-model review remain optional; they are not part of
       the default delivery or release gate.
-- [x] The coordinated private security fix is integrated into the candidate and
-      remains private until supported artifacts exist and disclosure is approved.
-- [ ] One clean final candidate passes the complete Node-floor and current-Node
+- [x] The coordinated security fix is integrated, released in supported
+      artifacts, and published through the approved repository advisory.
+- [x] One clean final candidate passes the complete Node-floor and current-Node
       verification matrix with exact counts, skips, retries, image size, and
       limitations recorded in the evidence packet.
-- [ ] The release PR merges and its exact merge is published as annotated
+- [x] The release PR merges and its exact merge is published as annotated
       `v6.1.2` with a live body matching `docs/releases/v6.1.2.md`.
-- [ ] Signed/notarized macOS assets, updater metadata, installed-app readiness,
-      the live Homebrew cask, and the private advisory disposition are verified.
-- [ ] Release tracker #1174 closes only after every publication readback passes.
+- [x] Signed/notarized macOS assets, updater metadata, installed-app readiness,
+      the live Homebrew cask, and the advisory disposition are verified.
+- [x] Every publication readback required before closing release tracker #1174
+      has passed; close the tracker after this evidence update merges.
 
 ## Historical 6.1.1 Completed Release Gate
 
@@ -127,10 +127,11 @@ gates at Node 22.22.1 and the current supported Node runtime.
 
 ## Distribution And Post-Publication
 
-The 6.1.2 publication gate is pending the final candidate, release merge, tag,
-signed/notarized artifacts, independent launch verification, post-publication
-validator, live Homebrew cask, and approved advisory disposition. Completed
-6.1.1 evidence remains recorded below and in the evidence packet.
+The 6.1.2 publication gate is complete. The final candidate, release merge,
+annotated tag, signed/notarized artifacts, independent launch verification,
+post-publication validator, live Homebrew cask, and approved advisory
+disposition are verified in the evidence packet. Completed 6.1.1 evidence
+remains recorded below.
 
 ## Historical 6.0.2 Source And Scope
 
