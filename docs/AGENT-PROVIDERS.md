@@ -1073,6 +1073,22 @@ execution-tree identity to the durable attempt. Missing or inconsistent
 evidence fails before the adapter is called, so an adapter cannot widen
 capacity or substitute an external hidden queue.
 
+### Provider adapter lifecycle ownership
+
+`server/src/services/agent-provider-adapter-registry.ts` is the executable
+provider-selection authority. Its `resolve(provider, surface)` interface owns
+the exact adapter identity, task-envelope renderer, runtime probe, run-event
+mapper, start dispatch, and stop behavior for every executable provider.
+Unknown or non-executable providers fail before this seam; there is no implicit
+OpenClaw fallback.
+
+`ClawdbotAgentService` remains the shared run orchestrator. It supplies
+admission, supervisor, sandbox, budget, journal, and completion effects to the
+registry host without duplicating provider selection. Full attempt mutations
+cross `AttemptLifecycleCoordinator`, which verifies active-attempt ownership,
+optimistic revisions, history maintenance, and terminal completion binding.
+Provider adapters never write attempt state directly.
+
 Active leases renew while the verified run is live; completion, interruption,
 cancellation, or launch failure releases the reservation idempotently.
 Workflow retry and fallback attempts release the prior step reservation before
