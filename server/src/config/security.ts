@@ -376,7 +376,7 @@ export function saveSecurityConfig(config: SecurityConfig): void {
  * Format: XXXX-XXXX-XXXX-XXXX (16 alphanumeric chars)
  */
 export function generateRecoveryKey(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Omit confusing chars (0/O, 1/I/L)
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // Omit confusing chars (0/O, 1/I/L)
   let key = '';
 
   for (let i = 0; i < 16; i++) {
