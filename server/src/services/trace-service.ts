@@ -1,5 +1,3 @@
-import fs from 'fs/promises';
-import path from 'path';
 import type {
   AgentRunTrace,
   AgentRunTraceMetadata,
@@ -8,8 +6,9 @@ import type {
   AgentType,
 } from '@veritas-kanban/shared';
 import { getTelemetryService } from './telemetry-service.js';
-import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
+import { validatePathSegment } from '../utils/sanitize.js';
 import { getTracesDir } from '../utils/paths.js';
+import { TraceFileRepository } from '../storage/trace-file-repository.js';
 
 const TRACES_DIR = getTracesDir();
 
@@ -21,11 +20,11 @@ export type Trace = AgentRunTrace;
 const activeTraces = new Map<string, Trace>();
 
 export class TraceService {
-  private tracesDir: string;
+  private readonly repository: TraceFileRepository;
   private enabled: boolean = false;
 
   constructor() {
-    this.tracesDir = TRACES_DIR;
+    this.repository = new TraceFileRepository(TRACES_DIR);
     this.init();
   }
 
@@ -36,7 +35,7 @@ export class TraceService {
     this.enabled = config.traces ?? false;
 
     if (this.enabled) {
-      await fs.mkdir(this.tracesDir, { recursive: true });
+      await this.repository.ensureReady();
     }
   }
 
@@ -54,7 +53,7 @@ export class TraceService {
     this.enabled = enabled;
     if (enabled) {
       // Intentionally silent: best-effort directory creation
-      fs.mkdir(this.tracesDir, { recursive: true }).catch(() => {});
+      this.repository.ensureReady().catch(() => {});
     }
   }
 
@@ -180,10 +179,7 @@ export class TraceService {
 
     // Try to load from disk
     try {
-      const filepath = path.join(this.tracesDir, `${attemptId}.json`);
-      ensureWithinBase(this.tracesDir, filepath);
-      const content = await fs.readFile(filepath, 'utf-8');
-      return JSON.parse(content) as Trace;
+      return await this.repository.read(attemptId);
     } catch {
       // Intentionally silent: trace file may not exist on disk
       return null;
@@ -208,20 +204,9 @@ export class TraceService {
 
     // Load completed traces from disk
     try {
-      const files = await fs.readdir(this.tracesDir);
-      for (const file of files) {
-        if (!file.endsWith('.json')) continue;
-
-        try {
-          const filepath = path.join(this.tracesDir, file);
-          ensureWithinBase(this.tracesDir, filepath);
-          const content = await fs.readFile(filepath, 'utf-8');
-          const trace = JSON.parse(content) as Trace;
-          if (trace.taskId === taskId && !activeTraces.has(trace.traceId)) {
-            traces.push(trace);
-          }
-        } catch {
-          // Skip invalid files
+      for (const trace of await this.repository.list()) {
+        if (trace.taskId === taskId && !activeTraces.has(trace.traceId)) {
+          traces.push(trace);
         }
       }
     } catch {
@@ -236,13 +221,7 @@ export class TraceService {
    * Save a trace to disk
    */
   private async saveTrace(trace: Trace): Promise<void> {
-    // Validate traceId to prevent path traversal
-    validatePathSegment(trace.traceId);
-
-    await fs.mkdir(this.tracesDir, { recursive: true });
-    const filepath = path.join(this.tracesDir, `${trace.traceId}.json`);
-    ensureWithinBase(this.tracesDir, filepath);
-    await fs.writeFile(filepath, JSON.stringify(trace, null, 2), 'utf-8');
+    await this.repository.write(trace);
   }
 }
 

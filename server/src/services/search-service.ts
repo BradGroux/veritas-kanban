@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { AnyTelemetryEvent } from '@veritas-kanban/shared';
 import { createLogger } from '../lib/logger.js';
@@ -13,6 +12,10 @@ import { getWorkProductService, WorkProductService } from './work-product-servic
 import { getWorkflowService, WorkflowService } from './workflow-service.js';
 import { getWorkflowRunService, WorkflowRunService } from './workflow-run-service.js';
 import { getStorageRoot } from '../utils/paths.js';
+import {
+  SearchFileRepository,
+  type SearchFileDescriptor,
+} from '../storage/search-file-repository.js';
 
 const log = createLogger('search-service');
 
@@ -80,10 +83,7 @@ interface SearchSource {
   extensions: readonly string[];
 }
 
-interface SearchFile {
-  path: string;
-  mtimeMs: number;
-}
+type SearchFile = SearchFileDescriptor;
 
 interface ScoreDetails {
   score: number;
@@ -118,6 +118,7 @@ const MAX_TELEMETRY_SEARCH_EVENTS =
     : 2_000;
 
 class SearchService {
+  private readonly fileRepository = new SearchFileRepository();
   async search(request: SearchRequest): Promise<SearchResponse> {
     const started = Date.now();
     const query = request.query.trim();
@@ -417,7 +418,7 @@ class SearchService {
   ): Promise<SearchResult | null> {
     let content: string;
     try {
-      content = await fs.readFile(file.path, 'utf-8');
+      content = await this.fileRepository.readText(file.path);
     } catch {
       return null;
     }
@@ -1130,45 +1131,11 @@ class SearchService {
     dir: string,
     extensions: readonly string[] = DEFAULT_FILE_EXTENSIONS
   ): Promise<SearchFile[]> {
-    const files: SearchFile[] = [];
-    const allowedExtensions = new Set(extensions.map((extension) => extension.toLowerCase()));
-
-    const visit = async (currentDir: string): Promise<void> => {
-      if (files.length >= MAX_FILES_PER_SOURCE) return;
-
-      let entries;
-      try {
-        entries = await fs.readdir(currentDir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-
-      for (const entry of entries) {
-        if (files.length >= MAX_FILES_PER_SOURCE) return;
-        if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
-
-        const fullPath = path.join(currentDir, entry.name);
-        if (entry.isDirectory()) {
-          await visit(fullPath);
-          continue;
-        }
-
-        if (!entry.isFile()) continue;
-
-        const extension = path.extname(entry.name).toLowerCase();
-        if (!allowedExtensions.has(extension)) continue;
-
-        try {
-          const stats = await fs.stat(fullPath);
-          files.push({ path: fullPath, mtimeMs: stats.mtimeMs });
-        } catch {
-          continue;
-        }
-      }
-    };
-
-    await visit(dir);
-    return files.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, MAX_FILES_PER_SOURCE);
+    return this.fileRepository.listFiles(dir, {
+      extensions,
+      maxFiles: MAX_FILES_PER_SOURCE,
+      skippedDirectories: SKIPPED_DIRECTORIES,
+    });
   }
 
   private extractTitle(

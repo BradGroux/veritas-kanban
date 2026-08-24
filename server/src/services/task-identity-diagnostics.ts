@@ -1,6 +1,6 @@
-import fs from 'fs/promises';
 import path from 'path';
 import matter from '../utils/frontmatter.js';
+import { TaskIdentityFileRepository } from '../storage/task-identity-file-repository.js';
 
 export type TaskIdentityLocation = 'active' | 'backlog' | 'archive';
 export type TaskIdentityConflictKind = 'task-id' | 'business-id';
@@ -60,6 +60,7 @@ const EMPTY_DIAGNOSTICS: TaskIdentityDiagnostics = {
   conflictCount: 0,
   conflicts: [],
 };
+const fileRepository = new TaskIdentityFileRepository();
 
 function taskIdFromFilename(filename: string): string {
   return filename.replace(/\.md$/, '').split('-')[0] ?? '';
@@ -121,22 +122,11 @@ async function readMarkdownSources(
   source: TaskIdentityScanSource,
   rootDir: string
 ): Promise<TaskIdentitySource[]> {
-  let files: string[];
-  try {
-    files = await fs.readdir(source.dir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return [];
-    }
-    throw error;
-  }
-
-  const markdownFiles = files.filter((filename) => filename.endsWith('.md')).sort();
   const results: TaskIdentitySource[] = [];
 
-  for (const filename of markdownFiles) {
-    const filepath = path.join(source.dir, filename);
-    const content = await fs.readFile(filepath, 'utf-8');
+  for (const { filename, absolutePath, content } of await fileRepository.readMarkdownFiles(
+    source.dir
+  )) {
     const parsed = matter(content);
     const frontmatter = parsed.data as Record<string, unknown>;
     const taskId =
@@ -148,7 +138,7 @@ async function readMarkdownSources(
 
     results.push({
       location: source.location,
-      path: path.relative(rootDir, filepath),
+      path: path.relative(rootDir, absolutePath),
       filename,
       taskId,
       title: typeof frontmatter.title === 'string' ? frontmatter.title : undefined,
