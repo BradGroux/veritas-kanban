@@ -226,6 +226,15 @@ export {
   SqliteWorkflowRunRepository,
 } from './sqlite/workflow-repositories.js';
 export { SqliteChatRepository } from './sqlite/chat-repository.js';
+export { FileChatRepository } from './chat-repository.js';
+export type {
+  ChatRepository,
+  SquadMessageListOptions,
+  SquadMessageMetadata,
+  SquadMetadataFile,
+  SquadMetadataRepository,
+  SquadReadMetadata,
+} from './chat-repository.js';
 export { SqliteNotificationRepository } from './sqlite/notification-repository.js';
 export { SqliteScheduledDeliverablesRepository } from './sqlite/scheduled-deliverables-repository.js';
 export { SqliteIdentityRepository, WORKSPACE_ROLES } from './sqlite/identity-repository.js';
