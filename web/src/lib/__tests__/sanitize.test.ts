@@ -69,6 +69,11 @@ describe('sanitizeHtml', () => {
     expect(result).toContain('blocked');
   });
 
+  it('preserves safe digit-prefixed relative links', () => {
+    const result = sanitizeHtml('<a href="1-release-notes.html">release notes</a>');
+    expect(result).toContain('href="1-release-notes.html"');
+  });
+
   it('preserves tables', () => {
     const input = '<table><tr><td>Cell</td></tr></table>';
     expect(sanitizeHtml(input)).toContain('<td>Cell</td>');
