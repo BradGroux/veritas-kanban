@@ -13,37 +13,38 @@ Documentation freshness: 2026-08-24 for the Veritas Kanban 6.1.2 candidate.
 
 ## 6.1.2 Audit Release Candidate
 
-| Field | Value |
-| --- | --- |
-| Release version | 6.1.2 |
-| Source branch | `release/6.1.2-audit` |
-| Source baseline | `3851fea93ecfe5119e4092739662443d29059ac7`, `main` after release-gate fix PR #1243 |
-| Included issues | Audit tracker [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174), findings #1162-#1173, and CodeQL baseline #1231 |
-| Public implementation | #1162, #1163, and #1165-#1173 are closed through merged work; #1164 implementation is merged and remains open only for final regression evidence; coordinated remediation and release-gate fixes are merged through #1236, #1239, #1241, and #1243 |
-| Private security blocker | Remediation is integrated into the candidate. Release verification and disclosure disposition remain pending, and no exploit-relevant detail is included here |
-| Publication state | Not published. The release PR, final matrix, tag, GitHub release, desktop workflow, artifacts, Homebrew cask, and advisory disposition are pending |
+| Field                    | Value                                                                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version          | 6.1.2                                                                                                                                                                                                                                              |
+| Source branch            | `release/6.1.2-audit`                                                                                                                                                                                                                              |
+| Source baseline          | `3851fea93ecfe5119e4092739662443d29059ac7`, `main` after release-gate fix PR #1243                                                                                                                                                                 |
+| Validated candidate      | `2a21178df97a00395cfc6c43774a57496a5c1f6a`, the frozen release PR head before this evidence-only update                                                                                                                                            |
+| Included issues          | Audit tracker [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174), findings #1162-#1173, and CodeQL baseline #1231                                                                                                                    |
+| Public implementation    | #1162, #1163, and #1165-#1173 are closed through merged work; #1164 implementation is merged and remains open only for final regression evidence; coordinated remediation and release-gate fixes are merged through #1236, #1239, #1241, and #1243 |
+| Private security blocker | Remediation is integrated into the candidate. Release verification and disclosure disposition remain pending, and no exploit-relevant detail is included here                                                                                      |
+| Publication state        | Not published. The final matrix is complete on the frozen candidate; merge, tag, GitHub release, signed desktop workflow, Homebrew cask, and advisory disposition remain pending                                                                   |
 
 ### 6.1.2 issue and pull request traceability
 
-| Phase | Issue | Merged evidence |
-| --- | --- | --- |
-| Verification | #1172 deterministic and milestone-scoped test gates | #1175, #1177, #1181, #1228 |
-| Verification | #1171 native-loader Vite/Vitest configuration | #1178 |
-| Supply chain | #1167 immutable actions | #1179 |
-| Security gates | #1168 continuous scanning | #1180 |
-| Coverage | #1169 critical-path baselines and ratchets | #1183 |
-| Runtime paths | #1162 canonical `DATA_DIR` behavior | #1184 |
-| Persistence | #1163 storage boundary restoration | #1190-#1220 |
-| Provider runtime | #1164 lifecycle and provider decomposition | #1223-#1230 |
-| Frontend API | #1165 credential-aware requests | #1218 |
-| Dependencies | #1170 unused direct dependencies | #1217 |
-| Container | #1166 production runtime and size contract | #1222 |
-| Type safety | #1173 lint-debt ratchet | #1221 |
-| CodeQL baseline | #1231 initial alert triage, remediation, and disposition | #1232-#1235 |
-| Coordinated security | Private release blocker integrated without premature disclosure | #1236 |
-| Release validation | Recovery-key alphabet and WebSocket header forwarding | #1238, #1239 |
-| Release validation | Same-task lifecycle invocation ordering | #1240, #1241 |
-| Release validation | Sanitized URI prefix validation | #1242, #1243 |
+| Phase                | Issue                                                           | Merged evidence            |
+| -------------------- | --------------------------------------------------------------- | -------------------------- |
+| Verification         | #1172 deterministic and milestone-scoped test gates             | #1175, #1177, #1181, #1228 |
+| Verification         | #1171 native-loader Vite/Vitest configuration                   | #1178                      |
+| Supply chain         | #1167 immutable actions                                         | #1179                      |
+| Security gates       | #1168 continuous scanning                                       | #1180                      |
+| Coverage             | #1169 critical-path baselines and ratchets                      | #1183                      |
+| Runtime paths        | #1162 canonical `DATA_DIR` behavior                             | #1184                      |
+| Persistence          | #1163 storage boundary restoration                              | #1190-#1220                |
+| Provider runtime     | #1164 lifecycle and provider decomposition                      | #1223-#1230                |
+| Frontend API         | #1165 credential-aware requests                                 | #1218                      |
+| Dependencies         | #1170 unused direct dependencies                                | #1217                      |
+| Container            | #1166 production runtime and size contract                      | #1222                      |
+| Type safety          | #1173 lint-debt ratchet                                         | #1221                      |
+| CodeQL baseline      | #1231 initial alert triage, remediation, and disposition        | #1232-#1235                |
+| Coordinated security | Private release blocker integrated without premature disclosure | #1236                      |
+| Release validation   | Recovery-key alphabet and WebSocket header forwarding           | #1238, #1239               |
+| Release validation   | Same-task lifecycle invocation ordering                         | #1240, #1241               |
+| Release validation   | Sanitized URI prefix validation                                 | #1242, #1243               |
 
 The initial CodeQL baseline contained 195 open alerts. All were reviewed: 67
 were closed through source remediation and 128 received specific,
@@ -69,21 +70,20 @@ host, so the post-publication installation will not replace an active install.
 
 ### 6.1.2 verification matrix
 
-The final matrix runs once on the fully integrated candidate. Pending rows are
-explicitly not release evidence and will be replaced with exact environments,
-counts, skips, retries, sizes, hashes, workflow links, and limitations.
+The final matrix ran once on the fully integrated candidate. The checked-in
+evidence update is documentation-only and does not alter the validated runtime.
 
-| Gate | Environment | Candidate result |
-| --- | --- | --- |
-| Frozen install, package-manager, security-artifact, delivery-cadence, and CI-scope policy | Node 22.22.1 and current supported Node; pnpm 11.1.1 | Pending final milestone |
-| Typecheck, lint, 458-warning budget, lint report, production/full audit, and gitleaks | Node 22.22.1 and current supported Node | Pending final milestone |
-| Root `pnpm test` and workspace `pnpm test:unit` | Clean isolated worktree | Pending exact counts, skips, and deterministic repeatability |
-| Critical-path coverage ratchets | `ci:full` release candidate | Pending exact package results and artifacts |
-| Playwright Chromium and WebKit | Isolated data directory | Pending exact cases, skips, and unexplained-retry count |
-| Build, Mantine QA, CLI/MCP, and credential-gated live smoke | Clean isolated worktree | Pending; live smoke may remain explicitly skipped without an isolated credential |
-| Desktop tests, build, readiness, fresh native lifecycle, unsigned DMG/ZIP, and mounted artifact inspection | macOS arm64 isolated profile | Pending exact results, artifact names, sizes, and hashes |
-| Production Docker build, image-size contract, non-root health/auth/SQLite/static-web/data-path/backup/integrity/clean-shutdown smoke | arm64 and amd64 release workflows where available | Pending release-candidate measurement; implementation baselines were 195,910,880 and 571,590,173 bytes |
-| Release-format and release validators | Version 6.1.2 | Pending final candidate and post-publication readback |
+| Gate                                                                                      | Environment                                                                                                                       | Candidate result                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Frozen install, package-manager, security-artifact, delivery-cadence, and CI-scope policy | Local Node 26.7.0 and CI Node 22; pnpm 11.1.1                                                                                     | Pass. Frozen install completed; package-manager, 1,864-file security-artifact, 18/18 delivery-cadence, and 18/18 CI-scope gates passed                                                                                                                                                                                                                                                                                                                             |
+| Typecheck, lint, 458-warning budget, lint report, production/full audit, and gitleaks     | Local Node 26.7.0 and CI Node 22                                                                                                  | Pass. Typecheck and lint completed with zero errors and the exact 458-warning budget; production and full audits found no known vulnerabilities; gitleaks passed                                                                                                                                                                                                                                                                                                   |
+| Workspace and orchestration units                                                         | Local clean worktree and [CI run 32732019845](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019845)               | Pass. Local workspace packages reported 4,289 passed and 24 skipped, plus 3/3 root orchestration tests. CI independently reported server 3,376 passed/5 skipped, web 780 passed, CLI 62 passed, MCP 71 passed/19 skipped, and dual-storage parity 4/4                                                                                                                                                                                                              |
+| Critical-path coverage ratchets                                                           | CI Node 22 on frozen candidate                                                                                                    | Pass. All seven boundaries passed: server dispatch 65.2% lines, auth 59.05%, storage 50.45%, web 55.25%, CLI 52.07%, MCP 52.39%, and desktop 66.24%; [coverage artifact](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019845/artifacts/9521857932) SHA-256 `395ae4aef57b8dcb24eabe2ad2ac628f8bbe51564195b7525e5c2be57613a096`                                                                                                                     |
+| Playwright Chromium and WebKit                                                            | [Scheduled QA run 32732019821](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019821)                              | Pass. 37/37 cases passed in 3.6 minutes with zero retries; k6 completed 7/7 checks, 5 requests, zero request failures, and one uninterrupted smoke iteration                                                                                                                                                                                                                                                                                                       |
+| Build, Mantine QA, CLI/MCP smoke                                                          | Local clean worktree and CI Node 22                                                                                               | Pass. Build and Mantine QA passed; initial JS/CSS were 242.3/53.7 KiB gzip. CLI/MCP compatibility had zero failures or warnings; two live read/write checks were explicitly skipped because the isolated profile had no `VK_API_KEY`                                                                                                                                                                                                                               |
+| Desktop tests, build, readiness, native lifecycle, and unsigned package                   | macOS arm64 isolated profile and [artifact run 32732019898](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019898) | Pass. Desktop 67/67, Electron artifacts 4/4, readiness 7/7, package smoke, visible setup/readiness, single-instance, close/reopen, and clean quit all passed. Mounted DMG and ZIP report 6.1.2 arm64. DMG: 265,821,857 bytes, SHA-256 `562aa08c1d93653227aa0deee7cc0020f42bfe4ead9e404005fbe67a87822d7a`; ZIP: 270,676,980 bytes, SHA-256 `e1dc99f95e1c3396cda78c5e38582cdc7554baf2757aa57cfee411ba6a94de60`. CI macOS/Linux/Windows unsigned artifacts all passed |
+| Production Docker build, image-size contract, and runtime smoke                           | amd64 [Docker contract run 32732019831](https://github.com/BradGroux/veritas-kanban/actions/runs/32732019831)                     | Pass. Image size 571,628,184 bytes, below 600,000,000; non-root user, version, mounted paths, SQLite, backup, auth, static web, health, bcrypt, and clean shutdown passed                                                                                                                                                                                                                                                                                          |
+| Release-format and release validators                                                     | Version 6.1.2                                                                                                                     | Pass with one classified host limitation. Canonical release format passed 3/3 and every source/build-output check passed. The local Docker-enabled wrapper reached image assembly before Docker Desktop returned an `overlayfs` containerd metadata I/O error on a full host filesystem; the clean CI Docker build and complete runtime contract passed on the same frozen source. Live GitHub/tag/body validation remains a post-publication gate                 |
 
 ## 6.1.1 Maintenance Release Candidate
 
