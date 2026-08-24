@@ -54,17 +54,7 @@ import { buildSafeCodexEnv } from '../utils/codex-env.js';
 import { getRuntimeDir, getLogsDir } from '../utils/paths.js';
 import { buildSafeHermesEnv } from '../utils/hermes-env.js';
 import { HttpOpenClawTaskAdapter } from './openclaw-workflow-adapter.js';
-import {
-  renderCodexCliTaskEnvelope,
-  renderCodexSdkTaskEnvelope,
-  renderCodexAppServerTaskEnvelope,
-  renderClaudeCodeTaskEnvelope,
-  renderAcpStdioTaskEnvelope,
-  renderHermesTaskEnvelope,
-  renderOpenClawTaskEnvelope,
-  type ProviderTaskEnvelopeRenderInput,
-  type ProviderTaskEnvelopeTransport,
-} from './provider-task-envelope-renderer.js';
+import { type ProviderTaskEnvelopeTransport } from './provider-task-envelope-renderer.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import {
   evaluateTaskReadiness,
@@ -213,11 +203,19 @@ import {
   type RunEventJournalService,
 } from './run-event-journal-service.js';
 import { getRunTerminalService, type RunTerminalService } from './run-terminal-service.js';
+import { type ProviderMappedRunEvent } from './provider-run-event-mappers.js';
 import {
-  getProviderRunEventMapper,
-  type ProviderMappedRunEvent,
-  type ProviderRunEventMapper,
-} from './provider-run-event-mappers.js';
+  AgentProviderAdapterRegistry,
+  type AgentProviderAdapterHost,
+  type AgentProviderAdmissionEvidence,
+  type AgentProviderStartContext,
+} from './agent-provider-adapter-registry.js';
+export type {
+  AgentProviderAdapter,
+  AgentProviderAdmissionEvidence,
+  AgentProviderStartContext,
+  AgentProviderStopContext,
+} from './agent-provider-adapter-registry.js';
 import {
   buildClaudeCodeArgs,
   buildSafeClaudeCodeEnv,
@@ -338,45 +336,6 @@ const providerDependencyExecutionOptions = {
     };
   },
 } satisfies DependencyCircuitExecutionOptions;
-
-export interface AgentProviderStartContext {
-  task: Task;
-  agentConfig?: AgentConfig;
-  transport: ProviderTaskEnvelopeTransport;
-  logPath: string;
-  attemptId: string;
-  startedAt: string;
-  emitter: EventEmitter;
-  attempt: TaskAttempt;
-  sandboxPolicy?: SandboxPolicyDryRunResult;
-  runLaunchManifest: RunLaunchManifest;
-  conversation: ConversationLifecycleRecord;
-  admission: AgentProviderAdmissionEvidence;
-}
-
-export interface AgentProviderAdmissionEvidence {
-  schemaVersion: 'provider-admission-evidence/v1';
-  source: AdmissionLaunchSource;
-  outcome: 'admitted' | 'queued-dispatch';
-  reservationId: string;
-  queueEntryId?: string;
-  executionTree: ExecutionTreeIdentity;
-}
-
-export interface AgentProviderStopContext {
-  taskId: string;
-  pending: PendingAgent;
-}
-
-export interface AgentProviderAdapter {
-  id: ExecutableAgentProvider;
-  label: string;
-  renderTaskEnvelope(input: ProviderTaskEnvelopeRenderInput): ProviderTaskEnvelopeTransport;
-  probe(context: AgentProviderProbeContext): Promise<ProviderRuntimeManifest>;
-  runEventMapper: ProviderRunEventMapper;
-  start(context: AgentProviderStartContext): Promise<void> | void;
-  stop(context: AgentProviderStopContext): Promise<void> | void;
-}
 
 export interface AgentStatus {
   taskId: string;
@@ -637,6 +596,7 @@ export class ClawdbotAgentService {
   private taskEnvelopes: TaskEnvelopeService;
   private runLaunchManifests: RunLaunchManifestService;
   private runLaunchCompiler: RunLaunchCompiler;
+  private providerAdapters: AgentProviderAdapterRegistry;
   private providerCompletions: ProviderCompletionService;
   private attemptLifecycle: AttemptLifecycleCoordinator;
   private credentialLeases: CredentialLeaseLifecycle;
@@ -767,6 +727,7 @@ export class ClawdbotAgentService {
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
+    this.providerAdapters = this.createProviderAdapterRegistry();
     this.runLaunchCompiler = new RunLaunchCompiler({
       runLaunchManifests: this.runLaunchManifests,
       workspaceFiles: this.workspaceFiles,
@@ -1928,7 +1889,7 @@ export class ClawdbotAgentService {
         : agentConfig;
     const provider = resolveExecutableAgentProvider(profileAgentConfig, agent);
     const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
-    const adapter = this.resolveProviderAdapter(provider);
+    const adapter = this.providerAdapters.resolve(provider);
     const budgetService = getAgentBudgetService();
     const budgetSources = {
       workspaceBudget: config.features?.budget?.enabled
@@ -2239,7 +2200,7 @@ export class ClawdbotAgentService {
         : agentConfig;
     const provider = resolveExecutableAgentProvider(profileAgentConfig, agent);
     const agentHealth = await this.assertAgentAvailable(agent, profileAgentConfig);
-    const adapter = this.resolveProviderAdapter(provider);
+    const adapter = this.providerAdapters.resolve(provider);
     const budgetService = getAgentBudgetService();
     const budgetSources = {
       workspaceBudget: config.features?.budget?.enabled
@@ -3675,7 +3636,7 @@ export class ClawdbotAgentService {
         attempt.id,
         undefined,
         'openclaw',
-        this.resolveProviderAdapter('openclaw').runEventMapper.mapEvent(
+        this.providerAdapters.resolve('openclaw').runEventMapper.mapEvent(
           'message.completed',
           {
             type: 'message.completed',
@@ -4015,7 +3976,7 @@ export class ClawdbotAgentService {
         attemptId,
         undefined,
         'openclaw',
-        this.resolveProviderAdapter('openclaw').runEventMapper.mapEvent(
+        this.providerAdapters.resolve('openclaw').runEventMapper.mapEvent(
           'message.completed',
           {
             type: 'message.completed',
@@ -4398,7 +4359,7 @@ export class ClawdbotAgentService {
       if (supervisor.control.kind === 'local-process') {
         await this.runSupervisor.stopLocalProcess(pending.supervisorId);
       } else {
-        await this.resolveProviderAdapter(pending.provider).stop({
+        await this.providerAdapters.resolve(pending.provider).stop({
           taskId: pending.taskId,
           pending,
         });
@@ -4406,7 +4367,7 @@ export class ClawdbotAgentService {
       return;
     }
 
-    await this.resolveProviderAdapter(pending.provider).stop({
+    await this.providerAdapters.resolve(pending.provider).stop({
       taskId: pending.taskId,
       pending,
     });
@@ -5199,7 +5160,7 @@ export class ClawdbotAgentService {
           .map((event) => `- ${event.message}`)
           .join('\n')}\n`
       );
-      await this.resolveProviderAdapter(pending.provider).stop({ taskId, pending });
+      await this.providerAdapters.resolve(pending.provider).stop({ taskId, pending });
       return {
         status: 'interrupted',
         terminalSource: 'operator-interruption',
@@ -5389,7 +5350,7 @@ export class ClawdbotAgentService {
     const health = await this.assertAgentAvailable(agent, agentConfig);
     return this.dependencyExecution.execute(
       providerDependencyIdentity(provider, agentConfig.model),
-      () => this.resolveProviderAdapter(provider, surface).probe({ agentConfig, health }),
+      () => this.providerAdapters.resolve(provider, surface).probe({ agentConfig, health }),
       providerDependencyExecutionOptions
     );
   }
@@ -5427,24 +5388,40 @@ export class ClawdbotAgentService {
     return health;
   }
 
-  private resolveProviderAdapter(
-    provider: ExecutableAgentProvider,
-    surface: ProviderRuntimeSurface = 'task'
-  ): AgentProviderAdapter {
-    const definition = getProviderRuntimeAdapterDefinition(provider, surface);
-    const probe = (context: AgentProviderProbeContext) =>
-      this.providerRuntimeManifests.probe(
-        buildProviderRuntimeProbeRequest(provider, context, definition)
-      );
-
-    if (provider === 'codex-cli') {
-      return {
-        id: definition.id,
-        label: definition.label,
-        renderTaskEnvelope: renderCodexCliTaskEnvelope,
-        probe,
-        runEventMapper: getProviderRunEventMapper(provider),
-        start: async ({
+  private createProviderAdapterRegistry(): AgentProviderAdapterRegistry {
+    const host: AgentProviderAdapterHost = {
+      probe: (provider, context, definition) =>
+        this.providerRuntimeManifests.probe(
+          buildProviderRuntimeProbeRequest(provider, context, definition)
+        ),
+      probeAcp: (context, definition) => this.probeAcpProviderRuntime(context, definition),
+      assertTransport: (provider, transport, manifest) =>
+        this.assertProviderAdapterTransport(provider, transport, manifest),
+      getPending: (taskId) => pendingAgents.get(taskId),
+      startCodexCli: ({
+        task,
+        agentConfig,
+        transport,
+        logPath,
+        attemptId,
+        startedAt,
+        emitter,
+        sandboxPolicy,
+        runLaunchManifest,
+      }) =>
+        this.startCodexCli(
+          task,
+          agentConfig,
+          transport.content,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          sandboxPolicy,
+          runLaunchManifest
+        ),
+      startCodexSdk: (
+        {
           task,
           agentConfig,
           transport,
@@ -5454,375 +5431,222 @@ export class ClawdbotAgentService {
           emitter,
           sandboxPolicy,
           runLaunchManifest,
-        }) => {
-          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          await this.startCodexCli(
-            task,
-            agentConfig,
-            transport.content,
-            logPath,
-            attemptId,
-            startedAt,
-            emitter,
-            sandboxPolicy,
-            runLaunchManifest
-          );
         },
-        stop: ({ pending }) => {
-          if (pending.process && !pending.process.killed) pending.process.kill('SIGTERM');
-        },
-      };
-    }
-
-    if (provider === 'codex-sdk') {
-      return {
-        id: definition.id,
-        label: definition.label,
-        renderTaskEnvelope: renderCodexSdkTaskEnvelope,
-        probe,
-        runEventMapper: getProviderRunEventMapper(provider),
-        start: async ({
+        abortController
+      ) =>
+        this.startCodexSdk(
           task,
           agentConfig,
-          transport,
+          transport.content,
+          logPath,
+          attemptId,
+          startedAt,
+          emitter,
+          abortController,
+          sandboxPolicy,
+          runLaunchManifest
+        ),
+      handleCodexSdkError: (context, abortController, error) =>
+        this.handleCodexSdkAdapterError(context, abortController, error),
+      startCodexAppServer: ({
+        task,
+        agentConfig,
+        transport,
+        logPath,
+        attemptId,
+        startedAt,
+        emitter,
+        sandboxPolicy,
+        runLaunchManifest,
+      }) =>
+        this.startCodexAppServer(
+          task,
+          agentConfig,
+          transport.content,
           logPath,
           attemptId,
           startedAt,
           emitter,
           sandboxPolicy,
-          runLaunchManifest,
-        }) => {
-          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          const abortController = new AbortController();
-          const pending = pendingAgents.get(task.id);
-          if (pending) pending.abortController = abortController;
-          void this.startCodexSdk(
-            task,
-            agentConfig,
-            transport.content,
-            logPath,
-            attemptId,
-            startedAt,
-            emitter,
-            abortController,
-            sandboxPolicy,
-            runLaunchManifest
-          ).catch(async (error: unknown) => {
-            const current = pendingAgents.get(task.id);
-            if (!current || current.attemptId !== attemptId) return;
-            if (error instanceof CompletionPersistenceError) {
-              if (emitter.listenerCount('error') > 0) {
-                emitter.emit('error', error.persistenceCause);
-              }
-              log.error(
-                { err: error.persistenceCause, taskId: task.id, attemptId },
-                'Codex SDK completion could not be persisted after bounded retries'
-              );
-              return;
-            }
-            abortController.abort();
-            const message = this.redactTraceText(
-              error instanceof Error ? error.message : 'Codex SDK attempt failed'
-            );
-            try {
-              const journalEvent = await this.appendRunEvent(
-                task.id,
-                attemptId,
-                'run.error',
-                { summary: message, error: message, phase: 'stream' },
-                {
-                  provider: 'codex-sdk',
-                  adapter: 'codex-sdk',
-                  agent: agentConfig?.type || 'codex-sdk',
-                  model: agentConfig?.model,
-                }
-              );
-              this.emitJournalOutput(journalEvent);
-              await this.appendLog(logPath, `\n## Codex SDK Error\n\n${message}\n`);
-            } catch (logError) {
-              log.error(
-                { err: logError, taskId: task.id },
-                'Failed to record Codex SDK error evidence'
-              );
-            }
-            try {
-              await this.completeAgent(
-                task.id,
-                { success: false, error: message },
-                {
-                  attemptId,
-                  terminalSource: 'stream',
-                  providerRuntimeManifestDigest: current.providerRuntimeManifest.digest,
-                }
-              );
-            } catch (finalizationError) {
-              const retryable =
-                current.preparedCompletion !== undefined &&
-                !(finalizationError instanceof CompletionOwnershipError);
-              if (!retryable && pendingAgents.get(task.id)?.attemptId === attemptId) {
-                pendingAgents.delete(task.id);
-              }
-              if (emitter.listenerCount('error') > 0) {
-                emitter.emit('error', finalizationError);
-              }
-              log.error(
-                { err: finalizationError, taskId: task.id, attemptId, retryable },
-                retryable
-                  ? 'Codex SDK failure completion remains pending after bounded persistence retries'
-                  : 'Codex SDK failure could not update stale persisted attempt state'
-              );
-            }
-          });
-        },
-        stop: ({ pending }) => {
-          pending.abortController?.abort();
-        },
-      };
-    }
-
-    if (provider === 'codex-app-server') {
-      return {
-        id: definition.id,
-        label: definition.label,
-        renderTaskEnvelope: renderCodexAppServerTaskEnvelope,
-        probe,
-        runEventMapper: getProviderRunEventMapper(provider),
-        start: async ({
+          runLaunchManifest
+        ),
+      startAcpStdio: ({
+        task,
+        agentConfig,
+        transport,
+        logPath,
+        attemptId,
+        sandboxPolicy,
+        runLaunchManifest,
+        conversation,
+      }) =>
+        this.startAcpStdio(
           task,
           agentConfig,
-          transport,
+          transport.content,
+          logPath,
+          attemptId,
+          sandboxPolicy,
+          runLaunchManifest,
+          conversation
+        ),
+      startClaudeCode: ({
+        task,
+        agentConfig,
+        transport,
+        logPath,
+        attemptId,
+        startedAt,
+        emitter,
+        sandboxPolicy,
+        runLaunchManifest,
+      }) =>
+        this.startClaudeCode(
+          task,
+          agentConfig,
+          transport.content,
           logPath,
           attemptId,
           startedAt,
           emitter,
           sandboxPolicy,
-          runLaunchManifest,
-        }) => {
-          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          await this.startCodexAppServer(
-            task,
-            agentConfig,
-            transport.content,
-            logPath,
-            attemptId,
-            startedAt,
-            emitter,
-            sandboxPolicy,
-            runLaunchManifest
-          );
-        },
-        stop: async ({ pending }) => {
-          try {
-            await pending.codexAppServerControl?.interrupt();
-          } catch (error) {
-            log.warn(
-              { err: error, taskId: pending.taskId },
-              'Codex app-server cooperative interrupt failed; closing the supervised process'
-            );
-          }
-          pending.codexAppServerControl?.close();
-          const child = pending.process;
-          if (!child || child.exitCode != null || child.signalCode != null) return;
-          const forcedStop = setTimeout(() => {
-            if (child.exitCode == null && child.signalCode == null) child.kill('SIGKILL');
-          }, 5_000);
-          child.once('close', () => clearTimeout(forcedStop));
-        },
-      };
-    }
-
-    if (provider === 'acp-stdio') {
-      return {
-        id: definition.id,
-        label: definition.label,
-        renderTaskEnvelope: renderAcpStdioTaskEnvelope,
-        probe: (context) => this.probeAcpProviderRuntime(context, definition),
-        runEventMapper: getProviderRunEventMapper(provider),
-        start: async ({
+          runLaunchManifest
+        ),
+      startHermesCli: ({
+        task,
+        agentConfig,
+        transport,
+        logPath,
+        attemptId,
+        startedAt,
+        emitter,
+        sandboxPolicy,
+      }) =>
+        this.startHermesCli(
           task,
           agentConfig,
-          transport,
-          logPath,
-          attemptId,
-          sandboxPolicy,
-          runLaunchManifest,
-          conversation,
-        }) => {
-          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          await this.startAcpStdio(
-            task,
-            agentConfig,
-            transport.content,
-            logPath,
-            attemptId,
-            sandboxPolicy,
-            runLaunchManifest,
-            conversation
-          );
-        },
-        stop: async ({ pending }) => {
-          pending.abortController?.abort();
-          await pending.acpControl?.cancel().catch(() => undefined);
-          await pending.acpControl?.close().catch(() => undefined);
-        },
-      };
-    }
-
-    if (provider === 'claude-code') {
-      return {
-        id: definition.id,
-        label: definition.label,
-        renderTaskEnvelope: renderClaudeCodeTaskEnvelope,
-        probe,
-        runEventMapper: getProviderRunEventMapper(provider),
-        start: async ({
-          task,
-          agentConfig,
-          transport,
+          transport.content,
           logPath,
           attemptId,
           startedAt,
           emitter,
-          sandboxPolicy,
-          runLaunchManifest,
-        }) => {
-          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          await this.startClaudeCode(
-            task,
-            agentConfig,
-            transport.content,
-            logPath,
-            attemptId,
-            startedAt,
-            emitter,
-            sandboxPolicy,
-            runLaunchManifest
-          );
-        },
-        stop: ({ pending }) => {
-          const child = pending.process;
-          if (!child || child.exitCode != null || child.signalCode != null) return;
-          child.kill('SIGTERM');
-          const forcedStop = setTimeout(() => {
-            if (child.exitCode == null && child.signalCode == null) {
-              child.kill('SIGKILL');
-              log.warn(
-                { taskId: pending.taskId },
-                '[ClawdbotAgent] Claude Code SIGKILL issued after graceful stop timeout'
-              );
-            }
-          }, 5_000);
-          child.once('close', () => clearTimeout(forcedStop));
-        },
-      };
-    }
-
-    if (provider === 'hermes-cli') {
-      return {
-        id: definition.id,
-        label: definition.label,
-        renderTaskEnvelope: renderHermesTaskEnvelope,
-        probe,
-        runEventMapper: getProviderRunEventMapper(provider),
-        start: async ({
-          task,
-          agentConfig,
-          transport,
-          logPath,
-          attemptId,
-          startedAt,
-          emitter,
-          sandboxPolicy,
-          runLaunchManifest,
-        }) => {
-          this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-          await this.startHermesCli(
-            task,
-            agentConfig,
-            transport.content,
-            logPath,
-            attemptId,
-            startedAt,
-            emitter,
-            sandboxPolicy
-          );
-        },
-        stop: ({ pending }) => {
-          if (pending.process && !pending.process.killed) {
-            pending.process.kill('SIGTERM');
-            // Bounded forced-stop: send SIGKILL after 5 s if the process is still running
-            const forcedStop = setTimeout(() => {
-              if (pending.process && !pending.process.killed) {
-                pending.process.kill('SIGKILL');
-                log.warn(
-                  { taskId: pending.taskId },
-                  '[ClawdbotAgent] Hermes SIGKILL issued after graceful stop timeout'
-                );
-              }
-            }, 5_000);
-            pending.process.once('close', () => clearTimeout(forcedStop));
-          }
-        },
-      };
-    }
-
-    return {
-      id: definition.id,
-      label: definition.label,
-      renderTaskEnvelope: renderOpenClawTaskEnvelope,
-      probe,
-      runEventMapper: getProviderRunEventMapper(provider),
-      start: async ({ transport, task, attemptId, agentConfig, runLaunchManifest }) => {
-        this.assertProviderAdapterTransport(provider, transport, runLaunchManifest);
-        // Use the HTTP gateway adapter (sessions_spawn) instead of writing a request file.
-        // The real spawn acknowledgement surfaces policy denial or gateway
-        // unreachability, which the caller's error handler rolls back to 'todo'.
-        const openclawAdapter = new HttpOpenClawTaskAdapter();
-        const result = await openclawAdapter.spawnTask({
-          taskId: task.id,
-          attemptId,
-          agentId: agentConfig?.type || 'openclaw',
-          agentName: agentConfig?.name,
-          model: agentConfig?.model,
-          prompt: transport.content,
-          timeoutSeconds: 900,
-        });
-        await this.attemptLifecycle.patchActiveAttempt(task.id, attemptId, {
-          sessionKey: result.sessionKey,
-        });
-        await this.recordConversationIdentity(task.id, attemptId, {
-          conversationId: result.sessionKey,
-        });
-        void this.recordAgentStarted(
-          task,
-          attemptId,
-          agentConfig?.type || 'openclaw',
-          'openclaw',
-          agentConfig
-        );
-        const pending = pendingAgents.get(task.id);
-        if (!pending || pending.attemptId !== attemptId || !pending.supervisorId) {
-          throw new ConflictError('OpenClaw session has no durable run supervisor binding.', {
-            taskId: task.id,
-            attemptId,
-          });
-        }
-        pending.openclawSessionKey = result.sessionKey;
-        await this.runSupervisor.attachRemoteSession(pending.supervisorId, result.sessionKey);
-        log.info(
-          { taskId: task.id, attemptId, sessionKey: result.sessionKey },
-          '[ClawdbotAgent] OpenClaw session spawned via gateway'
-        );
-      },
-      stop: async ({ pending }) => {
-        // OpenClaw does not expose a direct stop API for sub-sessions in v2026.6.11.
-        // Completion is driven by the callback URL included in the task prompt.
-        log.warn(
-          { taskId: pending.taskId, sessionKey: pending.openclawSessionKey },
-          '[ClawdbotAgent] OpenClaw stop requested; sub-session will complete via callback'
-        );
-      },
+          sandboxPolicy
+        ),
+      startOpenClaw: (context) => this.startOpenClawAdapter(context),
+      warn: (details, message) => log.warn(details, message),
     };
+    return new AgentProviderAdapterRegistry(host);
+  }
+
+  private async handleCodexSdkAdapterError(
+    context: AgentProviderStartContext,
+    abortController: AbortController,
+    error: unknown
+  ): Promise<void> {
+    const { task, attemptId, emitter, logPath, agentConfig } = context;
+    const current = pendingAgents.get(task.id);
+    if (!current || current.attemptId !== attemptId) return;
+    if (error instanceof CompletionPersistenceError) {
+      if (emitter.listenerCount('error') > 0) {
+        emitter.emit('error', error.persistenceCause);
+      }
+      log.error(
+        { err: error.persistenceCause, taskId: task.id, attemptId },
+        'Codex SDK completion could not be persisted after bounded retries'
+      );
+      return;
+    }
+
+    abortController.abort();
+    const message = this.redactTraceText(
+      error instanceof Error ? error.message : 'Codex SDK attempt failed'
+    );
+    try {
+      const journalEvent = await this.appendRunEvent(
+        task.id,
+        attemptId,
+        'run.error',
+        { summary: message, error: message, phase: 'stream' },
+        {
+          provider: 'codex-sdk',
+          adapter: 'codex-sdk',
+          agent: agentConfig?.type || 'codex-sdk',
+          model: agentConfig?.model,
+        }
+      );
+      this.emitJournalOutput(journalEvent);
+      await this.appendLog(logPath, `\n## Codex SDK Error\n\n${message}\n`);
+    } catch (logError) {
+      log.error({ err: logError, taskId: task.id }, 'Failed to record Codex SDK error evidence');
+    }
+
+    try {
+      await this.completeAgent(
+        task.id,
+        { success: false, error: message },
+        {
+          attemptId,
+          terminalSource: 'stream',
+          providerRuntimeManifestDigest: current.providerRuntimeManifest.digest,
+        }
+      );
+    } catch (finalizationError) {
+      const retryable =
+        current.preparedCompletion !== undefined &&
+        !(finalizationError instanceof CompletionOwnershipError);
+      if (!retryable && pendingAgents.get(task.id)?.attemptId === attemptId) {
+        pendingAgents.delete(task.id);
+      }
+      if (emitter.listenerCount('error') > 0) {
+        emitter.emit('error', finalizationError);
+      }
+      log.error(
+        { err: finalizationError, taskId: task.id, attemptId, retryable },
+        retryable
+          ? 'Codex SDK failure completion remains pending after bounded persistence retries'
+          : 'Codex SDK failure could not update stale persisted attempt state'
+      );
+    }
+  }
+
+  private async startOpenClawAdapter(context: AgentProviderStartContext): Promise<void> {
+    const { transport, task, attemptId, agentConfig } = context;
+    const openclawAdapter = new HttpOpenClawTaskAdapter();
+    const result = await openclawAdapter.spawnTask({
+      taskId: task.id,
+      attemptId,
+      agentId: agentConfig?.type || 'openclaw',
+      agentName: agentConfig?.name,
+      model: agentConfig?.model,
+      prompt: transport.content,
+      timeoutSeconds: 900,
+    });
+    await this.attemptLifecycle.patchActiveAttempt(task.id, attemptId, {
+      sessionKey: result.sessionKey,
+    });
+    await this.recordConversationIdentity(task.id, attemptId, {
+      conversationId: result.sessionKey,
+    });
+    void this.recordAgentStarted(
+      task,
+      attemptId,
+      agentConfig?.type || 'openclaw',
+      'openclaw',
+      agentConfig
+    );
+    const pending = pendingAgents.get(task.id);
+    if (!pending || pending.attemptId !== attemptId || !pending.supervisorId) {
+      throw new ConflictError('OpenClaw session has no durable run supervisor binding.', {
+        taskId: task.id,
+        attemptId,
+      });
+    }
+    pending.openclawSessionKey = result.sessionKey;
+    await this.runSupervisor.attachRemoteSession(pending.supervisorId, result.sessionKey);
+    log.info(
+      { taskId: task.id, attemptId, sessionKey: result.sessionKey },
+      '[ClawdbotAgent] OpenClaw session spawned via gateway'
+    );
   }
 
   private assertProviderAdapterLaunchManifest(
@@ -7153,11 +6977,13 @@ export class ClawdbotAgentService {
       attemptId,
       agentConfig,
       'codex-app-server',
-      this.resolveProviderAdapter('codex-app-server').runEventMapper.mapEvent(
-        classified.providerType,
-        recordValueForProvider(record, 'params'),
-        classified.summary
-      )
+      this.providerAdapters
+        .resolve('codex-app-server')
+        .runEventMapper.mapEvent(
+          classified.providerType,
+          recordValueForProvider(record, 'params'),
+          classified.summary
+        )
     );
     this.emitJournalOutput(journalEvent);
     if (classified.usage) {
@@ -7264,11 +7090,9 @@ export class ClawdbotAgentService {
       attemptId,
       agentConfig,
       'codex-app-server',
-      this.resolveProviderAdapter('codex-app-server').runEventMapper.mapEvent(
-        method,
-        recordValueForProvider(record, 'params'),
-        summary
-      )
+      this.providerAdapters
+        .resolve('codex-app-server')
+        .runEventMapper.mapEvent(method, recordValueForProvider(record, 'params'), summary)
     );
     this.emitJournalOutput(requested);
     const resolved = await this.appendRunEvent(
@@ -7723,11 +7547,9 @@ export class ClawdbotAgentService {
       attemptId,
       agentConfig,
       'claude-code',
-      this.resolveProviderAdapter('claude-code').runEventMapper.mapEvent(
-        classified.providerType,
-        record,
-        classified.summary
-      )
+      this.providerAdapters
+        .resolve('claude-code')
+        .runEventMapper.mapEvent(classified.providerType, record, classified.summary)
     );
     this.emitJournalOutput(journalEvent);
     if (classified.usage) {
@@ -8741,7 +8563,7 @@ export class ClawdbotAgentService {
   ): Promise<void> {
     const content = this.redactTraceText(chunk.trimEnd());
     if (!content.trim()) return;
-    const mapper = this.resolveProviderAdapter(provider).runEventMapper;
+    const mapper = this.providerAdapters.resolve(provider).runEventMapper;
     const event = await this.appendMappedProviderEvent(
       task,
       attemptId,
@@ -8823,7 +8645,7 @@ export class ClawdbotAgentService {
       attemptId,
       agentConfig,
       provider,
-      this.resolveProviderAdapter(provider).runEventMapper.mapEvent(type, event, sanitizedSummary)
+      this.providerAdapters.resolve(provider).runEventMapper.mapEvent(type, event, sanitizedSummary)
     );
     this.emitJournalOutput(journalEvent);
     if (usage) {

@@ -80,7 +80,17 @@ POST /api/github/codex/delegate
 
 ## Architecture Direction
 
-v4.3 uses an explicit provider adapter contract inside the agent service. `codex` agents resolve to the local Codex CLI runner, `codex-sdk` agents resolve to the SDK session runner, `codex-cloud` uses GitHub-native delegation, and existing agents keep the OpenClaw request-file behavior.
+Executable task providers resolve through the dedicated
+`AgentProviderAdapterRegistry`. The registry owns exact provider selection,
+task-envelope rendering, runtime probing, run-event mapping, start dispatch,
+and stop semantics. `ClawdbotAgentService` supplies shared admission,
+supervision, journaling, budget, and completion effects without selecting an
+implicit fallback adapter.
+
+`codex` agents resolve to the local Codex CLI runner, `codex-sdk` agents resolve
+to the SDK session runner, and `codex-cloud` uses GitHub-native delegation.
+OpenClaw task dispatch uses the gateway `sessions_spawn` path and persists the
+returned session identity on the active attempt.
 
 Expected long-term provider capabilities:
 
@@ -93,7 +103,7 @@ Expected long-term provider capabilities:
 - optional `review`
 - optional `cloudDelegate`
 
-The provider abstraction should support:
+The provider adapter interface supports:
 
 - OpenClaw compatibility through an OpenClaw provider adapter.
 - Codex CLI through a local process provider.

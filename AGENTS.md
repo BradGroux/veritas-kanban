@@ -492,23 +492,24 @@ it.
 
 ## File locations quick-reference
 
-| What             | Where                                 |
-| ---------------- | ------------------------------------- |
-| API routes       | `server/src/routes/`                  |
-| Services         | `server/src/services/`                |
-| Zod schemas      | `server/src/schemas/`                 |
-| Storage          | `server/src/storage/`                 |
-| Server utilities | `server/src/utils/`                   |
-| React components | `web/src/components/`                 |
-| Zustand stores   | `web/src/stores/`                     |
-| CLI commands     | `cli/src/commands/`                   |
-| Shared types     | `shared/src/`                         |
-| MCP server       | `mcp/src/`                            |
-| Prompt registry  | `prompt-registry/`                    |
-| SOPs             | `docs/SOP-*.md`                       |
-| Agent registry   | `.veritas-kanban/agent-registry.json` |
-| Agent run logs   | `.veritas-kanban/logs/`               |
-| Telemetry events | `.veritas-kanban/telemetry/`          |
+| What              | Where                                                    |
+| ----------------- | -------------------------------------------------------- |
+| API routes        | `server/src/routes/`                                     |
+| Services          | `server/src/services/`                                   |
+| Zod schemas       | `server/src/schemas/`                                    |
+| Storage           | `server/src/storage/`                                    |
+| Server utilities  | `server/src/utils/`                                      |
+| Provider adapters | `server/src/services/agent-provider-adapter-registry.ts` |
+| React components  | `web/src/components/`                                    |
+| Zustand stores    | `web/src/stores/`                                        |
+| CLI commands      | `cli/src/commands/`                                      |
+| Shared types      | `shared/src/`                                            |
+| MCP server        | `mcp/src/`                                               |
+| Prompt registry   | `prompt-registry/`                                       |
+| SOPs              | `docs/SOP-*.md`                                          |
+| Agent registry    | `.veritas-kanban/agent-registry.json`                    |
+| Agent run logs    | `.veritas-kanban/logs/`                                  |
+| Telemetry events  | `.veritas-kanban/telemetry/`                             |
 
 ---
 
