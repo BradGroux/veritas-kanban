@@ -1,6 +1,6 @@
 # Veritas Kanban v6 Agent Runtime Control Plane
 
-This document defines the supported v6.1.1 architecture for executable agent
+This document defines the supported v6.1.2 architecture for executable agent
 harnesses and Buzz integration. It is the version-level composition of the
 individual contract documents for
 [ACP](ACP-PROVIDER-V1.md),
@@ -9,7 +9,7 @@ individual contract documents for
 [tool control](TOOL-CONTROL-PLANE-V1.md), and
 [runtime hooks](RUNTIME-HOOK-V1.md).
 
-Documentation freshness: 2026-08-22 for Veritas Kanban 6.1.1.
+Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
 
 ## Authority Model
 
@@ -42,6 +42,12 @@ owns signed delivery, not Veritas task or completion state.
 
 Provider profiles select an adapter. No unknown executable, provider-less
 record, or unsupported profile can route through an implicit fallback.
+
+The server resolves these contracts through a provider adapter registry. The
+registry owns the task-envelope renderer, runtime probe, event mapper, start
+dispatch, and stop semantics for each exact executable provider. Attempt state
+transitions remain centralized in the lifecycle coordinator, while terminal
+completion and recovery consume the same persisted provider evidence.
 
 ## Run Lifecycle
 

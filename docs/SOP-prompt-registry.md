@@ -188,7 +188,7 @@ Example frontmatter:
 id: cross-model-review
 name: Cross Model Review
 category: evaluation
-description: Opposite-model review checklist
+description: Optional independent review checklist
 ---
 
 # Cross Model Review

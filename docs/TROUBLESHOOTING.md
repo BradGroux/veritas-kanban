@@ -141,21 +141,22 @@ pnpm install
 pnpm build
 ```
 
-If errors persist, check your Node.js version — **Node 22+** is required:
+If errors persist, check your Node.js version. **Node 22.22.1+** is required:
 
 ```bash
-node -v  # Should be v22.x or higher
+node -v  # Must be v22.22.1 or higher
 ```
 
 ### `pnpm` not found
 
-Veritas Kanban uses pnpm workspaces. Install it first:
+Veritas Kanban uses pnpm workspaces. Activate the repository-pinned version:
 
 ```bash
-npm install -g pnpm
-# or
-corepack enable && corepack prepare pnpm@latest --activate
+corepack enable
+corepack prepare pnpm@11.1.1 --activate
 ```
+
+Do not install this workspace with npm, Yarn, or Bun.
 
 ### Port already in use
 

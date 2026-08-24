@@ -1,46 +1,50 @@
-# Veritas Kanban 6.1.1 Release Notes
+# Veritas Kanban 6.1.2 Release Notes
 
-Veritas Kanban 6.1.1 is a focused maintenance release for the agentic-control platform delivered in 6.1.0. It restores reliable Task Detail drawer scrolling after the Mantine tabs migration, adds browser-level regression coverage, updates the supported dependency set, and refreshes transitive security floors.
+Veritas Kanban 6.1.2 completes the reliability, security, persistence, provider-runtime, CI, container, and supportability audit tracked by [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174). It is a backward-compatible patch release for 6.1.1.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.1 supersedes 6.1.0 as the supported stable v6 release after signed assets and updater metadata are published.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.2 becomes the supported stable v6 release only after the annotated tag, signed assets, updater metadata, and Homebrew cask are published and verified.
 
-## 6.1.1 Maintenance Changes
+## Audit Outcomes And Traceability
 
-Long Task Detail content is height-constrained and scrollable again. The regression gate verifies the shared overlay's flex-column layout, real overflow, and wheel-driven scroll movement in Chromium. Nested task-card controls no longer activate the card, preserving touch status selection in WebKit after the Mantine 9.5 update. File-backed workflow operations now await storage-directory readiness, preventing immediate startup requests from racing directory creation. The dependency maintenance pass updates supported minor and patch versions, adopts Chalk 6, and refreshes transitive override floors so production and full dependency audits report no known vulnerabilities.
+| Issue | Operational outcome | Pull requests |
+| --- | --- | --- |
+| [#1162](https://github.com/BradGroux/veritas-kanban/issues/1162) | Canonical runtime data paths, legacy discovery, and migration compatibility | #1184 |
+| [#1163](https://github.com/BradGroux/veritas-kanban/issues/1163) | Service persistence restored behind explicit file and SQLite repositories | #1190-#1220 |
+| [#1164](https://github.com/BradGroux/veritas-kanban/issues/1164) | Provider launch, runtime, event, completion, mutation, and adapter contracts decomposed | #1223-#1230 |
+| [#1165](https://github.com/BradGroux/veritas-kanban/issues/1165) | Credential-aware JSON, blob, stream, and download API helpers | #1218 |
+| [#1166](https://github.com/BradGroux/veritas-kanban/issues/1166) | Measured non-root production Docker runtime and size contract | #1222 |
+| [#1167](https://github.com/BradGroux/veritas-kanban/issues/1167) | Immutable external GitHub Actions | #1179 |
+| [#1168](https://github.com/BradGroux/veritas-kanban/issues/1168) | Continuous CodeQL, dependency, and secret scanning | #1180 |
+| [#1169](https://github.com/BradGroux/veritas-kanban/issues/1169) | Risk-weighted critical-path coverage baselines and ratchets | #1183 |
+| [#1170](https://github.com/BradGroux/veritas-kanban/issues/1170) | Four unused direct dependencies removed | #1217 |
+| [#1171](https://github.com/BradGroux/veritas-kanban/issues/1171) | Native-loader-compatible Vite and Vitest configuration | #1178 |
+| [#1172](https://github.com/BradGroux/veritas-kanban/issues/1172) | Deterministic, milestone-scoped workspace and browser gates | #1175, #1177, #1181, #1228 |
+| [#1173](https://github.com/BradGroux/veritas-kanban/issues/1173) | Server lint-warning budget reduced from 600 to 458 | #1221 |
+| [#1231](https://github.com/BradGroux/veritas-kanban/issues/1231) | Initial CodeQL baseline triaged, remediated, and dispositioned | #1232-#1235 |
 
-jsdom 30 remains deferred in Dependabot because it exceeds the documented Node.js patch floor and breaks the current changed-test suite; jsdom 29 patch updates remain enabled. Version 6.1.1 does not change the storage schema, public REST API, provider contracts, configuration, or migration requirements from 6.1.0.
+## Persistence And Runtime Paths
 
-## Harness Support On Equal Footing
+`DATA_DIR` and `VERITAS_DATA_DIR` now resolve through one canonical path contract. Live services, health, backup, integrity, migrations, and the production container use the same root. Legacy locations remain discoverable and migrate through explicit compatibility paths rather than creating split authoritative state.
 
-Every supported harness is now discovered, diagnosed, dispatched, observed, and completed through the same `harness-support-profile/v1`, `provider-runtime-manifest/v1`, immutable launch-manifest, approval, tool, credential, sandbox, phase-authority, and completion contracts. Settings, API diagnostics, telemetry, `vk doctor --json`, and dispatch consume the same redacted readiness evidence.
+Service-layer filesystem access has been moved into deep repository modules across activity, progress, status history, scheduled deliverables, workflows, broadcasts, conflicts, delegation, ceremony, error analyses, permissions, lifecycle configuration, scheduler, reflection, chat, tasks, telemetry, and managed content. File and SQLite backends preserve their containment, locking, atomic-write, and parity contracts.
 
-Equal footing does not claim identical native capabilities. Veritas probes the exact installed build and transport, persists capability evidence, and blocks unsupported lifecycle, tool, approval, sandbox, network, phase, or completion behavior before attempt creation. Provider upgrades invalidate prior conformance evidence until the new build passes its deterministic fixtures.
+## Provider Runtime And Frontend API
 
-Buzz Agent and Grok Build use ACP transports with exact initialize and capability evidence. Codex CLI, SDK, and app-server retain their distinct supervised lifecycles. Claude Code uses a strict bare-mode stream, GitHub Copilot CLI remains bounded to its public-preview ACP contract, Hermes retains one-shot execution, and OpenClaw retains explicit gateway policy. Buzz relay communication remains independent from execution authority: Buzz transports signed messages while Veritas owns tasks, attempts, tools, approvals, and completion.
+Provider work now flows through cohesive launch-compiler, runtime-resolution, event-interpreter, completion, attempt-lifecycle, and adapter-registry boundaries. Explicitly executable providers retain their supported behavior. Provider-less, unknown, or profile/adapter-mismatched records still fail before attempt creation and never route through an implicit OpenClaw fallback.
 
-Repository-facing instructions are documented in [AGENTS.md](../AGENTS.md) and the reusable [agent template](AGENTS-TEMPLATE.md). Harness installation, authentication, capability limits, and remediation are documented in [Agent Providers](AGENT-PROVIDERS.md), with exact evidence in the [Harness Compatibility Matrix](HARNESS-COMPATIBILITY.md).
+Frontend JSON, blob, stream, log, and download operations now share credential-aware API boundaries. Cross-origin `VITE_API_URL` cookie authentication, configured base paths, and server error envelopes remain consistent across supported workflows.
 
-## Governed Execution And Recovery
+## Verification, Security, Dependencies, And Container
 
-Run-scoped egress enforcement resolves and pins allowed destinations, routes governed traffic through the gateway, applies protocol, host, port, HTTP method, and normalized path rules, and records redacted decision evidence. Required enforcement fails closed when a process can bypass or cannot prove the gateway.
+Ordinary pull requests now run source-policy, lint, typecheck, build, dependency-audit, secret-scanning, and CodeQL checks without repeatedly executing workspace tests, coverage, E2E, desktop packaging, load, or Docker contracts. Those expensive gates run at explicit `ci:full`, scheduled, manual, integration, security, and release milestones.
 
-Durable admission control now applies capacity, aggregate budgets, fairness, cancellation, queue leases, and circuit breaking to direct tasks, workflows, retries, fallbacks, continuations, provider handoffs, and child agents through one execution-tree contract. Agent-dependency health feeds load shedding so an unhealthy tree cannot continue amplifying provider, host, or workspace pressure.
+The complete final release matrix is recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md). Historical test counts are not reused as 6.1.2 evidence.
 
-Append-only admission snapshots now complete each serialized write before syncing, preventing short filesystem writes from truncating durable reservation evidence. Knowledge-collection routes also share the exact server permission prefix, keeping client discovery and server enforcement in fail-closed parity.
+The production Docker closure excludes unrelated workspace dependencies, runs as a non-root user, and has architecture-specific size ceilings. The implementation baseline measured 195,910,880 bytes on arm64 against a 200,000,000-byte ceiling and 571,590,173 bytes on amd64 against a 600,000,000-byte ceiling; the release candidate is remeasured before publication.
 
-Durable goals survive turns, restarts, and provider continuations without inventing completion. Memory extraction is reviewed and attributable. Background commands and monitors are supervisor-owned, repetitive or stalled runs receive bounded recovery, and oversized output spills into governed artifacts instead of exhausting the active context.
+Four verified unused direct dependencies were removed. The server lint-warning budget dropped from 600 to 458 without weakening rules or adding broad suppressions. A coordinated private remediation is integrated through #1236; technical details stay in the advisory workflow pending supported artifacts and explicit disclosure approval. Final milestone validation also corrected recovery-key alphabet generation, WebSocket upgrade header forwarding, same-task lifecycle ordering, and sanitized URI prefix handling through #1239, #1241, and #1243.
 
-## Knowledge Collections And Integrity
-
-Workspace knowledge collections support classified immutable sources, cited and versioned derived pages, reviewed ingestion dry runs, atomic apply and reversal, scoped keyword and QMD search, query promotion, and cited work-product export. File and SQLite backends preserve the same workspace, digest, attribution, idempotency, contradiction, graph, activity, and redaction contracts.
-
-Deterministic integrity linting finds structural graph errors, invalid schemas and metadata, provenance gaps, source-hash drift, invalid citation locations, freshness violations, orphan pages, missing canonical terms, unanswered research questions, contradictions, near-duplicates, supersession candidates, and evidence gaps. Material claims have attributable, evidence-linked, reversible lifecycle controls, so disputed or superseded statements remain visible and reviewable rather than being silently overwritten.
-
-## Workspace Checkpoints And Rewind
-
-Turn-boundary checkpoints capture run-owned Git, index, file, exclusion, ownership, conversation, and attributable provider-diff state. Rewind is preview-first, digest-bound, conflict-aware, and limited to explicit selected paths. The control route can quiesce an exact active Codex app-server turn and fork an earlier approved turn into a new provider thread.
-
-Ambiguous attribution, unsupported providers, stale runtime evidence, external edits, and unresolved ownership conflicts fail closed. Failed storage transactions preserve descendant state and do not mutate paths outside the approved preview.
+The initial 195-alert CodeQL baseline was reviewed alert by alert: 67 findings were fixed and 128 non-exploitable alerts received evidence-backed dispositions. Validated request, logging, persisted-key, file-handling, and sandbox-read findings were fixed in #1232-#1235. Alerts that were limited to test fixtures or were already contained by explicit authentication, path, descriptor, ownership, or atomic-write controls received documented dispositions rather than speculative code churn. The post-merge default-branch analysis reports zero open alerts.
 
 ## Install Or Upgrade
 
@@ -57,31 +61,30 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.1 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.1). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.2 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.2) after publication. Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
-Veritas Kanban 6.1.1 retains SQLite migrations 30 to 33 from 6.1.0. No new migration runs when upgrading from 6.1.0. Rollback to an older schema still requires restoring the stopped-writer pre-upgrade backup; do not open migrated data with an older binary.
+There is no public REST API version change, configuration breaking change, or new SQLite schema migration in 6.1.2. Migrations remain at 30 through 33. Runtime-path normalization can move legacy files into the configured canonical data directory; verify the selected data root, health, integrity, and backup evidence before resuming writers or automation.
 
-The public REST API remains mounted at `v1`. Provider-less or adapter/profile-mismatched records do not fall through to OpenClaw. Unknown or changed provider builds lose certification until current probes and deterministic fixtures pass. Claude Code does not launch with `--dangerously-skip-permissions`. Credential-bound MCP servers remain available only through the mediated run-scoped bridge.
+Rollback is restore-first. Stop every writer. Reinstall 6.1.1 only when the current data contracts remain compatible; otherwise restore the complete pre-upgrade stopped-writer workspace. Never copy an older database over a live instance.
 
 ## Known Limitations
 
-Buzz Agent sessions remain in-memory and do not support session load/resume. Buzz files, reactions, forums, direct messages, and destructive edit/delete projection are not bridged. GitHub Copilot CLI ACP remains public preview. Grok Build's stable artifact still self-reports alpha and cannot be fully traced to the current public source tree. Claude Code's complete CLI implementation is not public, so certification is bound to exact release behavior and checked-in fixtures.
+Buzz Agent sessions remain in-memory and do not support session load/resume. Buzz files, reactions, forums, direct messages, and destructive edit/delete projection are not bridged. GitHub Copilot CLI ACP remains public preview. Grok Build's stable artifact still self-reports alpha and cannot be fully traced to the current public source tree. Claude Code's complete CLI implementation is not public, so certification remains bound to exact release behavior and checked-in fixtures.
 
 Deterministic compatibility does not prove provider authentication, subscription availability, quota, or live inference. Linux and Windows desktop artifacts remain unsigned previews; signed and notarized macOS arm64 is the supported stable desktop distribution.
 
 ## Release Artifacts
 
-The supported stable desktop release publishes signed and notarized `Veritas-Kanban-6.1.1-mac-arm64.dmg` and `Veritas-Kanban-6.1.1-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.1` tag. Publication is complete only after GitHub assets, signature, Gatekeeper, stapling, updater, downloaded-app launch, and Homebrew installation have been verified.
+The supported stable desktop release publishes signed and notarized `Veritas-Kanban-6.1.2-mac-arm64.dmg` and `Veritas-Kanban-6.1.2-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.2` tag. Exact sizes, hashes, signing, notarization, stapling, Gatekeeper, launch, updater, workflow, release, and Homebrew evidence are recorded after publication in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
 ## Documentation And Evidence
 
-- [Agent guide and reusable template](AGENTS-TEMPLATE.md)
 - [Agent provider setup and operations](AGENT-PROVIDERS.md)
 - [Harness compatibility matrix](HARNESS-COMPATIBILITY.md)
-- [Buzz integration guide](BUZZ-INTEGRATION.md)
 - [v6 runtime architecture](architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
 - [v6 compatibility and release policy](V6-COMPATIBILITY-AND-RELEASE-POLICY.md)
 - [v6 upgrade and administration guide](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md)
+- [v6 release candidate evidence](V6-RC-EVIDENCE-PACKET.md)
 - [Changelog](../CHANGELOG.md)

@@ -1,6 +1,6 @@
 # Scheduled QA Gates
 
-Review date: 2026-06-04
+Review date: 2026-08-24
 
 The scheduled QA workflow runs heavier browser and load-test coverage outside
 the fast pull-request path. Ordinary pull requests stay limited to lint,
@@ -14,12 +14,10 @@ job-level `env` used the `runner.temp` context. GitHub does not expose the
 error instead of producing logs. The workflow now writes `VERITAS_DATA_DIR`
 from `$RUNNER_TEMP` during job setup.
 
-Playwright and `pnpm qa:mantine` remain scheduled/manual gates while #568 and
-#569 are open. Adding them to PR CI before those gates are stable would create
-red PR checks with known non-PR-specific failures. Once both gates pass on
-`main`, either add a small PR smoke job for `pnpm qa:mantine` and
-`pnpm test:e2e -- e2e/mantine-qa-gate.spec.ts`, or record the release decision
-to keep them scheduled-only here.
+Playwright, Mantine QA, coverage, desktop artifacts, load profiles, and Docker
+contracts are deliberate milestone gates. Apply `ci:full` to an integration or
+release candidate, or use the documented scheduled/manual dispatch. Do not add
+them to every ordinary pull request merely to duplicate the final milestone.
 
 ## Workflow
 

@@ -1,6 +1,6 @@
 # Lint Warning Debt
 
-Review date: 2026-06-04
+Review date: 2026-08-24
 
 The repository still allows lint warnings, but warning debt is now managed with a
 ratchetable budget and a repeatable package/rule report.
@@ -30,24 +30,15 @@ pnpm lint:report
 
 ## Current Budget
 
-Current warning budget: 600.
+Current warning budget: 458.
 
-Baseline after the production unused-value cleanup:
+The 6.1.2 audit reduced the repository ceiling from 600 to 458 by narrowing
+production server boundaries, replacing unsafe assertions, and removing unused
+values without relaxing rules or adding broad suppressions. Use
+`pnpm lint:report` for the current package and rule distribution; do not copy a
+historical distribution into release evidence.
 
-| Package | Warnings |
-| ------- | -------- |
-| server  | 536      |
-| web     | 37       |
-| mcp     | 25       |
-| shared  | 2        |
-
-Current warning classes:
-
-| Rule                                       | Warnings |
-| ------------------------------------------ | -------- |
-| `@typescript-eslint/no-explicit-any`       | 342      |
-| `@typescript-eslint/no-non-null-assertion` | 227      |
-| `@typescript-eslint/no-unused-vars`        | 31       |
+The final 6.1.2 release matrix records the freshly measured total and report.
 
 ## Cleanup Order
 

@@ -54,11 +54,11 @@ Steal these end-to-end flows when building your own automations. Each example sh
 
 ## 4. Security Audit (RF-002 style)
 
-**Goal:** Run cross-model audit on repo.
+**Goal:** Run a focused security audit on the repository.
 
 1. Task -> `type=security`, `project=veritas-kanban`.
-2. Subtasks: scope, run Codex audit, run Claude review, compile findings, create issues.
-3. Agents spawn using research prompt template, save results to `refactoring/rf-002/*`.
+2. Subtasks: scope, inspect trust boundaries, validate findings, compile evidence, create issues.
+3. Use the security-review prompt and save durable results to the task's declared artifact path.
 4. Deliverables: Markdown report, HTML deck, GitHub issues.
 
 ---
@@ -88,7 +88,7 @@ For any workflow:
 2. **Prompt** stored in registry.
 3. **API/CLI** calls scripted (vk begin/done, time tracking, status updates).
 4. **Artifacts** saved to predictable paths and mirrored to Brain/engram if needed.
-5. **Cross-model review** if code/critical.
+5. **Focused review** when the task or configured governance policy requires it.
 6. **Lessons learned** field updated for systemic knowledge.
 
 Use these recipes as seeds for your own automation playbooks.

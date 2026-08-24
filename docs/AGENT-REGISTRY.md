@@ -12,7 +12,7 @@ The Agent Registry is a service discovery and liveness tracking system for AI ag
 | **Persistence**  | File-backed JSON survives server restarts               |
 | **Dashboard**    | Live agent cards in the board sidebar                   |
 
-**Storage:** `.veritas-kanban/agent-registry.json`
+**Storage:** `<storage-root>/.veritas-kanban/agent-registry.json`
 
 ---
 
@@ -406,13 +406,14 @@ The panel reads from the registry API and updates every 30 seconds (plus WebSock
 | ------------------------- | ------------------ | -------------------------------------------- |
 | `HEARTBEAT_TIMEOUT_MS`    | 300,000 (5 min)    | Time before marking agent offline            |
 | `STALE_CHECK_INTERVAL_MS` | 60,000 (1 min)     | How often the server checks for stale agents |
-| `VERITAS_DATA_DIR`        | `.veritas-kanban/` | Directory for registry JSON file             |
+| `VERITAS_DATA_DIR`        | Project root       | Storage root used when `DATA_DIR` is unset   |
 
 ---
 
 ## File Format
 
-The registry is stored as JSON at `.veritas-kanban/agent-registry.json`:
+The registry is stored as JSON at
+`<storage-root>/.veritas-kanban/agent-registry.json`:
 
 ```json
 {

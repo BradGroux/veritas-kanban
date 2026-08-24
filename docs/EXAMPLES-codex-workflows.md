@@ -47,9 +47,10 @@ Use these recipes as starting points for v4.3 OpenAI Codex workflows in Veritas 
 
 ---
 
-## 2. Codex Review Of A Claude-authored PR
+## 2. Optional Independent Review With Codex
 
-**Goal:** Use Codex as the opposite-model reviewer for a Claude-authored branch.
+**Goal:** Use Codex as an independent reviewer when a task or governance policy
+explicitly requires one. This is not a default delivery step.
 
 1. Keep the original implementation task `in-progress`.
 2. Trigger a Codex review action:
@@ -152,7 +153,7 @@ steps:
     agent: reviewer
     depends_on: [implement]
     input: |
-      Review Codex's implementation using docs/SOP-cross-model-code-review.md.
+      Run the configured independent review using docs/SOP-cross-model-code-review.md.
 ```
 
 Expected behavior:
