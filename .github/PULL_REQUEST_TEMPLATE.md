@@ -28,7 +28,7 @@ Describe the tests you ran to verify your changes. Provide instructions so revie
 **Verification tier:**
 
 - [ ] Documentation or static checks only
-- [ ] Focused changed-package tests
+- [ ] Explicit focused diagnostic (manual workflow dispatch)
 - [ ] Full milestone gate (`ci:full`, critical security, integration, or release)
 
 **Why this tier is sufficient:** Explain the changed behavior, covered failure
@@ -46,7 +46,7 @@ modes, and why broader gates are or are not required.
 - [ ] Separable follow-up work is linked instead of folded into this PR
 - [ ] My code follows the style guidelines of this project
 - [ ] I have performed a self-review of my own code
-- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] I have added or updated coverage for the next declared test milestone
 - [ ] I have updated the documentation accordingly
 - [ ] My changes generate no new warnings
 - [ ] Any breaking changes have been documented in the PR description

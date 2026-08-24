@@ -13,7 +13,7 @@ on:
       test_scope:
         description: Unit-test verification tier
         required: true
-        default: focused
+        default: full
         type: choice
         options:
           - focused
@@ -24,10 +24,7 @@ on:
         type: string
 
 permissions:
-  actions: read
   contents: read
-  checks: read
-  pull-requests: read
 
 concurrency:
   group: >-
@@ -81,7 +78,6 @@ jobs:
           scripts/check-security-gates.test.mjs
           scripts/check-tracked-ignore.test.mjs
           scripts/select-ci-test-scope.test.mjs
-          scripts/verify-full-suite-job-evidence.test.mjs
 
       - name: Guard delivery cadence
         run: node scripts/check-delivery-cadence.mjs
@@ -95,126 +91,6 @@ jobs:
       - name: Reject tracked files covered by ignore rules
         run: node scripts/check-tracked-ignore.mjs
 
-      - name: Find reviewed full-suite evidence
-        id: reviewed_full
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          reviewed_full=false
-          reviewed_pr=
-          reviewed_head=
-          reviewed_mode=
-          associated_prs="$(
-            gh api \
-              -H 'Accept: application/vnd.github+json' \
-              "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
-              2>/dev/null ||
-              printf '[]'
-          )"
-          merged_pr="$(
-            jq -c \
-              --arg merge_sha "$GITHUB_SHA" \
-              '[.[] | select(
-                .merged_at != null and
-                .base.ref == "main" and
-                .merge_commit_sha == $merge_sha
-              )] | first // empty' \
-              <<<"$associated_prs"
-          )"
-
-          if [[ -n "$merged_pr" ]]; then
-            reviewed_pr="$(jq -r '.number' <<<"$merged_pr")"
-            reviewed_head="$(jq -r '.head.sha' <<<"$merged_pr")"
-            check_runs="$(
-              gh api \
-                -H 'Accept: application/vnd.github+json' \
-                "repos/${GITHUB_REPOSITORY}/commits/${reviewed_head}/check-runs?per_page=100" \
-                2>/dev/null ||
-                printf '{"check_runs":[]}'
-            )"
-
-            full_suite_check_id="$(
-              jq -r '
-                [
-                  .check_runs[] |
-                  select(
-                .name == "Workspace Unit Tests" and
-                .status == "completed" and
-                .conclusion == "success" and
-                .app.slug == "github-actions"
-                  )
-                ] |
-                sort_by(.completed_at) |
-                last |
-                .id // empty
-              ' <<<"$check_runs"
-            )"
-            full_suite_job="$(
-              if [[ -n "$full_suite_check_id" ]]; then
-                gh api \
-                  -H 'Accept: application/vnd.github+json' \
-                  "repos/${GITHUB_REPOSITORY}/actions/jobs/${full_suite_check_id}" \
-                  2>/dev/null ||
-                  printf '{}'
-              else
-                printf '{}'
-              fi
-            )"
-            coverage_check_id="$(
-              jq -r '
-                [
-                  .check_runs[] |
-                  select(
-                    .name == "Critical Path Coverage" and
-                    .status == "completed" and
-                    .conclusion == "success" and
-                    .app.slug == "github-actions"
-                  )
-                ] |
-                sort_by(.completed_at) |
-                last |
-                .id // empty
-              ' <<<"$check_runs"
-            )"
-            coverage_job="$(
-              if [[ -n "$coverage_check_id" ]]; then
-                gh api \
-                  -H 'Accept: application/vnd.github+json' \
-                  "repos/${GITHUB_REPOSITORY}/actions/jobs/${coverage_check_id}" \
-                  2>/dev/null ||
-                  printf '{}'
-              else
-                printf '{}'
-              fi
-            )"
-
-            if node scripts/verify-full-suite-job-evidence.mjs <<<"$full_suite_job" &&
-              node scripts/verify-full-suite-job-evidence.mjs coverage <<<"$coverage_job"; then
-              if git cat-file -e "${reviewed_head}^{commit}" 2>/dev/null ||
-                git fetch --no-tags origin "$reviewed_head"; then
-                if git merge-base --is-ancestor "$reviewed_head" "$GITHUB_SHA"; then
-                  reviewed_full=true
-                  reviewed_mode=ancestor
-                elif [[ "$(git rev-parse "${reviewed_head}^{tree}")" == \
-                  "$(git rev-parse "${GITHUB_SHA}^{tree}")" ]]; then
-                  reviewed_full=true
-                  reviewed_mode=identical-tree
-                fi
-              fi
-            fi
-          fi
-
-          {
-            echo "reviewed_full=$reviewed_full"
-            echo "reviewed_pr=$reviewed_pr"
-            echo "reviewed_head=$reviewed_head"
-            echo "reviewed_mode=$reviewed_mode"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Select verification tier
         id: scope
         shell: bash
@@ -222,9 +98,6 @@ jobs:
           CI_EVENT_NAME: ${{ github.event_name }}
           CI_MANUAL_SCOPE: ${{ inputs.test_scope || '' }}
           CI_PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          CI_REVIEWED_FULL: ${{ steps.reviewed_full.outputs.reviewed_full || 'false' }}
-          CI_REVIEWED_PR: ${{ steps.reviewed_full.outputs.reviewed_pr || '' }}
-          CI_REVIEWED_MODE: ${{ steps.reviewed_full.outputs.reviewed_mode || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}

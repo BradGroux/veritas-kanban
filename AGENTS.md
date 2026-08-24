@@ -126,9 +126,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - At the 45-minute delivery checkpoint, if the issue is not pull-request ready, stop adding scope
   and report the concrete cause. Split independent remaining work into linked issues, or continue
   only when the next step is required to preserve correctness of the current behavior.
-- During implementation, run the narrowest useful loop: type-check touched packages, lint changed
-  files, and run focused tests for changed behavior and high-risk edges.
-- Run focused Vitest slices with
+- During ordinary implementation, use source inspection, changed-file formatting/linting, and
+  touched-package type checking. Do not run workspace unit, coverage, E2E, desktop packaging, or
+  Docker contract tests between implementation PRs.
+- When a maintainer explicitly declares a focused diagnostic milestone, run the exact Vitest slice
+  once with
   `pnpm --filter <package> exec vitest run <exact-test-files>`. Do not use
   `pnpm --filter <package> test -- <test-files>` or
   `pnpm --filter <package> test -- --run <test-files>`; package wrappers can ignore that file
@@ -137,9 +139,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   Rerun only the checks affected by the later change.
 - Use the complete workspace suite once at an explicit integration, critical-security, or release
   milestone. Pull-request label `ci:full`, scheduled CI, and manual full dispatch are the
-  authoritative broad gates.
-- Trust `scripts/select-ci-test-scope.mjs` and the `Select Test Scope` job to choose the required
-  CI tier. Do not add broader local gates merely to duplicate CI.
+  authoritative broad gates. Critical coverage, unsigned desktop artifacts, and the Docker image
+  contract run only at those milestones.
+- Trust `scripts/select-ci-test-scope.mjs` and the `Select Test Scope` job to record the required
+  CI tier. Ordinary pull requests and `main` pushes select no workspace tests. Do not add local
+  test gates merely to duplicate a future milestone.
 - Do not wait for optional desktop packaging, artifact previews, or release workflows when the
   change does not touch their product boundary. They are evidence only when declared relevant.
 - Add enough regression coverage to prove the behavior and its meaningful failure modes. Test

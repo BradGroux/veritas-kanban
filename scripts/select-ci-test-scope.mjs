@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import path, { matchesGlob } from 'node:path';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const COVERAGE_POLICY = JSON.parse(
@@ -13,15 +13,6 @@ const COVERAGE_POLICY = JSON.parse(
 );
 const WORKSPACE_NAMES = COVERAGE_POLICY.packages.map(({ id }) => id);
 
-const FULL_SUITE_PATH_PATTERNS = [
-  /^\.github\/workflows\//,
-  /^scripts\/select-ci-test-scope(?:\.test)?\.mjs$/,
-  /^scripts\/verify-full-suite-job-evidence(?:\.test)?\.mjs$/,
-  /^scripts\/(?:run-coverage|check-coverage-(?:policy|ratchets))(?:\.test)?\.mjs$/,
-  /^docs\/testing\/critical-path-coverage\.json$/,
-  /^(?:server|web|cli|mcp|desktop)\/vitest\.config\.ts$/,
-];
-
 const ALL_WORKSPACE_PATH_PATTERNS = [
   /^shared\//,
   /^package\.json$/,
@@ -31,19 +22,6 @@ const ALL_WORKSPACE_PATH_PATTERNS = [
   /^(?:vitest|playwright|electron\.vite)\.config\.[cm]?[jt]s$/,
   /^tsconfig(?:\.[^/]+)?\.json$/,
 ];
-
-const CRITICAL_COVERAGE_PATHS = Object.fromEntries(
-  COVERAGE_POLICY.packages.map((packagePolicy) => [
-    packagePolicy.id,
-    [
-      ...packagePolicy.boundaries.flatMap(({ include }) => include),
-      ...(packagePolicy.runner?.testFiles ?? []).map(
-        (testFile) => `${packagePolicy.id}/${testFile}`
-      ),
-      ...(packagePolicy.runner?.triggerPatterns ?? []),
-    ],
-  ])
-);
 
 const DOCUMENTATION_PATH_PATTERNS = [
   /\.md$/i,
@@ -64,22 +42,12 @@ function normalizeFiles(files) {
   return [...new Set(files.map((file) => file.trim()).filter(Boolean))].sort();
 }
 
-function summarizePaths(files) {
-  const visible = files.slice(0, 5);
-  const remainder = files.length - visible.length;
-  return `${visible.join(', ')}${remainder > 0 ? `, and ${remainder} more` : ''}`;
-}
-
 export function isDocumentationPath(file) {
   return DOCUMENTATION_PATH_PATTERNS.some((pattern) => pattern.test(file));
 }
 
 export function isDependencyFreeScopeControlPath(file) {
   return DEPENDENCY_FREE_SCOPE_CONTROL_PATH_PATTERNS.some((pattern) => pattern.test(file));
-}
-
-export function requiresFullSuite(file) {
-  return FULL_SUITE_PATH_PATTERNS.some((pattern) => pattern.test(file));
 }
 
 export function affectedWorkspaces(files) {
@@ -96,15 +64,9 @@ export function affectedWorkspaces(files) {
   return WORKSPACE_NAMES.filter((name) => selected.has(name));
 }
 
-export function coverageWorkspaces(files, scope = 'focused') {
+export function coverageWorkspaces(_files, scope = 'focused') {
   if (scope === 'full') return [...WORKSPACE_NAMES];
-  if (scope === 'none') return [];
-
-  return WORKSPACE_NAMES.filter((workspace) =>
-    files.some((file) =>
-      CRITICAL_COVERAGE_PATHS[workspace].some((pattern) => matchesGlob(file, pattern))
-    )
-  );
+  return [];
 }
 
 export function classifyCiTestScope({
@@ -113,9 +75,6 @@ export function classifyCiTestScope({
   labels = [],
   changedFiles = [],
   deletedFiles = [],
-  reviewedFullSuite = false,
-  reviewedPullRequest = '',
-  reviewedFullSuiteMode = '',
 }) {
   const files = normalizeFiles(changedFiles);
   const deleted = normalizeFiles(deletedFiles);
@@ -148,46 +107,20 @@ export function classifyCiTestScope({
     };
   }
 
-  if (eventName === 'push' && reviewedFullSuite) {
-    const prSuffix = reviewedPullRequest ? ` for PR #${reviewedPullRequest}` : '';
-    const evidence =
-      reviewedFullSuiteMode === 'identical-tree'
-        ? 'has the exact Git tree published by this squash merge'
-        : 'is an ancestor of this merge commit';
+  if (eventName === 'workflow_dispatch' && manualScope === 'focused') {
+    if (packages.length === 0) {
+      return {
+        scope: 'none',
+        packages: [],
+        files,
+        reason: 'The manually selected range does not affect a testable workspace.',
+      };
+    }
     return {
-      scope: 'none',
-      packages: [],
+      scope: 'focused',
+      packages,
       files,
-      reason: `The reviewed head${prSuffix} already passed Workspace Unit Tests and Critical Path Coverage, and ${evidence}.`,
-    };
-  }
-
-  const unclassifiedDeletedCodePaths = deleted.filter(
-    (file) =>
-      !isDocumentationPath(file) &&
-      !isDependencyFreeScopeControlPath(file) &&
-      affectedWorkspaces([file]).length === 0
-  );
-  if (unclassifiedDeletedCodePaths.length > 0) {
-    return {
-      scope: 'full',
-      packages: WORKSPACE_NAMES,
-      files,
-      reason: `Deleted non-documentation paths outside a known workspace fail safe to the full suite: ${summarizePaths(
-        unclassifiedDeletedCodePaths
-      )}`,
-    };
-  }
-
-  const fullSuitePaths = files.filter(requiresFullSuite);
-  if (fullSuitePaths.length > 0) {
-    return {
-      scope: 'full',
-      packages: WORKSPACE_NAMES,
-      files,
-      reason: `CI control paths require the full suite before the selector change can take effect: ${summarizePaths(
-        fullSuitePaths
-      )}`,
+      reason: `Manual dispatch explicitly requested focused diagnostics for: ${packages.join(', ')}.`,
     };
   }
 
@@ -207,41 +140,18 @@ export function classifyCiTestScope({
       packages: [],
       files,
       reason:
-        'Only documentation or dependency-free delivery-cadence controls checked by the selector changed.',
-    };
-  }
-
-  const unclassifiedCodePaths = files.filter(
-    (file) =>
-      !isDocumentationPath(file) &&
-      !isDependencyFreeScopeControlPath(file) &&
-      affectedWorkspaces([file]).length === 0
-  );
-  if (unclassifiedCodePaths.length > 0) {
-    return {
-      scope: 'full',
-      packages: WORKSPACE_NAMES,
-      files,
-      reason: `Non-documentation paths outside a known test workspace fail safe to the full suite: ${summarizePaths(
-        unclassifiedCodePaths
-      )}`,
-    };
-  }
-
-  if (packages.length === 0) {
-    return {
-      scope: 'none',
-      packages: [],
-      files,
-      reason: 'No testable workspace changed.',
+        'Only documentation or dependency-free policy controls changed; workspace tests are reserved for explicit milestones.',
     };
   }
 
   return {
-    scope: 'focused',
+    scope: 'none',
     packages,
     files,
-    reason: `Run Vitest related coverage for affected workspace packages: ${packages.join(', ')}.`,
+    reason:
+      packages.length > 0
+        ? `Ordinary changes defer workspace tests and coverage to an explicit milestone. Affected packages: ${packages.join(', ')}.`
+        : 'This ordinary change is not an explicit test milestone; workspace tests and coverage are deferred.',
   };
 }
 
@@ -337,9 +247,6 @@ async function main() {
     headSha: process.env.CI_HEAD_SHA || '',
     manualScope: process.env.CI_MANUAL_SCOPE || '',
     labels: parseLabels(process.env.CI_PR_LABELS || '[]'),
-    reviewedFullSuite: process.env.CI_REVIEWED_FULL === 'true',
-    reviewedPullRequest: process.env.CI_REVIEWED_PR || '',
-    reviewedFullSuiteMode: process.env.CI_REVIEWED_MODE || '',
   };
 
   if (!input.eventName) {

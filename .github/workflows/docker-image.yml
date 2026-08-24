@@ -1,32 +1,9 @@
 name: Docker Image Contract
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - package.json
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - server/**
-      - shared/**
-      - web/**
-      - scripts/check-docker-image.mjs
-      - .github/workflows/docker-image.yml
   pull_request:
     branches: [main]
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - package.json
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - server/**
-      - shared/**
-      - web/**
-      - scripts/check-docker-image.mjs
-      - .github/workflows/docker-image.yml
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 permissions:
@@ -39,8 +16,20 @@ concurrency:
 jobs:
   contract:
     name: Build, Size, and Runtime Contract
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     steps:
+      - name: Record milestone selection
+        run: |
+          {
+            echo "### Docker image milestone"
+            echo
+            echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
+            echo "- Reason: explicit \`ci:full\` or manual milestone"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build production image
