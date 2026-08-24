@@ -6,9 +6,10 @@
 #   2. build-shared — Build the shared package
 #   3. build-web   — Build React frontend with Vite
 #   4. build-server — Compile the Express server TypeScript
-#   5. production  — Minimal runtime image
+#   5. production-deps — Install the server-only runtime closure
+#   6. production  — Minimal runtime image
 #
-# Target image size: < 625,000,000 bytes
+# Target image size: < 200,000,000 bytes
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -63,19 +64,12 @@ COPY server/ ./server/
 RUN pnpm --filter @veritas-kanban/server build
 
 # ---------------------------------------------------------------------------
-# Stage 5: Production runtime
+# Stage 5: Install the server-only production dependency closure
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS production
-
-# Security: run as non-root
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S veritas -u 1001 -G nodejs
+FROM node:22-alpine AS production-deps
 
 WORKDIR /app
 
-# Install only the server workspace and its shared dependency. The Linux Codex
-# SDK runtime is intentionally retained; pnpm's platform pruning excludes the
-# other platform binaries that pnpm deploy currently copies.
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY shared/package.json ./shared/
 COPY server/package.json ./server/
@@ -83,9 +77,28 @@ COPY scripts/ ./scripts/
 RUN corepack enable && \
     corepack prepare pnpm@11.1.1 --activate && \
     HUSKY=0 pnpm install --frozen-lockfile --prod --filter @veritas-kanban/server... && \
-    rm -rf /root/.cache/node/corepack /root/.local/share/pnpm/store /root/.local/share/pnpm/.tools && \
-    rm -rf scripts package.json pnpm-lock.yaml pnpm-workspace.yaml && \
-    rm -f /usr/local/bin/pnpm /usr/local/bin/pnpx
+    rm -rf /root/.cache/node/corepack /root/.local/share/pnpm/store /root/.local/share/pnpm/.tools
+
+# ---------------------------------------------------------------------------
+# Stage 6: Production runtime
+# ---------------------------------------------------------------------------
+# The matching Alpine base keeps Node's musl ABI while excluding npm,
+# Corepack, headers, and package-manager tooling from the runtime image.
+FROM alpine:3.24 AS production
+
+RUN apk add --no-cache libstdc++ && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S veritas -u 1001 -G nodejs
+
+COPY --from=production-deps /usr/local/bin/node /usr/local/bin/node
+
+WORKDIR /app
+
+# Copy only the resolved server runtime closure. The platform-specific Codex
+# binary remains available, while npm, pnpm, workspace manifests, and build
+# tooling never enter the production stage.
+COPY --from=production-deps --chown=veritas:nodejs /app/node_modules ./node_modules
+COPY --from=production-deps --chown=veritas:nodejs /app/server/node_modules ./server/node_modules
 
 # Copy only built runtime artifacts. CLI, MCP, frontend dependencies, source,
 # and build tooling never enter the production stage.

@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
 const image = process.env.VERITAS_DOCKER_IMAGE || process.argv[2] || 'veritas-kanban:contract';
-const maxBytes = Number(process.env.VERITAS_DOCKER_MAX_BYTES || '625000000');
+const maxBytes = Number(process.env.VERITAS_DOCKER_MAX_BYTES || '200000000');
 const containerName = `veritas-kanban-contract-${process.pid}`;
 const volumeName = `${containerName}-data`;
 const adminKey = randomBytes(24).toString('hex');
