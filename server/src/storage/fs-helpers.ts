@@ -113,11 +113,22 @@ export async function atomicWriteFile(
 ): Promise<void> {
   const suffix = randomBytes(6).toString('hex');
   const tmpPath = `${destPath}.tmp.${suffix}`;
+  let handle: Awaited<ReturnType<typeof openAsync>> | undefined;
 
   try {
-    await writeFileAsync(tmpPath, content, encoding);
+    const noFollow = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0;
+    handle = await openAsync(
+      tmpPath,
+      fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | noFollow,
+      0o600
+    );
+    await handle.writeFile(content, typeof content === 'string' ? { encoding } : undefined);
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
     await renameAsync(tmpPath, destPath);
   } catch (err) {
+    await handle?.close().catch(() => {});
     // Best-effort cleanup; ignore errors — the original file is untouched.
     await unlinkAsync(tmpPath).catch(() => {});
     throw err;

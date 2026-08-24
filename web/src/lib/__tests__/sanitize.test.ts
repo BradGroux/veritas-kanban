@@ -63,6 +63,12 @@ describe('sanitizeHtml', () => {
     expect(result).toContain('rel="noopener noreferrer"');
   });
 
+  it('does not treat digits as URI-scheme characters', () => {
+    const result = sanitizeHtml('<a href="1javascript:alert(1)">blocked</a>');
+    expect(result).not.toContain('href=');
+    expect(result).toContain('blocked');
+  });
+
   it('preserves tables', () => {
     const input = '<table><tr><td>Cell</td></tr></table>';
     expect(sanitizeHtml(input)).toContain('<td>Cell</td>');
