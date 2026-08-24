@@ -70,6 +70,13 @@ storage, provider-runtime, CI, container, and supportability audit tracked in
   boundary. Technical details remain under the repository security-advisory
   process until supported artifacts are available and disclosure is approved
   (#1236).
+- Corrected recovery-key alphabet generation and WebSocket upgrade header
+  forwarding defects exposed by the final release validation (#1238, #1239).
+- Serialized complete same-task update and lifecycle operations before their
+  first read, preserving archive/restore invocation order under contention
+  (#1240, #1241).
+- Rejected digit-prefixed unsafe URI payloads in sanitized HTML while
+  preserving safe relative links (#1242, #1243).
 
 ### Compatibility and operations
 

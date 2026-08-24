@@ -17,9 +17,9 @@ Documentation freshness: 2026-08-24 for the Veritas Kanban 6.1.2 candidate.
 | --- | --- |
 | Release version | 6.1.2 |
 | Source branch | `release/6.1.2-audit` |
-| Source baseline | `eee4dd9a2af3946e6c90d1076fc8caa6533ec8c3`, `main` after coordinated remediation PR #1236 |
+| Source baseline | `3851fea93ecfe5119e4092739662443d29059ac7`, `main` after release-gate fix PR #1243 |
 | Included issues | Audit tracker [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174), findings #1162-#1173, and CodeQL baseline #1231 |
-| Public implementation | #1162, #1163, and #1165-#1173 are closed through merged work; #1164 implementation is merged and remains open only for final regression evidence; coordinated remediation is merged through #1236 |
+| Public implementation | #1162, #1163, and #1165-#1173 are closed through merged work; #1164 implementation is merged and remains open only for final regression evidence; coordinated remediation and release-gate fixes are merged through #1236, #1239, #1241, and #1243 |
 | Private security blocker | Remediation is integrated into the candidate. Release verification and disclosure disposition remain pending, and no exploit-relevant detail is included here |
 | Publication state | Not published. The release PR, final matrix, tag, GitHub release, desktop workflow, artifacts, Homebrew cask, and advisory disposition are pending |
 
@@ -41,6 +41,9 @@ Documentation freshness: 2026-08-24 for the Veritas Kanban 6.1.2 candidate.
 | Type safety | #1173 lint-debt ratchet | #1221 |
 | CodeQL baseline | #1231 initial alert triage, remediation, and disposition | #1232-#1235 |
 | Coordinated security | Private release blocker integrated without premature disclosure | #1236 |
+| Release validation | Recovery-key alphabet and WebSocket header forwarding | #1238, #1239 |
+| Release validation | Same-task lifecycle invocation ordering | #1240, #1241 |
+| Release validation | Sanitized URI prefix validation | #1242, #1243 |
 
 The initial CodeQL baseline contained 195 open alerts. All were reviewed: 67
 were closed through source remediation and 128 received specific,
