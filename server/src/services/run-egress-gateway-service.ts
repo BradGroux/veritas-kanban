@@ -13,7 +13,6 @@ import {
   type RunEgressPolicy,
 } from '@veritas-kanban/shared';
 import { ConflictError } from '../middleware/error-handler.js';
-import { setSafeRecordValue } from '../utils/safe-record.js';
 import { EgressPolicyService, getEgressPolicyService } from './egress-policy-service.js';
 
 const LOOPBACK_HOST = '127.0.0.1';
@@ -965,16 +964,20 @@ function forwardHeaders(
   headers: IncomingHttpHeaders,
   host: string | undefined,
   preserveUpgrade: boolean
-): IncomingHttpHeaders {
-  const result: IncomingHttpHeaders = {};
+): string[] {
+  const result: string[] = [];
   for (const [name, value] of Object.entries(headers)) {
     const lower = name.toLowerCase();
     if (lower === 'proxy-authorization' || lower === 'proxy-connection') continue;
     if (!preserveUpgrade && HOP_BY_HOP_HEADERS.has(lower)) continue;
     if (value === undefined) continue;
-    setSafeRecordValue(result, lower, value, 'HTTP header name');
+    if (Array.isArray(value)) {
+      for (const item of value) result.push(lower, item);
+    } else {
+      result.push(lower, value);
+    }
   }
-  if (host) result.host = host;
+  if (host) result.push('host', host);
   return result;
 }
 

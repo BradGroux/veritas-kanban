@@ -40,12 +40,7 @@ export function setSafeRecordValue<T>(
   label = 'record key'
 ): void {
   assertSafeRecordKey(key, label);
-  Object.defineProperty(record, key, {
-    configurable: true,
-    enumerable: true,
-    value,
-    writable: true,
-  });
+  Object.assign(record, Object.fromEntries([[key, value]]));
 }
 
 export function deleteSafeRecordValue<T>(
