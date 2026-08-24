@@ -201,7 +201,7 @@ export class PromptRegistryService {
       const { data } = matter(content);
       return data as PromptTemplate;
     } catch (err) {
-      log.error({ err: err }, `Error reading template ${id}`);
+      log.error({ err, templateId: id }, 'Error reading prompt template');
       return null;
     }
   }
@@ -433,7 +433,7 @@ export class PromptRegistryService {
         usageData = JSON.parse(content);
       }
     } catch (err) {
-      log.warn({ err: err }, `Error reading usage file for ${templateId}`);
+      log.warn({ err, templateId }, 'Error reading prompt usage file');
     }
 
     usageData.push(usage);
@@ -460,7 +460,7 @@ export class PromptRegistryService {
       const content = await readFile(usageFile, 'utf-8');
       return JSON.parse(content);
     } catch (err) {
-      log.error({ err: err }, `Error reading usage file for ${templateId}`);
+      log.error({ err, templateId }, 'Error reading prompt usage file');
       return [];
     }
   }

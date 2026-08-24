@@ -40,6 +40,7 @@ import {
   TelemetryExportQuerySchema,
 } from '../schemas/telemetry-schemas.js';
 import {
+  MAX_TASK_REORDER_ITEMS,
   ReorderTasksBodySchema,
   ApplyTemplateBodySchema,
 } from '../schemas/task-mutation-schemas.js';
@@ -698,6 +699,14 @@ describe('Task Mutation Schemas', () => {
 
     it('should reject non-array orderedIds', () => {
       expect(() => ReorderTasksBodySchema.parse({ orderedIds: 'not-an-array' })).toThrow();
+    });
+
+    it('should reject an unbounded reorder payload', () => {
+      const orderedIds = Array.from(
+        { length: MAX_TASK_REORDER_ITEMS + 1 },
+        (_, index) => `task_${index}`
+      );
+      expect(() => ReorderTasksBodySchema.parse({ orderedIds })).toThrow();
     });
   });
 

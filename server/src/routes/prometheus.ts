@@ -5,6 +5,7 @@ import {
   authorizePermission,
   type AuthenticatedRequest,
 } from '../middleware/auth.js';
+import { readRateLimit } from '../middleware/rate-limit.js';
 import { getPrometheusCollector } from '../services/metrics/prometheus.js';
 
 export const prometheusMetricsRouter = Router();
@@ -66,7 +67,7 @@ function protectPrometheusMetrics(req: Request, res: Response, next: NextFunctio
   });
 }
 
-prometheusMetricsRouter.get('/metrics', protectPrometheusMetrics, (_req, res) => {
+prometheusMetricsRouter.get('/metrics', readRateLimit, protectPrometheusMetrics, (_req, res) => {
   const collector = getPrometheusCollector();
   res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
   res.send(collector.scrape());

@@ -59,7 +59,12 @@ import authRoutes from './routes/auth.js';
 import { checkJwtSecretConfig } from './config/security.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
-import { apiRateLimit, authRateLimit } from './middleware/rate-limit.js';
+import {
+  apiRateLimit,
+  authRateLimit,
+  authStatusRateLimit,
+  readRateLimit,
+} from './middleware/rate-limit.js';
 import { apiVersionMiddleware } from './middleware/api-version.js';
 import { apiCacheHeaders } from './middleware/cache-control.js';
 import type { RunEventEnvelope } from '@veritas-kanban/shared';
@@ -400,12 +405,24 @@ app.use(
 
 // Auth diagnostic endpoint (admin-only, requires authentication)
 // Available at both /api/auth/diagnostics and /api/v1/auth/diagnostics
-app.get('/api/auth/diagnostics', authenticate, authorize('admin'), (_req, res) => {
-  res.json(getAuthStatus());
-});
-app.get('/api/v1/auth/diagnostics', authenticate, authorize('admin'), (_req, res) => {
-  res.json(getAuthStatus());
-});
+app.get(
+  '/api/auth/diagnostics',
+  authStatusRateLimit,
+  authenticate,
+  authorize('admin'),
+  (_req, res) => {
+    res.json(getAuthStatus());
+  }
+);
+app.get(
+  '/api/v1/auth/diagnostics',
+  authStatusRateLimit,
+  authenticate,
+  authorize('admin'),
+  (_req, res) => {
+    res.json(getAuthStatus());
+  }
+);
 
 // ============================================
 // Auth Routes (unauthenticated - for login/setup)
@@ -522,7 +539,7 @@ if (process.env.NODE_ENV === 'production') {
 
   // SPA fallback: serve index.html for any non-API route
   // Express 5 / path-to-regexp v8+ requires named wildcards (fixes #150)
-  app.get('{*path}', (_req, res, next) => {
+  app.get('{*path}', readRateLimit, (_req, res, next) => {
     // Don't serve index.html for API routes or WebSocket
     if (_req.path.startsWith('/api') || _req.path.startsWith('/ws') || _req.path === '/health') {
       return next();

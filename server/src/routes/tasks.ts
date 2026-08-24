@@ -24,6 +24,7 @@ import { authorizePermission, type AuthenticatedRequest } from '../middleware/au
 import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
 import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
 import { TaskExecutionPolicySchema } from '../schemas/task-envelope-schemas.js';
+import { ReorderTasksBodySchema } from '../schemas/task-mutation-schemas.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -174,10 +175,6 @@ const automationSchema = z
     result: z.string().optional(),
   })
   .optional();
-
-const reorderTasksSchema = z.object({
-  orderedIds: z.array(z.string().min(1)).min(1, 'orderedIds must be a non-empty array of task IDs'),
-});
 
 const applyTemplateSchema = z.object({
   templateId: z.string().min(1, 'Template ID is required'),
@@ -552,7 +549,7 @@ router.post(
   asyncHandler(async (req, res) => {
     let orderedIds: string[];
     try {
-      ({ orderedIds } = reorderTasksSchema.parse(req.body));
+      ({ orderedIds } = ReorderTasksBodySchema.parse(req.body));
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Validation failed', error.issues);

@@ -168,7 +168,7 @@ export class TemplateService {
       const { data } = matter(content);
       return this.migrateTemplate(data);
     } catch (err) {
-      log.error({ err: err }, `Error reading template ${id}`);
+      log.error({ err, templateId: id }, 'Error reading task template');
       return null;
     }
   }

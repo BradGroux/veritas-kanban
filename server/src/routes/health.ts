@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { createLogger } from '../lib/logger.js';
 import { authenticate, authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
+import { readRateLimit, writeRateLimit } from '../middleware/rate-limit.js';
 import { getAllStatus as getCircuitBreakerStatus } from '../services/circuit-registry.js';
 import { getDependencyCircuitControlService } from '../services/dependency-circuit-control-service.js';
 import {
@@ -359,13 +360,14 @@ async function buildDeepHealthPayload() {
   };
 }
 
-healthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) => {
+healthRouter.get('/deep', readRateLimit, authenticate, authorize('admin'), async (_req, res) => {
   const payload = await buildDeepHealthPayload();
   res.json(payload);
 });
 
 healthRouter.post(
   '/dependency-circuits/:key/reset',
+  writeRateLimit,
   authenticate,
   authorize('admin'),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -389,6 +391,7 @@ healthRouter.post(
 
 healthRouter.post(
   '/dependency-circuits/:key/override',
+  writeRateLimit,
   authenticate,
   authorize('admin'),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -405,6 +408,7 @@ healthRouter.post(
 
 healthRouter.delete(
   '/dependency-circuits/:key/override',
+  writeRateLimit,
   authenticate,
   authorize('admin'),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -445,7 +449,7 @@ healthRouter.get('/', (_req, res) => {
  * Returns a minimal JSON payload that is cheap to compute and safe to call
  * frequently.
  */
-apiHealthRouter.get('/', async (_req, res) => {
+apiHealthRouter.get('/', readRateLimit, async (_req, res) => {
   // Read version from package.json (best-effort)
   let version = 'unknown';
   try {
@@ -470,7 +474,7 @@ apiHealthRouter.get('/', async (_req, res) => {
  *
  * Same payload as /health/deep, exposed under /api for watchdogs and tooling.
  */
-apiHealthRouter.get('/deep', authenticate, authorize('admin'), async (_req, res) => {
+apiHealthRouter.get('/deep', readRateLimit, authenticate, authorize('admin'), async (_req, res) => {
   const payload = await buildDeepHealthPayload();
   res.json(payload);
 });

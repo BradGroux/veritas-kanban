@@ -91,7 +91,8 @@ router.post(
     const result = isProcessed(subject);
 
     log.info(
-      `dedup-check subject="${subject}" emailId=${emailId ?? '(none)'} found=${result.found} match=${result.matchedFile ?? 'none'}`
+      { found: result.found, hasEmailId: typeof emailId === 'string' && emailId.length > 0 },
+      'Transcript deduplication check completed'
     );
 
     res.json({

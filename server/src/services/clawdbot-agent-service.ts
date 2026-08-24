@@ -2171,7 +2171,13 @@ export class ClawdbotAgentService {
       routingReason = `Agent profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent}.`;
       routingFallback = profileLaunch.profile.runtime.fallbackAgent;
       log.info(
-        `[ClawdbotAgent] Profile ${profileLaunch.profile.id}@${profileLaunch.profile.version} selected ${agent} for task ${taskId}`
+        {
+          agent,
+          profileId: profileLaunch.profile.id,
+          profileVersion: profileLaunch.profile.version,
+          taskId,
+        },
+        '[ClawdbotAgent] Profile selected agent for task'
       );
     } else if (!agentType || agentType === 'auto') {
       const routing = getAgentRoutingService();
@@ -2179,9 +2185,7 @@ export class ClawdbotAgentService {
       agent = result.agent;
       routingReason = result.reason;
       routingFallback = result.fallback;
-      log.info(
-        `[ClawdbotAgent] Routing resolved agent for task ${taskId}: ${agent} (${routingReason})`
-      );
+      log.info({ agent, routingReason, taskId }, '[ClawdbotAgent] Routing resolved agent for task');
     } else {
       agent = agentType;
       routingReason = `Operator explicitly selected ${agent}.`;
@@ -4190,7 +4194,7 @@ export class ClawdbotAgentService {
       });
     }
 
-    log.info(`[ClawdbotAgent] Task ${taskId} completed with status: ${status}`);
+    log.info({ status, taskId }, '[ClawdbotAgent] Task completed');
   }
 
   private scheduleReflectionExtraction(
