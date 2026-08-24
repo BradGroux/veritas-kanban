@@ -1,42 +1,5 @@
 {
   "schemaVersion": 1,
-  "maximumEntries": 6,
-  "entries": [
-    {
-      "path": "server/src/services/clawdbot-agent-service.ts",
-      "category": "transient-process-io",
-      "owner": "#1189",
-      "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/file-lock.ts",
-      "category": "transient-process-io",
-      "owner": "#1189",
-      "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/gateway-chat-client.ts",
-      "category": "transient-process-io",
-      "owner": "#1189",
-      "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/pdf-report-service.ts",
-      "category": "transient-process-io",
-      "owner": "#1189",
-      "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/sqlite-portability-service.ts",
-      "category": "transient-process-io",
-      "owner": "#1189",
-      "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    },
-    {
-      "path": "server/src/services/text-extraction-service.ts",
-      "category": "transient-process-io",
-      "owner": "#1189",
-      "rationale": "Remaining process I/O migration is tracked in issue #1189."
-    }
-  ]
+  "maximumEntries": 0,
+  "entries": []
 }

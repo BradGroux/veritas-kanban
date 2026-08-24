@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import path from 'path';
 import { createLogger } from '../lib/logger.js';
 
