@@ -315,19 +315,8 @@ import {
   DependencyCircuitExecutionService,
   type DependencyCircuitExecutionOptions,
 } from './dependency-circuit-routing-service.js';
+import { interpretCodexEvent, redactProviderTraceText } from './codex-event-interpreter.js';
 const log = createLogger('clawdbot-agent-service');
-
-const TRACE_SECRET_PATTERNS: Array<[RegExp, string]> = [
-  [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'],
-  [/\bsk-[A-Za-z0-9_-]{12,}/g, 'sk-[REDACTED]'],
-  [/\bghp_[A-Za-z0-9_]{12,}/g, 'ghp_[REDACTED]'],
-  [/\bgithub_pat_[A-Za-z0-9_]{12,}/g, 'github_pat_[REDACTED]'],
-  [
-    /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*)\s*=\s*([^\s"'`]+)/gi,
-    '$1=[REDACTED]',
-  ],
-  [/\b(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*([^\s"'`,}]+)/gi, '$1=[REDACTED]'],
-];
 const CLAUDE_CODE_MAX_STDERR_BUFFER_BYTES = 64 * 1024;
 const providerDependencyExecutionOptions = {
   signalsForError: (error: unknown) => {
@@ -8966,8 +8955,7 @@ export class ClawdbotAgentService {
     }
     const record = event as Record<string, unknown>;
     const type = String(record.type || record.event || 'codex.event');
-    const summary = this.extractCodexSummary(record);
-    const usage = this.extractCodexUsage(record);
+    const { summary, usage } = interpretCodexEvent(record, type);
     if (usage && task) {
       assertProviderRuntimeControl(
         pendingAgents.get(task.id)?.providerRuntimeManifest,
@@ -9283,14 +9271,11 @@ export class ClawdbotAgentService {
   ): Promise<void> {
     const agent =
       agentConfig?.type || (agentConfig?.provider === 'codex-sdk' ? 'codex-sdk' : 'codex');
-    const files = this.extractCodexFiles(event);
-    const usage = this.extractCodexUsage(event);
-    const command = this.extractCodexCommand(event);
-    const tool = this.extractCodexTool(event, type);
-    const error = this.extractCodexError(event, type);
+    const interpreted = interpretCodexEvent(event, type);
+    const { files, usage, command, tool, error } = interpreted;
     const sanitizedSummary = summary ? this.redactTraceText(summary) : undefined;
-    const stepType = this.codexTraceStepType(type, event);
-    const stream = this.extractCodexStream(event, type);
+    const stepType = interpreted.traceStepType;
+    const stream = interpreted.stream;
     const provider = agentConfig?.provider === 'codex-sdk' ? 'codex-sdk' : 'codex-cli';
     const journalEvent = await this.appendMappedProviderEvent(
       task,
@@ -9332,8 +9317,8 @@ export class ClawdbotAgentService {
       tool,
       files,
       error: error ? this.redactTraceText(error) : undefined,
-      retryAttempt: this.extractCodexNumber(event, ['retryAttempt', 'retry_attempt', 'attempt']),
-      retryDelayMs: this.extractCodexNumber(event, ['retryDelayMs', 'retry_delay_ms', 'delayMs']),
+      retryAttempt: interpreted.retryAttempt,
+      retryDelayMs: interpreted.retryDelayMs,
       inputTokens: usage?.inputTokens,
       outputTokens: usage?.outputTokens,
       totalTokens: usage?.totalTokens,
@@ -9341,7 +9326,7 @@ export class ClawdbotAgentService {
       finalResult: stepType === 'complete' ? sanitizedSummary : undefined,
     });
 
-    if (this.shouldLogCodexActivity(type)) {
+    if (interpreted.logActivity) {
       await activityService.logActivity(
         'agent_event',
         task.id,
@@ -9374,235 +9359,8 @@ export class ClawdbotAgentService {
     }
   }
 
-  private codexTraceStepType(type: string, event?: Record<string, unknown>): AgentRunTraceStepType {
-    const normalized = type.toLowerCase();
-    if (normalized.includes('retry')) return 'retry';
-    if (normalized.includes('abort') || normalized.includes('cancel')) return 'abort';
-    if (normalized.includes('failed') || normalized === 'error') return 'error';
-    if (normalized.includes('finaliz')) return 'finalize';
-    if (
-      normalized.includes('delta') ||
-      normalized.includes('stream') ||
-      normalized.includes('output') ||
-      normalized.includes('stdout') ||
-      normalized.includes('stderr')
-    ) {
-      return 'stream';
-    }
-    if (event && typeof event.item === 'object' && event.item !== null) {
-      const itemType = String((event.item as Record<string, unknown>).type || '').toLowerCase();
-      if (itemType.includes('delta') || itemType.includes('message_delta')) return 'stream';
-    }
-    if (type.includes('failed') || type === 'error') return 'error';
-    if (type === 'turn.completed' || type === 'response.completed') return 'complete';
-    return 'execute';
-  }
-
-  private shouldLogCodexActivity(type: string): boolean {
-    return (
-      type.includes('command') ||
-      type.includes('tool') ||
-      type.includes('file') ||
-      type.includes('retry') ||
-      type.includes('abort') ||
-      type.includes('completed') ||
-      type.includes('failed') ||
-      type === 'error'
-    );
-  }
-
-  private extractCodexFiles(event: unknown): string[] {
-    const files = new Set<string>();
-    const seen = new Set<unknown>();
-    const fileKeys = new Set([
-      'file',
-      'file_path',
-      'filePath',
-      'path',
-      'relative_path',
-      'relativePath',
-      'absolute_path',
-      'absolutePath',
-    ]);
-
-    const visit = (value: unknown, key?: string): void => {
-      if (!value) return;
-      if (typeof value === 'string') {
-        if (key && fileKeys.has(key) && this.looksLikeFilePath(value)) files.add(value);
-        return;
-      }
-      if (Array.isArray(value)) {
-        for (const item of value) visit(item, key);
-        return;
-      }
-      if (typeof value !== 'object' || seen.has(value)) return;
-      seen.add(value);
-      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
-        visit(childValue, childKey);
-      }
-    };
-
-    visit(event);
-    return [...files].slice(0, 25);
-  }
-
-  private extractCodexCommand(event: unknown): string | undefined {
-    const command = this.findCodexString(event, [
-      'command',
-      'cmd',
-      'shell_command',
-      'shellCommand',
-    ]);
-    const args = this.findCodexStringArray(event, ['args', 'argv']);
-    if (command && args.length > 0) return `${command} ${args.join(' ')}`;
-    return command ?? (args.length > 0 ? args.join(' ') : undefined);
-  }
-
-  private extractCodexTool(event: unknown, fallbackType: string): string | undefined {
-    const tool = this.findCodexString(event, [
-      'tool',
-      'tool_name',
-      'toolName',
-      'function_name',
-      'functionName',
-    ]);
-    if (tool) return tool;
-
-    if (event && typeof event === 'object') {
-      const item = (event as Record<string, unknown>).item;
-      if (item && typeof item === 'object') {
-        const itemType = (item as Record<string, unknown>).type;
-        if (typeof itemType === 'string' && itemType.trim()) return itemType.trim();
-      }
-    }
-
-    return fallbackType;
-  }
-
-  private extractCodexError(event: unknown, type: string): string | undefined {
-    if (!type.includes('failed') && type !== 'error') return undefined;
-    const error = this.findCodexString(event, ['error', 'message']);
-    return error;
-  }
-
-  private extractCodexStream(
-    event: Record<string, unknown>,
-    type: string
-  ): 'stdout' | 'stderr' | undefined {
-    const stream = this.findCodexString(event, ['stream', 'channel', 'fd']);
-    if (stream === 'stdout' || stream === 'stderr') return stream;
-    if (/stderr|error/i.test(type)) return 'stderr';
-    if (/stdout|delta|output|stream/i.test(type)) return 'stdout';
-    return undefined;
-  }
-
-  private extractCodexNumber(event: unknown, keys: string[]): number | undefined {
-    const wanted = new Set(keys);
-    const seen = new Set<unknown>();
-
-    const visit = (value: unknown, key?: string): number | undefined => {
-      if (!value) return undefined;
-      if (typeof value === 'number') {
-        return key && wanted.has(key) ? value : undefined;
-      }
-      if (typeof value === 'string' && key && wanted.has(key)) {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : undefined;
-      }
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const result = visit(item, key);
-          if (result !== undefined) return result;
-        }
-        return undefined;
-      }
-      if (typeof value !== 'object' || seen.has(value)) return undefined;
-      seen.add(value);
-      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
-        const result = visit(childValue, childKey);
-        if (result !== undefined) return result;
-      }
-      return undefined;
-    };
-
-    return visit(event);
-  }
-
-  private findCodexString(event: unknown, keys: string[]): string | undefined {
-    const wanted = new Set(keys);
-    const seen = new Set<unknown>();
-
-    const visit = (value: unknown, key?: string): string | undefined => {
-      if (!value) return undefined;
-      if (typeof value === 'string') {
-        if (key && wanted.has(key) && value.trim()) return value.trim();
-        return undefined;
-      }
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const result = visit(item, key);
-          if (result) return result;
-        }
-        return undefined;
-      }
-      if (typeof value !== 'object' || seen.has(value)) return undefined;
-      seen.add(value);
-      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
-        const result = visit(childValue, childKey);
-        if (result) return result;
-      }
-      return undefined;
-    };
-
-    return visit(event);
-  }
-
-  private findCodexStringArray(event: unknown, keys: string[]): string[] {
-    const wanted = new Set(keys);
-    const seen = new Set<unknown>();
-
-    const visit = (value: unknown, key?: string): string[] => {
-      if (!value) return [];
-      if (Array.isArray(value)) {
-        if (key && wanted.has(key)) {
-          return value
-            .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-            .map((item) => item.trim())
-            .slice(0, 20);
-        }
-        for (const item of value) {
-          const result = visit(item, key);
-          if (result.length > 0) return result;
-        }
-        return [];
-      }
-      if (typeof value !== 'object' || seen.has(value)) return [];
-      seen.add(value);
-      for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
-        const result = visit(childValue, childKey);
-        if (result.length > 0) return result;
-      }
-      return [];
-    };
-
-    return visit(event);
-  }
-
   private redactTraceText(value: string): string {
-    let redacted = value;
-    for (const [pattern, replacement] of TRACE_SECRET_PATTERNS) {
-      redacted = redacted.replace(pattern, replacement);
-    }
-    return redacted.length > 2000 ? `${redacted.slice(0, 2000)}...` : redacted;
-  }
-
-  private looksLikeFilePath(value: string): boolean {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed.includes('\n')) return false;
-    if (/^https?:\/\//i.test(trimmed)) return true;
-    if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../'))
-      return true;
-    return /^[\w.-]+\/[\w./-]+$/.test(trimmed) || /\.[a-z0-9]{1,12}$/i.test(trimmed);
+    return redactProviderTraceText(value);
   }
 
   private async attachProviderDeliverables(
@@ -9724,87 +9482,6 @@ export class ClawdbotAgentService {
     pending.conversation = conversation;
     await this.taskService.patchTaskAttempt(taskId, attemptId, { conversation });
     return conversation;
-  }
-
-  private extractCodexSummary(event: unknown): string | undefined {
-    const seen = new Set<unknown>();
-    const visit = (value: unknown): string | undefined => {
-      if (!value || typeof value !== 'object') return undefined;
-      if (seen.has(value)) return undefined;
-      seen.add(value);
-      const record = value as Record<string, unknown>;
-      for (const key of [
-        'final_response',
-        'finalMessage',
-        'final_message',
-        'message',
-        'text',
-        'delta',
-        'chunk',
-        'content',
-        'output',
-      ]) {
-        const candidate = record[key];
-        if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
-      }
-      for (const child of Object.values(record)) {
-        const result = visit(child);
-        if (result) return result;
-      }
-      return undefined;
-    };
-    return visit(event);
-  }
-
-  private extractCodexUsage(event: unknown):
-    | {
-        inputTokens: number;
-        outputTokens: number;
-        totalTokens?: number;
-        cost?: number;
-        model?: string;
-      }
-    | undefined {
-    const seen = new Set<unknown>();
-    const visit = (value: unknown): Record<string, unknown> | undefined => {
-      if (!value || typeof value !== 'object') return undefined;
-      if (seen.has(value)) return undefined;
-      seen.add(value);
-      const record = value as Record<string, unknown>;
-      const input =
-        record.input_tokens ?? record.inputTokens ?? record.prompt_tokens ?? record.promptTokens;
-      const output =
-        record.output_tokens ??
-        record.outputTokens ??
-        record.completion_tokens ??
-        record.completionTokens;
-      if (typeof input === 'number' && typeof output === 'number') return record;
-      for (const child of Object.values(record)) {
-        const result = visit(child);
-        if (result) return result;
-      }
-      return undefined;
-    };
-
-    const usage = visit(event);
-    if (!usage) return undefined;
-    const input = (usage.input_tokens ??
-      usage.inputTokens ??
-      usage.prompt_tokens ??
-      usage.promptTokens) as number;
-    const output = (usage.output_tokens ??
-      usage.outputTokens ??
-      usage.completion_tokens ??
-      usage.completionTokens) as number;
-    const total = usage.total_tokens ?? usage.totalTokens;
-    const cost = usage.cost ?? usage.cost_usd ?? usage.costUsd;
-    return {
-      inputTokens: input,
-      outputTokens: output,
-      totalTokens: typeof total === 'number' ? total : input + output,
-      cost: typeof cost === 'number' ? cost : undefined,
-      model: typeof usage.model === 'string' ? usage.model : undefined,
-    };
   }
 
   private async appendLog(logPath: string, content: string): Promise<void> {
