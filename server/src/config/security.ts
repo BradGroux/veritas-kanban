@@ -378,10 +378,9 @@ export function saveSecurityConfig(config: SecurityConfig): void {
 export function generateRecoveryKey(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Omit confusing chars (0/O, 1/I/L)
   let key = '';
-  const bytes = crypto.randomBytes(16);
 
   for (let i = 0; i < 16; i++) {
-    key += chars[bytes[i] % chars.length];
+    key += chars[crypto.randomInt(chars.length)];
     if (i === 3 || i === 7 || i === 11) {
       key += '-';
     }

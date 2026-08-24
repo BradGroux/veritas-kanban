@@ -158,6 +158,18 @@ describe('TextExtractionService', () => {
       expect(extracted).toContain('Hello World');
       expect(extracted).toContain('paragraph');
     });
+
+    it('discards malformed script and style end tags without leaving executable content', async () => {
+      const filepath = path.join(testRoot, 'malformed-end-tags.html');
+      await fs.writeFile(
+        filepath,
+        '<p>Visible</p><script>alert(1)</script ><style>body{display:none}</style >'
+      );
+
+      const extracted = await service.extractText(filepath, 'text/html');
+
+      expect(extracted).toBe('Visible');
+    });
   });
 
   describe('JSON extraction', () => {

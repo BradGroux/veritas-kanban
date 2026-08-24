@@ -1,5 +1,14 @@
 import { createHash } from 'crypto';
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readSync, statSync } from 'fs';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+} from 'fs';
 import { dirname, join, resolve } from 'path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SqliteStorageDiagnostics } from '@veritas-kanban/shared';
@@ -540,13 +549,22 @@ export class SqliteDatabase {
 }
 
 function inspectExistingSqliteJournalPosture(databasePath: string): ExistingSqliteJournalPosture {
-  if (!existsSync(databasePath) || statSync(databasePath).size === 0) {
-    return 'new';
+  let file: number;
+  try {
+    const noFollow = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0;
+    file = openSync(databasePath, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return 'new';
+    if (code === 'ELOOP') return 'unrecognized';
+    throw error;
   }
 
   const header = Buffer.alloc(20);
-  const file = openSync(databasePath, 'r');
   try {
+    const opened = fstatSync(file);
+    if (!opened.isFile()) return 'unrecognized';
+    if (opened.size === 0) return 'new';
     const bytesRead = readSync(file, header, 0, header.length, 0);
     if (bytesRead < header.length || header.subarray(0, 16).toString('utf8') !== SQLITE_HEADER) {
       return 'unrecognized';

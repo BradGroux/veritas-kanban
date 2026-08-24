@@ -3,6 +3,7 @@ import { extractText as unpdfExtract } from 'unpdf';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
 import { createLogger } from '../lib/logger.js';
+import { stripHtml } from '../utils/sanitize.js';
 const log = createLogger('text-extraction-service');
 
 export interface TextExtractionResult {
@@ -77,7 +78,7 @@ export class TextExtractionService {
       // Unknown type
       return null;
     } catch (error) {
-      log.error({ err: error }, `Text extraction failed for ${filepath}`);
+      log.error({ err: error, filepath }, 'Text extraction failed');
       return null;
     }
   }
@@ -178,13 +179,7 @@ export class TextExtractionService {
     try {
       const html = await fs.readFile(filepath, 'utf-8');
 
-      // Simple tag stripping (for more complex HTML, consider using a library like cheerio)
-      const text = html
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const text = stripHtml(html).replace(/\s+/g, ' ').trim();
 
       return text || null;
     } catch (error) {
