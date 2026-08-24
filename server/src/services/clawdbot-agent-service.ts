@@ -623,12 +623,6 @@ class CompletionPersistenceError extends Error {
   }
 }
 
-function normalizedTaskRevision(task: Pick<Task, 'revision'>): number {
-  return typeof task.revision === 'number' && Number.isInteger(task.revision) && task.revision >= 0
-    ? task.revision
-    : 1;
-}
-
 function executableProvider(value: string | undefined): ExecutableAgentProvider | 'system' {
   return EXECUTABLE_AGENT_PROVIDERS.includes(value as ExecutableAgentProvider)
     ? (value as ExecutableAgentProvider)
@@ -1069,10 +1063,10 @@ export class ClawdbotAgentService {
               status: 'failed',
               ended: new Date().toISOString(),
             };
-            await this.taskService.updateTask(task.id, {
-              ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+            await this.attemptLifecycle.persistActiveAttempt({
+              task,
               attempt: failedAttempt,
-              attempts: upsertAttemptHistory(task.attempts, failedAttempt),
+              ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
             });
           }
           recoveryRequiredCount += 1;
@@ -1169,11 +1163,10 @@ export class ClawdbotAgentService {
               runSupervisorId: recovery.record.id,
               runRecovery,
             };
-            await this.taskService.updateTask(task.id, {
-              expectedRevision: normalizedTaskRevision(task),
-              ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+            await this.attemptLifecycle.persistActiveAttempt({
+              task,
               attempt: recoveredAttempt,
-              attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
+              ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
             });
             recoveryRequiredCount += 1;
           }
@@ -1205,11 +1198,10 @@ export class ClawdbotAgentService {
           runSupervisorId: recovery.record.id,
           runRecovery,
         };
-        await this.taskService.updateTask(task.id, {
-          expectedRevision: normalizedTaskRevision(task),
-          ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+        await this.attemptLifecycle.persistActiveAttempt({
+          task,
           attempt: recoveredAttempt,
-          attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
+          ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
         });
         recoveryRequiredCount += 1;
       } catch (err) {
@@ -1265,10 +1257,9 @@ export class ClawdbotAgentService {
             reason: `${record.reason} Re-queued after server restart before child launch.`,
           };
           const recoveredAttempt = { ...attempt, runRetry: record };
-          const updated = await this.taskService.updateTask(task.id, {
-            expectedRevision: normalizedTaskRevision(task),
+          const updated = await this.attemptLifecycle.persistActiveAttempt({
+            task,
             attempt: recoveredAttempt,
-            attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
           });
           if (!updated) continue;
           await this.appendRunEvent(
@@ -1352,10 +1343,9 @@ export class ClawdbotAgentService {
       },
     };
     const cancelledAttempt = { ...attempt, runRetry: cancelled };
-    const updated = await this.taskService.updateTask(taskId, {
-      expectedRevision: normalizedTaskRevision(task),
+    const updated = await this.attemptLifecycle.persistActiveAttempt({
+      task,
       attempt: cancelledAttempt,
-      attempts: upsertAttemptHistory(task.attempts, cancelledAttempt),
     });
     if (!updated) throw new Error(`Task "${taskId}" disappeared during recovery cancellation`);
     this.clearScheduledRecovery(taskId, expectedAttemptId);
@@ -1472,11 +1462,10 @@ export class ClawdbotAgentService {
 
     const recoveredAttempt = { ...currentAttempt, runRetry: decision };
     try {
-      const updated = await this.taskService.updateTask(taskId, {
-        expectedRevision: normalizedTaskRevision(task),
-        ...(decision.state === 'approval-required' ? { status: 'blocked' as const } : {}),
+      const updated = await this.attemptLifecycle.persistActiveAttempt({
+        task,
         attempt: recoveredAttempt,
-        attempts: upsertAttemptHistory(task.attempts, recoveredAttempt),
+        ...(decision.state === 'approval-required' ? { status: 'blocked' as const } : {}),
       });
       if (!updated) return null;
     } catch (error) {
@@ -1584,10 +1573,9 @@ export class ClawdbotAgentService {
 
     const launching: RunRecoveryRecord = { ...current, state: 'launching' };
     const claimedAttempt = { ...parentAttempt, runRetry: launching };
-    const claimed = await this.taskService.updateTask(taskId, {
-      expectedRevision: normalizedTaskRevision(task),
+    const claimed = await this.attemptLifecycle.persistActiveAttempt({
+      task,
       attempt: claimedAttempt,
-      attempts: upsertAttemptHistory(task.attempts, claimedAttempt),
     });
     if (!claimed) throw new NotFoundError(`Task "${taskId}" disappeared during recovery launch`);
     await this.appendRunEvent(
@@ -2908,11 +2896,9 @@ export class ClawdbotAgentService {
               runLaunchManifestDigest: runLaunchManifest.digest,
             })
           : undefined;
-      await this.taskService.updateTask(taskId, {
-        ...(options.recovery ? { expectedRevision: normalizedTaskRevision(task) } : {}),
-        status: 'in-progress',
+      await this.attemptLifecycle.beginAttempt({
+        task,
         attempt,
-        attempts: task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
       });
     } catch (error) {
       pendingAgents.delete(taskId);
@@ -2976,7 +2962,7 @@ export class ClawdbotAgentService {
         });
       }
       pending.supervisorId = supervisorId;
-      await this.taskService.patchTaskAttempt(taskId, attemptId, {
+      await this.attemptLifecycle.patchActiveAttempt(taskId, attemptId, {
         runSupervisorId: supervisorId,
       });
       if (queuedClaim) {
@@ -3291,14 +3277,7 @@ export class ClawdbotAgentService {
         status: 'failed',
         ended: new Date().toISOString(),
       };
-      await this.taskService.updateTask(taskId, {
-        status: 'todo',
-        attempt: failedAttempt,
-        attempts: upsertAttemptHistory(
-          task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
-          failedAttempt
-        ),
-      });
+      await this.attemptLifecycle.persistLaunchFailure(taskId, failedAttempt);
       if (supervisorId) {
         await this.runSupervisor
           .markTerminal(
@@ -4748,7 +4727,7 @@ export class ClawdbotAgentService {
     };
     pending.conversation = conversation;
     pending.threadId = conversationId;
-    await this.taskService.patchTaskAttempt(pending.taskId, pending.attemptId, {
+    await this.attemptLifecycle.patchActiveAttempt(pending.taskId, pending.attemptId, {
       threadId: conversationId,
       conversation,
     });
@@ -5056,7 +5035,7 @@ export class ClawdbotAgentService {
   ): Promise<ConversationLifecycleRecord> {
     const conversation = this.conversationLifecycle.transition(pending.conversation, state);
     pending.conversation = conversation;
-    await this.taskService.patchTaskAttempt(taskId, pending.attemptId, { conversation });
+    await this.attemptLifecycle.patchActiveAttempt(taskId, pending.attemptId, { conversation });
     return conversation;
   }
 
@@ -5808,7 +5787,7 @@ export class ClawdbotAgentService {
           prompt: transport.content,
           timeoutSeconds: 900,
         });
-        await this.taskService.patchTaskAttempt(task.id, attemptId, {
+        await this.attemptLifecycle.patchActiveAttempt(task.id, attemptId, {
           sessionKey: result.sessionKey,
         });
         await this.recordConversationIdentity(task.id, attemptId, {
@@ -9010,7 +8989,7 @@ export class ClawdbotAgentService {
     const conversation = this.conversationLifecycle.bind(pending.conversation, identity);
     pending.conversation = conversation;
     if (identity.conversationId) pending.threadId = identity.conversationId;
-    await this.taskService.patchTaskAttempt(taskId, attemptId, {
+    await this.attemptLifecycle.patchActiveAttempt(taskId, attemptId, {
       ...(identity.conversationId ? { threadId: identity.conversationId } : {}),
       conversation,
     });
@@ -9042,7 +9021,7 @@ export class ClawdbotAgentService {
       limitTokens
     );
     pending.conversation = conversation;
-    await this.taskService.patchTaskAttempt(taskId, attemptId, { conversation });
+    await this.attemptLifecycle.patchActiveAttempt(taskId, attemptId, { conversation });
     return conversation;
   }
 
@@ -10281,13 +10260,6 @@ function admissionReleaseReason(
 ): AdmissionReservationRelease['reason'] {
   if (status === 'success' || success === true) return 'completed';
   return status === 'interrupted' ? 'interrupted' : 'failed';
-}
-
-function upsertAttemptHistory(
-  history: TaskAttempt[] | undefined,
-  attempt: TaskAttempt
-): TaskAttempt[] {
-  return [...(history ?? []).filter((candidate) => candidate.id !== attempt.id), attempt];
 }
 
 function mergeThresholdEvents(
