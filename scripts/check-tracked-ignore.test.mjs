@@ -1,77 +1,71 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
 import { findIgnoredTrackedFiles } from './check-tracked-ignore.mjs';
 
-const isolatedGitEnvironment = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))
-);
-
-async function createRepository() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'veritas-tracked-ignore-'));
-  execFileSync('git', ['init', '--quiet'], { cwd: root, env: isolatedGitEnvironment });
-  return root;
+function result(status, stdout = '', stderr = '') {
+  return {
+    status,
+    stdout: Buffer.from(stdout),
+    stderr: Buffer.from(stderr),
+    error: undefined,
+  };
 }
 
-async function write(root, relativePath, content = '') {
-  const destination = path.join(root, relativePath);
-  await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(destination, content, 'utf8');
+function gitRunner(responses, calls) {
+  return (args, options) => {
+    calls.push({ args, options });
+    const response = responses.shift();
+    assert.ok(response, 'unexpected Git invocation');
+    return response;
+  };
 }
 
-test('reports a tracked file covered by a later ignore rule', async (t) => {
-  const root = await createRepository();
-  t.after(() => rm(root, { recursive: true, force: true }));
+test('reports sorted tracked paths returned by check-ignore', () => {
+  const calls = [];
+  const tracked = 'server/src/storage/repository.ts\0server/src/__tests__/storage/example.test.ts\0';
+  const ignored =
+    'server/src/storage/repository.ts\0server/src/__tests__/storage/example.test.ts\0';
 
-  await write(root, 'server/src/__tests__/storage/example.test.ts', 'export {};\n');
-  execFileSync('git', ['add', 'server/src/__tests__/storage/example.test.ts'], {
-    cwd: root,
-    env: isolatedGitEnvironment,
+  assert.deepEqual(
+    findIgnoredTrackedFiles(
+      '/repo',
+      gitRunner([result(0, tracked), result(0, ignored)], calls)
+    ),
+    ['server/src/__tests__/storage/example.test.ts', 'server/src/storage/repository.ts']
+  );
+  assert.deepEqual(calls[0], {
+    args: ['ls-files', '-z'],
+    options: { cwd: '/repo' },
   });
-  await write(root, '.gitignore', 'storage/\n');
-
-  assert.deepEqual(findIgnoredTrackedFiles(root, isolatedGitEnvironment), [
-    'server/src/__tests__/storage/example.test.ts',
-  ]);
+  assert.deepEqual(calls[1], {
+    args: ['check-ignore', '--no-index', '-z', '--stdin'],
+    options: { cwd: '/repo', input: Buffer.from(tracked) },
+  });
 });
 
-test('allows tracked storage source while anchored runtime roots stay ignored', async (t) => {
-  const root = await createRepository();
-  t.after(() => rm(root, { recursive: true, force: true }));
-
-  await write(root, '.gitignore', '/storage/\n/server/storage/\n');
-  await write(root, 'server/src/storage/repository.ts', 'export {};\n');
-  await write(root, 'server/src/__tests__/storage/repository.test.ts', 'export {};\n');
-  execFileSync(
-    'git',
-    [
-      'add',
-      '.gitignore',
-      'server/src/storage/repository.ts',
-      'server/src/__tests__/storage/repository.test.ts',
-    ],
-    { cwd: root, env: isolatedGitEnvironment }
+test('accepts the normal check-ignore no-match exit status', () => {
+  const calls = [];
+  assert.deepEqual(
+    findIgnoredTrackedFiles(
+      '/repo',
+      gitRunner([result(0, 'server/src/storage/repository.ts\0'), result(1)], calls)
+    ),
+    []
   );
+});
 
-  assert.deepEqual(findIgnoredTrackedFiles(root, isolatedGitEnvironment), []);
-  assert.equal(
-    execFileSync('git', ['check-ignore', 'storage/runtime.json'], {
-      cwd: root,
-      env: isolatedGitEnvironment,
-      encoding: 'utf8',
-    }),
-    'storage/runtime.json\n'
+test('surfaces Git command failures', () => {
+  assert.throws(
+    () => findIgnoredTrackedFiles('/repo', gitRunner([result(2, '', 'bad index')], [])),
+    /git ls-files failed: bad index/
   );
-  assert.equal(
-    execFileSync('git', ['check-ignore', 'server/storage/runtime.json'], {
-      cwd: root,
-      env: isolatedGitEnvironment,
-      encoding: 'utf8',
-    }),
-    'server/storage/runtime.json\n'
+  assert.throws(
+    () =>
+      findIgnoredTrackedFiles(
+        '/repo',
+        gitRunner([result(0, 'tracked\0'), result(128, '', 'bad ignore rules')], [])
+      ),
+    /git check-ignore failed: bad ignore rules/
   );
 });

@@ -14,15 +14,14 @@ function runGit(args, options = {}) {
   return result;
 }
 
-export function findIgnoredTrackedFiles(cwd = process.cwd(), env = process.env) {
-  const tracked = runGit(['ls-files', '-z'], { cwd, env });
+export function findIgnoredTrackedFiles(cwd = process.cwd(), gitRunner = runGit) {
+  const tracked = gitRunner(['ls-files', '-z'], { cwd });
   if (tracked.status !== 0) {
     throw new Error(`git ls-files failed: ${tracked.stderr.toString('utf8').trim()}`);
   }
 
-  const ignored = runGit(['check-ignore', '--no-index', '-z', '--stdin'], {
+  const ignored = gitRunner(['check-ignore', '--no-index', '-z', '--stdin'], {
     cwd,
-    env,
     input: tracked.stdout,
   });
   if (ignored.status === 1) return [];
