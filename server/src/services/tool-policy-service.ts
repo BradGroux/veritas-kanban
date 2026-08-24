@@ -6,7 +6,7 @@
  * specifies a role, that role's tool policy is applied to the agent session.
  */
 
-import fs from 'fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import path from 'path';
 import type { CreateGovernanceTraceInput } from '@veritas-kanban/shared';
 import type { ToolPolicy } from '../types/workflow.js';

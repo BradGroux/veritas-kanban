@@ -8,7 +8,7 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import * as fs from 'node:fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import * as path from 'node:path';
 import { getDocsDir } from '../utils/paths.js';
 
