@@ -19,6 +19,22 @@ const COMPLETION_PERSISTENCE_ATTEMPTS = 3;
 export interface AttemptLifecycleStore {
   getTask(taskId: string): Promise<Task | null>;
   updateTask(taskId: string, input: UpdateTaskInput): Promise<Task | null>;
+  patchTaskAttempt(
+    taskId: string,
+    attemptId: string,
+    patch: Partial<Omit<TaskAttempt, 'id'>>
+  ): Promise<Task | null>;
+}
+
+export interface PersistActiveAttemptInput {
+  task: Task;
+  attempt: TaskAttempt;
+  status?: UpdateTaskInput['status'];
+}
+
+export interface BeginAttemptInput {
+  task: Task;
+  attempt: TaskAttempt;
 }
 
 export interface PersistAttemptCompletionInput {
@@ -37,14 +53,90 @@ export interface PersistAttemptCompletionOutcome {
 }
 
 export class CompletionOwnershipError extends ConflictError {}
+export class AttemptOwnershipError extends ConflictError {}
 
 /**
- * Owns terminal attempt mutation and its immutable persistence invariants.
- * Provider orchestration prepares completion evidence, then crosses this seam
- * exactly once to claim the terminal task state.
+ * Owns attempt mutation and its persistence invariants from launch through
+ * terminal completion. Provider orchestration prepares state and evidence,
+ * then crosses this seam instead of writing attempt fields directly.
  */
 export class AttemptLifecycleCoordinator {
   constructor(private readonly store: AttemptLifecycleStore) {}
+
+  /**
+   * Replaces the currently active attempt while preserving one canonical
+   * history entry for that same attempt ID.
+   */
+  async persistActiveAttempt(input: PersistActiveAttemptInput): Promise<Task | null> {
+    this.assertActiveAttempt(input.task, input.attempt.id, 'Attempt update');
+    return this.store.updateTask(input.task.id, {
+      expectedRevision: normalizedTaskRevision(input.task),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      attempt: input.attempt,
+      attempts: upsertAttemptHistory(input.task.attempts, input.attempt),
+    });
+  }
+
+  /**
+   * Installs a new running attempt and archives the displaced active attempt.
+   * The new attempt remains solely in `task.attempt` until it reaches a state
+   * transition that belongs in history.
+   */
+  async beginAttempt(input: BeginAttemptInput): Promise<Task | null> {
+    if (input.task.attempt?.id === input.attempt.id) {
+      throw new AttemptOwnershipError('New attempt already owns the task', {
+        taskId: input.task.id,
+        attemptId: input.attempt.id,
+      });
+    }
+    if (input.attempt.status !== 'running') {
+      throw new AttemptOwnershipError('New attempt must begin in the running state', {
+        taskId: input.task.id,
+        attemptId: input.attempt.id,
+        attemptStatus: input.attempt.status,
+      });
+    }
+    return this.store.updateTask(input.task.id, {
+      expectedRevision: normalizedTaskRevision(input.task),
+      status: 'in-progress',
+      attempt: input.attempt,
+      attempts: input.task.attempt
+        ? upsertAttemptHistory(input.task.attempts, input.task.attempt)
+        : input.task.attempts,
+    });
+  }
+
+  /** Records a provider launch failure without losing the displaced attempt. */
+  async persistLaunchFailure(taskId: string, attempt: TaskAttempt): Promise<Task | null> {
+    if (attempt.status !== 'failed') {
+      throw new AttemptOwnershipError('Launch failure must persist a failed attempt', {
+        taskId,
+        attemptId: attempt.id,
+        attemptStatus: attempt.status,
+      });
+    }
+    const task = await this.store.getTask(taskId);
+    if (!task) return null;
+    this.assertActiveAttempt(task, attempt.id, 'Launch failure');
+    return this.store.updateTask(taskId, {
+      expectedRevision: normalizedTaskRevision(task),
+      status: 'todo',
+      attempt,
+      attempts: upsertAttemptHistory(
+        task.attempt ? upsertAttemptHistory(task.attempts, task.attempt) : task.attempts,
+        attempt
+      ),
+    });
+  }
+
+  /** Applies a partial mutation only while the same attempt still owns the task. */
+  async patchActiveAttempt(
+    taskId: string,
+    attemptId: string,
+    patch: Partial<Omit<TaskAttempt, 'id'>>
+  ): Promise<Task | null> {
+    return this.store.patchTaskAttempt(taskId, attemptId, patch);
+  }
 
   parsePersistedCompletion(attempt: TaskAttempt): CompletionResult {
     if (!attempt.taskEnvelope || !attempt.completionResult) {
@@ -238,6 +330,15 @@ export class AttemptLifecycleCoordinator {
     throw lastError instanceof Error
       ? lastError
       : new Error('Provider completion persistence retry budget was exhausted');
+  }
+
+  private assertActiveAttempt(task: Task, attemptId: string, operation: string): void {
+    if (task.attempt?.id === attemptId) return;
+    throw new AttemptOwnershipError(`${operation} does not match the active attempt`, {
+      taskId: task.id,
+      activeAttemptId: task.attempt?.id,
+      requestedAttemptId: attemptId,
+    });
   }
 
   private assertRetryBinding(

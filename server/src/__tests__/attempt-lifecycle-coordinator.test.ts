@@ -71,13 +71,28 @@ class MemoryAttemptLifecycleStore implements AttemptLifecycleStore {
 
   async updateTask(taskId: string, input: UpdateTaskInput): Promise<Task | null> {
     if (taskId !== this.task.id) return null;
-    if (input.expectedRevision !== this.task.revision) {
+    if (input.expectedRevision !== undefined && input.expectedRevision !== this.task.revision) {
       throw new Error('Task revision conflict');
     }
     const { expectedRevision: _expectedRevision, ...patch } = input;
     this.task = {
       ...this.task,
       ...patch,
+      revision: (this.task.revision ?? 0) + 1,
+      updated: completedAt,
+    };
+    return structuredClone(this.task);
+  }
+
+  async patchTaskAttempt(
+    taskId: string,
+    attemptId: string,
+    patch: Partial<Omit<TaskAttempt, 'id'>>
+  ): Promise<Task | null> {
+    if (taskId !== this.task.id || this.task.attempt?.id !== attemptId) return null;
+    this.task = {
+      ...this.task,
+      attempt: { ...this.task.attempt, ...patch },
       revision: (this.task.revision ?? 0) + 1,
       updated: completedAt,
     };
@@ -125,6 +140,156 @@ async function completionFixture(summary = 'Lifecycle work completed.') {
 }
 
 describe('AttemptLifecycleCoordinator', () => {
+  it('persists an active-attempt transition with revision and history invariants', async () => {
+    const task = baseTask();
+    const attempt: TaskAttempt = {
+      id: 'attempt_active',
+      agent: 'codex',
+      provider: 'codex-cli',
+      status: 'running',
+    };
+    const activeTask = { ...task, attempt, attempts: [attempt] };
+    const store = new MemoryAttemptLifecycleStore(activeTask);
+    const coordinator = new AttemptLifecycleCoordinator(store);
+    const recoveredAttempt: TaskAttempt = {
+      ...attempt,
+      runRecovery: {
+        code: 'terminal-result-missing',
+        detail: 'Supervisor has no terminal result.',
+        nextAction: 'Inspect the provider log.',
+        recordedAt: completedAt,
+      },
+    };
+
+    const updated = await coordinator.persistActiveAttempt({
+      task: activeTask,
+      attempt: recoveredAttempt,
+      status: 'blocked',
+    });
+
+    expect(updated).toMatchObject({
+      status: 'blocked',
+      revision: 5,
+      attempt: { id: attempt.id, runRecovery: recoveredAttempt.runRecovery },
+    });
+    expect(updated?.attempts).toEqual([recoveredAttempt]);
+  });
+
+  it('rejects an active-attempt transition for a stale owner', async () => {
+    const task = baseTask();
+    const activeAttempt: TaskAttempt = {
+      id: 'attempt_active',
+      agent: 'codex',
+      provider: 'codex-cli',
+      status: 'running',
+    };
+    const staleAttempt: TaskAttempt = {
+      ...activeAttempt,
+      id: 'attempt_stale',
+    };
+    const activeTask = { ...task, attempt: activeAttempt, attempts: [activeAttempt] };
+    const coordinator = new AttemptLifecycleCoordinator(
+      new MemoryAttemptLifecycleStore(activeTask)
+    );
+
+    await expect(
+      coordinator.persistActiveAttempt({ task: activeTask, attempt: staleAttempt })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: expect.objectContaining({
+        activeAttemptId: activeAttempt.id,
+        requestedAttemptId: staleAttempt.id,
+      }),
+    });
+  });
+
+  it('begins a new running attempt while archiving the displaced attempt', async () => {
+    const task = baseTask();
+    const previousAttempt: TaskAttempt = {
+      id: 'attempt_previous',
+      agent: 'hermes',
+      provider: 'hermes-cli',
+      status: 'complete',
+    };
+    const nextAttempt: TaskAttempt = {
+      id: 'attempt_next',
+      agent: 'codex',
+      provider: 'codex-cli',
+      status: 'running',
+    };
+    const queuedTask: Task = {
+      ...task,
+      status: 'todo',
+      attempt: previousAttempt,
+      attempts: [],
+    };
+    const coordinator = new AttemptLifecycleCoordinator(
+      new MemoryAttemptLifecycleStore(queuedTask)
+    );
+
+    const updated = await coordinator.beginAttempt({
+      task: queuedTask,
+      attempt: nextAttempt,
+    });
+
+    expect(updated).toMatchObject({
+      status: 'in-progress',
+      attempt: nextAttempt,
+      attempts: [previousAttempt],
+    });
+  });
+
+  it('records launch failure without losing the displaced attempt', async () => {
+    const task = baseTask();
+    const previousAttempt: TaskAttempt = {
+      id: 'attempt_previous',
+      agent: 'hermes',
+      provider: 'hermes-cli',
+      status: 'complete',
+    };
+    const failedAttempt: TaskAttempt = {
+      id: 'attempt_failed',
+      agent: 'codex',
+      provider: 'codex-cli',
+      status: 'failed',
+      ended: completedAt,
+    };
+    const launchingTask = {
+      ...task,
+      attempt: { ...failedAttempt, status: 'running' as const, ended: undefined },
+      attempts: [previousAttempt],
+    };
+    const coordinator = new AttemptLifecycleCoordinator(
+      new MemoryAttemptLifecycleStore(launchingTask)
+    );
+
+    const updated = await coordinator.persistLaunchFailure(task.id, failedAttempt);
+
+    expect(updated).toMatchObject({ status: 'todo', attempt: failedAttempt });
+    expect(updated?.attempts).toEqual([previousAttempt, failedAttempt]);
+  });
+
+  it('patches only the attempt that still owns the task', async () => {
+    const task = baseTask();
+    const attempt: TaskAttempt = {
+      id: 'attempt_active',
+      agent: 'codex',
+      provider: 'codex-cli',
+      status: 'running',
+    };
+    const activeTask = { ...task, attempt, attempts: [attempt] };
+    const coordinator = new AttemptLifecycleCoordinator(
+      new MemoryAttemptLifecycleStore(activeTask)
+    );
+
+    await expect(
+      coordinator.patchActiveAttempt(task.id, attempt.id, { sessionKey: 'session-1' })
+    ).resolves.toMatchObject({ attempt: { id: attempt.id, sessionKey: 'session-1' } });
+    await expect(
+      coordinator.patchActiveAttempt(task.id, 'attempt_stale', { sessionKey: 'session-2' })
+    ).resolves.toBeNull();
+  });
+
   it('persists terminal completion through the lifecycle seam', async () => {
     const { task, attempt, completionResult } = await completionFixture();
     const store = new MemoryAttemptLifecycleStore(task);
