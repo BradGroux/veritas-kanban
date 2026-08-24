@@ -1,4 +1,4 @@
-import fs from 'node:fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type {

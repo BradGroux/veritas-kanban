@@ -17,10 +17,12 @@ import {
   copyFile as copyFileAsync,
   lstat as lstatAsync,
   mkdir as mkdirAsync,
+  open as openAsync,
   readFile as readFileAsync,
   readdir as readdirAsync,
   rename as renameAsync,
   rm as rmAsync,
+  rmdir as rmdirAsync,
   stat as statAsync,
   statfs as statfsAsync,
   unlink as unlinkAsync,
@@ -73,6 +75,7 @@ export const createWriteStream = fs.createWriteStream;
 // ---------------------------------------------------------------------------
 
 export const mkdir = mkdirAsync;
+export const open = openAsync;
 export { access };
 export const copyFile = copyFileAsync;
 export const lstat = lstatAsync;
@@ -81,6 +84,7 @@ export const readdir = readdirAsync;
 export const realpath = fs.promises.realpath;
 export const rename = renameAsync;
 export const rm = rmAsync;
+export const rmdir = rmdirAsync;
 export const stat = statAsync;
 export const statfs = statfsAsync;
 export const unlink = unlinkAsync;

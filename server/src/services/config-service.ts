@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import * as fs from '../storage/fs-helpers.js';
 import { watch, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
 import { simpleGit } from 'simple-git';
