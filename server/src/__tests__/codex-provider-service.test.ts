@@ -213,7 +213,6 @@ import {
 import type { ThreadEvent } from '@openai/codex-sdk';
 import type {
   AgentConfig,
-  RunLaunchRuntime,
   RunApprovalRequest,
   SandboxPolicyDryRunResult,
   Task,
@@ -247,30 +246,16 @@ import type { WorkspaceExecutionTrustService } from '../services/workspace-execu
 import type { AdmissionControlService } from '../services/admission-control-service.js';
 import type { RunTerminalService } from '../services/run-terminal-service.js';
 import type { WorkspaceCheckpointService } from '../services/workspace-checkpoint-service.js';
+import type { RunLaunchCompiler } from '../services/run-launch-compiler.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
 
 type TestableClawdbotAgentService = ClawdbotAgentService & {
   logsDir: string;
-  buildRunLaunchEnvironment(
-    provider: 'openclaw' | 'codex-sdk',
-    sandboxPolicy: SandboxPolicyDryRunResult
-  ): Pick<RunLaunchRuntime, 'environmentKeys' | 'credentialReferences'>;
-  buildRunLaunchRuntime(
-    provider: 'openclaw' | 'codex-sdk',
-    agentConfig: AgentConfig | undefined,
-    taskId: string,
-    logPath: string,
-    attemptId: string,
-    sandboxPolicy: SandboxPolicyDryRunResult
-  ): RunLaunchRuntime;
-  normalizeRunLaunchTaskPrompt(
-    prompt: string,
-    attemptId: string,
-    worktreePath: string | undefined,
-    taskEnvelopeDigest: string,
-    providerRuntimeDigest: string
-  ): string;
+  runLaunchCompiler: Pick<
+    RunLaunchCompiler,
+    'buildRunLaunchEnvironment' | 'buildRunLaunchRuntime' | 'normalizeRunLaunchTaskPrompt'
+  >;
   handleCodexEvent(
     event: Record<string, unknown>,
     logPath: string,
@@ -2297,14 +2282,14 @@ describe('ClawdbotAgentService Codex providers', () => {
 
   it('normalizes checkpoint age out of material instruction evidence', () => {
     const service = testableService(tmpDir);
-    const first = service.normalizeRunLaunchTaskPrompt(
+    const first = service.runLaunchCompiler.normalizeRunLaunchTaskPrompt(
       `Envelope sha256:${'c'.repeat(64)} Last Checkpoint: 2026-07-23T20:00:00.000Z (5 minutes ago)`,
       'attempt-a',
       tmpDir,
       `sha256:${'c'.repeat(64)}`,
       `sha256:${'a'.repeat(64)}`
     );
-    const later = service.normalizeRunLaunchTaskPrompt(
+    const later = service.runLaunchCompiler.normalizeRunLaunchTaskPrompt(
       `Envelope sha256:${'d'.repeat(64)} Last Checkpoint: 2026-07-23T20:00:00.000Z (125 minutes ago)`,
       'attempt-b',
       tmpDir,
@@ -2325,7 +2310,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     vi.stubEnv('OPENCLAW_GATEWAY_ALLOW_PRIVATE', '');
     const service = testableService(tmpDir);
 
-    const environment = service.buildRunLaunchEnvironment(
+    const environment = service.runLaunchCompiler.buildRunLaunchEnvironment(
       'openclaw',
       {} as SandboxPolicyDryRunResult
     );
@@ -2344,7 +2329,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     vi.stubEnv('OPENCLAW_GATEWAY_ALLOW_PRIVATE', '');
     const service = testableService(tmpDir);
 
-    const runtime = service.buildRunLaunchRuntime(
+    const runtime = service.runLaunchCompiler.buildRunLaunchRuntime(
       'openclaw',
       {
         type: 'openclaw',
@@ -2381,7 +2366,7 @@ describe('ClawdbotAgentService Codex providers', () => {
     vi.stubEnv('OPENCLAW_GATEWAY_ALLOW_PRIVATE', 'true');
     const service = testableService(tmpDir);
 
-    const runtime = service.buildRunLaunchRuntime(
+    const runtime = service.runLaunchCompiler.buildRunLaunchRuntime(
       'openclaw',
       {
         type: 'openclaw',
@@ -2409,7 +2394,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       },
     } as SandboxPolicyDryRunResult;
 
-    const overridden = service.buildRunLaunchRuntime(
+    const overridden = service.runLaunchCompiler.buildRunLaunchRuntime(
       'codex-sdk',
       {
         type: 'codex-sdk',
@@ -2422,7 +2407,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       'attempt-sdk',
       sandboxPolicy
     );
-    const bundled = service.buildRunLaunchRuntime(
+    const bundled = service.runLaunchCompiler.buildRunLaunchRuntime(
       'codex-sdk',
       {
         type: 'codex-sdk',
