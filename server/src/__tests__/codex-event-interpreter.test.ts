@@ -23,6 +23,7 @@ describe('Codex event interpretation', () => {
           42,
         ],
         retryAttempt: '2',
+        retryDelayMs: false,
         usage: {
           input_tokens: 10,
           output_tokens: 4,

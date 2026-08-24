@@ -1691,6 +1691,15 @@ describe('ClawdbotAgentService Codex providers', () => {
     await waitFor(() => {
       expect(received.some(({ method }) => method === 'turn/start')).toBe(true);
     });
+    await waitFor(() => {
+      expect(mockPatchTaskAttempt).toHaveBeenCalledWith(
+        task.id,
+        status.attemptId,
+        expect.objectContaining({
+          conversation: expect.objectContaining({ currentTurnId: 'turn-app-server-fixture' }),
+        })
+      );
+    });
     expect(captureBoundary).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: task.id,
