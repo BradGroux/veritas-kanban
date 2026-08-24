@@ -77,8 +77,10 @@ The multi-stage Dockerfile produces a production image smaller than 625,000,000 
 | `build-server` | Compile the server and deploy its production dependency closure          |
 | `production`   | Copy only the server closure and built web assets into Node.js 22 Alpine |
 
-The production stage does not contain pnpm, workspace manifests, CLI dependencies, or MCP
-dependencies. It runs as the non-root `veritas` user (UID 1001).
+The production stage does not contain npm, pnpm, the root workspace/lockfile,
+CLI dependencies, or MCP dependencies. It retains only the server and shared
+package identity manifests required for module resolution and version health.
+It runs as the non-root `veritas` user (UID 1001).
 
 The measured release image is about 600 MB. Roughly 302 MB of its unpacked filesystem is the
 Linux Codex executable bundled by `@openai/codex-sdk`; retaining it keeps the `codex-sdk` provider

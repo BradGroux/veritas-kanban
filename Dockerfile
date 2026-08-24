@@ -15,7 +15,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Install dependencies (shared across build stages)
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS deps
+FROM node:22-alpine3.24 AS deps
 
 RUN corepack enable && corepack prepare pnpm@11.1.1 --activate
 
@@ -66,7 +66,7 @@ RUN pnpm --filter @veritas-kanban/server build
 # ---------------------------------------------------------------------------
 # Stage 5: Install the server-only production dependency closure
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS production-deps
+FROM node:22-alpine3.24 AS production-deps
 
 WORKDIR /app
 
@@ -86,7 +86,7 @@ RUN corepack enable && \
 # Corepack, headers, and package-manager tooling from the runtime image.
 FROM alpine:3.24 AS production
 
-RUN apk add --no-cache libstdc++ && \
+RUN apk add --no-cache ca-certificates libstdc++ && \
     addgroup -g 1001 -S nodejs && \
     adduser -S veritas -u 1001 -G nodejs
 
@@ -99,6 +99,8 @@ WORKDIR /app
 # tooling never enter the production stage.
 COPY --from=production-deps --chown=veritas:nodejs /app/node_modules ./node_modules
 COPY --from=production-deps --chown=veritas:nodejs /app/server/node_modules ./server/node_modules
+COPY --from=production-deps --chown=veritas:nodejs /app/shared/package.json ./shared/package.json
+COPY --from=production-deps --chown=veritas:nodejs /app/server/package.json ./server/package.json
 
 # Copy only built runtime artifacts. CLI, MCP, frontend dependencies, source,
 # and build tooling never enter the production stage.

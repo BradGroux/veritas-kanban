@@ -2,12 +2,16 @@
 
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const image = process.env.VERITAS_DOCKER_IMAGE || process.argv[2] || 'veritas-kanban:contract';
 const maxBytes = Number(process.env.VERITAS_DOCKER_MAX_BYTES || '200000000');
 const containerName = `veritas-kanban-contract-${process.pid}`;
 const volumeName = `${containerName}-data`;
 const adminKey = randomBytes(24).toString('hex');
+const expectedVersion = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+).version;
 
 function run(args) {
   const result = spawnSync('docker', args, { encoding: 'utf8', stdio: 'pipe' });
@@ -52,6 +56,7 @@ async function waitForHealthyContainer() {
 
 const runtimeProbe = String.raw`
   import bcrypt from 'bcrypt';
+  import { access } from 'node:fs/promises';
 
   const assert = (condition, message) => {
     if (!condition) throw new Error(message);
@@ -83,7 +88,36 @@ const runtimeProbe = String.raw`
   });
   const deepHealthBody = await deepHealth.json();
   assert(deepHealth.status === 200, 'Deep health endpoint did not return 200');
+  assert(deepHealthBody.status === 'ok', 'Deep health reported a degraded runtime');
+  assert(
+    deepHealthBody.version === ${JSON.stringify(expectedVersion)},
+    'Deep health did not report release version ${expectedVersion}'
+  );
+  assert(deepHealthBody.checks?.storage === 'ok', 'Storage integrity check was not healthy');
   assert(deepHealthBody.sqlite?.healthPosture === 'healthy', 'SQLite startup was not healthy');
+  assert(
+    deepHealthBody.dataDirectory?.path === '/app/data/.veritas-kanban',
+    'Runtime state did not resolve beneath the mounted DATA_DIR'
+  );
+
+  const backup = await response('/api/v1/sqlite/export', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': process.env.VERITAS_ADMIN_KEY,
+    },
+    body: JSON.stringify({
+      sqlitePath: '/app/data/.veritas-kanban/veritas.db',
+      outputDir: '/app/data/backups/docker-contract',
+    }),
+  });
+  const backupBody = await backup.json();
+  assert(backup.status === 200, 'SQLite backup export did not return 200');
+  assert(
+    backupBody.bundlePath === '/app/data/backups/docker-contract',
+    'SQLite backup export escaped the mounted DATA_DIR'
+  );
+  await access('/app/data/backups/docker-contract/manifest.json');
 
   const hash = await bcrypt.hash('native-module-probe', 4);
   assert(await bcrypt.compare('native-module-probe', hash), 'bcrypt native module failed');
@@ -142,10 +176,21 @@ try {
   ]);
   run(['exec', containerName, 'node', '--input-type=module', '--eval', runtimeProbe]);
 
+  run(['stop', '--time', '15', containerName]);
+  const stoppedState = JSON.parse(
+    run(['inspect', '--format', '{{json .State}}', containerName])
+  );
+  assert(stoppedState.Status === 'exited', 'Container did not stop cleanly');
+  assert(stoppedState.ExitCode === 0, `Container exited with code ${stoppedState.ExitCode}`);
+  run(['rm', containerName]);
+  started = false;
+
   console.log(
     `Docker image contract passed: ${imageBytes.toLocaleString()} bytes (< ${maxBytes.toLocaleString()})`
   );
-  console.log('Runtime smoke passed: non-root user, SQLite, auth, web assets, health, and bcrypt');
+  console.log(
+    'Runtime smoke passed: non-root user, version, mounted paths, SQLite, backup, auth, web assets, health, bcrypt, and clean shutdown'
+  );
 } finally {
   if (started) {
     spawnSync('docker', ['rm', '--force', containerName], { stdio: 'ignore' });
