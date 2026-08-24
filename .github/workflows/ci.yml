@@ -79,6 +79,7 @@ jobs:
           scripts/check-actions-pinned.test.mjs
           scripts/check-delivery-cadence.test.mjs
           scripts/check-security-gates.test.mjs
+          scripts/check-tracked-ignore.test.mjs
           scripts/select-ci-test-scope.test.mjs
           scripts/verify-full-suite-job-evidence.test.mjs
 
@@ -90,6 +91,9 @@ jobs:
 
       - name: Guard continuous security gates
         run: node scripts/check-security-gates.mjs
+
+      - name: Reject tracked files covered by ignore rules
+        run: node scripts/check-tracked-ignore.mjs
 
       - name: Find reviewed full-suite evidence
         id: reviewed_full

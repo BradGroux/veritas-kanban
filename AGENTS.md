@@ -73,6 +73,7 @@ pnpm lint:fix
 # Smoke checks
 pnpm check:actions-pinned       # Rejects mutable external GitHub Action references
 pnpm check:pnpm-settings        # Validates package manager fields match this file
+pnpm check:tracked-ignore       # Rejects tracked files covered by ignore rules
 pnpm check:coverage-policy      # Validates coverage policy, configs, CI, and regression tests
 pnpm check:delivery-cadence     # Prevents verification and review policy drift
 pnpm check:security-gates       # Validates CodeQL/gitleaks workflow and exact suppressions
