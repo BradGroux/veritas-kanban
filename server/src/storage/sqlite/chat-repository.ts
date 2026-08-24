@@ -1,6 +1,7 @@
 import type { SQLInputValue } from 'node:sqlite';
 import type { ChatMessage, ChatSession, SquadMessage } from '@veritas-kanban/shared';
 import type { SqliteDatabase } from './database.js';
+import type { ChatRepository, SquadMessageListOptions } from '../chat-repository.js';
 
 interface ChatSessionRow {
   id: string;
@@ -15,7 +16,7 @@ interface SquadMessageRow {
   message_json: string;
 }
 
-export class SqliteChatRepository {
+export class SqliteChatRepository implements ChatRepository {
   constructor(private readonly database: SqliteDatabase) {}
 
   getSession(sessionId: string): ChatSession | null {
@@ -149,6 +150,68 @@ export class SqliteChatRepository {
     }
   }
 
+  appendSessionMessage(sessionId: string, message: ChatMessage): boolean {
+    const db = this.database.getConnection();
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+      const row = db
+        .prepare(
+          `
+            SELECT id, session_json
+            FROM chat_sessions
+            WHERE workspace_id = 'local'
+              AND id = ?
+          `
+        )
+        .get(sessionId) as ChatSessionRow | undefined;
+      if (!row) {
+        db.exec('COMMIT;');
+        return false;
+      }
+
+      const session = JSON.parse(row.session_json) as ChatSession;
+      session.updated = message.timestamp;
+      db.prepare(
+        `
+          UPDATE chat_sessions
+          SET session_json = ?, updated_at = ?
+          WHERE workspace_id = 'local'
+            AND id = ?
+        `
+      ).run(JSON.stringify({ ...session, messages: [] }), session.updated, sessionId);
+      db.prepare(
+        `
+          INSERT INTO chat_messages (
+            id,
+            workspace_id,
+            session_id,
+            task_id,
+            role,
+            agent,
+            model,
+            message_json,
+            created_at
+          )
+          VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?)
+        `
+      ).run(
+        message.id,
+        sessionId,
+        session.taskId ?? null,
+        message.role,
+        message.agent ?? null,
+        message.model ?? null,
+        JSON.stringify(message),
+        message.timestamp
+      );
+      db.exec('COMMIT;');
+      return true;
+    } catch (error) {
+      db.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
   deleteSession(sessionId: string): boolean {
     const result = this.database
       .getConnection()
@@ -205,14 +268,7 @@ export class SqliteChatRepository {
       );
   }
 
-  listSquadMessages(
-    options: {
-      since?: string;
-      agent?: string;
-      limit?: number;
-      includeSystem?: boolean;
-    } = {}
-  ): SquadMessage[] {
+  listSquadMessages(options: SquadMessageListOptions = {}): SquadMessage[] {
     const clauses = ["workspace_id = 'local'"];
     const params: SQLInputValue[] = [];
     const sinceTimestamp =
