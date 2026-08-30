@@ -171,7 +171,7 @@ export function DependenciesSection({
                   variant="subtle"
                   color="gray"
                   size="sm"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  className="veritas-secondary-action h-6 w-6"
                   onClick={() => {
                     void handleRemoveDependency(dep.id);
                   }}
@@ -243,7 +243,7 @@ export function DependenciesSection({
                   variant="subtle"
                   color="gray"
                   size="sm"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  className="veritas-secondary-action h-6 w-6"
                   onClick={() => {
                     void handleRemoveDependency(blocked.id);
                   }}

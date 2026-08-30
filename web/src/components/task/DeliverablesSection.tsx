@@ -201,12 +201,12 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
                 <Text size="sm" fw={500} className="min-w-0 flex-1">
                   {deliverable.title}
                 </Text>
-                <Group gap={4} className="opacity-0 transition-opacity group-hover:opacity-100">
+                <Group gap={4} className="veritas-secondary-action">
                   <ActionIcon
                     variant="subtle"
                     color="gray"
                     size="sm"
-                    aria-label="Edit deliverable"
+                    aria-label={`Edit deliverable: ${deliverable.title}`}
                     onClick={() => setIsEditing(true)}
                   >
                     <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
@@ -215,7 +215,7 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
                     variant="subtle"
                     color="red"
                     size="sm"
-                    aria-label="Delete deliverable"
+                    aria-label={`Delete deliverable: ${deliverable.title}`}
                     onClick={() => setDeleteDialogOpen(true)}
                   >
                     <Trash2 className="h-3 w-3" />

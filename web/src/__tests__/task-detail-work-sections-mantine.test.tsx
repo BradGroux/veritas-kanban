@@ -143,7 +143,7 @@ describe('task detail work sections Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: 'Edit deliverable' }));
+    await user.click(screen.getByRole('button', { name: 'Edit deliverable: Release notes' }));
     expect(container.querySelector('.mantine-Select-root')).toBeDefined();
     expect(container.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(container.querySelector('.mantine-Textarea-root')).toBeDefined();
@@ -198,7 +198,7 @@ describe('task detail work sections Mantine migration', () => {
       description: undefined,
     });
 
-    await user.click(screen.getByRole('button', { name: 'Delete deliverable' }));
+    await user.click(screen.getByRole('button', { name: 'Delete deliverable: QA checklist' }));
     const dialog = screen.getByRole('dialog', { name: 'Delete deliverable?' });
     expect(container.querySelector('.mantine-Modal-content')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();

@@ -145,7 +145,7 @@ export function VerificationSection({ task }: VerificationSectionProps) {
               variant="subtle"
               color="gray"
               size="sm"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              className="veritas-secondary-action h-6 w-6 flex-shrink-0"
               onClick={() => {
                 void handleDeleteStep(step.id);
               }}
