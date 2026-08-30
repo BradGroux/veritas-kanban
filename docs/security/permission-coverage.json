@@ -716,6 +716,14 @@
       "denialReason": "Reading active phase state requires task and agent read access."
     },
     {
+      "id": "cli:agents:agent:change-access",
+      "kind": "cli",
+      "classification": "agent-scoped",
+      "permissions": ["task:read", "task:write"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Previewing and applying an exact Run Access transition requires task read and task write access."
+    },
+    {
       "id": "cli:agents:agent:file-provenance",
       "kind": "cli",
       "classification": "authenticated-read",
