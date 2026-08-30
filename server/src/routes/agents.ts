@@ -22,11 +22,7 @@ import {
   TASK_VERIFICATION_STATUSES,
 } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
-import {
-  ConflictError,
-  NotFoundError,
-  ValidationError,
-} from '../middleware/error-handler.js';
+import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import {
@@ -56,6 +52,7 @@ import {
   type PhaseTransitionActorContext,
 } from '../services/phase-transition-service.js';
 import { getRunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
+import { getRunAccessSummaryService } from '../services/run-access-summary-service.js';
 import { ProgressWatchdogOverrideInputSchema } from '../schemas/progress-watchdog-schemas.js';
 import { ProgressWatchdogControlService } from '../services/progress-watchdog-control-service.js';
 
@@ -71,6 +68,9 @@ function getRunOutputArtifactService(): RunOutputArtifactService {
 
 // Validation schemas
 const AgentTypeSchema = z.string().min(1).max(50);
+const runAccessReadQuerySchema = z
+  .object({ attemptId: z.string().trim().min(1).max(160) })
+  .strict();
 
 const startAgentSchema = z.object({
   agent: AgentTypeSchema.optional(),
@@ -510,6 +510,22 @@ router.get(
   })
 );
 
+// GET /api/agents/:taskId/access - Project exact redacted run authority and prior versions.
+router.get(
+  '/:taskId/access',
+  authorizePermission('agent:read'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = runAccessReadQuerySchema.parse(req.query);
+    res.json(
+      await getRunAccessSummaryService().get(
+        req.auth?.workspaceId || 'local',
+        req.params.taskId as string,
+        query.attemptId
+      )
+    );
+  })
+);
+
 // GET /api/agents/:taskId/output-artifacts/:artifactId - Query governed run output.
 router.get(
   '/:taskId/output-artifacts/:artifactId',
@@ -579,10 +595,7 @@ router.get(
     if (!range) throw new ConflictError('Run output artifact body is unavailable.');
     res.status(206);
     res.setHeader('Content-Type', range.metadata.mediaType);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${range.metadata.id}.bin"`
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${range.metadata.id}.bin"`);
     res.setHeader(
       'Content-Range',
       `bytes ${range.offset}-${Math.max(range.offset, range.offset + range.length - 1)}/${range.metadata.storedBytes}`

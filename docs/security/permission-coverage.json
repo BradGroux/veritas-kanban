@@ -684,6 +684,14 @@
       "denialReason": "Stopping an agent requires task read and task write access."
     },
     {
+      "id": "cli:agents:agent:access",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Reading the redacted access projection requires task and agent read access."
+    },
+    {
       "id": "cli:agents:agent:recovery",
       "kind": "cli",
       "classification": "authenticated-read",

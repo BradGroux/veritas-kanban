@@ -18,6 +18,7 @@ import type {
   RunApprovalRequest,
   RunRecoveryRecord,
   RunLaunchManifestPreview,
+  RunAccessSummaryResponse,
   RunPhaseAuthoritySnapshot,
   WorkspaceExecutionTrustDecision,
   WorkspaceExecutionTrustDecisionMode,
@@ -664,6 +665,48 @@ export function registerAgentCommands(program: Command): void {
         }
       }
     );
+
+  program
+    .command('agent:access <id>')
+    .description('Show the exact redacted access projection for one run')
+    .requiredOption('--attempt <attemptId>', 'Exact attempt ID')
+    .option('--json', 'Output the versioned machine-readable contract')
+    .action(async (id: string, options: { attempt: string; json?: boolean }): Promise<void> => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const result = await api<RunAccessSummaryResponse>(
+          `/api/agents/${taskId}/access?attemptId=${encodeURIComponent(options.attempt)}`
+        );
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        const summary = result.current;
+        console.log(chalk.cyan(`Run access: ${summary.status}`));
+        console.log(`  Attempt: ${summary.identity.attemptId}`);
+        console.log(`  Host: ${summary.identity.selectedHost ?? 'unavailable'}`);
+        console.log(`  Sandbox: ${summary.filesystem.sandboxMode}`);
+        console.log(`  Network: ${summary.network.policy}`);
+        console.log(
+          `  Tools: ${summary.tools.filter((tool) => tool.decision === 'allow').length} allowed, ${summary.approvals.toolCount} approval, ${summary.tools.filter((tool) => tool.decision === 'deny').length} denied`
+        );
+        console.log(`  Integrations: ${summary.integrations.length}`);
+        console.log(`  Phase sequence: ${summary.identity.transitionSequence}`);
+        console.log(chalk.dim(`  Evidence: ${summary.digest}`));
+        if (summary.blockers.length > 0) {
+          for (const blocker of summary.blockers) {
+            console.log(chalk.yellow(`  ${blocker.code}: ${blocker.message}`));
+          }
+        }
+        if (result.history.length > 0) {
+          console.log(chalk.dim(`  Prior immutable versions: ${result.history.length}`));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
 
   program
     .command('agent:transition-phase <id>')

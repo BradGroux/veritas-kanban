@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   useActiveRuns: vi.fn(),
   usePendingAgentApprovals: vi.fn(),
   useAgentPhase: vi.fn(),
+  useAgentAccess: vi.fn(),
   decideApprovalMutateAsync: vi.fn(),
   useRecentRuns: vi.fn(),
   useTaskTelemetryEvents: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('@/hooks/useAgentRunTimeline', () => ({
 vi.mock('@/hooks/useAgent', () => ({
   usePendingAgentApprovals: mocks.usePendingAgentApprovals,
   useAgentPhase: mocks.useAgentPhase,
+  useAgentAccess: mocks.useAgentAccess,
   useDecideRunApproval: () => ({
     mutateAsync: mocks.decideApprovalMutateAsync,
     isPending: false,
@@ -341,6 +343,7 @@ describe('agent run timeline Mantine surface', () => {
     mocks.useActiveRuns.mockReturnValue({ data: [workflowRun], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [approval], isLoading: false });
     mocks.useAgentPhase.mockReturnValue({ data: null, isLoading: false });
+    mocks.useAgentAccess.mockReturnValue({ data: undefined, isLoading: true, error: null });
     mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskTelemetryEvents.mockReturnValue({ data: telemetryEvents, isLoading: false });
     mocks.useTaskNotifications.mockReturnValue({ data: [notification], isLoading: false });

@@ -57,6 +57,7 @@ import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
 import { useActiveRuns, useRecentRuns, type WorkflowRun } from '@/hooks/useWorkflowStats';
 import { sanitizeText } from '@/lib/sanitize';
 import { ArtifactPreviewModal } from './ArtifactPreviewModal';
+import { RunAccessPanel } from './RunAccessPanel';
 
 type TimelineTabTarget = 'agent' | 'changes' | 'details' | 'review' | 'work-products';
 
@@ -1237,6 +1238,13 @@ export function AgentRunTimelinePanel({
 
   return (
     <Stack gap="md">
+      {selectedAttemptId && (
+        <RunAccessPanel
+          taskId={task.id}
+          attemptId={selectedAttemptId}
+          live={hasLiveAttempt && selectedAttemptId === task.attempt?.id}
+        />
+      )}
       {phase && (
         <Paper withBorder p="md" radius="md">
           <Stack gap="sm">

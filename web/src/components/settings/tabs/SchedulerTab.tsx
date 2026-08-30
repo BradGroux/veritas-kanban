@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import {
+  Alert,
   Badge,
   Button,
   Group,
@@ -7,12 +9,22 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  Textarea,
   Tooltip,
 } from '@mantine/core';
 import { CalendarClock, CheckCircle2, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
-import type { SchedulerEvent, SchedulerItem, SchedulerRunStatus } from '@veritas-kanban/shared';
+import type {
+  AutomationDraft,
+  AutomationDraftHints,
+  SchedulerEvent,
+  SchedulerItem,
+  SchedulerRunStatus,
+} from '@veritas-kanban/shared';
 import { useIdentity } from '@/hooks/useIdentity';
 import {
+  useAutomationDraftPreview,
+  useAutomationDraftSave,
+  useAutomationDrafts,
   useScheduler,
   useSchedulerPause,
   useSchedulerResume,
@@ -29,6 +41,15 @@ export function SchedulerTab() {
   const { hasPermission } = useIdentity();
   const { toast } = useToast();
   const scheduler = useScheduler();
+  const drafts = useAutomationDrafts();
+  const previewDraft = useAutomationDraftPreview();
+  const saveDraft = useAutomationDraftSave();
+  const [intent, setIntent] = useState('');
+  const [hintsJson, setHintsJson] = useState('{}');
+  const [draftPreview, setDraftPreview] = useState<AutomationDraft | null>(null);
+  const [requestId] = useState(
+    () => `automation-ui-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`
+  );
   const runDue = useSchedulerRunDue();
   const runItem = useSchedulerRunItem();
   const pause = useSchedulerPause();
@@ -46,6 +67,27 @@ export function SchedulerTab() {
     } catch (error) {
       toast({
         title: 'Scheduler action failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const compileDraft = async (save: boolean) => {
+    try {
+      const hints = parseDraftHints(hintsJson);
+      const result = await (save ? saveDraft : previewDraft).mutateAsync({
+        intent,
+        requestId,
+        hints,
+      });
+      setDraftPreview(result);
+      toast({
+        title: save ? 'Inactive automation draft saved' : 'Automation draft preview compiled',
+      });
+    } catch (error) {
+      toast({
+        title: 'Automation draft failed',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -96,6 +138,66 @@ export function SchedulerTab() {
           </Tooltip>
         </Group>
       </Group>
+
+      <Paper className="border bg-card p-4" radius="md">
+        <Stack gap="sm">
+          <Stack gap={2}>
+            <Text size="sm" fw={600}>
+              Automation Draft
+            </Text>
+            <Text size="xs" c="dimmed">
+              Compile recurring intent into an inactive, reviewable draft. Previewing and saving
+              never activates a schedule.
+            </Text>
+          </Stack>
+          <Textarea
+            label="Recurring objective"
+            placeholder="Every weekday at 9 AM, review the support queue and produce a triage report."
+            value={intent}
+            onChange={(event) => setIntent(event.currentTarget.value)}
+            minRows={2}
+          />
+          <Textarea
+            label="Structured hints (JSON)"
+            description="Consequential values are never silently defaulted. Include timezone, workflow or task template, provider, expiry, scope, budgets, outputs, retries, and stop conditions."
+            value={hintsJson}
+            onChange={(event) => setHintsJson(event.currentTarget.value)}
+            minRows={4}
+            className="font-mono"
+          />
+          <Group gap="xs">
+            <Button
+              size="xs"
+              variant="light"
+              disabled={!intent.trim() || previewDraft.isPending || saveDraft.isPending}
+              onClick={() => void compileDraft(false)}
+            >
+              Preview
+            </Button>
+            <Button
+              size="xs"
+              disabled={
+                !canWrite || !intent.trim() || previewDraft.isPending || saveDraft.isPending
+              }
+              onClick={() => void compileDraft(true)}
+            >
+              Save Inactive Draft
+            </Button>
+          </Group>
+          {draftPreview && <AutomationDraftReview draft={draftPreview} />}
+        </Stack>
+      </Paper>
+
+      {(drafts.data?.drafts.length ?? 0) > 0 && (
+        <Stack gap="xs">
+          <Text size="sm" fw={600}>
+            Saved Inactive Drafts
+          </Text>
+          {drafts.data?.drafts.map((draft) => (
+            <AutomationDraftReview key={draft.id} draft={draft} compact />
+          ))}
+        </Stack>
+      )}
 
       {scheduler.data && (
         <SimpleGrid cols={{ base: 2, md: 5 }} spacing="sm">
@@ -242,6 +344,55 @@ export function SchedulerTab() {
       )}
     </Stack>
   );
+}
+
+function AutomationDraftReview({
+  draft,
+  compact = false,
+}: {
+  draft: AutomationDraft;
+  compact?: boolean;
+}) {
+  const blockers = draft.validation.issues.filter((issue) => issue.severity === 'blocker');
+  return (
+    <Alert
+      color={blockers.length === 0 ? 'green' : 'yellow'}
+      title={`${draft.id} · revision ${draft.revision}`}
+    >
+      <Stack gap="xs">
+        <Text size="xs">
+          {draft.schedule.expression.value ?? 'Schedule unresolved'} ·{' '}
+          {draft.schedule.timezone.value ?? 'Timezone unresolved'} · inactive
+        </Text>
+        {!compact && draft.schedule.nextRunExamples.length > 0 && (
+          <Text size="xs" c="dimmed">
+            Next examples: {draft.schedule.nextRunExamples.map(formatDate).join(' · ')}
+          </Text>
+        )}
+        {blockers.length === 0 ? (
+          <Text size="xs">
+            No deterministic validation blockers. Activation still requires a separate review.
+          </Text>
+        ) : (
+          <Stack gap={2}>
+            {blockers.slice(0, compact ? 3 : undefined).map((issue) => (
+              <Text key={`${issue.code}:${issue.path}`} size="xs">
+                {issue.path}: {issue.message}
+              </Text>
+            ))}
+          </Stack>
+        )}
+      </Stack>
+    </Alert>
+  );
+}
+
+function parseDraftHints(value: string): AutomationDraftHints {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Structured hints must be a JSON object.');
+  }
+  return parsed as AutomationDraftHints;
 }
 
 function SummaryStat({ label, value }: { label: string; value: number }) {
