@@ -278,6 +278,46 @@ describe('vk agent runtime capability controls', () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('capture-unavailable'));
   });
 
+  it('reports provenance lookup failures to operators', async () => {
+    mockApi.mockRejectedValueOnce(new Error('Provenance evidence is unavailable.'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
+      _code?: number | string | null
+    ) => {
+      throw new Error('process.exit called');
+    }) as typeof process.exit);
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    try {
+      await expect(
+        program.parseAsync(
+          [
+            'agent:file-provenance',
+            'task_1',
+            '--attempt',
+            'attempt_1',
+            '--root',
+            'run-artifact',
+            '--path',
+            'reports/final.pdf',
+            '--sha256',
+            `sha256:${'a'.repeat(64)}`,
+          ],
+          { from: 'user' }
+        )
+      ).rejects.toThrow('process.exit called');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Provenance evidence is unavailable.')
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
+  });
+
   it('reads the versioned access projection for one exact attempt', async () => {
     mockApi.mockResolvedValueOnce({
       current: { schemaVersion: 'run-access-summary/v1', status: 'complete' },
