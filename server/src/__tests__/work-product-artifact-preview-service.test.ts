@@ -1,6 +1,10 @@
 import ExcelJS from 'exceljs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkProductArtifactMetadata } from '@veritas-kanban/shared';
+import {
+  WORK_PRODUCT_HTML_PREVIEW_CSP,
+  WORK_PRODUCT_HTML_PREVIEW_SANDBOX,
+} from '@veritas-kanban/shared';
 import { WorkProductArtifactPreviewService } from '../services/work-product-artifact-preview-service.js';
 import type { WorkProductArtifactPreviewSource } from '../services/work-product-artifact-service.js';
 
@@ -31,6 +35,55 @@ describe('WorkProductArtifactPreviewService', () => {
         actions: { downloadAllowed: true, openAssociatedAppAllowed: true },
       });
     }
+  });
+
+  it('reduces hostile HTML to a passive unique-origin document contract', async () => {
+    readPreviewSource.mockResolvedValue(
+      source(
+        'text/html',
+        Buffer.from(`<!doctype html>
+          <html><head>
+            <meta http-equiv="refresh" content="0;url=https://attacker.invalid/refresh">
+            <style>@import url(https://attacker.invalid/style.css)</style>
+            <script>parent.fetch('/api/tasks')</script>
+          </head><body onload="alert(document.cookie)">
+            <h1>Reviewed report</h1>
+            <a href="javascript:alert(1)" download>unsafe link</a>
+            <img src="https://attacker.invalid/pixel" onerror="alert(1)">
+            <form action="https://attacker.invalid/submit"><button>Submit</button></form>
+            <iframe src="file:///etc/passwd"></iframe>
+          </body></html>`)
+      )
+    );
+
+    const result = await preview();
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      renderer: 'html',
+      limits: { maxBytes: 512 * 1024 },
+      content: {
+        kind: 'html',
+        interactive: false,
+        contentSecurityPolicy: WORK_PRODUCT_HTML_PREVIEW_CSP,
+        sandbox: WORK_PRODUCT_HTML_PREVIEW_SANDBOX,
+      },
+    });
+    if (result.content?.kind !== 'html') throw new Error('Expected HTML preview.');
+    expect(result.content.document).toContain('<h1>Reviewed report</h1>');
+    expect(result.content.document).toContain('unsafe link');
+    expect(result.content.document).not.toMatch(
+      /<script|<meta[^>]+refresh|<iframe|<form|<img|onload=|onerror=|javascript:|attacker\.invalid|file:\/\//i
+    );
+    expect(result.content.document).toContain('http-equiv="Content-Security-Policy"');
+  });
+
+  it('fails closed for malformed or oversized HTML', async () => {
+    readPreviewSource.mockResolvedValueOnce(source('text/html', Buffer.from([0xc3, 0x28])));
+    await expect(preview()).resolves.toMatchObject({ status: 'malformed', content: null });
+
+    readPreviewSource.mockResolvedValueOnce(source('text/html', Buffer.alloc(512 * 1024 + 1, 'a')));
+    await expect(preview()).resolves.toMatchObject({ status: 'oversized', content: null });
   });
 
   it('parses CSV literally, marks formula-shaped cells, and exposes truncation', async () => {

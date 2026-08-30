@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listVersions: vi.fn(),
   purge: vi.fn(),
   preview: vi.fn(),
+  auditLog: vi.fn(),
   workProducts: {
     get: vi.fn(),
     list: vi.fn(),
@@ -33,6 +34,10 @@ vi.mock('../../services/work-product-artifact-service.js', () => ({
 
 vi.mock('../../services/work-product-artifact-preview-service.js', () => ({
   getWorkProductArtifactPreviewService: () => ({ preview: mocks.preview }),
+}));
+
+vi.mock('../../services/audit-service.js', () => ({
+  auditLog: mocks.auditLog,
 }));
 
 vi.mock('../../services/work-product-service.js', () => ({
@@ -141,6 +146,49 @@ describe('work product artifact routes', () => {
       productId: 'wp_1',
       version: 2,
     });
+  });
+
+  it('audits bounded HTML preview lifecycle events without document contents', async () => {
+    const artifact = {
+      id: 'wpa_html',
+      productId: 'wp_html',
+      version: 3,
+      mediaType: 'text/html',
+      state: 'available',
+    };
+    mocks.preview.mockResolvedValue({
+      schemaVersion: 'work-product-artifact-preview/v1',
+      status: 'ready',
+      renderer: 'html',
+      artifact,
+      content: { kind: 'html', document: '<h1>private content</h1>' },
+    });
+    mocks.listVersions.mockResolvedValue([artifact]);
+
+    const opened = await request(app).get('/api/work-products/wp_html/artifact/preview?version=3');
+    const closed = await request(app)
+      .post('/api/work-products/wp_html/artifact/preview/audit')
+      .send({ action: 'close', version: 3 });
+
+    expect(opened.status).toBe(200);
+    expect(closed.status).toBe(204);
+    expect(mocks.auditLog).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        action: 'artifact.preview.html.prepared',
+        resource: 'wp_html',
+        details: expect.objectContaining({ artifactId: 'wpa_html', version: 3 }),
+      })
+    );
+    expect(mocks.auditLog).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        action: 'artifact.preview.html.close',
+        resource: 'wp_html',
+        details: expect.objectContaining({ artifactId: 'wpa_html', version: 3 }),
+      })
+    );
+    expect(JSON.stringify(mocks.auditLog.mock.calls)).not.toContain('private content');
   });
 
   it('inspects and lists file products in the authenticated workspace', async () => {

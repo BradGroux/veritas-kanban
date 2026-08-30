@@ -89,6 +89,9 @@ export interface DashboardWorkProductRender extends WorkProductRenderBase {
 export const WORK_PRODUCT_ARTIFACT_SCHEMA_VERSION = 'work-product-artifact/v1' as const;
 export const WORK_PRODUCT_ARTIFACT_PREVIEW_SCHEMA_VERSION =
   'work-product-artifact-preview/v1' as const;
+export const WORK_PRODUCT_HTML_PREVIEW_CSP =
+  "default-src 'none'; base-uri 'none'; child-src 'none'; connect-src 'none'; font-src 'none'; form-action 'none'; frame-src 'none'; img-src 'none'; manifest-src 'none'; media-src 'none'; navigate-to 'none'; object-src 'none'; script-src 'none'; style-src 'unsafe-inline'; worker-src 'none'" as const;
+export const WORK_PRODUCT_HTML_PREVIEW_SANDBOX = '' as const;
 
 export type WorkProductArtifactState = 'available' | 'quarantined' | 'deleted';
 export type WorkProductArtifactRedactionState = 'none' | 'redacted' | 'quarantined';
@@ -132,7 +135,9 @@ export type WorkProductArtifactPreviewStatus =
   | 'policy-blocked';
 
 export type WorkProductArtifactPreviewRenderer =
-  'text' | 'markdown' | 'image' | 'pdf' | 'table' | 'none';
+  'text' | 'markdown' | 'html' | 'image' | 'pdf' | 'table' | 'none';
+
+export type WorkProductArtifactPreviewAuditAction = 'open' | 'close' | 'refresh' | 'navigate';
 
 export interface WorkProductArtifactPreviewCell {
   text: string;
@@ -150,6 +155,13 @@ export interface WorkProductArtifactPreviewSheet {
 
 export type WorkProductArtifactPreviewContent =
   | { kind: 'text'; text: string }
+  | {
+      kind: 'html';
+      document: string;
+      interactive: false;
+      contentSecurityPolicy: typeof WORK_PRODUCT_HTML_PREVIEW_CSP;
+      sandbox: typeof WORK_PRODUCT_HTML_PREVIEW_SANDBOX;
+    }
   | {
       kind: 'image';
       base64: string;

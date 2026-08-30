@@ -8,6 +8,7 @@ import { renderWithProviders } from './test-utils';
 const mocks = vi.hoisted(() => ({
   previewArtifact: vi.fn(),
   downloadArtifact: vi.fn(),
+  recordPreviewAudit: vi.fn(),
   navigateToTask: vi.fn(),
 }));
 
@@ -16,6 +17,7 @@ vi.mock('@/lib/api', () => ({
     workProducts: {
       previewArtifact: mocks.previewArtifact,
       downloadArtifact: mocks.downloadArtifact,
+      recordPreviewAudit: mocks.recordPreviewAudit,
     },
   },
 }));
@@ -24,6 +26,7 @@ vi.mock('@/lib/api/work-products', () => ({
   workProductsApi: {
     previewArtifact: mocks.previewArtifact,
     downloadArtifact: mocks.downloadArtifact,
+    recordPreviewAudit: mocks.recordPreviewAudit,
   },
 }));
 
@@ -35,6 +38,7 @@ describe('ArtifactPreviewModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.downloadArtifact.mockResolvedValue(new Blob(['safe bytes']));
+    mocks.recordPreviewAudit.mockResolvedValue(undefined);
   });
 
   afterEach(() => cleanup());
@@ -155,6 +159,48 @@ describe('ArtifactPreviewModal', () => {
       (within(dialog).getByRole('button', { name: 'Download' }) as HTMLButtonElement).disabled
     ).toBe(true);
   });
+
+  it('renders HTML only in the exact passive sandbox and audits its lifecycle', async () => {
+    mocks.previewArtifact.mockResolvedValue(
+      preview(
+        {
+          kind: 'html',
+          document: '<!doctype html><h1>Isolated report</h1>',
+          interactive: false,
+          contentSecurityPolicy:
+            "default-src 'none'; base-uri 'none'; child-src 'none'; connect-src 'none'; font-src 'none'; form-action 'none'; frame-src 'none'; img-src 'none'; manifest-src 'none'; media-src 'none'; navigate-to 'none'; object-src 'none'; script-src 'none'; style-src 'unsafe-inline'; worker-src 'none'",
+          sandbox: '',
+        },
+        'html'
+      )
+    );
+    const user = userEvent.setup();
+    const rendered = renderWithProviders(
+      <ArtifactPreviewModal
+        opened
+        productId="wp_html"
+        version={2}
+        title="HTML report"
+        onClose={vi.fn()}
+      />
+    );
+
+    const frame = await screen.findByTitle('preview.bin HTML preview');
+    expect(frame.getAttribute('sandbox')).toBe('');
+    expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(frame.getAttribute('src')).toBeNull();
+    expect(frame.getAttribute('srcdoc')).toContain('Isolated report');
+    await waitFor(() =>
+      expect(mocks.recordPreviewAudit).toHaveBeenCalledWith('wp_html', 'open', 2)
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(mocks.recordPreviewAudit).toHaveBeenCalledWith('wp_html', 'refresh', 2);
+    rendered.unmount();
+    await waitFor(() =>
+      expect(mocks.recordPreviewAudit).toHaveBeenCalledWith('wp_html', 'close', 2)
+    );
+  });
 });
 
 function preview(
@@ -179,7 +225,13 @@ function preview(
       requestIdDigest: `sha256:${'a'.repeat(64)}`,
       launchManifestDigest: `sha256:${'b'.repeat(64)}`,
       mediaType:
-        renderer === 'image' ? 'image/png' : renderer === 'pdf' ? 'application/pdf' : 'text/plain',
+        renderer === 'image'
+          ? 'image/png'
+          : renderer === 'pdf'
+            ? 'application/pdf'
+            : renderer === 'html'
+              ? 'text/html'
+              : 'text/plain',
       byteSize: 12,
       sha256: 'c'.repeat(64),
       safeName: 'preview.bin',

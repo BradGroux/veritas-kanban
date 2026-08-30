@@ -272,6 +272,11 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
     write: 'work_product:write',
     overrides: [
       { methods: ['DELETE'], path: /^\/[^/]+\/artifact\/?$/, permissions: 'admin:manage' },
+      {
+        methods: ['POST'],
+        path: /^\/[^/]+\/artifact\/preview\/audit\/?$/,
+        permissions: 'work_product:read',
+      },
     ],
   },
   { prefix: '/api/hooks', read: 'settings:read', write: 'settings:write' },

@@ -19,6 +19,11 @@ export const taskReadAccess = routeAccess('task:read', 'task:read');
 export const taskCommentAccess = routeAccess('task:read', 'comment:write');
 export const workProductAccess = routeAccess('work_product:read', 'work_product:write', [
   { methods: ['DELETE'], path: /^\/[^/]+\/artifact\/?$/, permissions: 'admin:manage' },
+  {
+    methods: ['POST'],
+    path: /^\/[^/]+\/artifact\/preview\/audit\/?$/,
+    permissions: 'work_product:read',
+  },
 ]);
 export const knowledgeAccess = routeAccess('work_product:read', 'work_product:write');
 export const diffAccess = routeAccess('task:read', 'task:write', [

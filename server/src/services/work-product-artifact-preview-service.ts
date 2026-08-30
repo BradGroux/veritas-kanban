@@ -1,8 +1,11 @@
 import ExcelJS from 'exceljs';
 import { fileTypeFromBuffer } from 'file-type';
+import sanitizeHtml from 'sanitize-html';
 import { extractLinks, getDocumentProxy } from 'unpdf';
 import {
   WORK_PRODUCT_ARTIFACT_PREVIEW_SCHEMA_VERSION,
+  WORK_PRODUCT_HTML_PREVIEW_CSP,
+  WORK_PRODUCT_HTML_PREVIEW_SANDBOX,
   type WorkProductArtifactPreview,
   type WorkProductArtifactPreviewCell,
   type WorkProductArtifactPreviewSheet,
@@ -17,6 +20,7 @@ import {
 const KIB = 1024;
 const MIB = KIB * KIB;
 const TEXT_LIMIT = 1 * MIB;
+const HTML_LIMIT = 512 * KIB;
 const CSV_LIMIT = 1 * MIB;
 const IMAGE_LIMIT = 8 * MIB;
 const PDF_LIMIT = 8 * MIB;
@@ -114,6 +118,7 @@ export class WorkProductArtifactPreviewService {
     try {
       if (mediaType === 'text/plain') return await this.textPreview(source, content, false);
       if (mediaType === 'text/markdown') return await this.textPreview(source, content, true);
+      if (mediaType === 'text/html') return await this.htmlPreview(source, content);
       if (mediaType === 'text/csv') return await this.csvPreview(source, content);
       if (IMAGE_MEDIA.has(mediaType)) return await this.imagePreview(source, content, mediaType);
       if (mediaType === 'application/pdf') return await this.pdfPreview(source, content);
@@ -134,6 +139,102 @@ export class WorkProductArtifactPreviewService {
         message
       );
     }
+  }
+
+  private async htmlPreview(
+    source: WorkProductArtifactPreviewSource,
+    content: Buffer
+  ): Promise<WorkProductArtifactPreview> {
+    enforceBytes(content, HTML_LIMIT, 'HTML preview');
+    const detected = await fileTypeFromBuffer(content);
+    if (detected) {
+      return this.statusPreview(
+        source,
+        'policy-blocked',
+        `HTML preview content was detected as ${detected.mime}.`
+      );
+    }
+    const html = decodeUtf8(content);
+    if (html.includes('\0')) throw new Error('HTML contains null bytes.');
+    const passiveBody = sanitizeHtml(html, {
+      allowedTags: [
+        'article',
+        'aside',
+        'blockquote',
+        'br',
+        'caption',
+        'code',
+        'col',
+        'colgroup',
+        'dd',
+        'details',
+        'div',
+        'dl',
+        'dt',
+        'em',
+        'figcaption',
+        'figure',
+        'footer',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'header',
+        'hr',
+        'kbd',
+        'li',
+        'main',
+        'mark',
+        'nav',
+        'ol',
+        'p',
+        'pre',
+        's',
+        'section',
+        'small',
+        'span',
+        'strong',
+        'sub',
+        'summary',
+        'sup',
+        'table',
+        'tbody',
+        'td',
+        'tfoot',
+        'th',
+        'thead',
+        'tr',
+        'u',
+        'ul',
+      ],
+      allowedAttributes: {
+        '*': ['aria-label', 'aria-hidden', 'dir', 'lang', 'role', 'title'],
+        col: ['span'],
+        details: ['open'],
+        li: ['value'],
+        ol: ['reversed', 'start', 'type'],
+        td: ['colspan', 'rowspan'],
+        th: ['colspan', 'rowspan', 'scope'],
+      },
+      allowedSchemes: [],
+      allowProtocolRelative: false,
+      disallowedTagsMode: 'discard',
+      enforceHtmlBoundary: true,
+    });
+    return this.readyPreview(
+      source,
+      'html',
+      {
+        kind: 'html',
+        document: passiveHtmlDocument(passiveBody),
+        interactive: false,
+        contentSecurityPolicy: WORK_PRODUCT_HTML_PREVIEW_CSP,
+        sandbox: WORK_PRODUCT_HTML_PREVIEW_SANDBOX,
+      },
+      { maxBytes: HTML_LIMIT }
+    );
   }
 
   private async textPreview(
@@ -421,6 +522,34 @@ function enforceBytes(content: Buffer, limit: number, label: string): void {
 
 function decodeUtf8(content: Buffer): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(content);
+}
+
+function passiveHtmlDocument(body: string): string {
+  const csp = WORK_PRODUCT_HTML_PREVIEW_CSP.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { color-scheme: dark; font-family: Roboto, ui-sans-serif, system-ui, sans-serif; }
+body { box-sizing: border-box; margin: 0; padding: 24px; color: #e5e7eb; background: #111827; line-height: 1.55; overflow-wrap: anywhere; }
+*, *::before, *::after { box-sizing: inherit; }
+h1, h2, h3, h4, h5, h6 { color: #f9fafb; line-height: 1.2; }
+code, pre, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre { max-width: 100%; padding: 12px; overflow: auto; border: 1px solid #374151; border-radius: 6px; background: #030712; }
+blockquote { margin-inline: 0; padding-left: 16px; border-left: 3px solid #6b7280; color: #d1d5db; }
+table { width: 100%; border-collapse: collapse; }
+caption { margin-bottom: 8px; font-weight: 600; text-align: left; }
+th, td { padding: 8px; border: 1px solid #4b5563; text-align: left; vertical-align: top; }
+th { background: #1f2937; }
+hr { border: 0; border-top: 1px solid #4b5563; }
+</style>
+</head>
+<body>${body}</body>
+</html>`;
 }
 
 function tableLimits(maxBytes: number): WorkProductArtifactPreview['limits'] {

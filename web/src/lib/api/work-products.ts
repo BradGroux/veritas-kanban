@@ -2,6 +2,7 @@ import type {
   UpdateWorkProductInput,
   WorkProduct,
   WorkProductArtifactPreview,
+  WorkProductArtifactPreviewAuditAction,
   WorkProductMaintenancePreview,
   WorkProductPreview,
   WorkProductVersion,
@@ -65,6 +66,19 @@ export const workProductsApi = {
     return apiFetch<WorkProductArtifactPreview>(
       `${API_BASE}/work-products/${encodeURIComponent(id)}/artifact/preview${query}`
     );
+  },
+
+  recordPreviewAudit: async (
+    id: string,
+    action: WorkProductArtifactPreviewAuditAction,
+    version?: number
+  ): Promise<void> => {
+    await apiFetch(`${API_BASE}/work-products/${encodeURIComponent(id)}/artifact/preview/audit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, version }),
+      ...(action === 'close' ? { keepalive: true } : {}),
+    });
   },
 
   update: async (id: string, input: UpdateWorkProductInput): Promise<WorkProduct> => {

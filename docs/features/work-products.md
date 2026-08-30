@@ -42,7 +42,9 @@ Task Work, the Run Timeline, and the Work Products tab share one authenticated p
 
 Preview parsing is bounded by format-specific byte, row, column, cell, page, pixel, archive-entry, decompressed-size, and compression-ratio limits. Spreadsheet formulas are displayed as inert formula text and are never evaluated. Markdown cannot load images or activate links. PDF previews reject active actions, embedded content, and external links, then render in a sandboxed data-origin frame.
 
-Every preview shows the immutable version, SHA-256 digest, media type, source run, redaction state, and a route to the causal timeline event. Truncation is explicit. Unsupported, quarantined, missing, malformed, oversized, or policy-blocked files keep only the fallback actions allowed by artifact policy. HTML is intentionally unsupported by this passive boundary; see [Governed Artifact Previews v1](../architecture/ARTIFACT-PREVIEWS-V1.md).
+Every preview shows the immutable version, SHA-256 digest, media type, source run, redaction state, and a route to the causal timeline event. Truncation is explicit. Unsupported, quarantined, missing, malformed, oversized, or policy-blocked files keep only the fallback actions allowed by artifact policy.
+
+HTML preview is passive, not a browser runtime. The server reduces bounded `text/html` to semantic, URL-free markup and wraps it in a host-owned document. The client renders it in an empty-sandbox `srcdoc` frame with a unique opaque origin, no referrer, no scripts, no network or remote assets, no forms, no frames or embeds, no storage, and no host or application authority. Refresh and causal-navigation controls stay outside the frame, and the preview lifecycle writes bounded audit records without document contents. Interactive HTML is not supported. See [Governed Artifact Previews v1](../architecture/ARTIFACT-PREVIEWS-V1.md).
 
 ## API
 
