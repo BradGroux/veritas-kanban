@@ -647,6 +647,24 @@ function parseCron(expression: string): ParsedCron | null {
   };
 }
 
+export function nextAutomationRunAt(
+  expression: string,
+  timezone: string,
+  after: Date,
+  expiresAt?: string
+): string | undefined {
+  const cron = parseCron(expression);
+  if (!cron || !isValidTimezone(timezone)) return undefined;
+  const parsedExpiry = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  return nextCronRuns(
+    cron,
+    timezone,
+    after,
+    1,
+    Number.isFinite(parsedExpiry) ? new Date(parsedExpiry) : undefined
+  )[0];
+}
+
 function parseCronField(value: string, min: number, max: number): CronMatcher | null {
   if (value === '*') return () => true;
   const step = value.match(/^\*\/(\d+)$/);

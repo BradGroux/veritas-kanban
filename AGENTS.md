@@ -270,6 +270,13 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   Completion, interruption, cancellation, and start failure release once;
   restart recovery may reclaim only after the durable run supervisor verifies
   the original live process or session.
+- Activate recurring work only through `automation-activation-preview/v1` and
+  an exact critical human approval. Persist one immutable
+  `automation-version/v1`, a compare-and-set scheduler binding, and a stable
+  due-window claim before workflow admission. The saved standing scope is a
+  ceiling: current workflow, phase, provider, tool, integration, credential,
+  and budget policy may narrow or block each run and may never be widened by
+  the automation version.
 - Bind every executable reservation to `execution-tree-identity/v1`. Descendants
   retain the root objective and exact parent edge across resume, follow-up,
   fork, retry, fallback, provider handoff, workflow step, and child-agent

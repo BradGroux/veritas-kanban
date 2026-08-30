@@ -1897,6 +1897,7 @@ Item IDs use the source prefix:
 - `scheduled-deliverable:<deliverableId>`
 - `workflow:<workflowId>`
 - `queue-monitor:<monitorId>`
+- `automation:<bindingId>`
 
 ### Run Item Now
 
@@ -1965,6 +1966,28 @@ DELETE /api/scheduler/drafts/:id?confirm=:id
 ```
 
 Revision accepts the same body as preview and appends an immutable version. Clone requires a new stable `requestId`. Delete requires the exact draft ID in the `confirm` query parameter and removes only inactive draft revisions. These write endpoints require `workflow:write`; none can activate recurring work.
+
+### Preview and Activate an Immutable Automation Version
+
+```
+POST /api/scheduler/drafts/:id/activation-preview
+POST /api/scheduler/drafts/:id/activate
+```
+
+Preview accepts a stable `requestId` and optional exact draft `revision`. It returns `automation-activation-preview/v1`, including the effective Run Access ceiling, safe tool/integration/target names, current workflow and provider evidence, expiry, budgets, blockers, and deterministic `requestRevision`.
+
+Activate requires the same request identity plus `expectedRequestRevision`. Without `approvalId`, it creates a critical exact-action Run Approval and returns `202`. After human approval, retry the identical body with the approval ID. A current-evidence mismatch returns `409`; an enforceability blocker returns a validation error. Success returns the immutable `automation-version/v1` and its compare-and-set scheduler binding.
+
+### Inspect and Control Active Automations
+
+```
+GET /api/scheduler/automations
+POST /api/scheduler/automations/:bindingId/pause
+POST /api/scheduler/automations/:bindingId/resume
+POST /api/scheduler/automations/:bindingId/revoke
+```
+
+The list returns immutable versions, current bindings, and recent durable run claims. Control bodies require `expectedRevision` and `reason`. Revocation is permanent. Every due or manual run claims one exact due window before entering normal workflow admission; duplicate claims never create a second provider-side launch.
 
 ---
 

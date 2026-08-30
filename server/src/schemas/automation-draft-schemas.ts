@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { AUTOMATION_DRAFT_SCHEMA_VERSION } from '@veritas-kanban/shared';
+import {
+  AUTOMATION_BINDING_SCHEMA_VERSION,
+  AUTOMATION_DRAFT_SCHEMA_VERSION,
+  AUTOMATION_RUN_CLAIM_SCHEMA_VERSION,
+  AUTOMATION_VERSION_SCHEMA_VERSION,
+} from '@veritas-kanban/shared';
 
 const identifier = z.string().trim().min(1).max(200);
 const boundedStringList = z.array(z.string().trim().min(1).max(1000)).max(100);
@@ -176,4 +181,143 @@ export const AutomationDraftRevisionQuerySchema = z
 
 export const AutomationDraftDeleteQuerySchema = z
   .object({ confirm: z.string().regex(/^automation_[a-f0-9]{24}$/) })
+  .strict();
+
+const evidence = z
+  .object({
+    sourceTarget: z
+      .object({
+        kind: z.enum(['workflow', 'task-template']),
+        id: identifier,
+        version: z.number().int().min(0),
+        digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+      })
+      .strict(),
+    workflowId: identifier,
+    workflowVersion: z.number().int().min(1),
+    workflowDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    provider: identifier,
+    providerEvidenceDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    toolCatalogDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    integrationEvidenceDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    policyDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    enforceable: z.boolean(),
+    blockers: boundedStringList,
+  })
+  .strict();
+
+const activeSchedule = z
+  .object({
+    expression: z.string().min(1).max(200),
+    timezone: z.string().min(1).max(100),
+    startAt: z.iso.datetime({ offset: true }).optional(),
+    expiresAt: z.iso.datetime({ offset: true }),
+    overlapPolicy: z.enum(['skip', 'queue-one', 'forbid']),
+    retry,
+    nextRunAt: z.iso.datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+export const AutomationVersionSchema = z
+  .object({
+    schemaVersion: z.literal(AUTOMATION_VERSION_SCHEMA_VERSION),
+    id: z.string().regex(/^automation_version_[a-f0-9]{24}$/),
+    version: z.number().int().min(1),
+    draftId: z.string().regex(/^automation_[a-f0-9]{24}$/),
+    draftRevision: z.number().int().min(1).max(50),
+    draftDigest: z.string().regex(/^scrypt:[a-f0-9]{64}$/),
+    requestRevision: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    workspaceId: identifier,
+    sourceTaskId: identifier.optional(),
+    objective: z.string().min(1).max(10_000),
+    workflowId: identifier,
+    workflowVersion: z.number().int().min(1),
+    provider: identifier,
+    schedule: activeSchedule,
+    output: z
+      .object({ destination: z.string().min(1).max(1000), expectedDeliverables: boundedStringList })
+      .strict(),
+    standingScope,
+    perRunBudget: budget,
+    aggregateBudget: budget,
+    stopConditions: boundedStringList,
+    evidence,
+    approval: z
+      .object({
+        id: z.string().regex(/^runapproval_[A-Za-z0-9_-]{12,32}$/),
+        revision: z.number().int().min(1),
+        actionHash: z.string().regex(/^[a-f0-9]{64}$/),
+        approvedBy: identifier,
+        approvedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict(),
+    activatedAt: z.iso.datetime({ offset: true }),
+    digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  })
+  .strict();
+
+export const AutomationBindingSchema = z
+  .object({
+    schemaVersion: z.literal(AUTOMATION_BINDING_SCHEMA_VERSION),
+    id: z.string().regex(/^automation_binding_[a-f0-9]{24}$/),
+    revision: z.number().int().min(1),
+    automationVersionId: z.string().regex(/^automation_version_[a-f0-9]{24}$/),
+    automationVersion: z.number().int().min(1),
+    status: z.enum(['active', 'paused', 'revoked', 'expired', 'blocked']),
+    nextRunAt: z.iso.datetime({ offset: true }).optional(),
+    lastRunAt: z.iso.datetime({ offset: true }).optional(),
+    acceptedRuns: z.number().int().min(0),
+    failedRuns: z.number().int().min(0),
+    aggregateUsage: z
+      .object({
+        runs: z.number().int().min(0),
+        costUsd: z.number().min(0),
+        tokens: z.number().int().min(0),
+        durationMinutes: z.number().min(0),
+      })
+      .strict(),
+    statusReason: z.string().min(1).max(2000),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const AutomationRunClaimSchema = z
+  .object({
+    schemaVersion: z.literal(AUTOMATION_RUN_CLAIM_SCHEMA_VERSION),
+    id: z.string().regex(/^automation_claim_[a-f0-9]{24}$/),
+    requestId: identifier,
+    automationVersionId: z.string().regex(/^automation_version_[a-f0-9]{24}$/),
+    bindingId: z.string().regex(/^automation_binding_[a-f0-9]{24}$/),
+    dueWindow: z.iso.datetime({ offset: true }),
+    trigger: z.enum(['due-run', 'manual-run']),
+    status: z.enum(['accepted', 'started', 'completed', 'blocked', 'failed']),
+    workflowRunId: identifier.optional(),
+    reason: z.string().min(1).max(2000).optional(),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const AutomationActivationPreviewBodySchema = z
+  .object({
+    revision: z.number().int().min(1).max(50).optional(),
+    requestId: identifier,
+  })
+  .strict();
+
+export const AutomationActivationApplyBodySchema = AutomationActivationPreviewBodySchema.extend({
+  expectedRequestRevision: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  approvalId: z
+    .string()
+    .regex(/^runapproval_[A-Za-z0-9_-]{12,32}$/)
+    .optional(),
+  approvalTtlMs: z.number().int().min(1_000).max(86_400_000).optional(),
+}).strict();
+
+export const AutomationBindingActionBodySchema = z
+  .object({
+    expectedRevision: z.number().int().min(1),
+    reason: z.string().trim().min(1).max(2000),
+  })
   .strict();

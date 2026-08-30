@@ -28,6 +28,7 @@ import {
   type WorkflowPipelineRoleStatusPatch,
   type WorkflowSubagentRunStatus,
   type WorkflowSubagentTelemetry,
+  type WorkflowAutomationBinding,
   WORKFLOW_ADMISSION_SCHEMA_VERSION,
 } from '@veritas-kanban/shared';
 import type { WorkflowRun, StepRun, WorkflowDefinition, WorkflowStep } from '../types/workflow.js';
@@ -81,6 +82,7 @@ const RESERVED_CONTEXT_KEYS = new Set([
   '_retryContext',
   '_gateBlock',
   '_gateApproval',
+  'automation',
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -402,14 +404,18 @@ export class WorkflowRunService {
   ): Promise<NonNullable<WorkflowRun['admission']>> {
     const admissionTaskId = this.rootAdmissionTaskId(run.id);
     const attemptId = admissionTaskId;
-    const workspaceId = this.workflowWorkspaceId(task);
-    const rootTaskId = run.taskId ?? admissionTaskId;
+    const workspaceId = run.automation?.workspaceId ?? this.workflowWorkspaceId(task);
+    const rootTaskId = run.taskId ?? run.automation?.bindingId ?? admissionTaskId;
     const executionTree: ExecutionTreeIdentity =
       run.executionTree ??
       ({
         schemaVersion: 'execution-tree-identity/v1',
         rootObjectiveId: `objective_${createHash('sha256')
-          .update(`${workspaceId}:${rootTaskId}:${run.id}`)
+          .update(
+            run.automation
+              ? `${workspaceId}:${run.automation.automationVersionId}`
+              : `${workspaceId}:${rootTaskId}:${run.id}`
+          )
           .digest('hex')
           .slice(0, 32)}`,
         nodeId: attemptId,
@@ -446,7 +452,9 @@ export class WorkflowRunService {
       hostId: this.admission.getExecutionHostId(),
       source: this.workflowAdmissionSource(run),
       workflowRunId: run.id,
-      idempotencyKey: `workflow-root:${run.id}`,
+      idempotencyKey: run.automation
+        ? `automation-root:${run.automation.requestId}`
+        : `workflow-root:${run.id}`,
       requested: {
         runSlots: 1,
         processSlots: 0,
@@ -1369,7 +1377,8 @@ export class WorkflowRunService {
     workflowId: string,
     taskId?: string,
     initialContext?: Record<string, unknown>,
-    runBudget?: AgentBudgetPolicy
+    runBudget?: AgentBudgetPolicy,
+    automation?: WorkflowAutomationBinding
   ): Promise<WorkflowRun> {
     const workflow = await this.workflowService.loadWorkflow(workflowId);
     if (!workflow) {
@@ -1425,6 +1434,7 @@ export class WorkflowRunService {
       workflowId: workflow.id,
       workflowVersion: workflow.version,
       taskId,
+      ...(automation ? { automation } : {}),
       status: 'pending',
       currentStep: workflow.steps[0]?.id,
       context: {
@@ -1433,6 +1443,8 @@ export class WorkflowRunService {
 
         // Custom initial context (from API caller)
         ...safeInitialContext,
+
+        ...(automation ? { automation } : {}),
 
         // Task payload (if provided)
         ...(task ? { task } : {}),

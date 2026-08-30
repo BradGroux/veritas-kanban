@@ -2,6 +2,9 @@ import type {
   AutomationDraft,
   AutomationDraftHints,
   AutomationDraftListResponse,
+  AutomationActivationPreview,
+  AutomationActivationResult,
+  AutomationVersionListResponse,
   SchedulerDueRunResult,
   SchedulerListResponse,
   SchedulerRunResult,
@@ -30,6 +33,38 @@ export const schedulerApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  previewActivation: (input: { draftId: string; revision: number; requestId: string }) =>
+    apiFetch<AutomationActivationPreview>(
+      `${API_BASE}/scheduler/drafts/${encodeURIComponent(input.draftId)}/activation-preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ revision: input.revision, requestId: input.requestId }),
+      }
+    ),
+
+  applyActivation: (input: {
+    draftId: string;
+    revision: number;
+    requestId: string;
+    expectedRequestRevision: string;
+    approvalId?: string;
+  }) =>
+    apiFetch<AutomationActivationResult>(
+      `${API_BASE}/scheduler/drafts/${encodeURIComponent(input.draftId)}/activate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          revision: input.revision,
+          requestId: input.requestId,
+          expectedRequestRevision: input.expectedRequestRevision,
+          ...(input.approvalId ? { approvalId: input.approvalId } : {}),
+        }),
+      }
+    ),
+
+  listAutomations: () =>
+    apiFetch<AutomationVersionListResponse>(`${API_BASE}/scheduler/automations`),
 
   runDue: () =>
     apiFetch<SchedulerDueRunResult>(`${API_BASE}/scheduler/due/run`, {

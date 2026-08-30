@@ -44,6 +44,9 @@ describe('FileSchedulerStateRepository', () => {
       items: {},
       events: [],
       drafts: {},
+      automationVersions: {},
+      automationBindings: {},
+      automationClaims: [],
     });
     await Promise.all(
       ['one', 'two'].map((id) =>

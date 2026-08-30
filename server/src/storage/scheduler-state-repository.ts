@@ -1,17 +1,31 @@
 import { constants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import path from 'node:path';
-import type { AutomationDraft, SchedulerEvent, SchedulerRunStatus } from '@veritas-kanban/shared';
+import type {
+  AutomationBinding,
+  AutomationDraft,
+  AutomationRunClaim,
+  AutomationVersion,
+  SchedulerEvent,
+  SchedulerRunStatus,
+} from '@veritas-kanban/shared';
 import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import { atomicWriteFile } from './fs-helpers.js';
-import { AutomationDraftSchema } from '../schemas/automation-draft-schemas.js';
+import {
+  AutomationBindingSchema,
+  AutomationDraftSchema,
+  AutomationRunClaimSchema,
+  AutomationVersionSchema,
+} from '../schemas/automation-draft-schemas.js';
 
 const MAX_SCHEDULER_STATE_BYTES = 8 * 1024 * 1024;
 const MAX_EVENTS = 200;
 const MAX_AUTOMATION_DRAFTS = 200;
 const MAX_AUTOMATION_DRAFT_REVISIONS = 50;
+const MAX_AUTOMATION_VERSIONS = 500;
+const MAX_AUTOMATION_CLAIMS = 1_000;
 
 export interface SchedulerItemState {
   attempts?: number;
@@ -29,6 +43,9 @@ export interface SchedulerState {
   items: Record<string, SchedulerItemState>;
   events: SchedulerEvent[];
   drafts: Record<string, AutomationDraft[]>;
+  automationVersions: Record<string, AutomationVersion>;
+  automationBindings: Record<string, AutomationBinding>;
+  automationClaims: AutomationRunClaim[];
 }
 
 export interface SchedulerStateRepository {
@@ -37,7 +54,15 @@ export interface SchedulerStateRepository {
 }
 
 function emptyState(): SchedulerState {
-  return { version: 1, items: {}, events: [], drafts: {} };
+  return {
+    version: 1,
+    items: {},
+    events: [],
+    drafts: {},
+    automationVersions: {},
+    automationBindings: {},
+    automationClaims: [],
+  };
 }
 
 function normalizeState(parsed: Partial<SchedulerState>): SchedulerState {
@@ -46,7 +71,53 @@ function normalizeState(parsed: Partial<SchedulerState>): SchedulerState {
     items: parsed.items && typeof parsed.items === 'object' ? parsed.items : {},
     events: Array.isArray(parsed.events) ? parsed.events.slice(-MAX_EVENTS) : [],
     drafts: normalizeDrafts(parsed.drafts),
+    automationVersions: normalizeRecord(
+      parsed.automationVersions,
+      AutomationVersionSchema,
+      MAX_AUTOMATION_VERSIONS,
+      'versions'
+    ),
+    automationBindings: normalizeRecord(
+      parsed.automationBindings,
+      AutomationBindingSchema,
+      MAX_AUTOMATION_VERSIONS,
+      'bindings'
+    ),
+    automationClaims: normalizeClaims(parsed.automationClaims),
   };
+}
+
+function normalizeRecord<T>(
+  value: unknown,
+  schema: { parse(candidate: unknown): T },
+  limit: number,
+  label: string
+): Record<string, T> {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Scheduler automation ${label} must be a record.`);
+  }
+  const entries = Object.entries(value);
+  if (entries.length > limit) {
+    throw new Error(`Scheduler automation ${label} exceed the ${limit}-record limit.`);
+  }
+  return Object.fromEntries(
+    entries.map(([id, candidate]) => {
+      const parsed = schema.parse(candidate) as T & { id?: string };
+      if (parsed.id !== id) {
+        throw new Error(`Scheduler automation ${label} entry ${id} has conflicting identity.`);
+      }
+      return [id, parsed];
+    })
+  );
+}
+
+function normalizeClaims(value: unknown): AutomationRunClaim[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error('Scheduler automation claims must be an array.');
+  return value
+    .slice(-MAX_AUTOMATION_CLAIMS)
+    .map((claim) => AutomationRunClaimSchema.parse(claim)) as AutomationRunClaim[];
 }
 
 function normalizeDrafts(value: unknown): Record<string, AutomationDraft[]> {

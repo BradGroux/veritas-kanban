@@ -761,7 +761,9 @@ export function buildAgentRunTimelineEvents({
               : 'tool',
       source: 'derived',
       timestamp: workflowStartedAt(run),
-      title: `Workflow ${run.status}: ${run.workflowId}`,
+      title: run.automation
+        ? `Automation ${run.status}: ${run.automation.automationVersionId}`
+        : `Workflow ${run.status}: ${run.workflowId}`,
       detail: run.currentStep
         ? `Current step: ${run.currentStep}`
         : run.error || `${run.steps.length} step${run.steps.length === 1 ? '' : 's'}`,
@@ -775,6 +777,7 @@ export function buildAgentRunTimelineEvents({
         workflowVersion: run.workflowVersion,
         status: run.status,
         currentStep: run.currentStep,
+        automation: run.automation,
         context: run.context,
         steps: run.steps.map((step) => ({
           stepId: step.stepId,

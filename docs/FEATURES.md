@@ -1496,7 +1496,10 @@ Unified operator surface for scheduled deliverables, scheduled workflow definiti
 - **Operations telemetry** — Scheduler events emit bounded run telemetry with `agent=scheduler` for operations digest visibility
 - **Custom cron guardrail** — Cron schedules are visible and manually runnable, but automatic custom-cron due execution is deferred until a cron adapter is configured
 - **Automation draft compiler** — Natural recurring intent and structured hints compile into inactive `automation-draft/v1` previews with timezone-aware run examples, field provenance, standing scope, budgets, stop conditions, redaction, and exact blockers
-- **No activation side effect** — Preview, save, revise, clone, and delete operations never create scheduler definitions, reservations, runs, provider queues, approvals, or external actions
+- **Exact activation review** — Operators review the same Run Access vocabulary, current workflow/provider/tool/integration evidence, expiry, outputs, and budgets before critical human approval
+- **Immutable active versions** — Approval creates one `automation-version/v1` and compare-and-set binding; later draft edits cannot mutate active authority
+- **Durable due-window ownership** — Each manual or due run persists a stable claim before shared workflow admission, preventing duplicate provider launches across ticks and restarts
+- **Fail-closed lifecycle** — Pause, revoke, expiry, evidence drift, aggregate budget exhaustion, and repeated failure stop future claims without deleting history
 
 → [Full guide](features/recurring-work-scheduler.md) — API, CLI, execution model, and scheduler guardrails
 

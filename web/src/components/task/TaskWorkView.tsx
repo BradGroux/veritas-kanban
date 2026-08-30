@@ -818,7 +818,9 @@ export function TaskWorkView({
                 </Group>
                 <Text size="xs" c="dimmed" mt={4}>
                   {workflowRun
-                    ? `Workflow ${workflowRun.workflowId} v${workflowRun.workflowVersion}`
+                    ? workflowRun.automation
+                      ? `Automation ${workflowRun.automation.automationVersionId} · Workflow ${workflowRun.workflowId} v${workflowRun.workflowVersion}`
+                      : `Workflow ${workflowRun.workflowId} v${workflowRun.workflowVersion}`
                     : 'No workflow run has been recorded for this task.'}
                 </Text>
               </div>
@@ -848,6 +850,11 @@ export function TaskWorkView({
                   {workflowRun.currentStep && (
                     <Badge variant="light" color="blue">
                       {workflowRun.currentStep}
+                    </Badge>
+                  )}
+                  {workflowRun.automation && (
+                    <Badge variant="light" color="violet" className="font-mono">
+                      automation v{workflowRun.automation.automationVersion}
                     </Badge>
                   )}
                 </Group>
