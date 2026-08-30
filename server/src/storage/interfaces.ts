@@ -91,6 +91,8 @@ import type {
   AgentStatusState,
 } from '../services/status-history-service.js';
 import type { ManagedListServiceConfig } from '../services/managed-list-service.js';
+import type { WorkProductArtifactRepository } from './work-product-artifact-repository.js';
+export type { WorkProductArtifactRepository } from './work-product-artifact-repository.js';
 
 // ---------------------------------------------------------------------------
 // Task Repository
@@ -584,6 +586,7 @@ export interface StorageProvider {
   readonly telemetry: TelemetryRepository;
   readonly runEvents: RunEventRepository;
   readonly runOutputArtifacts: RunOutputArtifactRepository;
+  readonly workProductArtifacts: WorkProductArtifactRepository;
   readonly runApprovals: RunApprovalRepository;
   readonly phaseTransitions: PhaseTransitionRepository;
   readonly runSupervisors: RunSupervisorRepository;

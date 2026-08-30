@@ -283,7 +283,7 @@ complete configured storage root, not only the Git-tracked board files.
 - **Error learning** — Structured failure analysis with similarity search
 - **Task lifecycle hooks** — 7 built-in hooks, 8 events, custom hooks API
 - **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.)
-- **Durable Work Products** — Versioned generated reports, checklists, tables, and handoff artifacts with provenance and redacted previews
+- **Durable Work Products** — Versioned reports, checklists, tables, and governed downloadable files with run provenance, integrity metadata, quarantine, and redacted previews
 - **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling
 - **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing
 - **OpenClaw Integration** — Optional direct gateway wake for real-time squad chat notifications and agent orchestration

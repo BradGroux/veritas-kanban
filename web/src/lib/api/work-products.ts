@@ -5,7 +5,7 @@ import type {
   WorkProductPreview,
   WorkProductVersion,
 } from '@veritas-kanban/shared';
-import { API_BASE, apiFetch, apiText } from './helpers';
+import { API_BASE, apiFetch, apiResponse, apiText } from './helpers';
 
 export type WorkProductExportFormat = 'markdown' | 'json';
 
@@ -48,6 +48,15 @@ export const workProductsApi = {
     return apiFetch<WorkProductVersion[]>(
       `${API_BASE}/work-products/${encodeURIComponent(id)}/versions`
     );
+  },
+
+  downloadArtifact: async (id: string, version?: number): Promise<Blob> => {
+    const query = buildQuery({ version });
+    return (
+      await apiResponse(
+        `${API_BASE}/work-products/${encodeURIComponent(id)}/artifact/download${query}`
+      )
+    ).blob();
   },
 
   update: async (id: string, input: UpdateWorkProductInput): Promise<WorkProduct> => {

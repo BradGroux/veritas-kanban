@@ -67,12 +67,12 @@ export class WorkProductService {
     }
   }
 
-  async create(input: CreateWorkProductInput): Promise<WorkProduct> {
+  async create(input: CreateWorkProductInput, options: { id?: string } = {}): Promise<WorkProduct> {
     this.assertRenderKind(input.kind, input.render);
 
     const now = new Date().toISOString();
     const product: WorkProduct = {
-      id: `wp_${randomUUID()}`,
+      id: options.id ?? `wp_${randomUUID()}`,
       workspaceId: input.workspaceId ?? 'local',
       kind: input.kind,
       title: input.title,
@@ -112,6 +112,7 @@ export class WorkProductService {
     const query = options.query?.toLowerCase();
     return this.fileState.products
       .filter((product) => {
+        if (options.workspaceId && product.workspaceId !== options.workspaceId) return false;
         if (!options.includeArchived && product.status !== 'active') return false;
         if (options.status && product.status !== options.status) return false;
         if (options.taskId && product.taskId !== options.taskId) return false;
@@ -174,14 +175,22 @@ export class WorkProductService {
   }
 
   async archive(id: string): Promise<WorkProduct | null> {
-    if (this.repository) {
-      return this.repository.archive(id, new Date().toISOString());
-    }
     return this.update(id, {
       status: 'archived',
       changeType: 'manual',
       changeSummary: 'Archived work product',
     });
+  }
+
+  async purge(id: string): Promise<boolean> {
+    if (this.repository) return this.repository.delete(id);
+
+    await this.ensureLoaded();
+    if (!this.fileState.products.some((product) => product.id === id)) return false;
+    this.fileState.products = this.fileState.products.filter((product) => product.id !== id);
+    this.fileState.versions = this.fileState.versions.filter((version) => version.productId !== id);
+    await this.saveFileState();
+    return true;
   }
 
   async listVersions(productId: string): Promise<WorkProductVersion[]> {
@@ -267,7 +276,8 @@ export class WorkProductService {
       notes: [
         'Preview only. No work products or version history are deleted by this endpoint.',
         'Archived work products are cleanup candidates; active work products are retained.',
-        'Byte counts are JSON storage estimates for product metadata, render payloads, and versions.',
+        'Archived file-backed artifact bodies remain immutable and downloadable until an exact-confirmation physical purge.',
+        'Byte counts include JSON metadata, render payloads, versions, and file-backed artifact bodies.',
       ],
     };
   }
@@ -321,6 +331,7 @@ export class WorkProductService {
       agent: product.agent,
       model: product.model,
       sourceLinks: product.sourceLinks,
+      artifact: product.render.kind === 'file' ? product.render.artifact : undefined,
       redacted: fullyRedacted || redactedText !== rawText,
       snippet: (fullyRedacted ? '[redacted work product preview]' : redactedText).slice(0, 500),
       createdAt: product.createdAt,
@@ -382,9 +393,22 @@ export class WorkProductService {
   }
 
   private estimateWorkProductBytes(product: WorkProduct, versions: WorkProductVersion[]): number {
+    const artifactBodies = new Map<string, number>();
+    if (product.render.kind === 'file' && product.render.artifact.state === 'available') {
+      artifactBodies.set(product.render.artifact.id, product.render.artifact.byteSize);
+    }
+    for (const version of versions) {
+      if (version.render.kind === 'file' && version.render.artifact.state === 'available') {
+        artifactBodies.set(version.render.artifact.id, version.render.artifact.byteSize);
+      }
+    }
     return (
       Buffer.byteLength(JSON.stringify(product), 'utf8') +
-      versions.reduce((sum, version) => sum + Buffer.byteLength(JSON.stringify(version), 'utf8'), 0)
+      versions.reduce(
+        (sum, version) => sum + Buffer.byteLength(JSON.stringify(version), 'utf8'),
+        0
+      ) +
+      Array.from(artifactBodies.values()).reduce((sum, byteSize) => sum + byteSize, 0)
     );
   }
 
@@ -849,6 +873,7 @@ export class WorkProductService {
     const versions = this.fileState.versions
       .filter((version) => version.productId === productId)
       .sort((a, b) => b.version - a.version);
+    if (versions.some((version) => version.kind === 'file')) return;
     const keep = new Set(versions.slice(0, this.versionLimit).map((version) => version.id));
     this.fileState.versions = this.fileState.versions.filter(
       (version) => version.productId !== productId || keep.has(version.id)
@@ -946,6 +971,14 @@ function renderToText(render: WorkProductRender): string {
             .join(': ')
         )
         .join('\n');
+    case 'file':
+      return [
+        render.artifact.safeName,
+        render.artifact.mediaType,
+        `${render.artifact.byteSize} bytes`,
+        `SHA-256 ${render.artifact.sha256}`,
+        render.artifact.state,
+      ].join('\n');
   }
 }
 
@@ -978,6 +1011,8 @@ function redactRender(render: WorkProductRender, text: string): WorkProductRende
         kind: 'dashboard',
         widgets: [{ id: 'redacted', title: 'Redacted', description: text }],
       };
+    case 'file':
+      return render;
   }
 }
 

@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { createBackup, runIntegrityChecks } from '../../services/integrity-service.js';
+import { FileWorkProductArtifactRepository } from '../../storage/work-product-artifact-repository.js';
 
 describe('integrity-service', () => {
   let tmpDir: string;
@@ -127,6 +128,49 @@ describe('integrity-service', () => {
       // Verify backup content
       const backupConfig = await fs.readFile(path.join(backupPath, 'config.json'), 'utf-8');
       expect(JSON.parse(backupConfig)).toEqual({ repos: [] });
+    });
+
+    it('backs up and restores immutable file Work Product artifact bodies', async () => {
+      const content = Buffer.from('backup artifact bytes', 'utf8');
+      const metadata = {
+        schemaVersion: 'work-product-artifact/v1' as const,
+        id: `wpa_${'a'.repeat(24)}`,
+        productId: `wp_${'b'.repeat(24)}`,
+        version: 1,
+        workspaceId: 'local',
+        taskId: 'task_backup',
+        runId: 'run_backup',
+        attemptId: 'attempt_backup',
+        producingEventId: 'event_backup',
+        requestIdDigest: `sha256:${'c'.repeat(64)}`,
+        launchManifestDigest: `sha256:${'d'.repeat(64)}`,
+        mediaType: 'application/octet-stream',
+        byteSize: content.byteLength,
+        sha256: '80d785e8c4d256e11f8af19ed041cdba6ad63dfd5ef9881544f4e8128963fbc1',
+        safeName: 'backup.bin',
+        state: 'available' as const,
+        redaction: { state: 'none' as const },
+        createdAt: '2026-08-30T12:00:00.000Z',
+      };
+      const source = new FileWorkProductArtifactRepository(
+        path.join(dataDir, 'work-product-artifacts')
+      );
+      await source.create(metadata, content);
+
+      const backupPath = await createBackup(dataDir);
+      const restoredDir = path.join(tmpDir, '.veritas-kanban-restored');
+      await fs.cp(backupPath, restoredDir, { recursive: true });
+      const restored = await new FileWorkProductArtifactRepository(
+        path.join(restoredDir, 'work-product-artifacts')
+      ).read({
+        workspaceId: 'local',
+        productId: metadata.productId,
+        version: 1,
+        artifactId: metadata.id,
+      });
+
+      expect(restored?.metadata).toEqual(metadata);
+      expect(Buffer.from(restored?.content ?? []).toString('utf8')).toBe('backup artifact bytes');
     });
 
     it('should skip backup when data directory is empty', async () => {

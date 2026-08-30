@@ -1181,11 +1181,12 @@ deliverables so they can survive archive, be refined without duplication, and
 be reached from task work views, run timelines, completion packets, command
 center search, and export flows.
 
-| Runtime table           | Stored data                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `work_products`         | Current typed render contract, source task/run, agent/model provenance, redaction metadata, links, and JSON. |
-| `work_product_versions` | Bounded non-destructive version history for refine, regenerate, restore, and manual updates.                 |
-| `work_product_search`   | FTS index for command-center and search reachability without walking task/comment files.                     |
+| Runtime table            | Stored data                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `work_products`          | Current typed render contract, source task/run, agent/model provenance, redaction metadata, links, and JSON.                             |
+| `work_product_versions`  | Non-destructive version history; file renders retain immutable artifact references until explicit cleanup.                               |
+| `work_product_artifacts` | Immutable file metadata and verified BLOB bytes keyed by workspace, product, version, attempt, and idempotent request digest.            |
+| `work_product_search`    | FTS index for command-center and search reachability without walking task/comment files; file entries index safe metadata, never bodies. |
 
 ## Operational Provenance Repository Implementation
 

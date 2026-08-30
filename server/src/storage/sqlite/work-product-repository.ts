@@ -54,8 +54,7 @@ export class SqliteWorkProductRepository {
         `
           SELECT product_json
           FROM work_products
-          WHERE workspace_id = 'local'
-            AND id = ?
+          WHERE id = ?
             AND deleted_at IS NULL
         `
       )
@@ -91,7 +90,7 @@ export class SqliteWorkProductRepository {
       this.upsertProduct(product);
       this.recordVersion(product, changeType, searchText, changeSummary);
       this.syncSearchRow(product, searchText);
-      this.pruneVersions(product.id);
+      if (product.kind !== 'file') this.pruneVersions(product.id);
       db.exec('COMMIT;');
       return product;
     } catch (error) {
@@ -107,8 +106,7 @@ export class SqliteWorkProductRepository {
         `
           SELECT version_json
           FROM work_product_versions
-          WHERE workspace_id = 'local'
-            AND product_id = ?
+          WHERE product_id = ?
           ORDER BY version_number DESC
         `
       )
@@ -124,8 +122,7 @@ export class SqliteWorkProductRepository {
         `
           SELECT version_json
           FROM work_product_versions
-          WHERE workspace_id = 'local'
-            AND product_id = ?
+          WHERE product_id = ?
             AND version_number = ?
         `
       )
@@ -145,6 +142,21 @@ export class SqliteWorkProductRepository {
       updatedAt: now,
     };
     return this.update(archived, '', 'manual', 'Archived work product');
+  }
+
+  delete(id: string): boolean {
+    const connection = this.database.getConnection();
+    connection.exec('BEGIN IMMEDIATE;');
+    try {
+      connection.prepare('DELETE FROM work_product_search WHERE product_id = ?').run(id);
+      connection.prepare('DELETE FROM work_product_versions WHERE product_id = ?').run(id);
+      const result = connection.prepare('DELETE FROM work_products WHERE id = ?').run(id);
+      connection.exec('COMMIT;');
+      return result.changes > 0;
+    } catch (error) {
+      connection.exec('ROLLBACK;');
+      throw error;
+    }
   }
 
   search(query: string, limit = 20): WorkProduct[] {
@@ -175,8 +187,8 @@ export class SqliteWorkProductRepository {
     sql: string;
     params: SQLInputValue[];
   } {
-    const clauses = ["workspace_id = 'local'", 'deleted_at IS NULL'];
-    const params: SQLInputValue[] = [];
+    const clauses = ['workspace_id = ?', 'deleted_at IS NULL'];
+    const params: SQLInputValue[] = [options.workspaceId ?? 'local'];
 
     if (!options.includeArchived) {
       clauses.push("status = 'active'");

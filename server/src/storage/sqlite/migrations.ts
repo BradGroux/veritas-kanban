@@ -1601,6 +1601,35 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         );
     `,
   },
+  {
+    version: 34,
+    name: '0034_work_product_artifacts',
+    up: `
+      CREATE TABLE work_product_artifacts (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL CHECK (version_number > 0),
+        task_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL,
+        request_id_digest TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('available', 'quarantined', 'deleted')),
+        byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+        sha256 TEXT NOT NULL,
+        metadata_json TEXT NOT NULL,
+        content BLOB,
+        created_at TEXT NOT NULL,
+        UNIQUE (workspace_id, product_id, version_number),
+        UNIQUE (workspace_id, product_id, request_id_digest)
+      );
+
+      CREATE INDEX idx_work_product_artifacts_product_version
+        ON work_product_artifacts(workspace_id, product_id, version_number DESC);
+
+      CREATE INDEX idx_work_product_artifacts_state_created
+        ON work_product_artifacts(workspace_id, state, created_at DESC);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

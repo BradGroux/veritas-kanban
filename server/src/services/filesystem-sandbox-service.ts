@@ -334,6 +334,12 @@ export class FilesystemSandboxService {
                 access: 'write',
                 scope: 'run-cache',
               },
+              {
+                id: 'run-artifact',
+                path: directories.artifactPath,
+                access: 'write',
+                scope: 'run-artifact',
+              },
             ])
           : []),
       ];
@@ -510,6 +516,12 @@ export class FilesystemSandboxService {
         path: directories.cachePath,
         access: 'write',
         scope: 'run-cache',
+      },
+      {
+        id: 'run-artifact',
+        path: directories.artifactPath,
+        access: 'write',
+        scope: 'run-artifact',
       },
     ];
     const entries = [...baseEntries, ...compileProtectedMetadataReadEntries(baseEntries)];
@@ -1081,6 +1093,7 @@ function runDirectoryEnvironment(directories: RunSandboxDirectories): Record<str
     TMP: directories.tempPath,
     TEMP: directories.tempPath,
     XDG_CACHE_HOME: directories.cachePath,
+    VERITAS_ARTIFACT_ROOT: directories.artifactPath,
   };
 }
 

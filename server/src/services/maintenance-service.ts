@@ -332,6 +332,7 @@ export class MaintenanceService {
         'raw chat content',
         'generated sensitive text',
         'raw run output artifact bodies',
+        'file Work Product artifact bodies',
       ],
       redactionRules: [
         'Bearer tokens, API keys, JWTs, opaque tokens, and long hashes are replaced.',
@@ -339,6 +340,7 @@ export class MaintenanceService {
         'Log files are included as redacted tails only, capped at 200 lines per source.',
         'Admission queue diagnostics use the bounded inspection projection and never include durable replay targets.',
         'Run output artifact bodies are excluded; lifecycle summaries contain metadata and policy only.',
+        'File Work Product artifact bodies are excluded; only bounded metadata and lifecycle accounting are included.',
       ],
       files: summary.logs.map((source) => this.redactLogSource(source)),
     };

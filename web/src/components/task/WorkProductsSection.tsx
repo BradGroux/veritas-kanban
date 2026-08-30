@@ -46,6 +46,7 @@ interface WorkProductsSectionProps {
 const KIND_LABELS: Record<WorkProductKind, string> = {
   checklist: 'Checklist',
   dashboard: 'Dashboard',
+  file: 'File',
   markdown: 'Markdown',
   report: 'Report',
   summary: 'Summary',
@@ -58,6 +59,12 @@ function formatDate(value: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function safeDownloadName(product: WorkProductPreview, extension: string): string {
@@ -229,6 +236,31 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
     }
   };
 
+  const downloadArtifact = async (product: WorkProductPreview) => {
+    if (!product.artifact || product.artifact.state !== 'available') return;
+    try {
+      const blob = await api.workProducts.downloadArtifact(product.id, product.version);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = product.artifact.safeName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({
+        title: 'Artifact downloaded',
+        description: `${product.artifact.safeName} passed its stored integrity check.`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Download failed',
+        description: err instanceof Error ? err.message : 'Could not download artifact.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <Paper withBorder p="md" radius="md">
@@ -317,33 +349,59 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
                       </Text>
                     </div>
                     <Group gap={4} wrap="nowrap">
-                      <Tooltip label="Copy redacted markdown">
-                        <ActionIcon
-                          aria-label={`Copy redacted ${product.title}`}
-                          variant="subtle"
-                          onClick={() => copyRedacted(product)}
+                      {product.kind === 'file' && product.artifact && (
+                        <Tooltip
+                          label={
+                            product.artifact.state === 'available'
+                              ? 'Download verified artifact'
+                              : product.artifact.redaction.reason || 'Artifact is unavailable'
+                          }
                         >
-                          <Clipboard className="h-4 w-4" />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label="Edit redacted markdown">
-                        <ActionIcon
-                          aria-label={`Edit ${product.title}`}
-                          variant="subtle"
-                          onClick={() => openEditor(product)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label="Export redacted markdown">
-                        <ActionIcon
-                          aria-label={`Export redacted ${product.title}`}
-                          variant="subtle"
-                          onClick={() => exportRedacted(product)}
-                        >
-                          <Download className="h-4 w-4" />
-                        </ActionIcon>
-                      </Tooltip>
+                          <span>
+                            <ActionIcon
+                              aria-label={`Download ${product.artifact.safeName}`}
+                              variant="subtle"
+                              disabled={product.artifact.state !== 'available'}
+                              onClick={() => downloadArtifact(product)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </ActionIcon>
+                          </span>
+                        </Tooltip>
+                      )}
+                      {product.kind !== 'file' && (
+                        <Tooltip label="Copy redacted markdown">
+                          <ActionIcon
+                            aria-label={`Copy redacted ${product.title}`}
+                            variant="subtle"
+                            onClick={() => copyRedacted(product)}
+                          >
+                            <Clipboard className="h-4 w-4" />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      {product.kind !== 'file' && (
+                        <Tooltip label="Edit redacted markdown">
+                          <ActionIcon
+                            aria-label={`Edit ${product.title}`}
+                            variant="subtle"
+                            onClick={() => openEditor(product)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      {product.kind !== 'file' && (
+                        <Tooltip label="Export redacted markdown">
+                          <ActionIcon
+                            aria-label={`Export redacted ${product.title}`}
+                            variant="subtle"
+                            onClick={() => exportRedacted(product)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
                       <Tooltip label="Version history">
                         <ActionIcon
                           aria-label={`Open version history for ${product.title}`}
@@ -359,6 +417,29 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
                   <Text size="sm" c="dimmed" className="whitespace-pre-wrap">
                     {product.snippet || 'No preview text available.'}
                   </Text>
+
+                  {product.artifact && (
+                    <Stack gap={2}>
+                      <Text size="sm" fw={500}>
+                        {product.artifact.safeName} | {product.artifact.mediaType} |{' '}
+                        {formatBytes(product.artifact.byteSize)}
+                      </Text>
+                      <Text size="xs" c="dimmed" className="break-all">
+                        SHA-256 {product.artifact.sha256}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        Attempt {product.artifact.attemptId} | Event{' '}
+                        {product.artifact.producingEventId} | {product.artifact.state}
+                      </Text>
+                      {product.artifact.state !== 'available' && (
+                        <Alert color="yellow" title="Artifact quarantined" py="xs">
+                          {product.artifact.redaction.reason ||
+                            product.artifact.quarantineReason ||
+                            'Artifact content is unavailable by policy.'}
+                        </Alert>
+                      )}
+                    </Stack>
+                  )}
 
                   {(product.sourceRunId || (product.sourceLinks?.length ?? 0) > 0) && (
                     <Group gap="xs" wrap="wrap">

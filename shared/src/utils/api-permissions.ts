@@ -256,7 +256,14 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       { methods: ['POST'], path: /^\/?$/, permissions: ['task:read', 'work_product:read'] },
     ],
   },
-  { prefix: '/api/work-products', read: 'work_product:read', write: 'work_product:write' },
+  {
+    prefix: '/api/work-products',
+    read: 'work_product:read',
+    write: 'work_product:write',
+    overrides: [
+      { methods: ['DELETE'], path: /^\/[^/]+\/artifact\/?$/, permissions: 'admin:manage' },
+    ],
+  },
   { prefix: '/api/hooks', read: 'settings:read', write: 'settings:write' },
   { prefix: '/api/shared-resources', read: 'settings:read', write: 'settings:write' },
   { prefix: '/api/status-history', read: 'telemetry:read', write: 'admin:manage' },

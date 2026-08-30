@@ -285,6 +285,44 @@ describe('task work view Mantine surface', () => {
     });
   });
 
+  it('shows file Work Product state and an authenticated download action', () => {
+    const fileProduct: WorkProductPreview = {
+      ...product,
+      id: 'wp-file-release',
+      kind: 'file',
+      title: 'Release PDF',
+      version: 1,
+      artifact: {
+        schemaVersion: 'work-product-artifact/v1',
+        id: `wpa_${'a'.repeat(24)}`,
+        productId: `wp_${'b'.repeat(24)}`,
+        version: 1,
+        workspaceId: 'local',
+        taskId: 'task-work',
+        runId: 'run-456',
+        attemptId: 'attempt-456',
+        producingEventId: 'event-456',
+        requestIdDigest: `sha256:${'c'.repeat(64)}`,
+        launchManifestDigest: `sha256:${'d'.repeat(64)}`,
+        mediaType: 'application/pdf',
+        byteSize: 4096,
+        sha256: 'e'.repeat(64),
+        safeName: 'release.pdf',
+        state: 'available',
+        redaction: { state: 'none' },
+        createdAt: '2026-06-01T12:00:00.000Z',
+      },
+    };
+    mocks.useTaskWorkProducts.mockReturnValue({ data: [fileProduct], isLoading: false });
+
+    renderWorkView(createMockTask({ id: 'task-work' }));
+
+    expect(screen.getByText('release.pdf | 4096 bytes | available')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Download Release PDF' }).getAttribute('href')).toBe(
+      '/api/work-products/wp-file-release/artifact/download?version=1'
+    );
+  });
+
   it('does not show a stopped run from stale task and WebSocket state', () => {
     mocks.useAgentStatus.mockReturnValue({
       data: { running: false },

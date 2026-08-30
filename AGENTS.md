@@ -293,6 +293,12 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   reconstruction. A dangling handle becomes `interrupted` after restart
   because inherited pipes cannot be reattached safely. PTY, interactive stdin,
   and restart reattachment fail closed until their typed controls ship.
+- File-backed Work Products use the exact manifest-bound `run-artifact` root
+  exposed as `VERITAS_ARTIFACT_ROOT`. Register only completed relative files
+  through the governed artifact service; never persist or expose the host root.
+  Stored versions are immutable, downloads revalidate size and SHA-256, and
+  quarantined bodies remain unavailable. See
+  `docs/architecture/FILE-WORK-PRODUCTS-V1.md`.
 - Harnesses start a run-owned command with
   `POST /api/v1/run-terminals/runs/:taskId/:attemptId/execute`. Send one stable
   `requestId`, a command plus argument array, `mode: "pipe"`, start mode,
