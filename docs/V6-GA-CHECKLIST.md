@@ -25,14 +25,15 @@ Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
 - [x] Packaged authentication, secondary-action, macOS menu, motion, compact
       width, keyboard, reduced-motion, and accessibility smoke evidence is
       recorded for #1256-#1260.
-- [ ] One clean final candidate passes the complete Node-floor and current-Node
+- [x] One clean final candidate passes the complete Node-floor and current-Node
       release matrix with exact counts, skips, retries, image size, and
       limitations recorded in the evidence packet.
-- [ ] The release PR merges and its exact merge is published as annotated
+- [x] The release PR merges and its exact merge is published as annotated
       `v6.1.3` with a live body matching `docs/releases/v6.1.3.md`.
-- [ ] Signed/notarized macOS assets, updater metadata, installed-app readiness,
+- [x] Signed/notarized macOS assets, updater metadata, installed-app readiness,
       and the live Homebrew cask are verified.
-- [ ] Release tracker #1262 closes only after every publication readback passes.
+- [x] Every publication readback required before closing release tracker #1262
+      has passed; close the tracker after this evidence update merges.
 
 ## Historical 6.1.2 Completed Release Gate
 
@@ -154,10 +155,12 @@ gates at Node 22.22.1 and the current supported Node runtime.
 
 ## Distribution And Post-Publication
 
-The 6.1.3 publication gate remains pending the final candidate, release merge,
-annotated tag, signed/notarized artifacts, installed-app verification,
-post-publication validator, and live Homebrew cask. Completed 6.1.2 and earlier
-evidence remains recorded below.
+The 6.1.3 release is published and verified. Release PR #1293 merged as
+`32ced60ebb1709f4a839dd80cc7bf067be1c5d9a`; annotated `v6.1.3`, the exact live
+release body, signed/notarized assets, updater metadata, isolated downloaded-app
+readiness, post-publication validation, and Homebrew PR #53 passed. The existing
+Homebrew-installed 6.1.2 app was preserved during validation. Exact evidence is
+recorded in the release candidate evidence packet.
 
 ## Historical 6.0.2 Source And Scope
 
