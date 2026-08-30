@@ -19,6 +19,8 @@ import type {
   RunRecoveryRecord,
   RunLaunchManifestPreview,
   RunAccessSummaryResponse,
+  RunAccessChangePreview,
+  RunAccessChangeResult,
   RunPhaseAuthoritySnapshot,
   WorkspaceExecutionTrustDecision,
   WorkspaceExecutionTrustDecisionMode,
@@ -55,6 +57,17 @@ interface PhaseTransitionOptions {
   approvalTtlMs?: string;
   overrideUntil?: string;
   overrideReason?: string;
+  json?: boolean;
+}
+
+interface RunAccessChangeOptions {
+  attempt: string;
+  targetPhase: string;
+  reason: string;
+  request?: string;
+  approvalId?: string;
+  approvalTtlMs?: string;
+  apply?: boolean;
   json?: boolean;
 }
 
@@ -701,6 +714,96 @@ export function registerAgentCommands(program: Command): void {
         }
         if (result.history.length > 0) {
           console.log(chalk.dim(`  Prior immutable versions: ${result.history.length}`));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('agent:change-access <id>')
+    .description('Preview or apply a governed Run Access phase change')
+    .requiredOption('--attempt <attemptId>', 'Exact active attempt ID')
+    .requiredOption(
+      '--target-phase <phase>',
+      'Target phase (explore, plan, implement, verify, publish)'
+    )
+    .requiredOption('--reason <text>', 'Operator reason bound to the reviewed diff')
+    .option('--request <id>', 'Stable request ID; required when retrying an approval')
+    .option('--approval-id <id>', 'Approved exact-action request ID')
+    .option('--approval-ttl-ms <milliseconds>', 'Approval request lifetime')
+    .option('--apply', 'Apply the exact preview; otherwise preview only')
+    .option('--json', 'Output the versioned machine-readable contract')
+    .action(async (id: string, options: RunAccessChangeOptions): Promise<void> => {
+      try {
+        const taskId = await resolveTaskId(id);
+        const state = await api<{ phase: RunPhaseAuthoritySnapshot | null }>(
+          `/api/agents/${taskId}/phase?attemptId=${encodeURIComponent(options.attempt)}`
+        );
+        if (!state.phase) throw new Error('This run has no governed phase authority');
+        const access = await api<RunAccessSummaryResponse>(
+          `/api/agents/${taskId}/access?attemptId=${encodeURIComponent(options.attempt)}`
+        );
+        const approvalTtlMs = options.approvalTtlMs ? Number(options.approvalTtlMs) : undefined;
+        if (options.approvalTtlMs && !Number.isSafeInteger(approvalTtlMs)) {
+          throw new Error('--approval-ttl-ms must be an integer');
+        }
+        const body = {
+          attemptId: options.attempt,
+          requestId: options.request ?? `access-${randomUUID()}`,
+          operation: 'transition-phase' as const,
+          targetPhase: options.targetPhase,
+          reason: options.reason,
+          expectedAccessSummaryDigest: access.current.digest,
+          expectedSequence: state.phase.transitionSequence,
+          expectedPhaseEvidenceDigest: state.phase.effectiveEvidence.digest,
+          expectedManifestDigest: state.phase.manifestDigest,
+          approvalId: options.approvalId,
+          approvalTtlMs,
+        };
+        const preview = await api<RunAccessChangePreview>(
+          `/api/agents/${taskId}/access/changes/preview`,
+          { method: 'POST', body: JSON.stringify(body) }
+        );
+        const result = options.apply
+          ? await api<RunAccessChangeResult>(`/api/agents/${taskId}/access/changes`, {
+              method: 'POST',
+              body: JSON.stringify({ ...body, requestRevision: preview.requestRevision }),
+            })
+          : undefined;
+        if (options.json) {
+          console.log(JSON.stringify(result ?? preview, null, 2));
+          return;
+        }
+        console.log(
+          preview.enforcement.state === 'ready'
+            ? chalk.green(`Run Access change ready: ${preview.targetPhase}`)
+            : chalk.yellow(`Run Access change blocked: ${preview.targetPhase}`)
+        );
+        console.log(chalk.dim(`Request: ${preview.requestId}`));
+        console.log(chalk.dim(`Revision: ${preview.requestRevision}`));
+        for (const entry of preview.authorityDelta.entries) {
+          console.log(
+            `  ${entry.dimension}: +${entry.addedScopes.join(', ') || 'none'} -${entry.removedScopes.join(', ') || 'none'}`
+          );
+        }
+        for (const blocker of preview.enforcement.blockers) {
+          console.log(chalk.yellow(`  ${blocker.code}: ${blocker.message}`));
+        }
+        console.log(
+          chalk.dim(
+            `Budget: ${preview.budgetImpact.classification} (${preview.budgetImpact.after.reservationState})`
+          )
+        );
+        if (result?.transition.status === 'approval-required' && result.transition.approval) {
+          console.log(chalk.yellow('Exact-action approval required'));
+          console.log(`  Approval: ${result.transition.approval.id}`);
+          console.log(
+            chalk.dim('Approve it, then rerun with the same --request and --approval-id values.')
+          );
+        } else if (result?.transition.record) {
+          console.log(chalk.green(`Applied access version #${result.transition.record.sequence}`));
         }
       } catch (err) {
         console.error(chalk.red(`Error: ${(err as Error).message}`));

@@ -46,6 +46,7 @@ import { getWorkspaceExecutionTrustService } from '../services/workspace-executi
 import {
   phaseNameSchema,
   phaseTransitionRequestInputSchema,
+  runAccessChangeInputSchema,
 } from '../schemas/phase-capability-schemas.js';
 import {
   getPhaseTransitionService,
@@ -53,6 +54,7 @@ import {
 } from '../services/phase-transition-service.js';
 import { getRunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
 import { getRunAccessSummaryService } from '../services/run-access-summary-service.js';
+import { getRunAccessChangeService } from '../services/run-access-change-service.js';
 import { ProgressWatchdogOverrideInputSchema } from '../schemas/progress-watchdog-schemas.js';
 import { ProgressWatchdogControlService } from '../services/progress-watchdog-control-service.js';
 
@@ -278,6 +280,36 @@ router.get(
     res.json(
       await workspaceExecutionTrust.scan(await taskWorkspacePath(req.params.taskId as string))
     );
+  })
+);
+
+// POST /api/agents/:taskId/access/changes/preview - Compile a server-owned access diff.
+router.post(
+  '/:taskId/access/changes/preview',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = runAccessChangeInputSchema.parse(req.body);
+    res.json(
+      await getRunAccessChangeService().preview(
+        req.auth?.workspaceId || 'local',
+        req.params.taskId as string,
+        input
+      )
+    );
+  })
+);
+
+// POST /api/agents/:taskId/access/changes - Apply the exact reviewed access diff.
+router.post(
+  '/:taskId/access/changes',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const input = runAccessChangeInputSchema.parse(req.body);
+    const result = await getRunAccessChangeService().apply(
+      req.auth?.workspaceId || 'local',
+      req.params.taskId as string,
+      input,
+      phaseActorContext(req)
+    );
+    res.status(result.transition.status === 'approval-required' ? 202 : 201).json(result);
   })
 );
 

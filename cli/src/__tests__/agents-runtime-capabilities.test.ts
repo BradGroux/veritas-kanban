@@ -218,6 +218,74 @@ describe('vk agent runtime capability controls', () => {
     );
   });
 
+  it('previews and applies the exact server-owned Run Access revision', async () => {
+    const evidenceDigest = `sha256:${'a'.repeat(64)}`;
+    const manifestDigest = `sha256:${'b'.repeat(64)}`;
+    const requestRevision = `sha256:${'c'.repeat(64)}`;
+    const accessDigest = `sha256:${'d'.repeat(64)}`;
+    mockApi
+      .mockResolvedValueOnce({
+        phase: {
+          transitionSequence: 2,
+          effectiveEvidence: { digest: evidenceDigest },
+          manifestDigest,
+        },
+      })
+      .mockResolvedValueOnce({ current: { digest: accessDigest }, history: [] })
+      .mockResolvedValueOnce({
+        schemaVersion: 'run-access-change-preview/v1',
+        requestId: 'access-change-1',
+        requestRevision,
+        targetPhase: 'publish',
+        authorityDelta: { entries: [] },
+        enforcement: { state: 'ready', blockers: [] },
+      })
+      .mockResolvedValueOnce({
+        transition: { status: 'applied', record: { sequence: 3 } },
+      });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:change-access',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--target-phase',
+        'publish',
+        '--reason',
+        'Publish the reviewed release.',
+        '--request',
+        'access-change-1',
+        '--apply',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    const body = {
+      attemptId: 'attempt_1',
+      requestId: 'access-change-1',
+      operation: 'transition-phase',
+      targetPhase: 'publish',
+      reason: 'Publish the reviewed release.',
+      expectedAccessSummaryDigest: accessDigest,
+      expectedSequence: 2,
+      expectedPhaseEvidenceDigest: evidenceDigest,
+      expectedManifestDigest: manifestDigest,
+    };
+    expect(mockApi).toHaveBeenNthCalledWith(3, '/api/agents/task_1/access/changes/preview', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    expect(mockApi).toHaveBeenNthCalledWith(4, '/api/agents/task_1/access/changes', {
+      method: 'POST',
+      body: JSON.stringify({ ...body, requestRevision }),
+    });
+  });
+
   it('renders the redacted access summary and blockers for operators', async () => {
     mockApi.mockResolvedValueOnce({
       current: {

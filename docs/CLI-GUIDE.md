@@ -459,6 +459,7 @@ Manage AI agents on code tasks.
 | `vk agent:cancel-recovery <id> --attempt <id>`                                      | Cancel the exact pending recovery parent                     |
 | `vk agent:phase <id> --attempt <id>`                                                | Read effective launch phase, sources, and transition history |
 | `vk agent:access <id> --attempt <id>`                                               | Read exact redacted run authority and historical versions    |
+| `vk agent:change-access <id> ...`                                                   | Preview or apply a server-owned Run Access change            |
 | `vk agent:transition-phase <id> ...`                                                | Apply or request approval for one exact phase transition     |
 | `vk agent:decide-phase-approval <approvalId> ...`                                   | Approve or reject an exact pending phase expansion           |
 | `vk agent:resume <id> --source-attempt <id> -m <text> [--phase <phase>]`            | Resume the exact persisted provider conversation             |
@@ -587,6 +588,13 @@ view of filesystem, network, tools, integrations, approvals, budgets,
 concurrency, and harness support. Human output is compact; `--json` preserves
 the exact `run-access-summary/v1` response and its prior immutable phase
 versions. See [Run Access Summary v1](architecture/RUN-ACCESS-SUMMARY-V1.md).
+
+Use `vk agent:change-access TASK-001 --attempt attempt_123 --target-phase verify
+--reason "Run the reviewed verification boundary."` to preview an exact
+authority diff. Add `--apply` to submit the displayed revision. Expansions
+return an approval ID; decide it, then rerun with the same `--request` and
+`--approval-id`. A provider or process-boundary blocker means the active run
+must pause and relaunch in the selected phase.
 
 The first transition also requires `--from-evidence <file>` and
 `--manifest <sha256:...>`. Later requests read the current journal record and
