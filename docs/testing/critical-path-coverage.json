@@ -64,6 +64,7 @@
           "src/__tests__/routes/sqlite-journal-maintenance.test.ts",
           "src/__tests__/routes/v1-permission-guards.test.ts",
           "src/__tests__/run-launch-manifest-service.test.ts",
+          "src/__tests__/run-access-summary-service.test.ts",
           "src/__tests__/run-recovery-policy-service.test.ts",
           "src/__tests__/run-supervisor-service.test.ts",
           "src/__tests__/schemas.test.ts",

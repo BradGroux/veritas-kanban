@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   onOpenTab: vi.fn(),
   onOpenWorkflow: vi.fn(),
   stopAgentMutate: vi.fn(),
+  useAgentAccess: vi.fn(),
   useAgentStatus: vi.fn(),
   useAgentStream: vi.fn(),
   useActiveRuns: vi.fn(),
@@ -27,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/hooks/useAgent', () => ({
+  useAgentAccess: mocks.useAgentAccess,
   useAgentStatus: mocks.useAgentStatus,
   useAgentStream: mocks.useAgentStream,
   useStopAgent: () => ({
@@ -81,6 +83,7 @@ function renderWorkView(task = createMockTask()) {
 describe('task work view Mantine surface', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useAgentAccess.mockReturnValue({ data: undefined, isLoading: true, error: null });
     mocks.useAgentStatus.mockReturnValue({ data: { running: false } });
     mocks.useAgentStream.mockReturnValue({
       outputs: [],

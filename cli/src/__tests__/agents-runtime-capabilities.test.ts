@@ -199,6 +199,25 @@ describe('vk agent runtime capability controls', () => {
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/phase?attemptId=attempt_1&limit=25');
   });
 
+  it('reads the versioned access projection for one exact attempt', async () => {
+    mockApi.mockResolvedValueOnce({
+      current: { schemaVersion: 'run-access-summary/v1', status: 'complete' },
+      history: [],
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(['agent:access', 'task_1', '--attempt', 'attempt_1', '--json'], {
+      from: 'user',
+    });
+
+    expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/access?attemptId=attempt_1');
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('"schemaVersion": "run-access-summary/v1"')
+    );
+  });
+
   it('binds the first phase transition to exact evidence and manifest provenance', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-phase-cli-'));
     temporaryRoots.push(root);

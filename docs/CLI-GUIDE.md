@@ -458,6 +458,7 @@ Manage AI agents on code tasks.
 | `vk agent:recovery <id>`                                                            | Inspect the latest retry or fallback decision                |
 | `vk agent:cancel-recovery <id> --attempt <id>`                                      | Cancel the exact pending recovery parent                     |
 | `vk agent:phase <id> --attempt <id>`                                                | Read effective launch phase, sources, and transition history |
+| `vk agent:access <id> --attempt <id>`                                               | Read exact redacted run authority and historical versions    |
 | `vk agent:transition-phase <id> ...`                                                | Apply or request approval for one exact phase transition     |
 | `vk agent:decide-phase-approval <approvalId> ...`                                   | Approve or reject an exact pending phase expansion           |
 | `vk agent:resume <id> --source-attempt <id> -m <text> [--phase <phase>]`            | Resume the exact persisted provider conversation             |
@@ -580,6 +581,12 @@ vk agent:transition-phase TASK-001 \
 `agent:phase` reports the launch phase even before the first transition. Human
 output distinguishes parent, agent-profile, sandbox, tool-catalog, and launch
 policy sources; `--json` returns the server-owned snapshot unchanged.
+
+Use `vk agent:access TASK-001 --attempt attempt_123` for the joined operator
+view of filesystem, network, tools, integrations, approvals, budgets,
+concurrency, and harness support. Human output is compact; `--json` preserves
+the exact `run-access-summary/v1` response and its prior immutable phase
+versions. See [Run Access Summary v1](architecture/RUN-ACCESS-SUMMARY-V1.md).
 
 The first transition also requires `--from-evidence <file>` and
 `--manifest <sha256:...>`. Later requests read the current journal record and
