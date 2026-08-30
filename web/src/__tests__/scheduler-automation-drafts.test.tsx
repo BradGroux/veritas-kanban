@@ -230,10 +230,10 @@ function activationPreviewFixture(draft: AutomationDraft) {
       retry: { maxAttempts: 2, backoffMinutes: 15 },
     },
     output: { destination: 'work-products/triage', expectedDeliverables: ['Triage report'] },
-    standingScope: draft.standingScope.value!,
-    perRunBudget: draft.perRunBudget.value!,
-    aggregateBudget: draft.aggregateBudget.value!,
-    stopConditions: draft.stopConditions.value!,
+    standingScope: requiredValue(draft.standingScope.value),
+    perRunBudget: requiredValue(draft.perRunBudget.value),
+    aggregateBudget: requiredValue(draft.aggregateBudget.value),
+    stopConditions: requiredValue(draft.stopConditions.value),
     effectiveRunAccess: {
       reads: ['support-queue'],
       writes: ['work-products/triage'],
@@ -274,6 +274,11 @@ function resolved<T>(value: T) {
     confidence: 'high' as const,
     explanation: 'Explicit.',
   };
+}
+
+function requiredValue<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('Expected resolved fixture value.');
+  return value;
 }
 
 function missing(explanation: string) {
