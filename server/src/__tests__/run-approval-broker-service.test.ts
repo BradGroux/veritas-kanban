@@ -19,6 +19,7 @@ import {
 import type { RunEventJournalService } from '../services/run-event-journal-service.js';
 import type { RunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
 import { calculateRunFileExecutionEvidenceDigest } from '../utils/run-file-execution-digest.js';
+import { RunApprovalRequestSchema } from '../schemas/run-approval-schemas.js';
 
 class InMemoryRunApprovalRepository implements RunApprovalRepository {
   readonly requests = new Map<string, RunApprovalRequest>();
@@ -201,14 +202,19 @@ describe('RunApprovalBrokerService', () => {
       digest: calculateRunFileExecutionEvidenceDigest(material),
     };
 
-    await expect(
-      fixture.broker.request(
-        requestInput({
-          providerRequestId: 'provider-request-file-evidence',
-          fileExecution,
-        })
-      )
-    ).resolves.toMatchObject({ fileExecution });
+    const persisted = await fixture.broker.request(
+      requestInput({
+        providerRequestId: 'provider-request-file-evidence',
+        fileExecution,
+      })
+    );
+    expect(persisted).toMatchObject({ fileExecution });
+    expect(() =>
+      RunApprovalRequestSchema.parse({
+        ...persisted,
+        fileExecution: { ...fileExecution, digest: `sha256:${'f'.repeat(64)}` },
+      })
+    ).toThrow();
     await expect(
       fixture.broker.request(
         requestInput({

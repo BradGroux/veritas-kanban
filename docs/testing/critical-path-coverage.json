@@ -67,6 +67,7 @@
           "src/__tests__/routes/work-product-artifacts.test.ts",
           "src/__tests__/routes/v1-permission-guards.test.ts",
           "src/__tests__/run-launch-manifest-service.test.ts",
+          "src/__tests__/run-approval-broker-service.test.ts",
           "src/__tests__/run-file-provenance-service.test.ts",
           "src/__tests__/run-access-summary-service.test.ts",
           "src/__tests__/run-recovery-policy-service.test.ts",

@@ -8913,13 +8913,17 @@ export class ClawdbotAgentService {
     };
   }
 
+  private activePendingAgent(taskId: string): PendingAgent | undefined {
+    return pendingAgents.get(taskId);
+  }
+
   async executeRunTerminal(
     taskId: string,
     attemptId: string,
     inputRequest: RunTerminalExecuteRequest
   ): Promise<RunTerminalExecutionResult> {
     const request = RunTerminalExecuteRequestSchema.parse(inputRequest);
-    const pending = pendingAgents.get(taskId);
+    const pending = this.activePendingAgent(taskId);
     if (!pending || pending.attemptId !== attemptId) {
       throw new NotFoundError('Active run terminal scope not found.');
     }
