@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { QueueMonitorSnapshot, WorkflowDefinition } from '@veritas-kanban/shared';
+import type {
+  AutomationBinding,
+  AutomationRunClaim,
+  AutomationVersion,
+  QueueMonitorSnapshot,
+  WorkflowDefinition,
+} from '@veritas-kanban/shared';
 import { SchedulerService } from '../services/scheduler-service.js';
 import {
   ScheduledDeliverablesService,
@@ -186,6 +192,83 @@ describe('SchedulerService', () => {
     );
   });
 
+  it('claims an immutable automation version before shared workflow admission', async () => {
+    const version = automationVersionFixture();
+    const binding = automationBindingFixture(version);
+    const claim = automationClaimFixture(version, binding);
+    const automationService = {
+      list: vi.fn(async () => ({
+        generatedAt: '2026-06-05T09:00:00.000Z',
+        versions: [version],
+        bindings: [binding],
+        recentClaims: [],
+      })),
+      claimRun: vi.fn(async () => ({ claim, version, binding, replayed: false })),
+      markRunStarted: vi.fn(async (_claimId, workflowRunId) => ({
+        ...claim,
+        status: 'started',
+        workflowRunId,
+      })),
+      markRunFailed: vi.fn(),
+      markRunCompleted: vi.fn(),
+      updateBinding: vi.fn(),
+    };
+    const workflowRunService = {
+      getRun: vi.fn(async () => null),
+      startRun: vi.fn(async () => ({
+        id: 'run_1780664400000_started',
+        workflowId: version.workflowId,
+        workflowVersion: version.workflowVersion,
+        status: 'running',
+        context: {},
+        startedAt: '2026-06-05T09:00:00.000Z',
+        steps: [],
+      })),
+    };
+    const service = new SchedulerService({
+      stateFile: path.join(testRoot, 'scheduler-state.json'),
+      deliverablesService,
+      workflowService,
+      workflowRunService: workflowRunService as never,
+      queueMonitorService: emptyQueueMonitorService() as never,
+      telemetryService: telemetry as never,
+      automationService: automationService as never,
+    });
+
+    const result = await service.runItem(
+      `automation:${binding.id}`,
+      'manual-run',
+      new Date('2026-06-05T09:00:00.000Z')
+    );
+
+    expect(automationService.claimRun).toHaveBeenCalledWith(
+      binding.id,
+      'manual-run',
+      new Date('2026-06-05T09:00:00.000Z')
+    );
+    expect(workflowRunService.startRun).toHaveBeenCalledWith(
+      version.workflowId,
+      version.sourceTaskId,
+      expect.objectContaining({ scheduler: expect.objectContaining({ trigger: 'manual-run' }) }),
+      expect.objectContaining({ scope: 'run' }),
+      expect.objectContaining({
+        automationVersionId: version.id,
+        bindingId: binding.id,
+        claimId: claim.id,
+        requestId: claim.requestId,
+        standingScope: version.standingScope,
+      })
+    );
+    expect(automationService.markRunStarted).toHaveBeenCalledWith(
+      claim.id,
+      'run_1780664400000_started'
+    );
+    expect(result.event).toMatchObject({
+      status: 'started',
+      sourceRunId: 'run_1780664400000_started',
+    });
+  });
+
   function schedulerService(): SchedulerService {
     return new SchedulerService({
       stateFile: path.join(testRoot, 'scheduler-state.json'),
@@ -299,5 +382,109 @@ function workflowDefinition(overrides: Partial<WorkflowDefinition> = {}): Workfl
     schedule: { mode: 'weekly', enabled: true, timezone: 'UTC' },
     outputTargets: [{ type: 'scheduled-snapshot', label: 'Snapshot', required: true }],
     ...overrides,
+  };
+}
+
+function automationVersionFixture(): AutomationVersion {
+  return {
+    schemaVersion: 'automation-version/v1',
+    id: 'automation_version_aaaaaaaaaaaaaaaaaaaaaaaa',
+    version: 1,
+    draftId: 'automation_bbbbbbbbbbbbbbbbbbbbbbbb',
+    draftRevision: 1,
+    draftDigest: `scrypt:${'c'.repeat(64)}`,
+    requestRevision: `sha256:${'d'.repeat(64)}`,
+    workspaceId: 'workspace-1',
+    sourceTaskId: 'task-source',
+    objective: 'Review support queue.',
+    workflowId: 'support-triage',
+    workflowVersion: 3,
+    provider: 'openclaw',
+    schedule: {
+      expression: '0 9 * * 1-5',
+      timezone: 'UTC',
+      expiresAt: '2026-12-31T23:59:59.000Z',
+      overlapPolicy: 'forbid',
+      retry: { maxAttempts: 2, backoffMinutes: 15 },
+      nextRunAt: '2026-06-05T09:00:00.000Z',
+    },
+    output: { destination: 'work-products/triage', expectedDeliverables: ['Triage report'] },
+    standingScope: {
+      reads: ['support-queue'],
+      writes: ['work-products/triage'],
+      sends: [],
+      externalTargets: [],
+      artifactDestinations: ['work-products/triage'],
+      integrationIds: [],
+      toolIds: ['support-read'],
+      credentialDefinitionIds: [],
+      approvalRequiredActions: [],
+    },
+    perRunBudget: { maxRuns: 1, maxTokens: 100_000, maxDurationMinutes: 30 },
+    aggregateBudget: { maxRuns: 20, maxTokens: 2_000_000, maxDurationMinutes: 600 },
+    stopConditions: ['expiry reached'],
+    evidence: {
+      sourceTarget: {
+        kind: 'workflow',
+        id: 'support-triage',
+        version: 3,
+        digest: `sha256:${'e'.repeat(64)}`,
+      },
+      workflowId: 'support-triage',
+      workflowVersion: 3,
+      workflowDigest: `sha256:${'e'.repeat(64)}`,
+      provider: 'openclaw',
+      providerEvidenceDigest: `sha256:${'f'.repeat(64)}`,
+      toolCatalogDigest: `sha256:${'1'.repeat(64)}`,
+      integrationEvidenceDigest: `sha256:${'2'.repeat(64)}`,
+      policyDigest: `sha256:${'3'.repeat(64)}`,
+      enforceable: true,
+      blockers: [],
+    },
+    approval: {
+      id: 'runapproval_Automation123456',
+      revision: 2,
+      actionHash: '4'.repeat(64),
+      approvedBy: 'operator-1',
+      approvedAt: '2026-06-05T08:55:00.000Z',
+    },
+    activatedAt: '2026-06-05T08:56:00.000Z',
+    digest: `sha256:${'5'.repeat(64)}`,
+  };
+}
+
+function automationBindingFixture(version: AutomationVersion): AutomationBinding {
+  return {
+    schemaVersion: 'automation-binding/v1',
+    id: 'automation_binding_aaaaaaaaaaaaaaaaaaaaaaaa',
+    revision: 1,
+    automationVersionId: version.id,
+    automationVersion: version.version,
+    status: 'active',
+    nextRunAt: version.schedule.nextRunAt,
+    acceptedRuns: 0,
+    failedRuns: 0,
+    aggregateUsage: { runs: 0, costUsd: 0, tokens: 0, durationMinutes: 0 },
+    statusReason: 'Active.',
+    createdAt: '2026-06-05T08:56:00.000Z',
+    updatedAt: '2026-06-05T08:56:00.000Z',
+  };
+}
+
+function automationClaimFixture(
+  version: AutomationVersion,
+  binding: AutomationBinding
+): AutomationRunClaim {
+  return {
+    schemaVersion: 'automation-run-claim/v1',
+    id: 'automation_claim_aaaaaaaaaaaaaaaaaaaaaaaa',
+    requestId: `automation:${version.id}:manual-run:2026-06-05T09:00:00.000Z`,
+    automationVersionId: version.id,
+    bindingId: binding.id,
+    dueWindow: '2026-06-05T09:00:00.000Z',
+    trigger: 'manual-run',
+    status: 'accepted',
+    createdAt: '2026-06-05T09:00:00.000Z',
+    updatedAt: '2026-06-05T09:00:00.000Z',
   };
 }

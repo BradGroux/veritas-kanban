@@ -280,6 +280,8 @@ export interface WorkflowRun {
   taskId?: string; // Optional task association
   admission?: WorkflowRootAdmissionBinding;
   executionTree?: import('./execution-tree-budget.types.js').ExecutionTreeIdentity;
+  /** Immutable recurring-work version and claim that owns this run. */
+  automation?: import('./scheduler.types.js').WorkflowAutomationBinding;
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps

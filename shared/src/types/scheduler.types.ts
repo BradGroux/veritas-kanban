@@ -1,12 +1,13 @@
 import type { WorkflowScheduleMode } from './workflow.js';
 
 export type SchedulerDeliverableSchedule = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
-export type SchedulerItemKind = 'scheduled-deliverable' | 'workflow' | 'queue-monitor';
+export type SchedulerItemKind =
+  'scheduled-deliverable' | 'workflow' | 'queue-monitor' | 'automation';
 export type SchedulerItemProvider = 'local-server';
 export type SchedulerHealth = 'healthy' | 'warning' | 'paused' | 'blocked';
 export type SchedulerRunStatus = 'success' | 'failed' | 'skipped' | 'started';
 export type SchedulerEventType =
-  'due-run' | 'manual-run' | 'pause' | 'resume' | 'validate' | 'overlap';
+  'due-run' | 'manual-run' | 'pause' | 'resume' | 'revoke' | 'activate' | 'validate' | 'overlap';
 
 export interface SchedulerTrigger {
   mode: SchedulerDeliverableSchedule | WorkflowScheduleMode;
@@ -237,4 +238,173 @@ export interface AutomationDraftCompileInput {
 export interface AutomationDraftListResponse {
   generatedAt: string;
   drafts: AutomationDraft[];
+}
+
+export const AUTOMATION_ACTIVATION_PREVIEW_SCHEMA_VERSION =
+  'automation-activation-preview/v1' as const;
+export const AUTOMATION_VERSION_SCHEMA_VERSION = 'automation-version/v1' as const;
+export const AUTOMATION_BINDING_SCHEMA_VERSION = 'automation-binding/v1' as const;
+export const AUTOMATION_RUN_CLAIM_SCHEMA_VERSION = 'automation-run-claim/v1' as const;
+
+export type AutomationBindingStatus = 'active' | 'paused' | 'revoked' | 'expired' | 'blocked';
+export type AutomationRunClaimStatus = 'accepted' | 'started' | 'completed' | 'blocked' | 'failed';
+
+export interface AutomationActivationEvidence {
+  sourceTarget: {
+    kind: 'workflow' | 'task-template';
+    id: string;
+    version: number;
+    digest: string;
+  };
+  workflowId: string;
+  workflowVersion: number;
+  workflowDigest: string;
+  provider: string;
+  providerEvidenceDigest: string;
+  toolCatalogDigest: string;
+  integrationEvidenceDigest: string;
+  policyDigest: string;
+  enforceable: boolean;
+  blockers: string[];
+}
+
+export interface AutomationActivationPreview {
+  schemaVersion: typeof AUTOMATION_ACTIVATION_PREVIEW_SCHEMA_VERSION;
+  draftId: string;
+  draftRevision: number;
+  draftDigest: string;
+  requestId: string;
+  requestRevision: string;
+  workspaceId: string;
+  sourceTaskId?: string;
+  objective: string;
+  schedule: {
+    expression: string;
+    timezone: string;
+    startAt?: string;
+    expiresAt: string;
+    overlapPolicy: 'skip' | 'queue-one' | 'forbid';
+    retry: AutomationDraftRetryPosture;
+    nextRunAt?: string;
+  };
+  output: {
+    destination: string;
+    expectedDeliverables: string[];
+  };
+  standingScope: AutomationDraftStandingScope;
+  perRunBudget: AutomationDraftBudget;
+  aggregateBudget: AutomationDraftBudget;
+  stopConditions: string[];
+  effectiveRunAccess: {
+    reads: string[];
+    writes: string[];
+    sends: string[];
+    externalTargets: string[];
+    artifactDestinations: string[];
+    tools: string[];
+    integrations: string[];
+    approvalRequiredActions: string[];
+  };
+  evidence: AutomationActivationEvidence;
+  approval: {
+    required: true;
+    riskClass: 'critical';
+    expiresInMs: number;
+  };
+}
+
+export interface AutomationVersion {
+  schemaVersion: typeof AUTOMATION_VERSION_SCHEMA_VERSION;
+  id: string;
+  version: number;
+  draftId: string;
+  draftRevision: number;
+  draftDigest: string;
+  requestRevision: string;
+  workspaceId: string;
+  sourceTaskId?: string;
+  objective: string;
+  workflowId: string;
+  workflowVersion: number;
+  provider: string;
+  schedule: AutomationActivationPreview['schedule'];
+  output: AutomationActivationPreview['output'];
+  standingScope: AutomationDraftStandingScope;
+  perRunBudget: AutomationDraftBudget;
+  aggregateBudget: AutomationDraftBudget;
+  stopConditions: string[];
+  evidence: AutomationActivationEvidence;
+  approval: {
+    id: string;
+    revision: number;
+    actionHash: string;
+    approvedBy: string;
+    approvedAt: string;
+  };
+  activatedAt: string;
+  digest: string;
+}
+
+export interface AutomationBinding {
+  schemaVersion: typeof AUTOMATION_BINDING_SCHEMA_VERSION;
+  id: string;
+  revision: number;
+  automationVersionId: string;
+  automationVersion: number;
+  status: AutomationBindingStatus;
+  nextRunAt?: string;
+  lastRunAt?: string;
+  acceptedRuns: number;
+  failedRuns: number;
+  aggregateUsage: {
+    runs: number;
+    costUsd: number;
+    tokens: number;
+    durationMinutes: number;
+  };
+  statusReason: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationRunClaim {
+  schemaVersion: typeof AUTOMATION_RUN_CLAIM_SCHEMA_VERSION;
+  id: string;
+  requestId: string;
+  automationVersionId: string;
+  bindingId: string;
+  dueWindow: string;
+  trigger: 'due-run' | 'manual-run';
+  status: AutomationRunClaimStatus;
+  workflowRunId?: string;
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationActivationResult {
+  preview: AutomationActivationPreview;
+  approvalId?: string;
+  approvalStatus?: 'pending' | 'approved';
+  version?: AutomationVersion;
+  binding?: AutomationBinding;
+}
+
+export interface AutomationVersionListResponse {
+  generatedAt: string;
+  versions: AutomationVersion[];
+  bindings: AutomationBinding[];
+  recentClaims: AutomationRunClaim[];
+}
+
+export interface WorkflowAutomationBinding {
+  automationVersionId: string;
+  automationVersion: number;
+  bindingId: string;
+  claimId: string;
+  requestId: string;
+  workspaceId: string;
+  outputDestination: string;
+  standingScope: AutomationDraftStandingScope;
+  evidenceDigest: string;
 }

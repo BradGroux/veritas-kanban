@@ -125,4 +125,78 @@ describe('vk scheduler draft commands', () => {
     expect(api.mock.calls.some(([url]) => String(url).includes('/run'))).toBe(false);
     output.mockRestore();
   });
+
+  it('keeps activation bound to the reviewed request revision and approval', async () => {
+    const requestRevision = `sha256:${'a'.repeat(64)}`;
+    api
+      .mockResolvedValueOnce({
+        draftId: 'automation_123',
+        draftRevision: 2,
+        requestRevision,
+        evidence: {
+          workflowId: 'workflow-1',
+          workflowVersion: 4,
+          provider: 'openclaw',
+          blockers: [],
+        },
+        schedule: { expiresAt: '2026-12-31T00:00:00.000Z' },
+        effectiveRunAccess: { tools: [], integrations: [], externalTargets: [] },
+      })
+      .mockResolvedValueOnce({
+        approvalId: 'runapproval_Automation123456',
+        approvalStatus: 'pending',
+      });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program().parseAsync([
+      'node',
+      'vk',
+      'scheduler',
+      'draft',
+      'activation-preview',
+      'automation_123',
+      '--request-id',
+      'activation-1',
+      '--revision',
+      '2',
+      '--json',
+    ]);
+    await program().parseAsync([
+      'node',
+      'vk',
+      'scheduler',
+      'draft',
+      'activate',
+      'automation_123',
+      '--request-id',
+      'activation-1',
+      '--expected-request-revision',
+      requestRevision,
+      '--revision',
+      '2',
+      '--json',
+    ]);
+
+    expect(api.mock.calls).toEqual([
+      [
+        '/api/scheduler/drafts/automation_123/activation-preview',
+        {
+          method: 'POST',
+          body: JSON.stringify({ requestId: 'activation-1', revision: 2 }),
+        },
+      ],
+      [
+        '/api/scheduler/drafts/automation_123/activate',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            requestId: 'activation-1',
+            expectedRequestRevision: requestRevision,
+            revision: 2,
+          }),
+        },
+      ],
+    ]);
+    output.mockRestore();
+  });
 });

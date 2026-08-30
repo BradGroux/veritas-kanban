@@ -10,6 +10,9 @@ import type {
   SchedulerRunStatus,
   SchedulerValidationIssue,
   SchedulerValidationResult,
+  AutomationBinding,
+  AutomationVersion,
+  AgentBudgetPolicy,
   QueueMonitorSnapshot,
   WorkflowDefinition,
   WorkflowSchedule,
@@ -42,6 +45,10 @@ import {
   getQueueIntakeMonitorService,
   type QueueIntakeMonitorService,
 } from './queue-intake-monitor-service.js';
+import {
+  AutomationActivationService,
+  getAutomationActivationService,
+} from './automation-activation-service.js';
 
 const log = createLogger('scheduler');
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -59,6 +66,7 @@ interface SchedulerServiceOptions {
   workflowAuthoringService?: WorkflowAuthoringService;
   queueMonitorService?: QueueIntakeMonitorService;
   telemetryService?: TelemetryService;
+  automationService?: AutomationActivationService;
 }
 
 export class SchedulerService {
@@ -69,6 +77,7 @@ export class SchedulerService {
   private readonly workflowAuthoringService: WorkflowAuthoringService;
   private readonly queueMonitorService: QueueIntakeMonitorService;
   private readonly telemetryService: TelemetryService;
+  private readonly automationService: AutomationActivationService;
   private state: SchedulerState | null = null;
   private runningDue = false;
   private readonly runningItems = new Set<string>();
@@ -83,6 +92,11 @@ export class SchedulerService {
       options.workflowAuthoringService ?? getWorkflowAuthoringService();
     this.queueMonitorService = options.queueMonitorService ?? getQueueIntakeMonitorService();
     this.telemetryService = options.telemetryService ?? getTelemetryService();
+    this.automationService =
+      options.automationService ??
+      (options.stateFile || options.stateRepository
+        ? new AutomationActivationService({ stateRepository: this.stateRepository })
+        : getAutomationActivationService());
   }
 
   async list(now = new Date()): Promise<SchedulerListResponse> {
@@ -145,7 +159,15 @@ export class SchedulerService {
       throw new ValidationError(`Scheduler item is already paused: ${itemId}`);
     }
 
-    if (item.kind === 'scheduled-deliverable') {
+    if (item.kind === 'automation') {
+      const binding = await this.automationService.updateBinding(
+        item.sourceId,
+        await this.bindingRevision(item.sourceId),
+        'paused',
+        'Paused by operator.'
+      );
+      void binding;
+    } else if (item.kind === 'scheduled-deliverable') {
       await this.deliverablesService.update(item.sourceId, { enabled: false });
     } else if (item.kind === 'queue-monitor') {
       await this.queueMonitorService.updateMonitor(item.sourceId, { enabled: false }, now);
@@ -169,7 +191,15 @@ export class SchedulerService {
       throw new ValidationError(`Scheduler item is already enabled: ${itemId}`);
     }
 
-    if (item.kind === 'scheduled-deliverable') {
+    if (item.kind === 'automation') {
+      const binding = await this.automationService.updateBinding(
+        item.sourceId,
+        await this.bindingRevision(item.sourceId),
+        'active',
+        'Resumed by operator.'
+      );
+      void binding;
+    } else if (item.kind === 'scheduled-deliverable') {
       await this.deliverablesService.update(item.sourceId, { enabled: true });
     } else if (item.kind === 'queue-monitor') {
       await this.queueMonitorService.updateMonitor(item.sourceId, { enabled: true }, now);
@@ -222,11 +252,13 @@ export class SchedulerService {
     const startedAt = Date.now();
     try {
       const result =
-        item.kind === 'scheduled-deliverable'
-          ? await this.runDeliverable(item, trigger, now, startedAt)
-          : item.kind === 'queue-monitor'
-            ? await this.runQueueMonitor(item, trigger, now, startedAt)
-            : await this.runWorkflow(item, trigger, now, startedAt);
+        item.kind === 'automation'
+          ? await this.runAutomation(item, trigger, now, startedAt)
+          : item.kind === 'scheduled-deliverable'
+            ? await this.runDeliverable(item, trigger, now, startedAt)
+            : item.kind === 'queue-monitor'
+              ? await this.runQueueMonitor(item, trigger, now, startedAt)
+              : await this.runWorkflow(item, trigger, now, startedAt);
       return result;
     } finally {
       this.runningItems.delete(itemId);
@@ -361,6 +393,89 @@ export class SchedulerService {
     return { item: await this.getItem(item.id, now), event };
   }
 
+  private async runAutomation(
+    item: SchedulerItem,
+    trigger: Extract<SchedulerEventType, 'manual-run' | 'due-run'>,
+    now: Date,
+    startedAt: number
+  ): Promise<SchedulerRunResult> {
+    const claimed = await this.automationService.claimRun(item.sourceId, trigger, now);
+    if (claimed.replayed) {
+      const event = await this.recordEvent({
+        item,
+        type: 'overlap',
+        status: 'skipped',
+        summary: `Automation due window already claimed: ${claimed.claim.id}`,
+        sourceRunId: claimed.claim.workflowRunId,
+        durationMs: Date.now() - startedAt,
+        now,
+        nextRunAt: claimed.binding.nextRunAt,
+      });
+      return { item: await this.getItem(item.id, now), event };
+    }
+    if (claimed.claim.status === 'blocked') {
+      const event = await this.recordEvent({
+        item,
+        type: trigger,
+        status: 'failed',
+        summary: 'Automation run was blocked before admission.',
+        error: claimed.claim.reason,
+        durationMs: Date.now() - startedAt,
+        now,
+        nextRunAt: claimed.binding.nextRunAt,
+      });
+      return { item: await this.getItem(item.id, now), event };
+    }
+
+    try {
+      const run = await this.workflowRunService.startRun(
+        claimed.version.workflowId,
+        claimed.version.sourceTaskId,
+        {
+          scheduler: { itemId: item.id, trigger, runAt: now.toISOString() },
+        },
+        automationBudgetPolicy(claimed.version),
+        {
+          automationVersionId: claimed.version.id,
+          automationVersion: claimed.version.version,
+          bindingId: claimed.binding.id,
+          claimId: claimed.claim.id,
+          requestId: claimed.claim.requestId,
+          workspaceId: claimed.version.workspaceId,
+          outputDestination: claimed.version.output.destination,
+          standingScope: claimed.version.standingScope,
+          evidenceDigest: claimed.version.digest,
+        }
+      );
+      await this.automationService.markRunStarted(claimed.claim.id, run.id);
+      const event = await this.recordEvent({
+        item,
+        type: trigger,
+        status: 'started',
+        summary: `Automation ${claimed.version.id} started workflow run ${run.id}.`,
+        sourceRunId: run.id,
+        durationMs: Date.now() - startedAt,
+        now,
+        nextRunAt: claimed.binding.nextRunAt,
+      });
+      return { item: await this.getItem(item.id, now), event };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Automation workflow launch failed.';
+      await this.automationService.markRunFailed(claimed.claim.id, reason);
+      const event = await this.recordEvent({
+        item,
+        type: trigger,
+        status: 'failed',
+        summary: 'Automation workflow launch failed after durable claim.',
+        error: reason,
+        durationMs: Date.now() - startedAt,
+        now,
+        nextRunAt: claimed.binding.nextRunAt,
+      });
+      return { item: await this.getItem(item.id, now), event };
+    }
+  }
+
   private async runQueueMonitor(
     item: SchedulerItem,
     trigger: Extract<SchedulerEventType, 'manual-run' | 'due-run'>,
@@ -398,10 +513,12 @@ export class SchedulerService {
 
   private async buildItems(now: Date): Promise<SchedulerItem[]> {
     await this.ensureLoaded();
-    const [deliverables, workflows, queueMonitors] = await Promise.all([
+    await this.reconcileAutomationRuns();
+    const [deliverables, workflows, queueMonitors, automations] = await Promise.all([
       this.deliverablesService.list(),
       this.workflowService.listWorkflows(),
       this.queueMonitorService.list(now),
+      this.automationService.list(),
     ]);
 
     const items = [
@@ -410,6 +527,9 @@ export class SchedulerService {
         .filter((workflow) => shouldExposeWorkflow(workflow))
         .map((workflow) => this.workflowItem(workflow, now)),
       ...queueMonitors.monitors.map((monitor) => this.queueMonitorItem(monitor)),
+      ...automations.bindings.map((binding) =>
+        this.automationItem(binding, automations.versions, now)
+      ),
     ];
 
     return items.sort((a, b) => {
@@ -418,6 +538,33 @@ export class SchedulerService {
       if (aNext !== bNext) return aNext - bNext;
       return a.name.localeCompare(b.name);
     });
+  }
+
+  private async reconcileAutomationRuns(): Promise<void> {
+    const automations = await this.automationService.list();
+    for (const claim of automations.recentClaims.filter(
+      (candidate) => candidate.status === 'started' && candidate.workflowRunId
+    )) {
+      const run = await this.workflowRunService.getRun(claim.workflowRunId as string);
+      if (!run || (run.status !== 'completed' && run.status !== 'failed')) continue;
+      if (run.status === 'failed') {
+        await this.automationService.markRunFailed(
+          claim.id,
+          run.error ?? 'Automation workflow run failed.'
+        );
+        continue;
+      }
+      await this.automationService.markRunCompleted(claim.id, {
+        costUsd: run.budget?.usage.costUsd ?? 0,
+        tokens: run.budget?.usage.totalTokens ?? 0,
+        durationMinutes: Math.max(
+          0,
+          ((run.completedAt ? Date.parse(run.completedAt) : Date.now()) -
+            Date.parse(run.startedAt)) /
+            60_000
+        ),
+      });
+    }
   }
 
   private deliverableItem(deliverable: Deliverable): SchedulerItem {
@@ -515,6 +662,68 @@ export class SchedulerService {
       retry: retryState(state),
       actions: baseActions(monitor.enabled),
     });
+  }
+
+  private automationItem(
+    binding: AutomationBinding,
+    versions: AutomationVersion[],
+    now: Date
+  ): SchedulerItem {
+    const version = versions.find((candidate) => candidate.id === binding.automationVersionId);
+    if (!version) throw new Error(`Automation version missing for binding ${binding.id}`);
+    const id = itemId('automation', binding.id);
+    const state = this.currentState().items[id] ?? {};
+    const expired = Date.parse(version.schedule.expiresAt) <= now.getTime();
+    const enabled = binding.status === 'active' && !expired;
+    return this.decorateItem({
+      id,
+      kind: 'automation',
+      provider: 'local-server',
+      sourceId: binding.id,
+      name: version.objective,
+      description: `Immutable automation ${version.id} version ${version.version}`,
+      enabled,
+      trigger: {
+        mode: 'custom',
+        description: `${version.schedule.expression} (${version.schedule.timezone})`,
+        cronExpr: version.schedule.expression,
+        timezone: version.schedule.timezone,
+        startAt: version.schedule.startAt,
+        endAt: version.schedule.expiresAt,
+        customDueRunnerSupported: true,
+      },
+      tags: ['automation', version.id],
+      nextRunAt: binding.nextRunAt,
+      lastRunAt: binding.lastRunAt ?? state.lastRunAt,
+      lastStatus: state.lastStatus,
+      lastSummary: state.lastSummary,
+      lastError: state.lastError,
+      sourceRunId: state.sourceRunId,
+      health:
+        expired || binding.status === 'blocked' || binding.status === 'revoked'
+          ? 'blocked'
+          : 'healthy',
+      healthSummary: expired ? 'Expired' : binding.statusReason,
+      retry: {
+        attempts: binding.failedRuns,
+        maxAttempts: version.schedule.retry.maxAttempts,
+        backoffMinutes: version.schedule.retry.backoffMinutes,
+      },
+      actions: {
+        canRun: enabled,
+        canPause: binding.status === 'active',
+        canResume: binding.status === 'paused',
+        canValidate: true,
+      },
+    });
+  }
+
+  private async bindingRevision(bindingId: string): Promise<number> {
+    const binding = (await this.automationService.list()).bindings.find(
+      (candidate) => candidate.id === bindingId
+    );
+    if (!binding) throw new NotFoundError(`Automation binding ${bindingId} not found.`);
+    return binding.revision;
   }
 
   private decorateItem(item: SchedulerItem): SchedulerItem {
@@ -796,6 +1005,25 @@ function queueMonitorStatus(status: QueueMonitorSnapshot['lastStatus']): Schedul
   if (status === 'started') return 'started';
   if (status === 'success') return 'success';
   return 'skipped';
+}
+
+function automationBudgetPolicy(version: AutomationVersion): AgentBudgetPolicy {
+  return {
+    enabled: true,
+    name: `Automation ${version.id} per-run budget`,
+    scope: 'run',
+    limits: {
+      totalTokens: version.perRunBudget.maxTokens,
+      costUsd: version.perRunBudget.maxCostUsd,
+      runtimeSeconds:
+        version.perRunBudget.maxDurationMinutes === undefined
+          ? undefined
+          : version.perRunBudget.maxDurationMinutes * 60,
+      retries: version.schedule.retry.maxAttempts,
+    },
+    hardAction: 'pause',
+    notes: `Bound to immutable automation version ${version.id}.`,
+  };
 }
 
 function isItemDue(item: SchedulerItem, cutoff: number): boolean {

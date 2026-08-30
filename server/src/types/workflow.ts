@@ -206,6 +206,8 @@ export interface WorkflowRun {
   taskId?: string; // Optional task association
   admission?: import('@veritas-kanban/shared').WorkflowRootAdmissionBinding;
   executionTree?: import('@veritas-kanban/shared').ExecutionTreeIdentity;
+  /** Immutable recurring-work version and claim that owns this run. */
+  automation?: import('@veritas-kanban/shared').WorkflowAutomationBinding;
   status: WorkflowRunStatus;
   currentStep?: string; // Current step ID
   context: Record<string, unknown>; // Shared context across steps

@@ -5,6 +5,10 @@ import type {
   AutomationDraft,
   AutomationDraftHints,
   AutomationDraftListResponse,
+  AutomationActivationPreview,
+  AutomationActivationResult,
+  AutomationVersionListResponse,
+  AutomationBinding,
   SchedulerDueRunResult,
   SchedulerItem,
   SchedulerListResponse,
@@ -134,6 +138,118 @@ export function registerSchedulerCommands(program: Command): void {
       }
     });
 
+  drafts
+    .command('activation-preview <draftId>')
+    .description('Preview the exact standing authority for an inactive draft')
+    .requiredOption('--request-id <id>', 'Stable activation request ID')
+    .option('--revision <number>', 'Specific immutable draft revision')
+    .option('--json', 'Output as JSON')
+    .action(async (draftId, options) => {
+      try {
+        const preview = await api<AutomationActivationPreview>(
+          `/api/scheduler/drafts/${encodeURIComponent(draftId)}/activation-preview`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              requestId: options.requestId,
+              ...(options.revision ? { revision: Number(options.revision) } : {}),
+            }),
+          }
+        );
+        printActivationPreview(preview, Boolean(options.json));
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  drafts
+    .command('activate <draftId>')
+    .description('Request approval or activate an exact reviewed automation draft')
+    .requiredOption('--request-id <id>', 'Stable activation request ID')
+    .requiredOption('--expected-request-revision <digest>', 'Exact preview request revision')
+    .option('--revision <number>', 'Specific immutable draft revision')
+    .option('--approval-id <id>', 'Approved exact-action request ID')
+    .option('--json', 'Output as JSON')
+    .action(async (draftId, options) => {
+      try {
+        const result = await api<AutomationActivationResult>(
+          `/api/scheduler/drafts/${encodeURIComponent(draftId)}/activate`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              requestId: options.requestId,
+              expectedRequestRevision: options.expectedRequestRevision,
+              ...(options.revision ? { revision: Number(options.revision) } : {}),
+              ...(options.approvalId ? { approvalId: options.approvalId } : {}),
+            }),
+          }
+        );
+        if (options.json) console.log(JSON.stringify(result, null, 2));
+        else if (result.version) {
+          console.log(chalk.green(`Activated ${result.version.id}`));
+          console.log(chalk.dim(`Binding: ${result.binding?.id}`));
+        } else {
+          console.log(chalk.yellow(`Approval required: ${result.approvalId}`));
+        }
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  const automations = scheduler
+    .command('automation')
+    .description('Inspect and control immutable active automation versions');
+
+  automations
+    .command('list')
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
+      try {
+        const result = await api<AutomationVersionListResponse>('/api/scheduler/automations');
+        if (options.json) console.log(JSON.stringify(result, null, 2));
+        else {
+          for (const binding of result.bindings) {
+            const version = result.versions.find(
+              (candidate) => candidate.id === binding.automationVersionId
+            );
+            console.log(`${chalk.bold(binding.id)} ${binding.status}`);
+            console.log(`  ${version?.objective ?? binding.automationVersionId}`);
+            console.log(
+              `  version=${binding.automationVersionId} next=${binding.nextRunAt ?? 'none'}`
+            );
+          }
+        }
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  for (const action of ['pause', 'resume', 'revoke'] as const) {
+    automations
+      .command(`${action} <bindingId>`)
+      .requiredOption('--expected-revision <number>', 'Exact binding revision')
+      .requiredOption('--reason <text>', 'Operator reason')
+      .option('--json', 'Output as JSON')
+      .action(async (bindingId, options) => {
+        try {
+          const binding = await api<AutomationBinding>(
+            `/api/scheduler/automations/${encodeURIComponent(bindingId)}/${action}`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                expectedRevision: Number(options.expectedRevision),
+                reason: options.reason,
+              }),
+            }
+          );
+          if (options.json) console.log(JSON.stringify(binding, null, 2));
+          else console.log(chalk.green(`${action}: ${binding.id} is ${binding.status}`));
+        } catch (err) {
+          printError(err);
+        }
+      });
+  }
+
   scheduler
     .command('list')
     .alias('status')
@@ -253,6 +369,22 @@ function printDraft(draft: AutomationDraft, json: boolean): void {
   console.log(
     `  schedule=${draft.schedule.expression.value ?? 'unresolved'} timezone=${draft.schedule.timezone.value ?? 'unresolved'}`
   );
+}
+
+function printActivationPreview(preview: AutomationActivationPreview, json: boolean): void {
+  if (json) {
+    console.log(JSON.stringify(preview, null, 2));
+    return;
+  }
+  console.log(chalk.bold(`${preview.draftId} revision=${preview.draftRevision}`));
+  console.log(`  requestRevision=${preview.requestRevision}`);
+  console.log(`  workflow=${preview.evidence.workflowId}@${preview.evidence.workflowVersion}`);
+  console.log(`  provider=${preview.evidence.provider} expires=${preview.schedule.expiresAt}`);
+  console.log(`  tools=${preview.effectiveRunAccess.tools.join(', ') || 'none'}`);
+  if (preview.evidence.blockers.length > 0) {
+    for (const blocker of preview.evidence.blockers)
+      console.log(chalk.red(`  blocked: ${blocker}`));
+  }
 }
 
 async function runItemAction(

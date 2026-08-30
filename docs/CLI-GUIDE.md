@@ -798,25 +798,33 @@ Manage automation tasks.
 
 Inspect and control recurring work from the terminal.
 
-| Command                      | Description                                       |
-| ---------------------------- | ------------------------------------------------- |
-| `vk scheduler list`          | List recurring scheduler items and recent events  |
-| `vk scheduler run-due`       | Run all due scheduler items                       |
-| `vk scheduler run <id>`      | Run one scheduler item now                        |
-| `vk scheduler pause <id>`    | Pause one scheduler item                          |
-| `vk scheduler resume <id>`   | Resume one scheduler item                         |
-| `vk scheduler validate <id>` | Validate one scheduler item                       |
-| `vk scheduler draft preview` | Compile intent without saving or activating       |
-| `vk scheduler draft save`    | Save an inactive draft                            |
-| `vk scheduler draft list`    | List latest inactive draft revisions              |
-| `vk scheduler draft show`    | Inspect a latest or exact draft revision          |
-| `vk scheduler draft revise`  | Append an immutable inactive revision             |
-| `vk scheduler draft clone`   | Clone an inactive draft                           |
-| `vk scheduler draft delete`  | Delete inactive revisions with exact confirmation |
+| Command                                 | Description                                       |
+| --------------------------------------- | ------------------------------------------------- |
+| `vk scheduler list`                     | List recurring scheduler items and recent events  |
+| `vk scheduler run-due`                  | Run all due scheduler items                       |
+| `vk scheduler run <id>`                 | Run one scheduler item now                        |
+| `vk scheduler pause <id>`               | Pause one scheduler item                          |
+| `vk scheduler resume <id>`              | Resume one scheduler item                         |
+| `vk scheduler validate <id>`            | Validate one scheduler item                       |
+| `vk scheduler draft preview`            | Compile intent without saving or activating       |
+| `vk scheduler draft save`               | Save an inactive draft                            |
+| `vk scheduler draft list`               | List latest inactive draft revisions              |
+| `vk scheduler draft show`               | Inspect a latest or exact draft revision          |
+| `vk scheduler draft revise`             | Append an immutable inactive revision             |
+| `vk scheduler draft clone`              | Clone an inactive draft                           |
+| `vk scheduler draft delete`             | Delete inactive revisions with exact confirmation |
+| `vk scheduler draft activation-preview` | Review exact standing authority and evidence      |
+| `vk scheduler draft activate`           | Request approval or activate the approved version |
+| `vk scheduler automation list`          | List immutable versions, bindings, and claims     |
+| `vk scheduler automation pause`         | Pause a binding with compare-and-set              |
+| `vk scheduler automation resume`        | Resume a binding with compare-and-set             |
+| `vk scheduler automation revoke`        | Permanently revoke a binding                      |
 
 Item IDs include a source prefix: `scheduled-deliverable:<id>`, `workflow:<id>`, or `queue-monitor:<id>`.
 
-Draft preview, save, and revise require `--intent` and `--request-id`; optional structured values are supplied through `--hints '<json>'`. Use `--json` to receive the exact `automation-draft/v1` body shown by the Settings preview. Preview requires `workflow:read`; mutations require `workflow:write`. Draft commands never activate a schedule.
+Draft preview, save, and revise require `--intent` and `--request-id`; optional structured values are supplied through `--hints '<json>'`. Use `--json` to receive the exact `automation-draft/v1` body shown by the Settings preview. Preview requires `workflow:read`; mutations require `workflow:write`.
+
+Activation preview returns the exact `requestRevision`. Pass it to `draft activate` to create a Run Approval, approve that request in Run Approvals, then repeat the identical command with `--approval-id`. Pause, resume, and revoke require the binding's current `--expected-revision` plus an operator reason.
 
 ---
 

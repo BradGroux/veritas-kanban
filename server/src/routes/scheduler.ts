@@ -4,7 +4,11 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { ForbiddenError } from '../middleware/error-handler.js';
 import { getAutomationDraftService } from '../services/automation-draft-service.js';
+import { getAutomationActivationService } from '../services/automation-activation-service.js';
 import {
+  AutomationActivationApplyBodySchema,
+  AutomationActivationPreviewBodySchema,
+  AutomationBindingActionBodySchema,
   AutomationDraftCloneBodySchema,
   AutomationDraftCompileBodySchema,
   AutomationDraftDeleteQuerySchema,
@@ -68,6 +72,56 @@ router.get(
     });
   })
 );
+
+router.post(
+  '/drafts/:draftId/activation-preview',
+  asyncHandler(async (req, res) => {
+    const parsed = AutomationActivationPreviewBodySchema.parse(req.body);
+    res.json(
+      await getAutomationActivationService().preview(
+        String(req.params.draftId),
+        parsed.requestId,
+        parsed.revision
+      )
+    );
+  })
+);
+
+router.post(
+  '/drafts/:draftId/activate',
+  asyncHandler(async (req, res) => {
+    const parsed = AutomationActivationApplyBodySchema.parse(req.body);
+    const result = await getAutomationActivationService().apply({
+      draftId: String(req.params.draftId),
+      ...parsed,
+    });
+    res.status(result.version ? 201 : 202).json(result);
+  })
+);
+
+router.get(
+  '/automations',
+  asyncHandler(async (_req, res) => {
+    res.json(await getAutomationActivationService().list());
+  })
+);
+
+for (const action of ['pause', 'resume', 'revoke'] as const) {
+  router.post(
+    `/automations/:bindingId/${action}`,
+    asyncHandler(async (req, res) => {
+      const parsed = AutomationBindingActionBodySchema.parse(req.body);
+      res.json(
+        await getAutomationActivationService().updateBinding(
+          String(req.params.bindingId),
+          parsed.expectedRevision,
+          action === 'resume' ? 'active' : action === 'pause' ? 'paused' : 'revoked',
+          parsed.reason
+        )
+      );
+    })
+  );
+}
 
 router.get(
   '/drafts/:draftId',

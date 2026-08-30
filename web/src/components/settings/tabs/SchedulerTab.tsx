@@ -16,6 +16,7 @@ import { CalendarClock, CheckCircle2, Pause, Play, RefreshCw, RotateCw } from 'l
 import type {
   AutomationDraft,
   AutomationDraftHints,
+  AutomationActivationPreview,
   SchedulerEvent,
   SchedulerItem,
   SchedulerRunStatus,
@@ -25,6 +26,8 @@ import {
   useAutomationDraftPreview,
   useAutomationDraftSave,
   useAutomationDrafts,
+  useAutomationActivationApply,
+  useAutomationActivationPreview,
   useScheduler,
   useSchedulerPause,
   useSchedulerResume,
@@ -44,9 +47,15 @@ export function SchedulerTab() {
   const drafts = useAutomationDrafts();
   const previewDraft = useAutomationDraftPreview();
   const saveDraft = useAutomationDraftSave();
+  const previewActivation = useAutomationActivationPreview();
+  const applyActivation = useAutomationActivationApply();
   const [intent, setIntent] = useState('');
   const [hintsJson, setHintsJson] = useState('{}');
   const [draftPreview, setDraftPreview] = useState<AutomationDraft | null>(null);
+  const [activationPreview, setActivationPreview] = useState<AutomationActivationPreview | null>(
+    null
+  );
+  const [activationApprovalId, setActivationApprovalId] = useState<string>();
   const [requestId] = useState(
     () => `automation-ui-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`
   );
@@ -88,6 +97,54 @@ export function SchedulerTab() {
     } catch (error) {
       toast({
         title: 'Automation draft failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const reviewActivation = async (draft: AutomationDraft) => {
+    try {
+      const preview = await previewActivation.mutateAsync({
+        draftId: draft.id,
+        revision: draft.revision,
+        requestId: `activation-ui-${draft.id}-${draft.revision}`,
+      });
+      setActivationPreview(preview);
+      setActivationApprovalId(undefined);
+      toast({ title: 'Standing authority preview compiled' });
+    } catch (error) {
+      toast({
+        title: 'Activation preview failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const requestOrApplyActivation = async () => {
+    if (!activationPreview) return;
+    try {
+      const result = await applyActivation.mutateAsync({
+        draftId: activationPreview.draftId,
+        revision: activationPreview.draftRevision,
+        requestId: activationPreview.requestId,
+        expectedRequestRevision: activationPreview.requestRevision,
+        approvalId: activationApprovalId,
+      });
+      if (result.version) {
+        setActivationApprovalId(undefined);
+        toast({ title: `Automation ${result.version.id} activated` });
+      } else {
+        setActivationApprovalId(result.approvalId);
+        toast({
+          title: 'Exact approval required',
+          description: `${result.approvalId} is available in Run Approvals.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: activationApprovalId ? 'Activation failed' : 'Approval request failed',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -194,9 +251,56 @@ export function SchedulerTab() {
             Saved Inactive Drafts
           </Text>
           {drafts.data?.drafts.map((draft) => (
-            <AutomationDraftReview key={draft.id} draft={draft} compact />
+            <AutomationDraftReview
+              key={draft.id}
+              draft={draft}
+              compact
+              onReviewActivation={canWrite ? () => void reviewActivation(draft) : undefined}
+            />
           ))}
         </Stack>
+      )}
+
+      {activationPreview && (
+        <Alert
+          color={activationPreview.evidence.enforceable ? 'blue' : 'red'}
+          title={`Activation review · ${activationPreview.draftId}`}
+        >
+          <Stack gap="xs">
+            <Text size="xs">
+              {activationPreview.evidence.workflowId}@{activationPreview.evidence.workflowVersion} ·{' '}
+              {activationPreview.evidence.provider} · expires{' '}
+              {formatDate(activationPreview.schedule.expiresAt)}
+            </Text>
+            <Text size="xs">
+              Run Access ceiling: {activationPreview.effectiveRunAccess.tools.length} tools,{' '}
+              {activationPreview.effectiveRunAccess.integrations.length} integrations,{' '}
+              {activationPreview.effectiveRunAccess.externalTargets.length} external targets
+            </Text>
+            <Text size="xs" className="font-mono">
+              {activationPreview.requestRevision}
+            </Text>
+            {activationPreview.evidence.blockers.map((blocker) => (
+              <Text key={blocker} size="xs" c="red">
+                {blocker}
+              </Text>
+            ))}
+            <Group gap="xs">
+              <Button
+                size="xs"
+                disabled={!activationPreview.evidence.enforceable || applyActivation.isPending}
+                onClick={() => void requestOrApplyActivation()}
+              >
+                {activationApprovalId ? 'Activate Approved Version' : 'Request Exact Approval'}
+              </Button>
+              {activationApprovalId && (
+                <Text size="xs" c="dimmed">
+                  Approve {activationApprovalId} in Run Approvals, then activate this exact version.
+                </Text>
+              )}
+            </Group>
+          </Stack>
+        </Alert>
       )}
 
       {scheduler.data && (
@@ -241,7 +345,9 @@ export function SchedulerTab() {
                           ? 'Workflow'
                           : item.kind === 'queue-monitor'
                             ? 'Queue'
-                            : 'Deliverable'}
+                            : item.kind === 'automation'
+                              ? 'Automation'
+                              : 'Deliverable'}
                       </Badge>
                       <HealthBadge item={item} />
                     </Group>
@@ -349,9 +455,11 @@ export function SchedulerTab() {
 function AutomationDraftReview({
   draft,
   compact = false,
+  onReviewActivation,
 }: {
   draft: AutomationDraft;
   compact?: boolean;
+  onReviewActivation?: () => void;
 }) {
   const blockers = draft.validation.issues.filter((issue) => issue.severity === 'blocker');
   return (
@@ -370,9 +478,16 @@ function AutomationDraftReview({
           </Text>
         )}
         {blockers.length === 0 ? (
-          <Text size="xs">
-            No deterministic validation blockers. Activation still requires a separate review.
-          </Text>
+          <Group justify="space-between" align="center">
+            <Text size="xs">
+              No deterministic validation blockers. Activation still requires a separate review.
+            </Text>
+            {onReviewActivation && (
+              <Button size="xs" variant="light" onClick={onReviewActivation}>
+                Review Activation
+              </Button>
+            )}
+          </Group>
         ) : (
           <Stack gap={2}>
             {blockers.slice(0, compact ? 3 : undefined).map((issue) => (

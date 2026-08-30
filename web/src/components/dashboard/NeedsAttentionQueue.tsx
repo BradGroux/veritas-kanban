@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type {
   AgentHealthClassification,
+  AutomationVersionListResponse,
   DriftAlert,
   SkillRiskInventoryItem,
   Task,
@@ -40,6 +41,7 @@ import {
 import { useTasks } from '@/hooks/useTasks';
 import { useActiveRuns, useRecentRuns, type WorkflowRun } from '@/hooks/useWorkflowStats';
 import { useSkillRiskInventory } from '@/hooks/useSkillSecurity';
+import { useAutomations } from '@/hooks/useScheduler';
 import { cn } from '@/lib/utils';
 
 const DISMISSED_STORAGE_KEY = 'veritas-needs-attention-dismissed-v1';
@@ -54,6 +56,7 @@ type NeedsAttentionSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 type NeedsAttentionSource =
   | 'agent-health'
+  | 'automation'
   | 'approval'
   | 'blocked-task'
   | 'drift-alert'
@@ -97,6 +100,7 @@ export interface NeedsAttentionItem {
 export interface BuildNeedsAttentionInput {
   activeRuns?: WorkflowRun[];
   agentHealth?: AgentHealthClassification[];
+  automations?: AutomationVersionListResponse;
   approvals?: AgentApprovalRequest[];
   driftAlerts?: DriftAlert[];
   failedRuns?: FailedRunDetails[];
@@ -128,6 +132,7 @@ const SEVERITY_RANK: Record<NeedsAttentionSeverity, number> = {
 
 const SOURCE_LABELS: Record<NeedsAttentionSource, string> = {
   'agent-health': 'Agent health',
+  automation: 'Automation',
   approval: 'Approval',
   'blocked-task': 'Blocked task',
   'drift-alert': 'Drift',
@@ -143,6 +148,7 @@ const SOURCE_LABELS: Record<NeedsAttentionSource, string> = {
 
 const SOURCE_ICONS: Record<NeedsAttentionSource, typeof AlertTriangle> = {
   'agent-health': ShieldAlert,
+  automation: Workflow,
   approval: ShieldAlert,
   'blocked-task': AlertTriangle,
   'drift-alert': ShieldAlert,
@@ -281,6 +287,29 @@ export function buildNeedsAttentionItems(
   const items = new Map<string, NeedsAttentionItem>();
   const tasks = input.tasks ?? [];
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+
+  for (const binding of input.automations?.bindings ?? []) {
+    if (binding.status !== 'blocked') continue;
+    const version = input.automations?.versions.find(
+      (candidate) => candidate.id === binding.automationVersionId
+    );
+    if (!version || !projectMatches(input.project, version.workspaceId)) continue;
+
+    addItem(items, {
+      id: `automation:${binding.id}`,
+      dedupeKey: `automation:${binding.id}:${binding.revision}:${binding.statusReason}`,
+      title: `${version.objective} v${version.version}`,
+      reason: binding.statusReason,
+      nextAction: 'Open automations',
+      severity: 'high',
+      source: 'automation',
+      sourceLabel: SOURCE_LABELS.automation,
+      timestamp: binding.updatedAt,
+      project: version.workspaceId,
+      destination: 'workflows',
+      destinationLabel: `automation:${version.id}`,
+    });
+  }
 
   for (const task of tasks) {
     if (!projectMatches(input.project, task.project)) continue;
@@ -544,17 +573,24 @@ export function buildNeedsAttentionItems(
     if (!projectMatches(input.project, project)) continue;
 
     const isBlocked = run.status === 'blocked';
+    const isFailedAutomation = run.status === 'failed' && Boolean(run.automation);
     const isStuckRunning =
       run.status === 'running' && ageMs(run.startedAt, now) >= STUCK_WORKFLOW_MS;
-    if (!isBlocked && !isStuckRunning) continue;
+    if (!isBlocked && !isFailedAutomation && !isStuckRunning) continue;
 
     addItem(items, {
       id: `stuck-workflow:${run.id}`,
       dedupeKey: `stuck-workflow:${run.id}:${run.status}:${run.currentStep ?? ''}`,
-      title: task?.title ?? `Workflow ${run.workflowId}`,
-      reason: isBlocked
-        ? `Workflow is blocked${run.currentStep ? ` at ${run.currentStep}` : ''}`
-        : `Workflow has been running for ${formatAge(run.startedAt, now)}`,
+      title:
+        task?.title ??
+        (run.automation
+          ? `Automation ${run.automation.automationVersionId}`
+          : `Workflow ${run.workflowId}`),
+      reason: isFailedAutomation
+        ? run.error || 'Automation workflow failed.'
+        : isBlocked
+          ? `Workflow is blocked${run.currentStep ? ` at ${run.currentStep}` : ''}`
+          : `Workflow has been running for ${formatAge(run.startedAt, now)}`,
       nextAction: task ? 'Open task' : 'Open workflows',
       severity: isBlocked ? 'high' : 'medium',
       source: 'stuck-workflow',
@@ -741,6 +777,7 @@ export function NeedsAttentionQueue({
   const { data: taskCost, isLoading: taskCostLoading } = useTaskCost(period, project, from, to);
   const { data: activeRuns = [], isLoading: activeRunsLoading } = useActiveRuns();
   const { data: recentRuns = [], isLoading: recentRunsLoading } = useRecentRuns();
+  const { data: automations, isLoading: automationsLoading } = useAutomations();
   const { data: driftAlerts = [], isLoading: driftLoading } = useDriftAlerts({
     acknowledged: false,
   });
@@ -759,6 +796,7 @@ export function NeedsAttentionQueue({
           activeRuns,
           agentHealth: agentHealthData?.classifications,
           approvals,
+          automations,
           driftAlerts,
           failedRuns,
           notifications,
@@ -774,6 +812,7 @@ export function NeedsAttentionQueue({
       activeRuns,
       agentHealthData?.classifications,
       approvals,
+      automations,
       driftAlerts,
       failedRuns,
       notifications,
@@ -821,6 +860,7 @@ export function NeedsAttentionQueue({
     failedRunsLoading ||
     taskCostLoading ||
     activeRunsLoading ||
+    automationsLoading ||
     recentRunsLoading ||
     driftLoading ||
     approvalsLoading ||

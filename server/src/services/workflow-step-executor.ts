@@ -295,7 +295,10 @@ export class WorkflowStepExecutor {
     const prompt = this.renderTemplate(step.input || '', sessionContext);
 
     // Get tool policy filter for this agent role (#110)
-    const toolPolicyFilter = await this.getToolPolicyForAgent(agentDef);
+    const toolPolicyFilter = this.applyAutomationToolCeiling(
+      run,
+      await this.getToolPolicyForAgent(agentDef)
+    );
     const workingDirectory = this.expandPath(this.getWorkflowWorkingDirectory(run));
     const runtimeProvider = this.resolveWorkflowProvider(step, agentDef);
     const runtimeManifest = await this.resolveRuntimeManifest(step, agentDef, runtimeProvider);
@@ -2210,5 +2213,22 @@ export class WorkflowStepExecutor {
 
     const toolPolicyService = getToolPolicyService();
     return await toolPolicyService.getToolFilterForRole(agentDef.role);
+  }
+
+  private applyAutomationToolCeiling(
+    run: WorkflowRun,
+    current: { allowed?: string[]; denied?: string[] }
+  ): { allowed?: string[]; denied?: string[] } {
+    const ceiling = run.automation?.standingScope.toolIds;
+    if (!ceiling) return current;
+    const ceilingSet = new Set(ceiling);
+    const currentAllowed = current.allowed ?? ['*'];
+    const allowed = currentAllowed.includes('*')
+      ? [...ceilingSet]
+      : currentAllowed.filter((tool) => ceilingSet.has(tool));
+    return {
+      allowed: allowed.sort((left, right) => left.localeCompare(right)),
+      denied: [...new Set([...(current.denied ?? []), ...(ceiling.length === 0 ? ['*'] : [])])],
+    };
   }
 }

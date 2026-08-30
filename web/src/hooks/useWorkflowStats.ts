@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/helpers';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
+import type { WorkflowAutomationBinding } from '@veritas-kanban/shared';
 
 export type WorkflowPeriod = '24h' | '7d' | '30d';
 
@@ -11,6 +12,7 @@ export interface WorkflowRun {
   workflowId: string;
   workflowVersion: number;
   taskId?: string;
+  automation?: WorkflowAutomationBinding;
   status: WorkflowRunStatus;
   currentStep?: string;
   context?: Record<string, unknown>;

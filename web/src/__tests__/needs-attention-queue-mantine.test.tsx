@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   useAcknowledgeDriftAlert: vi.fn(),
   useActiveRuns: vi.fn(),
   useAgentHealthClassifications: vi.fn(),
+  useAutomations: vi.fn(),
   useDriftAlerts: vi.fn(),
   useFailedRuns: vi.fn(),
   useMarkNotificationDelivered: vi.fn(),
@@ -61,6 +62,10 @@ vi.mock('@/hooks/useNotifications', () => ({
 
 vi.mock('@/hooks/useSkillSecurity', () => ({
   useSkillRiskInventory: mocks.useSkillRiskInventory,
+}));
+
+vi.mock('@/hooks/useScheduler', () => ({
+  useAutomations: mocks.useAutomations,
 }));
 
 const tasks = [
@@ -300,6 +305,7 @@ function mockQueueData() {
   mocks.useTaskCost.mockReturnValue({ data: taskCost, isLoading: false });
   mocks.useActiveRuns.mockReturnValue({ data: activeRuns, isLoading: false });
   mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
+  mocks.useAutomations.mockReturnValue({ data: undefined, isLoading: false });
   mocks.useDriftAlerts.mockReturnValue({ data: driftAlerts, isLoading: false });
   mocks.usePendingAgentApprovals.mockReturnValue({ data: approvals, isLoading: false });
   mocks.useAgentHealthClassifications.mockReturnValue({
@@ -382,6 +388,107 @@ describe('needs attention queue', () => {
     expect(healthItem?.reason).toContain('3 run errors recorded');
   });
 
+  it('surfaces blocked automation versions with their exact reason', () => {
+    const items = buildNeedsAttentionItems(
+      {
+        automations: {
+          generatedAt: '2026-06-02T12:00:00Z',
+          versions: [
+            {
+              schemaVersion: 'automation-version/v1',
+              id: 'automation_version_aaaaaaaaaaaaaaaa',
+              version: 2,
+              draftId: 'automation_aaaaaaaaaaaaaaaaaaaaaaaa',
+              draftRevision: 3,
+              draftDigest: `sha256:${'a'.repeat(64)}`,
+              requestRevision: `sha256:${'b'.repeat(64)}`,
+              workspaceId: 'platform',
+              objective: 'Triage support queue',
+              workflowId: 'support-triage',
+              workflowVersion: 4,
+              provider: 'openclaw',
+              schedule: {
+                expression: '0 9 * * 1-5',
+                timezone: 'America/Chicago',
+                expiresAt: '2026-12-31T23:59:59Z',
+                overlapPolicy: 'forbid',
+                retry: { maxAttempts: 2, backoffMinutes: 15 },
+              },
+              output: { destination: 'work-products/triage', expectedDeliverables: [] },
+              standingScope: {
+                reads: [],
+                writes: [],
+                sends: [],
+                externalTargets: [],
+                artifactDestinations: [],
+                integrationIds: [],
+                toolIds: [],
+                credentialDefinitionIds: [],
+                approvalRequiredActions: [],
+              },
+              perRunBudget: { maxRuns: 1 },
+              aggregateBudget: { maxRuns: 20 },
+              stopConditions: [],
+              evidence: {
+                sourceTarget: {
+                  kind: 'workflow',
+                  id: 'support-triage',
+                  version: 4,
+                  digest: `sha256:${'c'.repeat(64)}`,
+                },
+                workflowId: 'support-triage',
+                workflowVersion: 4,
+                workflowDigest: `sha256:${'c'.repeat(64)}`,
+                provider: 'openclaw',
+                providerEvidenceDigest: `sha256:${'d'.repeat(64)}`,
+                toolCatalogDigest: `sha256:${'e'.repeat(64)}`,
+                integrationEvidenceDigest: `sha256:${'f'.repeat(64)}`,
+                policyDigest: `sha256:${'1'.repeat(64)}`,
+                enforceable: true,
+                blockers: [],
+              },
+              approval: {
+                id: 'runapproval_aaaaaaaaaaaaaaaa',
+                revision: 2,
+                actionHash: `sha256:${'2'.repeat(64)}`,
+                approvedBy: 'operator',
+                approvedAt: '2026-06-01T12:00:00Z',
+              },
+              activatedAt: '2026-06-01T12:00:00Z',
+              digest: `sha256:${'3'.repeat(64)}`,
+            },
+          ],
+          bindings: [
+            {
+              schemaVersion: 'automation-binding/v1',
+              id: 'automation_binding_aaaaaaaaaaaaaaaa',
+              revision: 5,
+              automationVersionId: 'automation_version_aaaaaaaaaaaaaaaa',
+              automationVersion: 2,
+              status: 'blocked',
+              acceptedRuns: 4,
+              failedRuns: 2,
+              aggregateUsage: { runs: 4, costUsd: 0, tokens: 0, durationMinutes: 0 },
+              statusReason: 'Provider evidence drifted after activation.',
+              createdAt: '2026-06-01T12:00:00Z',
+              updatedAt: '2026-06-02T11:00:00Z',
+            },
+          ],
+          recentClaims: [],
+        },
+        project: 'platform',
+      },
+      new Date('2026-06-02T12:00:00Z')
+    );
+
+    expect(items[0]).toMatchObject({
+      source: 'automation',
+      title: 'Triage support queue v2',
+      reason: 'Provider evidence drifted after activation.',
+      destinationLabel: 'automation:automation_version_aaaaaaaaaaaaaaaa',
+    });
+  });
+
   it('renders queue items through Mantine controls and opens task targets', async () => {
     const user = userEvent.setup();
     const onOpenTask = vi.fn();
@@ -444,6 +551,7 @@ describe('needs attention queue', () => {
     });
     mocks.useActiveRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
+    mocks.useAutomations.mockReturnValue({ data: undefined, isLoading: false });
     mocks.useDriftAlerts.mockReturnValue({ data: [], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [], isLoading: false });
     mocks.useAgentHealthClassifications.mockReturnValue({
