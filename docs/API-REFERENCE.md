@@ -6270,6 +6270,17 @@ Registration body:
 
 Direct general Work Product creation rejects `kind: "file"`, and generic updates reject existing file products; governed registration is the only creation and refinement path. Archive preserves downloads. Physical purge is explicit, requires the authenticated workspace and `admin:manage`, rejects active products, and requires `confirm` to exactly match the Work Product ID. See [File-Backed Work Products v1](architecture/FILE-WORK-PRODUCTS-V1.md).
 
+### Run File Provenance (`/api/agents/:taskId/file-provenance`)
+
+Run file provenance projects the append-only run journal into digest-bound file history. Both routes require an authenticated workspace and an exact task attempt whose persisted task envelope belongs to that workspace. Legacy or mismatched attempts fail closed.
+
+| Method | Endpoint                                                                                         | Purpose                                                                                           |
+| ------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/agents/:taskId/file-provenance/resolve?attemptId=...&root=...&relativePath=...&sha256=...` | Resolve current bytes as `exact`, `stale`, `unknown`, or `gap`, with a bounded predecessor chain. |
+| `GET`  | `/api/agents/:taskId/file-provenance?attemptId=...&limit=25`                                     | List the latest bounded records and typed capture gaps for one attempt.                           |
+
+Paths are normalized root-relative identifiers; host paths and traversal are rejected. URLs, connector targets, and metadata are reduced to safe redacted fields. An exact response binds the latest path record to the requested SHA-256 digest. Approval workflows can bind the deterministic `run-file-provenance-approval-evidence/v1` projection rather than trusting a filename or mutable path. See [Run File Provenance v1](architecture/RUN-FILE-PROVENANCE-V1.md).
+
 ---
 
 ### System Health (`/api/v1/system/health`)

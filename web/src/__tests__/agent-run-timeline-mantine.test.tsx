@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   useActiveRuns: vi.fn(),
   usePendingAgentApprovals: vi.fn(),
   useAgentPhase: vi.fn(),
+  useRunFileProvenance: vi.fn(),
   useAgentAccess: vi.fn(),
   decideApprovalMutateAsync: vi.fn(),
   useRecentRuns: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@/hooks/useAgentRunTimeline', () => ({
 vi.mock('@/hooks/useAgent', () => ({
   usePendingAgentApprovals: mocks.usePendingAgentApprovals,
   useAgentPhase: mocks.useAgentPhase,
+  useRunFileProvenance: mocks.useRunFileProvenance,
   useAgentAccess: mocks.useAgentAccess,
   useDecideRunApproval: () => ({
     mutateAsync: mocks.decideApprovalMutateAsync,
@@ -343,6 +345,7 @@ describe('agent run timeline Mantine surface', () => {
     mocks.useActiveRuns.mockReturnValue({ data: [workflowRun], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [approval], isLoading: false });
     mocks.useAgentPhase.mockReturnValue({ data: null, isLoading: false });
+    mocks.useRunFileProvenance.mockReturnValue({ data: null, isLoading: false });
     mocks.useAgentAccess.mockReturnValue({ data: undefined, isLoading: true, error: null });
     mocks.useRecentRuns.mockReturnValue({ data: [], isLoading: false });
     mocks.useTaskTelemetryEvents.mockReturnValue({ data: telemetryEvents, isLoading: false });
@@ -599,6 +602,36 @@ describe('agent run timeline Mantine surface', () => {
     expect(screen.getByText('profile: agent-profile')).toBeDefined();
     expect(screen.getByText('sandbox: run')).toBeDefined();
     expect(screen.getByText(/Override until/)).toBeDefined();
+  });
+
+  it('renders bounded redacted file provenance and typed gaps', () => {
+    mocks.useRunFileProvenance.mockReturnValue({
+      data: {
+        records: [
+          {
+            id: 'runfile_1234567890abcdef1234567890abcdef',
+            source: 'agent-created',
+            operation: 'create',
+            location: { root: 'run-artifact', relativePath: 'reports/final.pdf' },
+            content: { sha256: `sha256:${'a'.repeat(64)}` },
+          },
+        ],
+        gaps: [
+          {
+            code: 'unsupported-tool-path',
+            message: 'The tool did not expose certifiable file evidence.',
+          },
+        ],
+      },
+      isLoading: false,
+    });
+
+    renderWithProviders(<AgentRunTimelinePanel task={task} />);
+
+    expect(screen.getByText('File Provenance')).toBeDefined();
+    expect(screen.getByText('run-artifact/reports/final.pdf')).toBeDefined();
+    expect(screen.getByText(/agent-created · create/)).toBeDefined();
+    expect(screen.getByText(/unsupported-tool-path/)).toBeDefined();
   });
 
   it('pages long timelines so replay rendering stays bounded', async () => {

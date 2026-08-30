@@ -16,6 +16,7 @@ import type {
   PhaseTransitionRecord,
   PhaseTransitionResult,
   RunApprovalRequest,
+  RunFileProvenanceResponse,
   RunRecoveryRecord,
   RunLaunchManifestPreview,
   RunAccessSummaryResponse,
@@ -666,6 +667,61 @@ export function registerAgentCommands(program: Command): void {
       }
     );
 
+  program
+    .command('agent:file-provenance <id>')
+    .description('Resolve the provenance of exact run-produced file bytes')
+    .requiredOption('--attempt <attemptId>', 'Exact attempt ID')
+    .requiredOption('--root <root>', 'Safe root label: worktree or run-artifact')
+    .requiredOption('--path <path>', 'Root-relative file path')
+    .requiredOption('--sha256 <digest>', 'Exact sha256: content digest')
+    .option('--limit <count>', 'Maximum predecessor records', '25')
+    .option('--json', 'Output the versioned machine-readable contract')
+    .action(
+      async (
+        id: string,
+        options: {
+          attempt: string;
+          root: string;
+          path: string;
+          sha256: string;
+          limit: string;
+          json?: boolean;
+        }
+      ): Promise<void> => {
+        try {
+          const taskId = await resolveTaskId(id);
+          const params = new URLSearchParams({
+            attemptId: options.attempt,
+            root: options.root,
+            path: options.path,
+            sha256: options.sha256,
+            limit: options.limit,
+          });
+          const result = await api<RunFileProvenanceResponse>(
+            `/api/agents/${taskId}/file-provenance/resolve?${params.toString()}`
+          );
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+            return;
+          }
+          console.log(chalk.cyan(`File provenance: ${result.status}`));
+          console.log(`  Path: ${result.query.root}/${result.query.relativePath}`);
+          console.log(`  Digest: ${result.query.sha256}`);
+          if (result.current) {
+            console.log(`  Source: ${result.current.source}`);
+            console.log(`  Operation: ${result.current.operation}`);
+            console.log(`  Producer: ${result.current.producer.eventId}`);
+            console.log(`  Chain: ${result.chain.length} record(s)`);
+          }
+          for (const gap of result.gaps) {
+            console.log(chalk.yellow(`  ${gap.code}: ${gap.message}`));
+          }
+        } catch (err) {
+          console.error(chalk.red(`Error: ${(err as Error).message}`));
+          process.exit(1);
+        }
+      }
+    );
   program
     .command('agent:access <id>')
     .description('Show the exact redacted access projection for one run')

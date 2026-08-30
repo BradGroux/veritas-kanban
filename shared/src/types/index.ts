@@ -63,6 +63,7 @@ export * from './run-access-summary.types.js';
 export * from './run-event.types.js';
 export * from './progress-watchdog.types.js';
 export * from './run-output-artifact.types.js';
+export * from './run-file-provenance.types.js';
 export * from './dependency-circuit.types.js';
 export * from './run-terminal.types.js';
 export * from './run-recovery.types.js';

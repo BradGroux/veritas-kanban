@@ -6,6 +6,7 @@ vi.mock('../services/task-service.js', () => ({
   getTaskService: () => taskServiceMocks,
 }));
 import { RunEventJournalService } from '../services/run-event-journal-service.js';
+import { RunFileProvenanceService } from '../services/run-file-provenance-service.js';
 import {
   getWorkProductArtifactService,
   resetWorkProductArtifactServiceForTests,
@@ -42,21 +43,25 @@ async function fixture(
   const events = new RunEventJournalService(
     new FileRunEventRepository(path.join(root, 'run-events'))
   );
+  const provenance = new RunFileProvenanceService(events);
   const service = new WorkProductArtifactService({
     repository: new FileWorkProductArtifactRepository(path.join(root, 'stored-artifacts')),
     workProducts,
     events,
+    provenance,
     resolveGrant: async () =>
       options.granted === false
         ? null
         : {
             artifactRoot,
             manifestDigest: `sha256:${'a'.repeat(64)}`,
+            rootObjectiveId: 'root-1247',
+            executionNodeId: 'node-1247',
           },
     maxArtifactBytes: options.maxArtifactBytes,
     sourceReader: options.sourceReader,
   });
-  return { root, artifactRoot, events, service, workProducts };
+  return { root, artifactRoot, events, provenance, service, workProducts };
 }
 
 describe('WorkProductArtifactService', () => {
@@ -92,7 +97,7 @@ describe('WorkProductArtifactService', () => {
   });
 
   it('registers immutable run output once and preserves causal provenance', async () => {
-    const { artifactRoot, events, service } = await fixture();
+    const { artifactRoot, events, provenance, service } = await fixture();
     const content = Buffer.from('%PDF-1.7\nverified deliverable\n', 'utf8');
     await fs.writeFile(path.join(artifactRoot, 'release-report.pdf'), content);
     const input = {
@@ -164,7 +169,7 @@ describe('WorkProductArtifactService', () => {
       service.inspect({ workspaceId: 'another-workspace', productId: first.product.id })
     ).rejects.toThrow('another workspace');
     const journal = await events.list({ taskId: 'task_1247', attemptId: 'attempt_1247' });
-    expect(journal.events).toHaveLength(1);
+    expect(journal.events).toHaveLength(2);
     expect(journal.events[0]).toMatchObject({
       kind: 'artifact.created',
       causalEventId: 'runevt_provider_output',
@@ -172,6 +177,24 @@ describe('WorkProductArtifactService', () => {
         artifactId: first.metadata.id,
         workProductId: first.product.id,
         version: 1,
+      },
+    });
+    await expect(
+      provenance.resolve({
+        workspaceId: 'local',
+        taskId: 'task_1247',
+        attemptId: 'attempt_1247',
+        root: 'run-artifact',
+        relativePath: 'release-report.pdf',
+        sha256: `sha256:${first.metadata.sha256}`,
+      })
+    ).resolves.toMatchObject({
+      status: 'exact',
+      current: {
+        source: 'agent-created',
+        operation: 'create',
+        scope: { rootObjectiveId: 'root-1247', executionNodeId: 'node-1247' },
+        producer: { eventId: journal.events[0]?.eventId, eventSequence: 1 },
       },
     });
   });
@@ -215,7 +238,7 @@ describe('WorkProductArtifactService', () => {
     });
     expect(
       (await events.list({ taskId: 'task_1247', attemptId: 'attempt_1247' })).events
-    ).toHaveLength(2);
+    ).toHaveLength(4);
   });
 
   it('rejects a stable request ID reused with different registration inputs', async () => {
