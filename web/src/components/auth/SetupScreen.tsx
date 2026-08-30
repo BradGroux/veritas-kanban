@@ -177,11 +177,19 @@ export function SetupScreen() {
               id="password"
               label="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="Enter password (8+ characters)"
               visible={showPassword}
               onVisibilityChange={setShowPassword}
               autoFocus
+              description={password ? `Password strength: ${strength.label}` : undefined}
+              descriptionProps={{ id: 'setup-password-strength' }}
+              error={error || undefined}
+              errorProps={{ id: 'setup-submission-error', role: 'alert' }}
+              aria-invalid={error ? true : undefined}
             />
             {password && (
               <div className="space-y-1">
@@ -195,9 +203,6 @@ export function SetupScreen() {
                     />
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Password strength: <span className="font-medium">{strength.label}</span>
-                </p>
               </div>
             )}
           </div>
@@ -207,21 +212,18 @@ export function SetupScreen() {
               id="confirm-password"
               label="Confirm Password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="Confirm password"
               visible={showPassword}
               onVisibilityChange={setShowPassword}
+              error={confirmPassword && !passwordsMatch ? 'Passwords do not match' : undefined}
+              errorProps={{ id: 'setup-password-mismatch' }}
+              aria-invalid={confirmPassword && !passwordsMatch ? true : undefined}
             />
-            {confirmPassword && !passwordsMatch && (
-              <p className="text-xs text-destructive">Passwords do not match</p>
-            )}
           </div>
-
-          {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-              {error}
-            </div>
-          )}
 
           <Button type="submit" className="w-full" disabled={!isValid || isSubmitting}>
             {isSubmitting ? 'Creating...' : 'Create Password'}
