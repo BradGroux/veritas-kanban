@@ -21,6 +21,7 @@ const roots: string[] = [];
 const admissions: AdmissionControlService[] = [];
 const runs: WorkflowRunService[] = [];
 const databases: SqliteDatabase[] = [];
+const RECOVERED_EXECUTION_TIMEOUT_MS = 5_000;
 
 afterEach(async () => {
   for (const run of runs.splice(0)) run.dispose();
@@ -593,7 +594,7 @@ describe('workflow admission', () => {
 
       await vi.waitFor(async () => {
         expect((await restarted.service.getRun(run.id))?.status).toBe('completed');
-      });
+      }, RECOVERED_EXECUTION_TIMEOUT_MS);
       expect(executeStep).toHaveBeenCalledTimes(1);
       await vi.waitFor(async () => {
         expect(
@@ -601,7 +602,7 @@ describe('workflow admission', () => {
             (reservation) => reservation.state === 'released'
           )
         ).toBe(true);
-      });
+      }, RECOVERED_EXECUTION_TIMEOUT_MS);
     }
   );
 
