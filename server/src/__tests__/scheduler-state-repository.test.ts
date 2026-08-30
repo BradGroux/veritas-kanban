@@ -168,4 +168,67 @@ describe('FileSchedulerStateRepository', () => {
     await persistDrafts({ automation_ffffffffffffffffffffffff: [draft] });
     await expect(repository.read()).rejects.toThrow(/conflicting identity or revision order/i);
   });
+
+  it('validates persisted automation version, binding, and claim collections', async () => {
+    const now = '2026-08-30T15:00:00.000Z';
+    const binding = {
+      schemaVersion: 'automation-binding/v1',
+      id: 'automation_binding_aaaaaaaaaaaaaaaaaaaaaaaa',
+      revision: 1,
+      automationVersionId: 'automation_version_bbbbbbbbbbbbbbbbbbbbbbbb',
+      automationVersion: 1,
+      status: 'active',
+      acceptedRuns: 0,
+      failedRuns: 0,
+      aggregateUsage: { runs: 0, costUsd: 0, tokens: 0, durationMinutes: 0 },
+      statusReason: 'Active.',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const claim = {
+      schemaVersion: 'automation-run-claim/v1',
+      id: 'automation_claim_cccccccccccccccccccccccc',
+      requestId: 'request-1',
+      automationVersionId: binding.automationVersionId,
+      bindingId: binding.id,
+      dueWindow: now,
+      trigger: 'manual-run',
+      status: 'accepted',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const persistAutomation = async (overrides: Record<string, unknown>): Promise<void> => {
+      await mkdir(path.dirname(stateFile), { recursive: true });
+      await writeFile(
+        stateFile,
+        JSON.stringify({ version: 1, items: {}, events: [], ...overrides }),
+        'utf8'
+      );
+    };
+
+    await persistAutomation({
+      automationBindings: { [binding.id]: binding },
+      automationClaims: Array(1_001).fill(claim),
+    });
+    await expect(repository.read()).resolves.toMatchObject({
+      automationBindings: { [binding.id]: binding },
+      automationClaims: expect.arrayContaining([claim]),
+    });
+    expect((await repository.read()).automationClaims).toHaveLength(1_000);
+
+    await persistAutomation({ automationVersions: null });
+    await expect(repository.read()).rejects.toThrow(/versions must be a record/i);
+    await persistAutomation({ automationBindings: [] });
+    await expect(repository.read()).rejects.toThrow(/bindings must be a record/i);
+    await persistAutomation({
+      automationVersions: Object.fromEntries(
+        Array.from({ length: 501 }, (_, index) => [`version-${index}`, {}])
+      ),
+    });
+    await expect(repository.read()).rejects.toThrow(/500-record limit/i);
+    await persistAutomation({ automationBindings: { wrong: binding } });
+    await expect(repository.read()).rejects.toThrow(/conflicting identity/i);
+    await persistAutomation({ automationClaims: {} });
+    await expect(repository.read()).rejects.toThrow(/claims must be an array/i);
+  });
 });

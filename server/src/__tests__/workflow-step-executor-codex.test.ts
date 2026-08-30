@@ -741,6 +741,48 @@ describe('WorkflowStepExecutor Codex integration', () => {
     expect(mockResumeThread).not.toHaveBeenCalled();
   });
 
+  it('intersects role tool policy with the immutable automation ceiling', () => {
+    const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
+    const applyCeiling = (
+      executor as unknown as {
+        applyAutomationToolCeiling: (
+          run: WorkflowRun,
+          current: { allowed?: string[]; denied?: string[] }
+        ) => { allowed?: string[]; denied?: string[] };
+      }
+    ).applyAutomationToolCeiling.bind(executor);
+    const automatedRun = {
+      automation: {
+        standingScope: { toolIds: ['tool-b', 'tool-a'] },
+      },
+    } as WorkflowRun;
+    const automation = automatedRun.automation;
+    if (!automation) throw new Error('Expected automation binding fixture.');
+
+    expect(applyCeiling(automatedRun, {})).toEqual({
+      allowed: ['tool-a', 'tool-b'],
+      denied: [],
+    });
+    expect(
+      applyCeiling(automatedRun, { allowed: ['tool-b', 'tool-c'], denied: ['tool-x'] })
+    ).toEqual({
+      allowed: ['tool-b'],
+      denied: ['tool-x'],
+    });
+    expect(
+      applyCeiling(
+        {
+          ...automatedRun,
+          automation: {
+            ...automation,
+            standingScope: { ...automation.standingScope, toolIds: [] },
+          },
+        },
+        {}
+      )
+    ).toEqual({ allowed: [], denied: ['*'] });
+  });
+
   it('records governance traces for workflow gate decisions', async () => {
     const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
     const step: WorkflowStep = {
