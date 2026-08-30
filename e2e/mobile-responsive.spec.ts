@@ -94,8 +94,19 @@ test.describe('mobile responsive flows', () => {
       name: `Change status for ${taskTitle}`,
     });
     await expect(statusSelect).toBeVisible();
+    const statusPersisted = page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === 'PATCH' &&
+        new URL(response.url()).pathname === `/api/tasks/${testTaskId}` &&
+        response.ok()
+      );
+    });
     await statusSelect.click();
     await page.getByRole('option', { name: 'Blocked' }).click();
+    await statusPersisted;
+    await page.reload();
+    await expect(page.getByRole('navigation', { name: 'Mobile navigation' })).toBeVisible();
     await expect(page.getByText(taskTitle).first()).toBeVisible();
 
     await page.getByText(taskTitle).first().click();

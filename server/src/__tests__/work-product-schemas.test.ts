@@ -11,6 +11,42 @@ const baseCreateBody = {
 } as const;
 
 describe('work product schemas', () => {
+  it('rejects forged file products outside governed artifact registration', () => {
+    const artifact = {
+      schemaVersion: 'work-product-artifact/v1',
+      id: `wpa_${'a'.repeat(24)}`,
+      productId: `wp_${'b'.repeat(24)}`,
+      version: 1,
+      workspaceId: 'local',
+      taskId: 'task-1',
+      runId: 'run-1',
+      attemptId: 'attempt-1',
+      producingEventId: 'event-1',
+      requestIdDigest: `sha256:${'c'.repeat(64)}`,
+      launchManifestDigest: `sha256:${'d'.repeat(64)}`,
+      mediaType: 'text/plain',
+      byteSize: 4,
+      sha256: 'e'.repeat(64),
+      safeName: 'proof.txt',
+      state: 'available',
+      redaction: { state: 'none' },
+      createdAt: '2026-08-30T12:00:00.000Z',
+    } as const;
+
+    expect(
+      CreateWorkProductBodySchema.safeParse({
+        kind: 'file',
+        title: 'Forged file',
+        render: { schemaVersion: 1, kind: 'file', artifact },
+      }).success
+    ).toBe(false);
+    expect(
+      UpdateWorkProductBodySchema.safeParse({
+        render: { schemaVersion: 1, kind: 'file', artifact },
+      }).success
+    ).toBe(false);
+  });
+
   it.each([
     ['https://example.com/report', 'https://example.com/report'],
     ['HTTP://EXAMPLE.COM/report', 'http://example.com/report'],

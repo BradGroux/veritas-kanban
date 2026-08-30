@@ -161,6 +161,26 @@
   bottom: 1.5rem;
 }
 
+/* Secondary row actions keep their layout slot while becoming discoverable by
+   hover, keyboard focus, and touch or other coarse-pointer input. */
+.veritas-secondary-action {
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 150ms;
+}
+
+.group:hover .veritas-secondary-action,
+.group:focus-within .veritas-secondary-action,
+.veritas-secondary-action:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .veritas-secondary-action {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 767px) {
   .floating-chat-trigger {
     right: max(1rem, env(safe-area-inset-right));

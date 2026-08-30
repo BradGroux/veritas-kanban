@@ -71,6 +71,9 @@ Recommended sequence:
 
 The restore endpoint only restores `tasks/` and `.veritas-kanban/` from the
 pre-migration backup. It does not attempt destructive SQLite down migrations.
+Because file-backed Work Product bodies live below `.veritas-kanban/work-product-artifacts/`, they are restored with the runtime data and revalidated on the next authorized download.
+
+SQLite portability export format 3 includes `work_product_artifacts` metadata and base64-wrapped BLOB content. Import decodes the wrapper and restores exact bytes; the focused portability test verifies post-import SHA-256 readback. Do not edit the encoded table JSON by hand.
 
 ## Downgrade Policy
 

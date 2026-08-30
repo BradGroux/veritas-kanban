@@ -84,6 +84,7 @@ const SQLITE_BACKUP_TABLES = [
   'scheduled_deliverable_runs',
   'work_products',
   'work_product_versions',
+  'work_product_artifacts',
 ] as const;
 
 type SqliteBackupTable = (typeof SQLITE_BACKUP_TABLES)[number];
@@ -424,7 +425,7 @@ export class SqlitePortabilityService {
       );
       await this.writeHumanReadableBundle(database, bundleDir, warnings, options.workspaceId);
       await this.writeJson(path.join(bundleDir, 'manifest.json'), {
-        formatVersion: 2,
+        formatVersion: 3,
         exportedAt: new Date().toISOString(),
         sqlitePath: path.resolve(options.sqlitePath),
         scope: options.workspaceId
@@ -1828,7 +1829,14 @@ export class SqlitePortabilityService {
         .getConnection()
         .prepare(query.sql)
         .all(...query.params) as unknown as Record<string, unknown>[];
-      snapshots.push({ table, rows });
+      snapshots.push({
+        table,
+        rows: rows.map((row) =>
+          Object.fromEntries(
+            Object.entries(row).map(([key, value]) => [key, this.encodeSnapshotValue(value)])
+          )
+        ),
+      });
     }
 
     return snapshots;
@@ -2159,6 +2167,14 @@ export class SqlitePortabilityService {
         return render.widgets
           .map((widget) => `${widget.title} ${widget.value ?? ''} ${widget.description ?? ''}`)
           .join('\n');
+      case 'file':
+        return [
+          render.artifact.safeName,
+          render.artifact.mediaType,
+          `${render.artifact.byteSize} bytes`,
+          `SHA-256 ${render.artifact.sha256}`,
+          render.artifact.state,
+        ].join('\n');
       default: {
         const _exhaustive: never = render;
         return _exhaustive;
@@ -2179,7 +2195,19 @@ export class SqlitePortabilityService {
       return value;
     }
     if (value instanceof Uint8Array) return value;
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      Object.keys(value).length === 1 &&
+      typeof (value as { $binary?: unknown }).$binary === 'string'
+    ) {
+      return Buffer.from((value as { $binary: string }).$binary, 'base64');
+    }
     return JSON.stringify(value);
+  }
+
+  private encodeSnapshotValue(value: unknown): unknown {
+    return value instanceof Uint8Array ? { $binary: Buffer.from(value).toString('base64') } : value;
   }
 
   private optionalString(value: unknown): string | null {

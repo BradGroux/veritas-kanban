@@ -145,27 +145,33 @@ export const DATA_LIFECYCLE_POLICIES: readonly DataLifecyclePolicy[] = [
     id: 'workProducts',
     label: 'Work products and versions',
     description:
-      'Durable work products, version history, source links, redaction metadata, and render data.',
-    tables: ['work_products', 'work_product_versions', 'task_deliverables'],
+      'Durable work products, immutable file artifact bodies, version history, provenance, source links, redaction metadata, and render data.',
+    tables: [
+      'work_products',
+      'work_product_versions',
+      'work_product_artifacts',
+      'task_deliverables',
+    ],
     defaultRetention:
       'Active work products and accepted deliverables are retained until task/workspace cleanup.',
     userControls: ['Archive, restore, export, and regenerate where supported.'],
     adminControls: [
       'Version retention, generated artifact cleanup, workspace export, and workspace deletion.',
     ],
-    exportBehavior: 'Included in full and workspace-scoped exports with version metadata.',
+    exportBehavior:
+      'Included in full and workspace-scoped exports with version metadata and integrity-preserving encoded artifact bodies.',
     deleteBehavior:
-      'Preview source task, source run, status, version count, and redaction state before cleanup.',
+      'Archive retains immutable file versions for authorized download. Physical purge requires an archived file product and exact Work Product ID confirmation, then deletes all product/version records and stored bodies.',
     auditBehavior:
       'Creation, regeneration, restore, archive, and delete actions should be traceable.',
     redaction:
-      'Rendered content may include prompts, private paths, or generated sensitive text; redact in support bundles.',
+      'Rendered content and file bodies may include prompts, private paths, or generated sensitive text; redact metadata and exclude file bodies from support bundles.',
     containsSecrets: false,
     containsPrivatePaths: true,
     containsGeneratedContent: true,
     workspaceScoped: true,
     previewSafety:
-      'Show title, kind, status, version count, linked task/run, and storage estimate.',
+      'Show title, kind, status, version count, linked task/run, quarantine state, and artifact-inclusive storage estimate without body content or host paths.',
   },
   {
     id: 'telemetry',

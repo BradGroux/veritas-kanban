@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import { ConflictResolver } from '@/components/task/ConflictResolver';
 import { PreviewPanel } from '@/components/task/PreviewPanel';
 import { ReviewPanel } from '@/components/task/ReviewPanel';
+import { DiffLineView } from '@/components/task/diff/DiffLine';
 import { CommentDisplay, CommentInput } from '@/components/task/diff/ReviewComment';
 import { createMockTask, renderWithProviders } from './test-utils';
 
@@ -422,8 +425,40 @@ describe('task detail review and preview Mantine migration', () => {
     );
 
     expect(container.querySelector('.mantine-ActionIcon-root')).toBeDefined();
-    await user.click(screen.getByRole('button', { name: 'Remove review comment' }));
+    await user.click(screen.getByRole('button', { name: 'Remove review comment on line 42' }));
     expect(onRemove).toHaveBeenCalled();
+  });
+
+  it('keeps secondary diff actions discoverable by keyboard and coarse pointers', async () => {
+    const user = userEvent.setup();
+    const onStartAddComment = vi.fn();
+    const globalsCss = readFileSync(path.resolve(process.cwd(), 'src/globals.css'), 'utf8');
+    expect(globalsCss).toContain('.group:focus-within .veritas-secondary-action');
+    expect(globalsCss).toMatch(/@media \(hover: none\), \(pointer: coarse\)/);
+
+    const { container } = renderWithProviders(
+      <DiffLineView
+        line={{ type: 'add', content: 'const ready = true;', newNumber: 42 }}
+        comments={[]}
+        addingCommentAtLine={null}
+        onStartAddComment={onStartAddComment}
+        onSubmitComment={vi.fn()}
+        onCancelComment={vi.fn()}
+        onRemoveComment={vi.fn()}
+      />
+    );
+
+    const addComment = screen.getByRole('button', { name: 'Add comment to line 42' });
+    expect(addComment.className).toContain('veritas-secondary-action');
+    expect(addComment.className).not.toContain('opacity-0');
+
+    await user.tab();
+    expect(document.activeElement).toBe(addComment);
+    await user.keyboard('{Enter}');
+    expect(onStartAddComment).toHaveBeenCalledWith(42);
+    await user.keyboard('[Space]');
+    expect(onStartAddComment).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.veritas-secondary-action')).toBe(addComment);
   });
 
   it('renders preview drawer controls through direct Mantine primitives', async () => {

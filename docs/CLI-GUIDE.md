@@ -1101,6 +1101,32 @@ vk delete "$TASK_ID" --json
 
 Expected result: the read command prints a number, the show command exits `0`, and the delete command returns `{ "deleted": true }`. If read succeeds but write fails with `401` or `403`, confirm the exported `VK_API_KEY` matches an `agent` or `admin` role key in `VERITAS_API_KEYS`, then restart the server.
 
+### File Work Products
+
+Runs with a manifest-bound artifact grant write completed deliverables below `VERITAS_ARTIFACT_ROOT`, then register a relative file:
+
+```bash
+vk work-products register \
+  --task task_release \
+  --run run_release \
+  --attempt attempt_release \
+  --request-id release-pdf-v1 \
+  --event runevt_output \
+  --path release.pdf \
+  --title "Release PDF" \
+  --media-type application/pdf \
+  --json
+```
+
+```bash
+vk work-products inspect wp_ID --json
+vk work-products list --task task_release --include-archived --json
+vk work-products download wp_ID --version 1 --output ./release.pdf --json
+vk work-products purge wp_ID --confirm wp_ID --json
+```
+
+Registration never accepts a host path. Reuse the same request ID only for an idempotent retry. Use `--product wp_ID` with a new request ID to create a new immutable file version. Download refuses to overwrite an existing destination unless `--force` is supplied. Purge rejects active products and removes every body plus product/version metadata only after archive and an exact ID confirmation.
+
 ---
 
 ## Tips & Tricks

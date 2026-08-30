@@ -14,6 +14,7 @@ export interface RunSandboxDirectories {
   rootPath: string;
   tempPath: string;
   cachePath: string;
+  artifactPath: string;
 }
 
 export interface ResolvedSandboxPath {
@@ -62,6 +63,7 @@ export function runSandboxDirectories(taskId: string, attemptId: string): RunSan
     rootPath,
     tempPath: ensureWithinBase(rootPath, path.join(rootPath, 'tmp')),
     cachePath: ensureWithinBase(rootPath, path.join(rootPath, 'cache')),
+    artifactPath: ensureWithinBase(rootPath, path.join(rootPath, 'artifacts')),
   };
 }
 
@@ -72,11 +74,14 @@ export async function activateRunSandboxDirectories(
   ensureWithinBase(basePath, directories.rootPath);
   ensureWithinBase(directories.rootPath, directories.tempPath);
   ensureWithinBase(directories.rootPath, directories.cachePath);
+  ensureWithinBase(directories.rootPath, directories.artifactPath);
   await fs.mkdir(directories.tempPath, { recursive: true, mode: 0o700 });
   await fs.mkdir(directories.cachePath, { recursive: true, mode: 0o700 });
+  await fs.mkdir(directories.artifactPath, { recursive: true, mode: 0o700 });
   await fs.chmod(directories.rootPath, 0o700);
   await fs.chmod(directories.tempPath, 0o700);
   await fs.chmod(directories.cachePath, 0o700);
+  await fs.chmod(directories.artifactPath, 0o700);
 }
 
 export async function removeRunSandboxDirectory(rootPath: string): Promise<void> {

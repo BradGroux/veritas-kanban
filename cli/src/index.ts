@@ -27,6 +27,7 @@ import { registerToolServerCommands } from './commands/tool-servers.js';
 import { registerAcpCommands } from './commands/acp.js';
 import { registerAdmissionCommands } from './commands/admission.js';
 import { registerGoalCommands } from './commands/goals.js';
+import { registerWorkProductCommands } from './commands/work-products.js';
 
 const program = new Command();
 const packageJson = JSON.parse(
@@ -65,5 +66,6 @@ registerToolServerCommands(program);
 registerAcpCommands(program);
 registerAdmissionCommands(program);
 registerGoalCommands(program);
+registerWorkProductCommands(program);
 
 program.parse();
