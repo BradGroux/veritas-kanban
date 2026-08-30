@@ -1657,9 +1657,9 @@ Execution accepts a stable caller-owned request ID, an executable plus argument 
 }
 ```
 
-The first valid request returns `202` with `status: "approval-required"` and an exact-action run approval. Resolve that approval through `/api/v1/run-approvals/:approvalId/decision`, then retry the identical request. An approved retry returns `201` with `status: "started"` and the run-owned handle. Reusing `requestId` with a changed command returns `409`; retrying an already-started exact request returns the original handle.
+The first valid request returns `202` with `status: "approval-required"` and an exact-action run approval. Resolve that approval through `/api/v1/run-approvals/:approvalId/decision`, then retry the identical request. An approved retry returns `201` with `status: "started"` and the run-owned handle. Reusing `requestId` with a changed command or changed referenced-file evidence returns `409`; retrying an already-started exact request returns the original handle.
 
-The server, not the caller, supplies environment values and applies the active run's filesystem wrapper and network-egress environment. Commands are launched without a shell. Missing process authority, stale manifest or phase evidence, unenforceable required sandbox posture, cwd escape, credential-shaped arguments, unapproved environment names, and unsupported PTY mode fail closed before spawn.
+The server, not the caller, supplies environment values and applies the active run's filesystem wrapper and network-egress environment. Commands are launched without a shell. Supported direct executable, interpreter, loader, config, and archive paths are hashed and joined to exact provenance or launch-baseline evidence. External, downloaded, attachment, connector, stale, gap, or unknown executable bytes require a critical human-only approval and are rehashed immediately before spawn. Project policy can require human review or deny agent, command, and tool-created inputs, but cannot lower the external-source floor. Unsupported indirect execution and uncertified file identities return typed `409` blockers. See [Run File Execution Approval v1](architecture/RUN-FILE-EXECUTION-APPROVAL-V1.md).
 
 ---
 
@@ -2983,7 +2983,12 @@ Task create/update payloads may set reusable defaults under
 {
   "executionPolicy": {
     "commitPolicy": "forbidden",
-    "allowedSideEffects": [{ "kind": "filesystem-write", "scope": "." }]
+    "allowedSideEffects": [{ "kind": "filesystem-write", "scope": "." }],
+    "fileExecution": {
+      "agentCreated": "human-approval",
+      "commandCreated": "standard-approval",
+      "toolCreated": "deny"
+    }
   }
 }
 ```
@@ -2994,6 +2999,10 @@ does not authorize. Path scopes wider than the assigned worktree are clamped to
 the worktree, while disjoint path scopes are dropped. Generic task PATCH calls
 cannot set `attempt.taskEnvelope` or `attempt.completionResult`; only the
 launch and finalization services may persist those authoritative contracts.
+`fileExecution` accepts `standard-approval`, `human-approval`, or `deny` for
+agent, command, and tool-created inputs and is frozen into the task envelope.
+External, attachment, connector, downloaded, stale, gap, and unknown sources
+always retain the human-only floor.
 
 Before dispatch, the selected adapter renders the envelope through an immutable
 `provider-task-envelope-transport/v1` request. Built-in renderers exist for

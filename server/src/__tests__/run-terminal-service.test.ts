@@ -207,6 +207,26 @@ describe('RunTerminalService', () => {
     expect(service.list(context.workspaceId, context.taskId, context.attemptId)).toEqual([]);
   });
 
+  it('runs the exact file identity guard immediately before spawning', async () => {
+    const { service, context, events } = await fixture();
+    const beforeSpawn = vi.fn(async () => {
+      throw new Error('referenced bytes changed');
+    });
+
+    await expect(
+      service.execute(
+        {
+          ...context,
+          fileExecutionEvidenceDigest: `sha256:${'f'.repeat(64)}`,
+          beforeSpawn,
+        },
+        request('process.exit(0)')
+      )
+    ).rejects.toThrow('referenced bytes changed');
+    expect(beforeSpawn).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([]);
+  });
+
   it('does not report a durable completion when terminal evidence cannot be persisted', async () => {
     const { context } = await fixture();
     let appendCount = 0;

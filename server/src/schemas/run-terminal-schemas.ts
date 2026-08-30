@@ -112,6 +112,10 @@ export const RunTerminalHandleSchema = z
     launchManifestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     requestId: terminalIdentifierSchema,
     requestDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    fileExecutionEvidenceDigest: z
+      .string()
+      .regex(/^sha256:[a-f0-9]{64}$/)
+      .optional(),
     mode: z.enum(RUN_TERMINAL_MODES),
     startMode: z.enum(RUN_TERMINAL_START_MODES),
     state: z.enum(RUN_TERMINAL_STATES),

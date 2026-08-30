@@ -9,6 +9,13 @@ export interface TaskExecutionPolicy {
   commitPolicy?: TaskCommitPolicy;
   allowedSideEffects?: TaskAllowedSideEffect[];
   expectedOutputs?: TaskExpectedOutput[];
+  /** Optional project policy for agent, command, and tool-created executable inputs. */
+  fileExecution?: Partial<
+    Pick<
+      import('./run-file-execution.types.js').RunFileExecutionProjectPolicy,
+      'agentCreated' | 'commandCreated' | 'toolCreated'
+    >
+  >;
 }
 
 export const TASK_COMPLETION_STATUSES = [
@@ -191,6 +198,8 @@ export interface TaskEnvelope {
   commitPolicy: TaskCommitPolicy;
   allowedSideEffects: TaskAllowedSideEffect[];
   expectedOutputs: TaskExpectedOutput[];
+  /** Resolved immutable policy for files referenced by mediated execution. */
+  fileExecutionPolicy?: import('./run-file-execution.types.js').RunFileExecutionProjectPolicy;
   verificationGates: TaskVerificationGate[];
   launchManifest: TaskLaunchManifestReference;
   completionContract: TaskCompletionContract;

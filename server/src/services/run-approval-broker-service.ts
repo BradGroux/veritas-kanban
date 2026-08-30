@@ -10,6 +10,7 @@ import {
   type RunApprovalRequestKind,
   type RunApprovalPhaseBinding,
   type RunApprovalRiskClass,
+  type RunFileExecutionApprovalEvidence,
   type RunEventJsonValue,
 } from '@veritas-kanban/shared';
 import { redactString } from '../lib/redact.js';
@@ -27,6 +28,7 @@ import { getStorage, getStorageTypeFromEnv } from '../storage/index.js';
 import { broadcastRunApprovalChange } from './broadcast-service.js';
 import { RunEventJournalService } from './run-event-journal-service.js';
 import type { RunPhaseAuthorityService } from './run-phase-authority-service.js';
+import { verifyRunFileExecutionEvidenceDigest } from '../utils/run-file-execution-digest.js';
 
 const DEFAULT_APPROVAL_TTL_MS = 5 * 60 * 1_000;
 const MIN_APPROVAL_TTL_MS = 1_000;
@@ -60,6 +62,8 @@ export interface CreateRunApprovalRequestInput {
   turnId?: string;
   itemId?: string;
   mobileSafe?: boolean;
+  decisionAuthority?: 'human-only';
+  fileExecution?: RunFileExecutionApprovalEvidence;
   phase?: RunApprovalPhaseBinding;
   ttlMs?: number;
 }
@@ -107,6 +111,9 @@ export class RunApprovalBrokerService {
   }
 
   async request(input: CreateRunApprovalRequestInput): Promise<RunApprovalRequest> {
+    if (input.fileExecution && !verifyRunFileExecutionEvidenceDigest(input.fileExecution)) {
+      throw new ValidationError('Run file execution approval evidence digest is invalid.');
+    }
     const workspaceId = input.workspaceId?.trim() || 'local';
     const exactAction = canonicalizeExactAction(input.exactAction);
     const actionHash = sha256(
@@ -128,6 +135,8 @@ export class RunApprovalBrokerService {
           policyReason: input.policyReason,
           evidenceRevision: input.evidenceRevision,
           mobileSafe: input.mobileSafe ?? false,
+          decisionAuthority: input.decisionAuthority,
+          fileExecution: input.fileExecution,
           phase: input.phase,
           exactAction,
         })
@@ -177,6 +186,8 @@ export class RunApprovalBrokerService {
       turnId: input.turnId,
       itemId: input.itemId,
       mobileSafe: input.mobileSafe ?? false,
+      decisionAuthority: input.decisionAuthority,
+      fileExecution: input.fileExecution,
       phase: input.phase,
       status: 'pending',
       revision: 1,
@@ -252,6 +263,13 @@ export class RunApprovalBrokerService {
           maximumAgeMs: MAX_PRIVILEGED_AUTH_AGE_MS,
         }
       );
+    }
+    if (current.decisionAuthority === 'human-only' && actor.type !== 'user') {
+      throw new ForbiddenError('This approval requires a human user decision.', {
+        approvalId: current.id,
+        decisionAuthority: current.decisionAuthority,
+        actorType: actor.type ?? 'unknown',
+      });
     }
     if (actor.clientMode === 'mobile-pwa' && !current.mobileSafe) {
       throw new ForbiddenError('This approval is not marked mobile-safe.', {
@@ -431,6 +449,22 @@ export class RunApprovalBrokerService {
         policyReason: request.policyReason,
         evidenceRevision: request.evidenceRevision,
         mobileSafe: request.mobileSafe,
+        decisionAuthority: request.decisionAuthority,
+        fileExecution: request.fileExecution
+          ? {
+              digest: request.fileExecution.digest,
+              decision: request.fileExecution.decision,
+              reasonCode: request.fileExecution.reasonCode,
+              references: request.fileExecution.references.map((reference) => ({
+                kind: reference.kind,
+                relativePath: reference.relativePath,
+                source: reference.source,
+                contentSha256: reference.contentSha256,
+                provenanceRecordId: reference.provenanceRecordId,
+                provenanceRecordDigest: reference.provenanceRecordDigest,
+              })),
+            }
+          : undefined,
         status: request.status,
         revision: request.revision,
         expiresAt: request.expiresAt,

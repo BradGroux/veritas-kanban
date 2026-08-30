@@ -6,7 +6,7 @@ exports[`provider task-envelope renderers > renders a callback-free Claude Code 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:ef4bde56bd2a3ab7f14ab2fcbfe034092ea8dfae37927adc11ba2bfce3f06f86\`
+- Digest: \`sha256:8e7a438fdc0475439622eee6dc2e00879466d807b6f1eddd7fe8da4160b3bc64\`
 - Provider: \`claude-code\`
 - Adapter: \`claude-code\`
 - Runtime manifest: \`sha256:88e24bd4e81c1188c99ba752fa246b15e2cbe1610d8c7ebeb435a983e66dc348\`
@@ -97,7 +97,7 @@ exports[`provider task-envelope renderers > renders a callback-free Codex CLI tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:0655dd8724d872681c78ded660e839f8fc4e15aad3028a64196b807c73f987e5\`
+- Digest: \`sha256:e12e89c8ebe506051d179c44fd53893ea8624b7ea44f3a11de888adf35b0145e\`
 - Provider: \`codex-cli\`
 - Adapter: \`codex-cli\`
 - Runtime manifest: \`sha256:d8ad6b2c4913ff3b21f6ce902b77cb362401ef86f32aa4f3f28cbbd9d88082c9\`
@@ -185,7 +185,7 @@ exports[`provider task-envelope renderers > renders a callback-free Codex SDK tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:9e8bd5c917431107ec21f6f4836b1f9f7077f4a2201cf6afb031d5eeec657920\`
+- Digest: \`sha256:a9aa614dee26324078c21a97e8821292b9b7fc1f42ec80db3320e3d440c20f8f\`
 - Provider: \`codex-sdk\`
 - Adapter: \`codex-sdk\`
 - Runtime manifest: \`sha256:a0d6c0f07b4c24419c37b4526f183951db10d5c6ec9bf3451f2daa1ef7cf368a\`
@@ -274,7 +274,7 @@ exports[`provider task-envelope renderers > renders a callback-free Codex app-se
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:6c2fa8ebc32e978a3a8fda910471429b26e93be9afe346311d0a80c97680658a\`
+- Digest: \`sha256:752997c167a25a9ec8781076a8e8c093d6b9f1fdf269c18797f346bfdb1de341\`
 - Provider: \`codex-app-server\`
 - Adapter: \`codex-app-server\`
 - Runtime manifest: \`sha256:d5a32f42bfe25fc1a2d4e93a35b31f1cded947bfbf24041b8fd96ebd86c299a3\`
@@ -365,7 +365,7 @@ exports[`provider task-envelope renderers > renders a callback-free Hermes scrip
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:f4943d64435f9a418eb648d3a309ffa22cf7bf488db3cfac471e6a779beb29a5\`
+- Digest: \`sha256:61f6a557435b2ec3fabc10cf9ef6a190b8bb882910fe6ada1855597b8b119215\`
 - Provider: \`hermes-cli\`
 - Adapter: \`hermes-cli\`
 - Runtime manifest: \`sha256:105fc11b1236086a7d0181f73ac7201e519ef667c27ad7f7b71d44a28ee4360c\`
@@ -456,7 +456,7 @@ exports[`provider task-envelope renderers > renders an OpenClaw callback transpo
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:43adb348cbb7ad4322b6b4ff1ca9a24091ddb7319a4e690602efe34e5caafbfd\`
+- Digest: \`sha256:6fb7e306ba5d86aa966cc32814ac2ae33915b7c55c68a8455171ff6a7a795c0f\`
 - Provider: \`openclaw\`
 - Adapter: \`openclaw\`
 - Runtime manifest: \`sha256:be3844c45a6aef384fb2c6d8dd0e15365b9cd06170272607396278beb052db68\`

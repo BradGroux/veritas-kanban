@@ -296,6 +296,34 @@ describe('TaskEnvelopeService', () => {
     expect(resolveTaskCommitPolicy({})).toBe('allowed');
   });
 
+  it('freezes the project file execution policy into the task envelope', async () => {
+    expect(
+      TaskExecutionPolicySchema.safeParse({ fileExecution: { agentCreated: 'automatic' } }).success
+    ).toBe(false);
+    const result = await new TaskEnvelopeService(evidenceSource).build({
+      task: task(),
+      attemptId: 'attempt_file_execution_policy',
+      createdAt,
+      worktreePath: '/tmp/veritas-kanban-task',
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      commitPolicy: 'allowed',
+      executionPolicy: {
+        fileExecution: {
+          agentCreated: 'human-approval',
+          toolCreated: 'deny',
+        },
+      },
+    });
+
+    expect(result.fileExecutionPolicy).toEqual({
+      schemaVersion: 'run-file-execution-policy/v1',
+      agentCreated: 'human-approval',
+      commandCreated: 'standard-approval',
+      toolCreated: 'deny',
+    });
+    expect(verifyTaskEnvelopeDigest(result)).toBe(true);
+  });
+
   it('rejects contradictory commit and side-effect/output policy', async () => {
     const service = new TaskEnvelopeService(evidenceSource);
     const base = {

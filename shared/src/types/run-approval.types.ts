@@ -60,6 +60,10 @@ export interface RunApprovalRequest {
   turnId?: string;
   itemId?: string;
   mobileSafe: boolean;
+  /** Present when an approval may only be resolved by a freshly authenticated human user. */
+  decisionAuthority?: 'human-only';
+  /** Bounded digest-bound evidence for run-produced file execution. */
+  fileExecution?: import('./run-file-execution.types.js').RunFileExecutionApprovalEvidence;
   /** Present when approval authority is constrained by an active run phase. */
   phase?: import('./phase-capability.types.js').RunApprovalPhaseBinding;
   status: RunApprovalStatus;

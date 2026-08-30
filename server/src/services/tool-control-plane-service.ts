@@ -497,6 +497,18 @@ export class ToolControlPlaneService {
         errors: validateArguments.errors,
       });
     }
+    if (tool.inputSchema['x-veritas-file-execution']) {
+      throw new ConflictError(
+        'This mediated tool declares file execution that its transport cannot certify.',
+        {
+          code: 'run-file-execution-unsupported-tool-transport',
+          serverId: entry.serverId,
+          tool: tool.name,
+          remediation:
+            'Use the run-terminal path or a future tool adapter that can bind provenance and revalidate bytes before execution.',
+        }
+      );
+    }
     const definition = await this.getCatalogDefinition(entry);
     const credentialBound = (entry.credentialBindings?.length ?? 0) > 0;
     const credentialAction = credentialBound

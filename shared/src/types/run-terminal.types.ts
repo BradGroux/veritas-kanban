@@ -59,6 +59,8 @@ export interface RunTerminalHandle {
   launchManifestDigest: string;
   requestId: string;
   requestDigest: string;
+  /** Exact run-file execution evidence revalidated immediately before spawn. */
+  fileExecutionEvidenceDigest?: string;
   mode: RunTerminalMode;
   startMode: RunTerminalStartMode;
   state: RunTerminalState;

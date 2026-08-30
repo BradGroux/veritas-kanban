@@ -5,17 +5,84 @@ import {
   RUN_APPROVAL_ACTION_CLASSES,
   RUN_APPROVAL_SCHEMA_VERSION,
   PHASE_NAMES,
+  RUN_FILE_EXECUTION_EVIDENCE_SCHEMA_VERSION,
+  RUN_FILE_EXECUTION_POLICY_DECISIONS,
+  RUN_FILE_EXECUTION_POLICY_SCHEMA_VERSION,
+  RUN_FILE_EXECUTION_REFERENCE_KINDS,
   type RunApprovalActor,
   type RunApprovalDecisionInput,
   type RunApprovalRequest,
   type RunApprovalResolution,
   type RunEventJsonValue,
 } from '@veritas-kanban/shared';
+import { verifyRunFileExecutionEvidenceDigest } from '../utils/run-file-execution-digest.js';
 
 const IdentifierSchema = z.string().trim().min(1).max(240);
 const IsoTimestampSchema = z.string().datetime();
 const DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const PhaseScopeSchema = z.string().trim().min(1).max(2_048);
+const RunFileExecutionPolicySchema = z
+  .object({
+    schemaVersion: z.literal(RUN_FILE_EXECUTION_POLICY_SCHEMA_VERSION),
+    agentCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+    commandCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+    toolCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+  })
+  .strict();
+const RunFileExecutionReferenceSchema = z
+  .object({
+    kind: z.enum(RUN_FILE_EXECUTION_REFERENCE_KINDS),
+    root: z.enum(['worktree', 'run-artifact']),
+    relativePath: z.string().trim().min(1).max(2_000),
+    contentSha256: DigestSchema,
+    byteSize: z.number().int().nonnegative(),
+    source: z.enum([
+      'repository-baseline',
+      'agent-created',
+      'command-created',
+      'tool-created',
+      'attachment-derived',
+      'connector-derived',
+      'downloaded-external',
+      'operator-provided',
+      'unknown',
+    ]),
+    provenanceStatus: z.enum(['exact', 'stale', 'unknown', 'gap', 'launch-baseline']),
+    provenanceRecordId: IdentifierSchema.nullable(),
+    provenanceRecordDigest: DigestSchema.nullable(),
+    provenanceEvidenceDigest: DigestSchema,
+    decision: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+  })
+  .strict();
+const RunFileExecutionEvidenceSchema = z
+  .object({
+    schemaVersion: z.literal(RUN_FILE_EXECUTION_EVIDENCE_SCHEMA_VERSION),
+    workspaceId: IdentifierSchema,
+    taskId: IdentifierSchema,
+    rootObjectiveId: IdentifierSchema,
+    executionNodeId: IdentifierSchema,
+    runId: IdentifierSchema,
+    attemptId: IdentifierSchema,
+    workflowStepId: IdentifierSchema.nullable(),
+    terminalRequestId: IdentifierSchema,
+    terminalRequestDigest: DigestSchema,
+    commandId: IdentifierSchema,
+    launchManifestDigest: DigestSchema,
+    phaseEvidenceDigest: DigestSchema.nullable(),
+    policy: RunFileExecutionPolicySchema,
+    references: z.array(RunFileExecutionReferenceSchema).max(16),
+    decision: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+    reasonCode: z.enum([
+      'no-referenced-files',
+      'baseline-only',
+      'run-produced-file',
+      'external-or-unknown-file',
+      'project-policy-deny',
+      'unsupported-file-identity',
+    ]),
+    digest: DigestSchema,
+  })
+  .strict();
 const ApprovalPhaseIdentitySchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('legacy'), phase: z.literal('legacy') }).strict(),
   z
@@ -75,7 +142,7 @@ export const RunApprovalRequestSchema: z.ZodType<RunApprovalRequest> = z
     action: z.string().trim().min(1).max(2_000),
     actionHash: z.string().regex(/^[a-f0-9]{64}$/),
     details: z.string().trim().min(1).max(8_000).optional(),
-    resourceScope: z.array(z.string().trim().min(1).max(2_048)).max(100),
+    resourceScope: z.array(z.string().trim().min(1).max(2_048)).max(256),
     workingDirectory: z.string().trim().min(1).max(4_096).optional(),
     riskClass: z.enum(['low', 'medium', 'high', 'critical']),
     policyReason: z.string().trim().min(1).max(2_000).optional(),
@@ -85,6 +152,8 @@ export const RunApprovalRequestSchema: z.ZodType<RunApprovalRequest> = z
     turnId: IdentifierSchema.optional(),
     itemId: IdentifierSchema.optional(),
     mobileSafe: z.boolean(),
+    decisionAuthority: z.literal('human-only').optional(),
+    fileExecution: RunFileExecutionEvidenceSchema.optional(),
     phase: z
       .object({
         evidenceDigest: DigestSchema,
@@ -142,6 +211,13 @@ export const RunApprovalRequestSchema: z.ZodType<RunApprovalRequest> = z
         code: 'custom',
         path: ['expiresAt'],
         message: 'Approval expiry must be after creation.',
+      });
+    }
+    if (request.fileExecution && !verifyRunFileExecutionEvidenceDigest(request.fileExecution)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['fileExecution', 'digest'],
+        message: 'Run file execution evidence digest is invalid.',
       });
     }
   });

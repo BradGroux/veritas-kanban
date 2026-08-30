@@ -246,6 +246,7 @@ import type { WorkspaceExecutionTrustService } from '../services/workspace-execu
 import type { AdmissionControlService } from '../services/admission-control-service.js';
 import type { RunTerminalService } from '../services/run-terminal-service.js';
 import type { WorkspaceCheckpointService } from '../services/workspace-checkpoint-service.js';
+import type { RunFileExecutionPolicyService } from '../services/run-file-execution-policy-service.js';
 import type { RunLaunchCompiler } from '../services/run-launch-compiler.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
@@ -294,7 +295,11 @@ function testableService(
   workspaceCheckpoints: Pick<
     WorkspaceCheckpointService,
     'captureBoundary'
-  > = testWorkspaceCheckpoints()
+  > = testWorkspaceCheckpoints(),
+  runFileExecutionPolicy: Pick<
+    RunFileExecutionPolicyService,
+    'evaluate' | 'revalidate'
+  > = testRunFileExecutionPolicy()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -327,10 +332,45 @@ function testableService(
     testReflectionExtractionJobs(),
     undefined,
     runTerminals,
-    workspaceCheckpoints
+    workspaceCheckpoints,
+    runFileExecutionPolicy
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testRunFileExecutionPolicy(): Pick<
+  RunFileExecutionPolicyService,
+  'evaluate' | 'revalidate'
+> {
+  return {
+    evaluate: vi.fn(async (input) => ({
+      schemaVersion: 'run-file-execution-approval-evidence/v1',
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      rootObjectiveId: input.rootObjectiveId,
+      executionNodeId: input.executionNodeId,
+      runId: input.runId,
+      attemptId: input.attemptId,
+      workflowStepId: input.workflowStepId,
+      terminalRequestId: input.request.requestId,
+      terminalRequestDigest: `sha256:${'d'.repeat(64)}`,
+      commandId: 'cmd_test',
+      launchManifestDigest: input.launchManifestDigest,
+      phaseEvidenceDigest: input.phaseEvidenceDigest,
+      policy: {
+        schemaVersion: 'run-file-execution-policy/v1',
+        agentCreated: 'standard-approval',
+        commandCreated: 'standard-approval',
+        toolCreated: 'standard-approval',
+      },
+      references: [],
+      decision: 'standard-approval',
+      reasonCode: 'no-referenced-files',
+      digest: `sha256:${'e'.repeat(64)}`,
+    })),
+    revalidate: vi.fn(async () => undefined),
+  };
 }
 
 function testWorkspaceCheckpoints(): Pick<WorkspaceCheckpointService, 'captureBoundary'> {
@@ -3579,6 +3619,8 @@ describe('ClawdbotAgentService Codex providers', () => {
         evidenceRevision: input.evidenceRevision,
         providerRequestId: input.providerRequestId,
         mobileSafe: input.mobileSafe ?? false,
+        decisionAuthority: input.decisionAuthority,
+        fileExecution: input.fileExecution,
         status: approvalStatus,
         revision: approvalStatus === 'approved' ? 2 : 1,
         createdAt: '2026-07-25T12:00:00.000Z',
@@ -3595,6 +3637,29 @@ describe('ClawdbotAgentService Codex providers', () => {
       }),
       cancelAttempt: vi.fn(async () => []),
     } as unknown as RunApprovalBrokerService;
+    const runFileExecutionPolicy = testRunFileExecutionPolicy();
+    const evaluateFileExecution = vi
+      .mocked(runFileExecutionPolicy.evaluate)
+      .getMockImplementation();
+    if (!evaluateFileExecution) throw new Error('File execution policy fixture is incomplete.');
+    vi.mocked(runFileExecutionPolicy.evaluate).mockImplementation(async (input) => ({
+      ...(await evaluateFileExecution(input)),
+      references: [
+        {
+          kind: 'direct-executable',
+          root: 'worktree',
+          relativePath: 'bin/tool',
+          contentSha256: `sha256:${'1'.repeat(64)}`,
+          byteSize: 42,
+          source: 'repository-baseline',
+          provenanceStatus: 'launch-baseline',
+          provenanceRecordId: null,
+          provenanceRecordDigest: null,
+          provenanceEvidenceDigest: `sha256:${'2'.repeat(64)}`,
+          decision: 'standard-approval',
+        },
+      ],
+    }));
     const service = testableService(
       tmpDir,
       undefined,
@@ -3604,7 +3669,9 @@ describe('ClawdbotAgentService Codex providers', () => {
       undefined,
       undefined,
       undefined,
-      runTerminals
+      runTerminals,
+      undefined,
+      runFileExecutionPolicy
     );
     const active = await service.startAgent(task.id, 'codex');
     const request = {
@@ -3646,7 +3713,10 @@ describe('ClawdbotAgentService Codex providers', () => {
         restartReattachment: 'unsupported' as const,
       },
     };
-    vi.mocked(runTerminals.execute).mockResolvedValue(handle);
+    vi.mocked(runTerminals.execute).mockImplementation(async (context) => {
+      await context.beforeSpawn();
+      return handle;
+    });
 
     await expect(
       service.executeRunTerminal(task.id, active.attemptId, {
@@ -3656,6 +3726,34 @@ describe('ClawdbotAgentService Codex providers', () => {
       })
     ).rejects.toThrow('Credential-shaped values are not allowed');
     expect(approvalRequest).not.toHaveBeenCalled();
+
+    vi.mocked(runFileExecutionPolicy.evaluate).mockImplementationOnce(async (input) => ({
+      ...(await evaluateFileExecution(input)),
+      decision: 'deny',
+      reasonCode: 'project-policy-deny',
+    }));
+    await expect(
+      service.executeRunTerminal(task.id, active.attemptId, {
+        ...request,
+        requestId: 'terminal-denied-file-request',
+      })
+    ).rejects.toThrow('Project policy denies execution');
+
+    const pendingAgent = (
+      service as unknown as {
+        activePendingAgent(taskId: string): { executionTree?: ExecutionTreeIdentity } | undefined;
+      }
+    ).activePendingAgent(task.id);
+    if (!pendingAgent?.executionTree) throw new Error('Active execution tree fixture is missing.');
+    const executionTree = pendingAgent.executionTree;
+    delete pendingAgent.executionTree;
+    await expect(
+      service.executeRunTerminal(task.id, active.attemptId, {
+        ...request,
+        requestId: 'terminal-missing-execution-tree-request',
+      })
+    ).rejects.toThrow('no durable execution-tree identity');
+    pendingAgent.executionTree = executionTree;
 
     await expect(
       service.executeRunTerminal(task.id, active.attemptId, request)
@@ -3670,7 +3768,14 @@ describe('ClawdbotAgentService Codex providers', () => {
         attemptId: active.attemptId,
         providerRequestId: request.requestId,
         riskClass: 'high',
-        exactAction: request,
+        exactAction: {
+          request,
+          fileExecution: expect.objectContaining({
+            schemaVersion: 'run-file-execution-approval-evidence/v1',
+            terminalRequestId: request.requestId,
+            decision: 'standard-approval',
+          }),
+        },
       })
     );
 
@@ -3695,19 +3800,39 @@ describe('ClawdbotAgentService Codex providers', () => {
         launchManifestDigest: active.runLaunchManifest.digest,
         worktreeRoot: tmpDir,
         allowedCommands: [process.execPath],
+        fileExecutionEvidenceDigest: `sha256:${'e'.repeat(64)}`,
+        beforeSpawn: expect.any(Function),
         wrap: expect.any(Function),
       }),
       request
     );
+
+    const bindPhaseApproval = vi.spyOn(
+      service as unknown as {
+        bindPhaseApproval(...args: unknown[]): Promise<unknown>;
+      },
+      'bindPhaseApproval'
+    );
+    bindPhaseApproval
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ evidenceDigest: `sha256:${'3'.repeat(64)}` });
+    await expect(
+      service.executeRunTerminal(task.id, active.attemptId, {
+        ...request,
+        requestId: 'terminal-phase-drift-request',
+      })
+    ).rejects.toThrow('phase evidence changed after approval');
+    bindPhaseApproval.mockRestore();
 
     let resolveLaunch: (() => void) | undefined;
     let launchSettled = false;
     const launchGate = new Promise<void>((resolve) => {
       resolveLaunch = resolve;
     });
-    vi.mocked(runTerminals.execute).mockImplementationOnce(async (_context, input) => {
+    vi.mocked(runTerminals.execute).mockImplementationOnce(async (context, input) => {
       await launchGate;
       launchSettled = true;
+      await context.beforeSpawn();
       return {
         ...handle,
         id: 'terminal_finalization_race',
@@ -3722,8 +3847,10 @@ describe('ClawdbotAgentService Codex providers', () => {
       ...request,
       requestId: 'terminal-finalization-race',
     };
+    const launchesBeforeRace = vi.mocked(runTerminals.execute).mock.calls.length;
     const racingExecution = service.executeRunTerminal(task.id, active.attemptId, racingRequest);
-    await waitFor(() => expect(runTerminals.execute).toHaveBeenCalledTimes(2));
+    const racingOutcome = expect(racingExecution).rejects.toThrow('raced with run finalization');
+    await waitFor(() => expect(runTerminals.execute).toHaveBeenCalledTimes(launchesBeforeRace + 1));
     const originalProviderComplete = ProviderCompletionService.prototype.complete;
     let resolveProviderCompletion: (() => void) | undefined;
     const providerCompletion = new Promise<void>((resolve) => {
@@ -3744,10 +3871,7 @@ describe('ClawdbotAgentService Codex providers', () => {
       expect(runTerminals.cleanupAttempt).not.toHaveBeenCalled();
 
       resolveLaunch?.();
-      await expect(racingExecution).resolves.toMatchObject({
-        status: 'started',
-        handle: { id: 'terminal_finalization_race' },
-      });
+      await racingOutcome;
       await stopping;
       expect(runTerminals.cleanupAttempt).toHaveBeenCalledOnce();
     } finally {

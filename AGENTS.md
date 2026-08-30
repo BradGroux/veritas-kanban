@@ -308,6 +308,11 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   reconstruction. A dangling handle becomes `interrupted` after restart
   because inherited pipes cannot be reattached safely. PTY, interactive stdin,
   and restart reattachment fail closed until their typed controls ship.
+- Explicit run-terminal executable, script, loader, config, archive, and
+  load-path inputs use `run-file-execution-approval-evidence/v1`. Bind exact
+  provenance or launch-baseline digests into the approval, require a critical
+  human-only decision for external or unknown bytes, and rehash immediately
+  before spawn. Unsupported indirect and tool transports fail closed.
 - File-backed Work Products use the exact manifest-bound `run-artifact` root
   exposed as `VERITAS_ARTIFACT_ROOT`. Register only completed relative files
   through the governed artifact service; never persist or expose the host root.

@@ -31,4 +31,4 @@ Only `exact` is affirmative provenance evidence. The response includes a bounded
 
 The API exposes exact resolution and bounded attempt listing. `vk agent:file-provenance` mirrors exact resolution. The run timeline shows the newest records and gaps without polling beyond the existing live-run refresh path.
 
-The initial automatic producer integration covers governed File Work Product artifact registration. Providers and tools that cannot expose causal digest-bound file operations remain explicitly unsupported. General filesystem interception, certified link identity, and approval-policy enforcement are separate boundaries; they must not be inferred from this ledger.
+The initial automatic producer integration covers governed File Work Product artifact registration. Providers and tools that cannot expose causal digest-bound file operations remain explicitly unsupported. General filesystem interception is not inferred from this ledger. The provider-neutral run terminal now consumes exact ledger or launch-baseline evidence through [Run File Execution Approval v1](RUN-FILE-EXECUTION-APPROVAL-V1.md); unsupported indirect or tool transports return typed blockers.

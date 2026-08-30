@@ -204,9 +204,7 @@ function fixture(
     now: () => new Date('2026-07-24T12:00:00.000Z'),
     environment: options.environment ?? {},
     ...(options.phaseAuthority ? { phaseAuthority: options.phaseAuthority } : {}),
-    ...(options.dependencyExecution
-      ? { dependencyExecution: options.dependencyExecution }
-      : {}),
+    ...(options.dependencyExecution ? { dependencyExecution: options.dependencyExecution } : {}),
   });
   return { service, open, requests, append, requestApproval };
 }
@@ -243,6 +241,44 @@ async function catalog(
 }
 
 describe('ToolControlPlaneService', () => {
+  it('fails closed when a tool declares file execution without a certified transport', async () => {
+    const { service, requests } = fixture({
+      tools: [
+        {
+          name: 'execute_file',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: false,
+            'x-veritas-file-execution': { pathArguments: ['/path'] },
+          },
+        },
+      ],
+    });
+    await catalog(service);
+
+    await expect(
+      service.invoke(
+        {
+          taskId: 'task-tools',
+          attemptId: 'attempt-tools',
+          serverId: 'fixture',
+          tool: 'execute_file',
+          arguments: { path: 'run-produced.sh' },
+          operationId: 'file-execution-tool-call',
+        },
+        'agent-a'
+      )
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: expect.objectContaining({
+        code: 'run-file-execution-unsupported-tool-transport',
+      }),
+    });
+    expect(requests.some((request) => request.method === 'tools/call')).toBe(false);
+  });
+
   it('reports discovery and invocation through scoped dependency circuits', async () => {
     const registry = new DependencyCircuitRegistryService({
       repository: new InMemoryDependencyCircuitStateRepository(),
