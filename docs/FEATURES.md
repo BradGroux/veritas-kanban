@@ -1225,6 +1225,12 @@ Reusable launch-time sandbox presets for provider execution guardrails.
   Code, and ACP stdio; Hermes and OpenClaw fail closed for credential-bound
   catalogs. Existing provider authentication and explicit environment
   passthrough are not mislabeled as brokered.
+- Run-owned terminal execution binds explicit executable, script, loader,
+  configuration, and archive inputs to provenance or launch-baseline digests.
+  External or unknown bytes require a critical human-only decision, project
+  policy governs other run-produced sources, and every reference is rehashed
+  immediately before spawn. Unsupported indirect and tool transports fail
+  closed rather than claiming incomplete enforcement.
 - Provider capability checks currently distinguish Codex CLI, Codex SDK,
   Codex app-server, Claude Code, ACP stdio harnesses, Hermes, and OpenClaw
   execution behavior. Gateway capability evidence is invalidated by provider

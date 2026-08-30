@@ -13,6 +13,8 @@ import {
   TASK_SIDE_EFFECT_KINDS,
   TASK_TERMINAL_SOURCES,
   TASK_VERIFICATION_STATUSES,
+  RUN_FILE_EXECUTION_POLICY_DECISIONS,
+  RUN_FILE_EXECUTION_POLICY_SCHEMA_VERSION,
   type CompletionResult,
   type TaskEnvelope,
 } from '@veritas-kanban/shared';
@@ -53,6 +55,14 @@ export const TaskExecutionPolicySchema = z
     commitPolicy: TaskCommitPolicySchema.optional(),
     allowedSideEffects: z.array(TaskAllowedSideEffectSchema).max(32).optional(),
     expectedOutputs: z.array(TaskExpectedOutputSchema).max(64).optional(),
+    fileExecution: z
+      .object({
+        agentCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS).optional(),
+        commandCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS).optional(),
+        toolCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -146,6 +156,15 @@ export const TaskEnvelopeSchema = z
     commitPolicy: TaskCommitPolicySchema,
     allowedSideEffects: z.array(TaskAllowedSideEffectSchema).max(32),
     expectedOutputs: z.array(TaskExpectedOutputSchema).max(64),
+    fileExecutionPolicy: z
+      .object({
+        schemaVersion: z.literal(RUN_FILE_EXECUTION_POLICY_SCHEMA_VERSION),
+        agentCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+        commandCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+        toolCreated: z.enum(RUN_FILE_EXECUTION_POLICY_DECISIONS),
+      })
+      .strict()
+      .optional(),
     verificationGates: z
       .array(
         z

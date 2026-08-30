@@ -246,6 +246,7 @@ import type { WorkspaceExecutionTrustService } from '../services/workspace-execu
 import type { AdmissionControlService } from '../services/admission-control-service.js';
 import type { RunTerminalService } from '../services/run-terminal-service.js';
 import type { WorkspaceCheckpointService } from '../services/workspace-checkpoint-service.js';
+import type { RunFileExecutionPolicyService } from '../services/run-file-execution-policy-service.js';
 import type { RunLaunchCompiler } from '../services/run-launch-compiler.js';
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'codex');
@@ -294,7 +295,11 @@ function testableService(
   workspaceCheckpoints: Pick<
     WorkspaceCheckpointService,
     'captureBoundary'
-  > = testWorkspaceCheckpoints()
+  > = testWorkspaceCheckpoints(),
+  runFileExecutionPolicy: Pick<
+    RunFileExecutionPolicyService,
+    'evaluate' | 'revalidate'
+  > = testRunFileExecutionPolicy()
 ): TestableClawdbotAgentService {
   const completionEvidence = testCompletionEvidence();
   const taskEnvelopes = new TaskEnvelopeService(completionEvidence);
@@ -327,10 +332,45 @@ function testableService(
     testReflectionExtractionJobs(),
     undefined,
     runTerminals,
-    workspaceCheckpoints
+    workspaceCheckpoints,
+    runFileExecutionPolicy
   ) as unknown as TestableClawdbotAgentService;
   service.logsDir = tmpDir;
   return service;
+}
+
+function testRunFileExecutionPolicy(): Pick<
+  RunFileExecutionPolicyService,
+  'evaluate' | 'revalidate'
+> {
+  return {
+    evaluate: vi.fn(async (input) => ({
+      schemaVersion: 'run-file-execution-approval-evidence/v1',
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      rootObjectiveId: input.rootObjectiveId,
+      executionNodeId: input.executionNodeId,
+      runId: input.runId,
+      attemptId: input.attemptId,
+      workflowStepId: input.workflowStepId,
+      terminalRequestId: input.request.requestId,
+      terminalRequestDigest: `sha256:${'d'.repeat(64)}`,
+      commandId: 'cmd_test',
+      launchManifestDigest: input.launchManifestDigest,
+      phaseEvidenceDigest: input.phaseEvidenceDigest,
+      policy: {
+        schemaVersion: 'run-file-execution-policy/v1',
+        agentCreated: 'standard-approval',
+        commandCreated: 'standard-approval',
+        toolCreated: 'standard-approval',
+      },
+      references: [],
+      decision: 'standard-approval',
+      reasonCode: 'no-referenced-files',
+      digest: `sha256:${'e'.repeat(64)}`,
+    })),
+    revalidate: vi.fn(async () => undefined),
+  };
 }
 
 function testWorkspaceCheckpoints(): Pick<WorkspaceCheckpointService, 'captureBoundary'> {
@@ -3579,6 +3619,8 @@ describe('ClawdbotAgentService Codex providers', () => {
         evidenceRevision: input.evidenceRevision,
         providerRequestId: input.providerRequestId,
         mobileSafe: input.mobileSafe ?? false,
+        decisionAuthority: input.decisionAuthority,
+        fileExecution: input.fileExecution,
         status: approvalStatus,
         revision: approvalStatus === 'approved' ? 2 : 1,
         createdAt: '2026-07-25T12:00:00.000Z',
@@ -3670,7 +3712,14 @@ describe('ClawdbotAgentService Codex providers', () => {
         attemptId: active.attemptId,
         providerRequestId: request.requestId,
         riskClass: 'high',
-        exactAction: request,
+        exactAction: {
+          request,
+          fileExecution: expect.objectContaining({
+            schemaVersion: 'run-file-execution-approval-evidence/v1',
+            terminalRequestId: request.requestId,
+            decision: 'standard-approval',
+          }),
+        },
       })
     );
 
@@ -3695,6 +3744,8 @@ describe('ClawdbotAgentService Codex providers', () => {
         launchManifestDigest: active.runLaunchManifest.digest,
         worktreeRoot: tmpDir,
         allowedCommands: [process.execPath],
+        fileExecutionEvidenceDigest: `sha256:${'e'.repeat(64)}`,
+        beforeSpawn: expect.any(Function),
         wrap: expect.any(Function),
       }),
       request

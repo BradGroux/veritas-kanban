@@ -330,6 +330,15 @@ Required filesystem boundaries have no per-run bypass. Task-readiness
 an authorized advisory policy preset, and the evaluated policy plus launch
 decision are retained as governance evidence.
 
+Run-owned terminal commands also bind supported executable, script, loader,
+configuration, archive, and load-path inputs to exact file provenance or the
+launch baseline. External or unknown bytes require a fresh human-only approval;
+project policy may further require human review or deny run-produced inputs.
+Every referenced file is reopened, rehashed, and compared with the complete
+approval evidence immediately before spawn. Unsupported indirect execution and
+uncertified tool transports fail closed. See
+[Run File Execution Approval v1](architecture/RUN-FILE-EXECUTION-APPROVAL-V1.md).
+
 ### Credential broker core
 
 Credential definitions are stored separately from secret values. An admin can

@@ -16,6 +16,7 @@ import {
   type TaskEnvelope,
   type TaskEvidenceRequirement,
   type TaskExecutionPolicy,
+  DEFAULT_RUN_FILE_EXECUTION_PROJECT_POLICY,
   type TaskExpectedOutput,
   type TaskLaunchBaseline,
   type TaskLaunchBaselineFile,
@@ -344,6 +345,10 @@ export class TaskEnvelopeService {
       commitPolicy: input.commitPolicy,
       allowedSideEffects: buildAllowedSideEffects(input),
       expectedOutputs: buildExpectedOutputs(input),
+      fileExecutionPolicy: {
+        ...DEFAULT_RUN_FILE_EXECUTION_PROJECT_POLICY,
+        ...input.executionPolicy?.fileExecution,
+      },
       verificationGates: (input.task.verificationSteps ?? []).slice(0, 256).map((step) => ({
         id: step.id,
         description: step.description,

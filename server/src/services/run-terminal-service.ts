@@ -63,6 +63,9 @@ export interface RunTerminalLaunchContext {
   worktreeRoot: string;
   environment: Record<string, string>;
   allowedCommands: string[];
+  fileExecutionEvidenceDigest?: string;
+  /** Revalidates exact referenced bytes immediately before the synchronous spawn call. */
+  beforeSpawn?: () => Promise<void>;
   wrap?: (
     command: string,
     args: string[],
@@ -217,7 +220,7 @@ export class RunTerminalService {
     }
     if (!context.allowedCommands.includes(request.command)) {
       throw new ConflictError('Terminal command is not approved by the run launch manifest.', {
-        commandId: commandId(request.command, request.args),
+        commandId: runTerminalCommandId(request.command, request.args),
       });
     }
     assertNoCredentialArguments(request.command, request.args);
@@ -235,6 +238,7 @@ export class RunTerminalService {
       ...selectEnvironment(context.environment, request.environmentKeys),
       ...launch.environment,
     };
+    await context.beforeSpawn?.();
     const id = `terminal_${nanoid(18)}`;
     const startedAt = this.now().toISOString();
     const child = spawn(launch.command, launch.args, {
@@ -257,10 +261,13 @@ export class RunTerminalService {
       launchManifestDigest: context.launchManifestDigest,
       requestId: request.requestId,
       requestDigest,
+      ...(context.fileExecutionEvidenceDigest
+        ? { fileExecutionEvidenceDigest: context.fileExecutionEvidenceDigest }
+        : {}),
       mode: request.mode,
       startMode: request.startMode,
       state: child.pid ? 'running' : 'starting',
-      commandId: commandId(request.command, request.args),
+      commandId: runTerminalCommandId(request.command, request.args),
       ...(child.pid
         ? {
             processId: child.pid,
@@ -940,6 +947,12 @@ function normalizeContext(input: RunTerminalLaunchContext): RunTerminalLaunchCon
   if (!/^sha256:[a-f0-9]{64}$/.test(launchManifestDigest)) {
     throw new ValidationError('Run terminal launch manifest digest is invalid.');
   }
+  if (
+    input.fileExecutionEvidenceDigest &&
+    !/^sha256:[a-f0-9]{64}$/.test(input.fileExecutionEvidenceDigest)
+  ) {
+    throw new ValidationError('Run terminal file execution evidence digest is invalid.');
+  }
   const worktreeRoot = path.resolve(required(input.worktreeRoot, 'worktreeRoot'));
   const allowedCommands = [...new Set(input.allowedCommands.map((command) => command.trim()))]
     .filter(Boolean)
@@ -955,6 +968,10 @@ function normalizeContext(input: RunTerminalLaunchContext): RunTerminalLaunchCon
     worktreeRoot,
     environment: { ...input.environment },
     allowedCommands,
+    ...(input.fileExecutionEvidenceDigest
+      ? { fileExecutionEvidenceDigest: input.fileExecutionEvidenceDigest }
+      : {}),
+    ...(input.beforeSpawn ? { beforeSpawn: input.beforeSpawn } : {}),
     ...(input.wrap ? { wrap: input.wrap } : {}),
   };
 }
@@ -1005,14 +1022,14 @@ function assertNoCredentialArguments(command: string, args: string[]): void {
   }
 }
 
-function commandId(command: string, args: string[]): string {
+export function runTerminalCommandId(command: string, args: string[]): string {
   return `cmd_${createHash('sha256')
     .update(JSON.stringify([command, args]))
     .digest('base64url')
     .slice(0, 24)}`;
 }
 
-function digestTerminalRequest(request: RunTerminalExecuteRequest): string {
+export function digestTerminalRequest(request: RunTerminalExecuteRequest): string {
   return `sha256:${createHash('sha256')
     .update(
       JSON.stringify({
@@ -1101,6 +1118,7 @@ function assertSamePersistedHandleIdentity(
     current.launchManifestDigest,
     current.requestId,
     current.requestDigest,
+    current.fileExecutionEvidenceDigest,
     current.mode,
     current.commandId,
     current.processId,
@@ -1116,6 +1134,7 @@ function assertSamePersistedHandleIdentity(
     next.launchManifestDigest,
     next.requestId,
     next.requestDigest,
+    next.fileExecutionEvidenceDigest,
     next.mode,
     next.commandId,
     next.processId,

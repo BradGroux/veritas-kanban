@@ -203,6 +203,11 @@ import {
   type RunEventJournalService,
 } from './run-event-journal-service.js';
 import { getRunTerminalService, type RunTerminalService } from './run-terminal-service.js';
+import {
+  getRunFileExecutionPolicyService,
+  type RunFileExecutionEvaluationInput,
+  type RunFileExecutionPolicyService,
+} from './run-file-execution-policy-service.js';
 import { type ProviderMappedRunEvent } from './provider-run-event-mappers.js';
 import {
   AgentProviderAdapterRegistry,
@@ -636,6 +641,7 @@ export class ClawdbotAgentService {
     RunTerminalService,
     'execute' | 'list' | 'cleanupAttempt' | 'reconcileAttempt'
   >;
+  private runFileExecutionPolicy: Pick<RunFileExecutionPolicyService, 'evaluate' | 'revalidate'>;
   private workspaceCheckpoints: Pick<WorkspaceCheckpointService, 'captureBoundary'>;
   private logsDir: string;
 
@@ -690,7 +696,11 @@ export class ClawdbotAgentService {
     workspaceCheckpoints: Pick<
       WorkspaceCheckpointService,
       'captureBoundary'
-    > = getWorkspaceCheckpointService()
+    > = getWorkspaceCheckpointService(),
+    runFileExecutionPolicy: Pick<
+      RunFileExecutionPolicyService,
+      'evaluate' | 'revalidate'
+    > = getRunFileExecutionPolicyService()
   ) {
     this.configService = new ConfigService();
     this.taskService = new TaskService();
@@ -724,6 +734,7 @@ export class ClawdbotAgentService {
     this.dependencyExecution = dependencyExecution;
     this.runTerminals = runTerminals;
     this.workspaceCheckpoints = workspaceCheckpoints;
+    this.runFileExecutionPolicy = runFileExecutionPolicy;
     this.workspaceExecutionTrust = workspaceExecutionTrust;
     this.phaseAuthority = phaseAuthority;
     this.phaseTransitions = phaseTransitions;
@@ -8963,7 +8974,10 @@ export class ClawdbotAgentService {
       .filter((reference) =>
         pending.runLaunchManifest.runtime.credentialReferences.includes(reference)
       );
-    const phase = await this.bindPhaseApproval(taskId, attemptId, pending.runLaunchManifest, [
+    const phaseRequirements: Array<{
+      dimension: PhaseAuthorityDimension;
+      requestedScopes: string[];
+    }> = [
       { dimension: 'filesystem.read', requestedScopes: ['<workspace>'] },
       { dimension: 'command.execute', requestedScopes: [commandClass] },
       ...(commandClass === 'inspect'
@@ -8990,7 +9004,51 @@ export class ClawdbotAgentService {
             },
           ]
         : []),
-    ]);
+    ];
+    const phase = await this.bindPhaseApproval(
+      taskId,
+      attemptId,
+      pending.runLaunchManifest,
+      phaseRequirements
+    );
+    if (!pending.executionTree) {
+      throw new ConflictError('Run terminal execution has no durable execution-tree identity.', {
+        taskId,
+        attemptId,
+        code: 'run-file-execution-tree-missing',
+      });
+    }
+    const fileExecutionInput: RunFileExecutionEvaluationInput = {
+      workspaceId: pending.taskEnvelope.workspace.workspaceId,
+      taskId,
+      rootObjectiveId: pending.executionTree.rootObjectiveId,
+      executionNodeId: pending.executionTree.nodeId,
+      runId: attemptId,
+      attemptId,
+      workflowStepId:
+        pending.executionTree.edge === 'workflow-step' ? pending.executionTree.nodeId : null,
+      launchManifestDigest: pending.runLaunchManifest.digest,
+      phaseEvidenceDigest: phase?.evidenceDigest ?? null,
+      worktreeRoot,
+      baseline: pending.taskEnvelope.workspace.baseline,
+      request,
+      ...(pending.taskEnvelope.fileExecutionPolicy
+        ? { policy: pending.taskEnvelope.fileExecutionPolicy }
+        : {}),
+    };
+    const fileExecution = await this.runFileExecutionPolicy.evaluate(fileExecutionInput);
+    if (fileExecution.decision === 'deny') {
+      throw new ForbiddenError(
+        'Project policy denies execution of a referenced run-produced file.',
+        {
+          taskId,
+          attemptId,
+          evidenceDigest: fileExecution.digest,
+          reasonCode: fileExecution.reasonCode,
+        }
+      );
+    }
+    const humanFileApproval = fileExecution.decision === 'human-approval';
     const requestedApproval = await this.approvalBroker.request({
       workspaceId: pending.taskEnvelope.workspace.workspaceId,
       taskId,
@@ -9001,19 +9059,36 @@ export class ClawdbotAgentService {
       requestKind: 'approval',
       actionClass: 'shell',
       action: `Execute ${request.command}`,
-      details: this.redactTraceText(JSON.stringify(request.args)).slice(0, 4_000),
+      details: this.redactTraceText(
+        JSON.stringify({
+          args: request.args,
+          fileExecution: fileExecution.references.map((reference) => ({
+            kind: reference.kind,
+            path: reference.relativePath,
+            source: reference.source,
+            digest: reference.contentSha256,
+            decision: reference.decision,
+          })),
+        })
+      ).slice(0, 8_000),
       resourceScope: [
         `command:${commandClass}`,
         `cwd:${request.cwd ?? '.'}`,
         ...request.environmentKeys.map((key) => `env:${key}`),
+        ...fileExecution.references.map(
+          (reference) => `file:${reference.source}:${reference.contentSha256}`
+        ),
       ],
       workingDirectory: request.cwd ?? '.',
-      riskClass: 'high',
-      policyReason:
-        'A provider-neutral terminal child requires exact operator approval before launch.',
+      riskClass: humanFileApproval ? 'critical' : 'high',
+      policyReason: humanFileApproval
+        ? 'External, unknown, or project-governed run-produced bytes require a fresh human decision before execution.'
+        : 'A provider-neutral terminal child requires exact operator approval before launch.',
       evidenceRevision: pending.runLaunchManifest.digest,
       mobileSafe: false,
-      exactAction: request,
+      exactAction: { request, fileExecution },
+      fileExecution,
+      ...(humanFileApproval ? { decisionAuthority: 'human-only' as const } : {}),
       ...(phase ? { phase } : {}),
     });
     const approval = await this.approvalBroker.get(
@@ -9050,6 +9125,31 @@ export class ClawdbotAgentService {
         worktreeRoot,
         environment: approvedEnvironment,
         allowedCommands: [request.command],
+        fileExecutionEvidenceDigest: fileExecution.digest,
+        beforeSpawn: async () => {
+          await this.assertPendingManifestSnapshotForAttempt(taskId, attemptId);
+          if (pendingAgents.get(taskId) !== pending || finalizingAgents.has(pending)) {
+            throw new ConflictError('Run terminal execution raced with run finalization.', {
+              taskId,
+              attemptId,
+            });
+          }
+          const currentPhase = await this.bindPhaseApproval(
+            taskId,
+            attemptId,
+            pending.runLaunchManifest,
+            phaseRequirements
+          );
+          if (JSON.stringify(currentPhase) !== JSON.stringify(phase)) {
+            throw new ConflictError('Run terminal phase evidence changed after approval.', {
+              taskId,
+              attemptId,
+              expectedPhaseEvidenceDigest: phase?.evidenceDigest,
+              currentPhaseEvidenceDigest: currentPhase?.evidenceDigest,
+            });
+          }
+          await this.runFileExecutionPolicy.revalidate(fileExecutionInput, fileExecution);
+        },
         wrap: (command, args, cwd) => {
           const launch = this.filesystemSandboxLaunch(pending, command, args, cwd);
           return {

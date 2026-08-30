@@ -18,6 +18,7 @@ import {
 } from '../services/run-approval-broker-service.js';
 import type { RunEventJournalService } from '../services/run-event-journal-service.js';
 import type { RunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
+import { calculateRunFileExecutionEvidenceDigest } from '../utils/run-file-execution-digest.js';
 
 class InMemoryRunApprovalRepository implements RunApprovalRepository {
   readonly requests = new Map<string, RunApprovalRequest>();
@@ -167,6 +168,55 @@ describe('RunApprovalBrokerService', () => {
         })
       )
     ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+  });
+
+  it('persists only digest-valid run file execution evidence', async () => {
+    const fixture = service();
+    const material = {
+      schemaVersion: 'run-file-execution-approval-evidence/v1' as const,
+      workspaceId: 'local',
+      taskId: 'task_approval_fixture',
+      rootObjectiveId: 'objective_1',
+      executionNodeId: 'node_1',
+      runId: 'attempt_approval_fixture',
+      attemptId: 'attempt_approval_fixture',
+      workflowStepId: null,
+      terminalRequestId: 'provider-request-file-evidence',
+      terminalRequestDigest: `sha256:${'1'.repeat(64)}`,
+      commandId: 'cmd_fixture',
+      launchManifestDigest: `sha256:${'2'.repeat(64)}`,
+      phaseEvidenceDigest: null,
+      policy: {
+        schemaVersion: 'run-file-execution-policy/v1' as const,
+        agentCreated: 'standard-approval' as const,
+        commandCreated: 'standard-approval' as const,
+        toolCreated: 'standard-approval' as const,
+      },
+      references: [],
+      decision: 'standard-approval' as const,
+      reasonCode: 'no-referenced-files' as const,
+    };
+    const fileExecution = {
+      ...material,
+      digest: calculateRunFileExecutionEvidenceDigest(material),
+    };
+
+    await expect(
+      fixture.broker.request(
+        requestInput({
+          providerRequestId: 'provider-request-file-evidence',
+          fileExecution,
+        })
+      )
+    ).resolves.toMatchObject({ fileExecution });
+    await expect(
+      fixture.broker.request(
+        requestInput({
+          providerRequestId: 'provider-request-invalid-file-evidence',
+          fileExecution: { ...fileExecution, digest: `sha256:${'f'.repeat(64)}` },
+        })
+      )
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
   });
 
   it('deduplicates concurrent provider retries and binds authorization metadata', async () => {
@@ -406,6 +456,42 @@ describe('RunApprovalBrokerService', () => {
         },
       },
     });
+  });
+
+  it('prevents agents and services from resolving a human-only approval', async () => {
+    const now = new Date('2026-08-30T12:00:00.000Z');
+    const fixture = service(new InMemoryRunApprovalRepository(), () => now);
+    const pending = await fixture.broker.request(
+      requestInput({
+        providerRequestId: 'provider-request-human-only',
+        riskClass: 'critical',
+        decisionAuthority: 'human-only',
+      })
+    );
+    const decision = {
+      decision: 'approved' as const,
+      expectedRevision: pending.revision,
+      expectedActionHash: pending.actionHash,
+    };
+
+    await expect(
+      fixture.broker.decide(pending.id, decision, {
+        id: 'reviewer-model',
+        type: 'agent',
+        authMethod: 'service-token',
+        authenticatedAt: '2026-08-30T11:59:30.000Z',
+        workspaceId: 'local',
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    await expect(
+      fixture.broker.decide(pending.id, decision, {
+        id: 'human-reviewer',
+        type: 'user',
+        authMethod: 'session',
+        authenticatedAt: '2026-08-30T11:59:30.000Z',
+        workspaceId: 'local',
+      })
+    ).resolves.toMatchObject({ status: 'approved', decisionAuthority: 'human-only' });
   });
 
   it('expires stale requests and cancels every pending request for an interrupted attempt', async () => {
