@@ -20,12 +20,15 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-vi.mock('@/contexts/ViewContext', () => ({
-  useView: () => ({ navigateToTask: mocks.navigateToTask }),
+vi.mock('@/lib/api/work-products', () => ({
+  workProductsApi: {
+    previewArtifact: mocks.previewArtifact,
+    downloadArtifact: mocks.downloadArtifact,
+  },
 }));
 
-vi.mock('@/hooks/useFeatureSettings', () => ({
-  useFeatureSettings: () => ({ settings: { markdown: { enableCodeHighlighting: false } } }),
+vi.mock('@/contexts/ViewContext', () => ({
+  useView: () => ({ navigateToTask: mocks.navigateToTask }),
 }));
 
 describe('ArtifactPreviewModal', () => {

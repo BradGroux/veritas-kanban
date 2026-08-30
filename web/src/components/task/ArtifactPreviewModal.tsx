@@ -16,10 +16,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Download, ExternalLink, ZoomIn, ZoomOut } from 'lucide-react';
 import type { WorkProductArtifactPreview } from '@veritas-kanban/shared';
-import { api } from '@/lib/api';
+import { workProductsApi } from '@/lib/api/work-products';
 import { useView } from '@/contexts/ViewContext';
-import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { toast } from '@/hooks/useToast';
+import { ArtifactSafeMarkdown } from './ArtifactSafeMarkdown';
 
 interface ArtifactPreviewModalProps {
   opened: boolean;
@@ -40,7 +40,7 @@ export function ArtifactPreviewModal({
   const [zoom, setZoom] = useState(1);
   const query = useQuery({
     queryKey: ['work-products', 'artifact-preview', productId, version],
-    queryFn: () => api.workProducts.previewArtifact(productId as string, version),
+    queryFn: () => workProductsApi.previewArtifact(productId as string, version),
     enabled: opened && Boolean(productId),
     staleTime: 30_000,
   });
@@ -49,7 +49,7 @@ export function ArtifactPreviewModal({
   const download = async () => {
     if (!productId || !preview?.actions.downloadAllowed || !preview.artifact) return;
     try {
-      const blob = await api.workProducts.downloadArtifact(productId, preview.artifact.version);
+      const blob = await workProductsApi.downloadArtifact(productId, preview.artifact.version);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -190,7 +190,7 @@ function PreviewBody({ preview, zoom }: { preview: WorkProductArtifactPreview; z
     return (
       <ScrollArea.Autosize mah={520} type="auto">
         {preview.renderer === 'markdown' ? (
-          <MarkdownRenderer content={preview.content.text} artifactSafe />
+          <ArtifactSafeMarkdown content={preview.content.text} />
         ) : (
           <Code block className="whitespace-pre-wrap break-words text-sm">
             {preview.content.text}

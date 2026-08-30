@@ -31,6 +31,13 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+vi.mock('@/lib/api/work-products', () => ({
+  workProductsApi: {
+    previewArtifact: mocks.previewArtifact,
+    downloadArtifact: mocks.downloadArtifact,
+  },
+}));
+
 const listForTaskMock = vi.mocked(api.workProducts.listForTask);
 const exportWorkProductMock = vi.mocked(api.workProducts.export);
 const listVersionsMock = vi.mocked(api.workProducts.listVersions);

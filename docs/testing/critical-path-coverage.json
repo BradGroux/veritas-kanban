@@ -189,7 +189,6 @@
           "src/__tests__/api-tasks.test.ts",
           "src/__tests__/api-work-products.test.ts",
           "src/__tests__/agent-run-timeline-mantine.test.tsx",
-          "src/__tests__/artifact-preview-modal.test.tsx",
           "src/__tests__/archive-backlog-mantine.test.tsx",
           "src/__tests__/auth-guard.test.tsx",
           "src/__tests__/auth-screens-mantine.test.tsx",
