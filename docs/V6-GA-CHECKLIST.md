@@ -10,7 +10,7 @@ Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
 ## 6.1.3 Release Gate
 
 - [x] Release tracker #1262 and its implementation dependencies are merged or
-      have an evidence-backed disposition; only packaged acceptance and
+      have an evidence-backed disposition; only the final release matrix and
       publication gates remain open.
 - [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.1.3.
 - [x] README, canonical instructions, API reference, compatibility policy,
@@ -22,7 +22,7 @@ Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
 - [x] The pre-release security audit has no open Dependabot or secret-scanning
       alerts. The reviewed CodeQL metadata-hash false positive is dismissed and
       default-branch CodeQL has zero open alerts.
-- [ ] Packaged authentication, secondary-action, macOS menu, motion, compact
+- [x] Packaged authentication, secondary-action, macOS menu, motion, compact
       width, keyboard, reduced-motion, and accessibility smoke evidence is
       recorded for #1256-#1260.
 - [ ] One clean final candidate passes the complete Node-floor and current-Node
