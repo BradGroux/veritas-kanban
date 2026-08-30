@@ -26,6 +26,7 @@ import {
   Coins,
   Download,
   ExternalLink,
+  Eye,
   FileText,
   GitBranch,
   History,
@@ -49,7 +50,12 @@ import {
   isExternalTargetHref,
   normalizeSafeHref,
 } from '@veritas-kanban/shared';
-import type { Task, TaskAttempt, TaskReadinessCheck } from '@veritas-kanban/shared';
+import type {
+  Task,
+  TaskAttempt,
+  TaskReadinessCheck,
+  WorkProductPreview,
+} from '@veritas-kanban/shared';
 import { useAgentStatus, useAgentStream, useStopAgent } from '@/hooks/useAgent';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
@@ -61,6 +67,7 @@ import {
 } from '@/hooks/useWorkflowStats';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 import { API_BASE } from '@/lib/config';
+import { ArtifactPreviewModal } from './ArtifactPreviewModal';
 import { sanitizeText } from '@/lib/sanitize';
 import { RunAccessPanel } from './RunAccessPanel';
 
@@ -367,6 +374,7 @@ export function TaskWorkView({
   onOpenWorkflow,
 }: TaskWorkViewProps) {
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const [previewProduct, setPreviewProduct] = useState<WorkProductPreview | null>(null);
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
   const {
     data: agentStatus,
@@ -1008,6 +1016,18 @@ export function TaskWorkView({
                             </Text>
                           )}
                         </div>
+                        {product.artifact && (
+                          <Tooltip label={`Preview ${product.artifact.safeName}`}>
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              aria-label={`Preview ${product.title}`}
+                              onClick={() => setPreviewProduct(product)}
+                            >
+                              <Eye className="h-3 w-3" />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
                         {artifactHref && (
                           <Tooltip label={`Download ${product.artifact?.safeName}`}>
                             <ActionIcon
@@ -1049,6 +1069,14 @@ export function TaskWorkView({
           </Paper>
         </SimpleGrid>
       </Stack>
+
+      <ArtifactPreviewModal
+        opened={Boolean(previewProduct)}
+        productId={previewProduct?.id ?? null}
+        version={previewProduct?.version}
+        title={previewProduct?.title}
+        onClose={() => setPreviewProduct(null)}
+      />
 
       <Modal
         opened={stopConfirmOpen}

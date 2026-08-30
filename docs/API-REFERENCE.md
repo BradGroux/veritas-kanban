@@ -6247,6 +6247,7 @@ File Work Products are governed, immutable deliverables copied from the exact ar
 | `GET`    | `/api/v1/work-products/artifacts`                       | List file products by optional `taskId`, `sourceRunId`, `includeArchived`, and `limit`.                  |
 | `GET`    | `/api/v1/work-products/:id/artifact`                    | Inspect current file Work Product metadata.                                                              |
 | `GET`    | `/api/v1/work-products/:id/artifact/versions`           | List immutable artifact metadata versions.                                                               |
+| `GET`    | `/api/v1/work-products/:id/artifact/preview?version=N`  | Return a bounded passive preview contract or an actionable fail-closed status.                           |
 | `GET`    | `/api/v1/work-products/:id/artifact/download?version=N` | Download authorized bytes after size and SHA-256 verification.                                           |
 | `DELETE` | `/api/v1/work-products/:id/artifact?confirm=:id`        | Physically purge an archived file product, all versions, and all stored bodies after exact confirmation. |
 
@@ -6267,6 +6268,8 @@ Registration body:
 ```
 
 `relativePath` is resolved only beneath the manifest-bound `VERITAS_ARTIFACT_ROOT`; callers cannot supply or discover the host root. Quarantined artifacts remain inspectable but return `404` from download. Successful downloads include `Content-Disposition: attachment`, `Content-Digest`, `X-Artifact-SHA256`, ETag, and private immutable cache headers.
+
+Preview responses use `work-product-artifact-preview/v1`. Renderer selection is based on validated content and media type. Text and Markdown require strict UTF-8; PNG, JPEG, GIF, and WebP require matching magic bytes and bounded dimensions; PDFs require a bounded passive page tree with no active actions or external links; CSV and `.xlsx` return capped inert cells with formula-shaped values marked explicitly. The response includes the exact artifact version, digest, source run, redaction state, and causal event, but never a host path or storage key. Unsupported, quarantined, missing, malformed, oversized, and policy-blocked artifacts return `renderer: "none"` with allowed fallback actions. Preview responses are private and non-cacheable. See [Governed Artifact Previews v1](architecture/ARTIFACT-PREVIEWS-V1.md).
 
 Direct general Work Product creation rejects `kind: "file"`, and generic updates reject existing file products; governed registration is the only creation and refinement path. Archive preserves downloads. Physical purge is explicit, requires the authenticated workspace and `admin:manage`, rejects active products, and requires `confirm` to exactly match the Work Product ID. See [File-Backed Work Products v1](architecture/FILE-WORK-PRODUCTS-V1.md).
 

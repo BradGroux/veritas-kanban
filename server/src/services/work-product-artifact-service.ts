@@ -65,6 +65,12 @@ export interface WorkProductArtifactRegistration {
   metadata: WorkProductArtifactMetadata;
 }
 
+export interface WorkProductArtifactPreviewSource {
+  metadata: WorkProductArtifactMetadata;
+  productStatus: WorkProduct['status'];
+  content: Uint8Array | null;
+}
+
 export interface WorkProductArtifactPurgeResult {
   productId: string;
   artifactsDeleted: number;
@@ -260,6 +266,15 @@ export class WorkProductArtifactService {
     productId: string;
     version?: number;
   }): Promise<WorkProductArtifactDownload | null> {
+    const source = await this.readPreviewSource(input);
+    return source?.content ? { metadata: source.metadata, content: source.content } : null;
+  }
+
+  async readPreviewSource(input: {
+    workspaceId: string;
+    productId: string;
+    version?: number;
+  }): Promise<WorkProductArtifactPreviewSource | null> {
     const product = await this.options.workProducts.get(input.productId);
     if (!product) return null;
     if (product.workspaceId !== input.workspaceId) {
@@ -274,13 +289,20 @@ export class WorkProductArtifactService {
           )?.render;
     if (!render || render.kind !== 'file') return null;
     const metadata = render.artifact;
-    if (metadata.state !== 'available') return null;
-    return this.options.repository.read({
-      workspaceId: metadata.workspaceId,
-      productId: metadata.productId,
-      version: metadata.version,
-      artifactId: metadata.id,
-    });
+    const stored =
+      metadata.state === 'available'
+        ? await this.options.repository.read({
+            workspaceId: metadata.workspaceId,
+            productId: metadata.productId,
+            version: metadata.version,
+            artifactId: metadata.id,
+          })
+        : null;
+    return {
+      metadata,
+      productStatus: product.status,
+      content: stored?.content ?? null,
+    };
   }
 
   async inspect(input: { workspaceId: string; productId: string }): Promise<WorkProduct | null> {

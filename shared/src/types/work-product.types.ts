@@ -87,6 +87,8 @@ export interface DashboardWorkProductRender extends WorkProductRenderBase {
 }
 
 export const WORK_PRODUCT_ARTIFACT_SCHEMA_VERSION = 'work-product-artifact/v1' as const;
+export const WORK_PRODUCT_ARTIFACT_PREVIEW_SCHEMA_VERSION =
+  'work-product-artifact-preview/v1' as const;
 
 export type WorkProductArtifactState = 'available' | 'quarantined' | 'deleted';
 export type WorkProductArtifactRedactionState = 'none' | 'redacted' | 'quarantined';
@@ -116,6 +118,79 @@ export interface WorkProductArtifactMetadata {
     reason?: string;
   };
   createdAt: string;
+  expiresAt?: string;
+}
+
+export type WorkProductArtifactPreviewStatus =
+  | 'ready'
+  | 'unsupported'
+  | 'quarantined'
+  | 'expired'
+  | 'missing'
+  | 'malformed'
+  | 'oversized'
+  | 'policy-blocked';
+
+export type WorkProductArtifactPreviewRenderer =
+  'text' | 'markdown' | 'image' | 'pdf' | 'table' | 'none';
+
+export interface WorkProductArtifactPreviewCell {
+  text: string;
+  formula: boolean;
+  truncated: boolean;
+}
+
+export interface WorkProductArtifactPreviewSheet {
+  name: string;
+  rows: WorkProductArtifactPreviewCell[][];
+  totalRows: number;
+  totalColumns: number;
+  truncated: boolean;
+}
+
+export type WorkProductArtifactPreviewContent =
+  | { kind: 'text'; text: string }
+  | {
+      kind: 'image';
+      base64: string;
+      width: number;
+      height: number;
+      animated: boolean;
+    }
+  | { kind: 'pdf'; base64: string; pages: number }
+  | { kind: 'table'; sheets: WorkProductArtifactPreviewSheet[] };
+
+export interface WorkProductArtifactPreview {
+  schemaVersion: typeof WORK_PRODUCT_ARTIFACT_PREVIEW_SCHEMA_VERSION;
+  status: WorkProductArtifactPreviewStatus;
+  renderer: WorkProductArtifactPreviewRenderer;
+  message: string;
+  artifact: WorkProductArtifactMetadata | null;
+  sourceRunId: string | null;
+  redactionState: WorkProductArtifactRedactionState | null;
+  causalEvent: {
+    taskId: string;
+    runId: string;
+    attemptId: string;
+    eventId: string;
+  } | null;
+  limits: {
+    maxBytes: number;
+    maxRows?: number;
+    maxColumns?: number;
+    maxCellCharacters?: number;
+    maxPages?: number;
+    maxPixels?: number;
+  };
+  truncation: {
+    truncated: boolean;
+    reasons: string[];
+  };
+  actions: {
+    downloadAllowed: boolean;
+    openAssociatedAppAllowed: boolean;
+  };
+  content: WorkProductArtifactPreviewContent | null;
 }
 
 export interface FileWorkProductRender extends WorkProductRenderBase {

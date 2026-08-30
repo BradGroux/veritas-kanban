@@ -486,10 +486,11 @@ describe('agent run timeline Mantine surface', () => {
     const event = events.find((entry) => entry.id === `work-product-${product.id}`);
 
     expect(event?.link).toEqual({
-      label: 'Download artifact',
-      href: `/api/work-products/${product.id}/artifact/download?version=2`,
-      target: 'external',
+      label: 'Preview artifact',
+      href: product.id,
+      target: 'artifact-preview',
     });
+    expect(event?.metadata?.productId).toBe(product.id);
     expect(event?.metadata?.artifact).toEqual(artifact);
   });
 

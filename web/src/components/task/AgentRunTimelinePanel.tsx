@@ -57,6 +57,7 @@ import { useTaskNotifications, type AgentNotification } from '@/hooks/useNotific
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
 import { useActiveRuns, useRecentRuns, type WorkflowRun } from '@/hooks/useWorkflowStats';
 import { sanitizeText } from '@/lib/sanitize';
+import { ArtifactPreviewModal } from './ArtifactPreviewModal';
 import { RunAccessPanel } from './RunAccessPanel';
 
 type TimelineTabTarget = 'agent' | 'changes' | 'details' | 'review' | 'work-products';
@@ -257,11 +258,11 @@ function workflowStartedAt(run: WorkflowRun): string {
 }
 
 function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['link'] {
-  if (product.artifact?.state === 'available') {
+  if (product.artifact) {
     return {
-      label: 'Download artifact',
-      href: `${BASE_PATH}/api/work-products/${encodeURIComponent(product.id)}/artifact/download?version=${product.version}`,
-      target: 'external',
+      label: 'Preview artifact',
+      href: product.id,
+      target: 'artifact-preview',
     };
   }
   const sourceLink = product.sourceLinks?.find((link) => link.type === 'pr' || link.type === 'url');
@@ -802,6 +803,7 @@ export function buildAgentRunTimelineEvents({
         version: product.version,
         status: product.status,
         sourceRunId: product.sourceRunId,
+        productId: product.id,
         agent: product.agent,
         model: product.model,
         redacted: product.redacted,
@@ -944,18 +946,29 @@ function EventRow({
   highlighted,
   onOpenTab,
   onOpenWorkflow,
+  onPreviewArtifact,
 }: {
   event: AgentRunTimelineEvent;
   highlighted?: boolean;
   onOpenTab?: (target: TimelineTabTarget) => void;
   onOpenWorkflow?: (runId?: string) => void;
+  onPreviewArtifact?: (productId: string, version: number) => void;
 }) {
   const Icon = EVENT_ICONS[event.type];
   const metadata = stringifyMetadata(event.metadata);
   const linkTarget = event.link?.target;
   const canOpenInternal =
-    linkTarget && linkTarget !== 'external' && linkTarget !== 'workflow' && onOpenTab;
+    linkTarget &&
+    linkTarget !== 'external' &&
+    linkTarget !== 'workflow' &&
+    linkTarget !== 'artifact-preview' &&
+    onOpenTab;
   const canOpenWorkflow = linkTarget === 'workflow' && onOpenWorkflow;
+  const previewProductId = safeString(event.metadata?.productId);
+  const previewVersion =
+    typeof event.metadata?.version === 'number' ? event.metadata.version : undefined;
+  const canPreviewArtifact =
+    linkTarget === 'artifact-preview' && previewProductId && previewVersion && onPreviewArtifact;
   const canOpenExternal = linkTarget === 'external' && event.link?.href;
   const governanceTraceHref = governanceTraceHrefForEvent(event);
 
@@ -1005,7 +1018,11 @@ function EventRow({
             {metadata}
           </Code>
         )}
-        {(canOpenInternal || canOpenWorkflow || canOpenExternal || governanceTraceHref) && (
+        {(canOpenInternal ||
+          canOpenWorkflow ||
+          canOpenExternal ||
+          canPreviewArtifact ||
+          governanceTraceHref) && (
           <Group gap="xs">
             {canOpenInternal && linkTarget && event.link && (
               <Button
@@ -1021,6 +1038,15 @@ function EventRow({
                 size="compact-xs"
                 variant="subtle"
                 onClick={() => onOpenWorkflow?.(safeString(event.metadata?.runId))}
+              >
+                {event.link.label}
+              </Button>
+            )}
+            {canPreviewArtifact && event.link && (
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                onClick={() => onPreviewArtifact(previewProductId, previewVersion)}
               >
                 {event.link.label}
               </Button>
@@ -1063,6 +1089,11 @@ export function AgentRunTimelinePanel({
   onOpenTab,
   onOpenWorkflow,
 }: AgentRunTimelinePanelProps) {
+  const [previewArtifact, setPreviewArtifact] = useState<{
+    productId: string;
+    version: number;
+    title?: string;
+  } | null>(null);
   const hasLiveAttempt = task.attempt?.status === 'running';
   const { data: traces = [], isLoading: tracesLoading } = useAgentRunTraces(task.id, {
     live: hasLiveAttempt,
@@ -1681,6 +1712,9 @@ export function AgentRunTimelinePanel({
                     highlighted={highlighted}
                     onOpenTab={onOpenTab}
                     onOpenWorkflow={onOpenWorkflow}
+                    onPreviewArtifact={(productId, version) =>
+                      setPreviewArtifact({ productId, version, title: event.title })
+                    }
                   />
                 </div>
               );
@@ -1721,6 +1755,14 @@ export function AgentRunTimelinePanel({
           )}
         </Stack>
       </ScrollArea.Autosize>
+
+      <ArtifactPreviewModal
+        opened={Boolean(previewArtifact)}
+        productId={previewArtifact?.productId ?? null}
+        version={previewArtifact?.version}
+        title={previewArtifact?.title}
+        onClose={() => setPreviewArtifact(null)}
+      />
     </Stack>
   );
 }

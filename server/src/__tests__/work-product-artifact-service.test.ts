@@ -153,6 +153,23 @@ describe('WorkProductArtifactService', () => {
     expect(download?.metadata.sha256).toBe(
       'e440c4de8bd283b7419578bbfea049e685cbf7c42a4745695fd28d5d4909e9a6'
     );
+    await expect(
+      service.readPreviewSource({
+        workspaceId: 'local',
+        productId: first.product.id,
+        version: 1,
+      })
+    ).resolves.toMatchObject({
+      metadata: { id: first.metadata.id },
+      productStatus: 'active',
+      content,
+    });
+    await expect(
+      service.readPreviewSource({
+        workspaceId: 'another-workspace',
+        productId: first.product.id,
+      })
+    ).rejects.toThrow('another workspace');
 
     const versions = await service.listVersions({
       workspaceId: 'local',

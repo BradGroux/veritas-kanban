@@ -81,7 +81,8 @@ function sameIdentity(
     left.state === right.state &&
     left.quarantineReason === right.quarantineReason &&
     left.redaction.state === right.redaction.state &&
-    left.redaction.reason === right.redaction.reason
+    left.redaction.reason === right.redaction.reason &&
+    left.expiresAt === right.expiresAt
   );
 }
 
