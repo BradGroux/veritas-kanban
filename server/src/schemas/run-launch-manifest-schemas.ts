@@ -314,6 +314,7 @@ export const RunLaunchManifestSchema = z
                       'absolute',
                       'run-temp',
                       'run-cache',
+                      'run-artifact',
                     ]),
                     pathDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
                   })

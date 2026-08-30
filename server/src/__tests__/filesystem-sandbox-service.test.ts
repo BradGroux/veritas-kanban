@@ -779,6 +779,7 @@ describe('FilesystemSandboxService', () => {
     expect(plan.environment).toMatchObject({
       TMPDIR: plan.directories?.tempPath,
       XDG_CACHE_HOME: plan.directories?.cachePath,
+      VERITAS_ARTIFACT_ROOT: plan.directories?.artifactPath,
     });
     expect(plan.evidence).toMatchObject({
       backend: 'provider-native',
@@ -789,12 +790,14 @@ describe('FilesystemSandboxService', () => {
       expect.arrayContaining([
         expect.objectContaining({ scope: 'run-temp', access: 'write' }),
         expect.objectContaining({ scope: 'run-cache', access: 'write' }),
+        expect.objectContaining({ scope: 'run-artifact', access: 'write' }),
         expect.objectContaining({ access: 'protected' }),
       ])
     );
 
     await service.activate(plan);
     await expect(fs.stat(plan.directories?.tempPath ?? '')).resolves.toBeDefined();
+    await expect(fs.stat(plan.directories?.artifactPath ?? '')).resolves.toBeDefined();
     await service.cleanup(plan);
     await expect(fs.stat(plan.directories?.rootPath ?? '')).rejects.toMatchObject({
       code: 'ENOENT',

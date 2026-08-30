@@ -279,6 +279,9 @@ export function evaluateCoverage(
         const included = boundary.include.some((pattern) => matchesGlob(changedFile, pattern));
         const excepted = exceptions.some((exception) => exception.path === changedFile);
         if (!included || excepted) continue;
+        const hasChangedLineAnalysis = changedLineNumbers.has(changedFile);
+        const changedLines = changedLineNumbers.get(changedFile) ?? new Set();
+        if (hasChangedLineAnalysis && changedLines.size === 0) continue;
         const fileCoverage = summary[changedFile];
         if (!fileCoverage || fileCoverage.lines.total === 0) {
           failures.push(
@@ -289,9 +292,8 @@ export function evaluateCoverage(
             `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no covered lines`
           );
         }
-        const changedLines = changedLineNumbers.get(changedFile) ?? new Set();
         const detailedFileCoverage = details[changedFile];
-        if (changedLines.size > 0 && !detailedFileCoverage) {
+        if (hasChangedLineAnalysis && changedLines.size > 0 && !detailedFileCoverage) {
           failures.push(
             `${packagePolicy.id}/${boundary.id} changed critical file ${changedFile} has no statement coverage entry`
           );

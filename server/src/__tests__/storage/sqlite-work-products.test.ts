@@ -275,12 +275,12 @@ describe('SQLite work products', () => {
         cleanupEligible: true,
         taskId: completedTask.id,
         sourceRunId: 'attempt_packet',
-        versionCount: 2,
+        versionCount: 3,
       });
       expect(maintenancePreview.retained.map((item) => item.id)).toContain(created.id);
       expect(maintenancePreview.byKind.find((group) => group.kind === 'report')).toMatchObject({
         products: 1,
-        versions: 2,
+        versions: 3,
       });
       expect(maintenancePreview.notes.join(' ')).toContain('Preview only');
     } finally {
@@ -299,6 +299,74 @@ describe('SQLite work products', () => {
       } else {
         process.env.VERITAS_SQLITE_PATH = originalSqlitePath;
       }
+    }
+  });
+
+  it('applies workspace scope before SQLite list limits and preserves direct reads', async () => {
+    const fixture = createTestSqliteDatabase();
+    const service = new WorkProductService({
+      storageType: 'sqlite',
+      sqliteDatabase: fixture.database,
+    });
+    try {
+      fixture.database
+        .getConnection()
+        .prepare('INSERT INTO workspaces (id, slug, name) VALUES (?, ?, ?)')
+        .run('foreign', 'foreign', 'Foreign workspace');
+      const local = await service.create({
+        kind: 'text',
+        title: 'Local product',
+        workspaceId: 'local',
+        render: { schemaVersion: 1, kind: 'text', text: 'local' },
+      });
+      const foreign = await service.create({
+        kind: 'text',
+        title: 'Foreign product',
+        workspaceId: 'foreign',
+        render: { schemaVersion: 1, kind: 'text', text: 'foreign' },
+      });
+
+      await expect(service.list({ workspaceId: 'foreign', limit: 1 })).resolves.toEqual([foreign]);
+      await expect(service.list({ workspaceId: 'local', limit: 1 })).resolves.toEqual([local]);
+      await expect(service.get(foreign.id)).resolves.toEqual(foreign);
+      await expect(service.listVersions(foreign.id)).resolves.toHaveLength(1);
+      await service.archive(foreign.id);
+      await expect(service.purge(foreign.id)).resolves.toBe(true);
+      await expect(service.get(foreign.id)).resolves.toBeNull();
+      await expect(service.listVersions(foreign.id)).resolves.toEqual([]);
+    } finally {
+      service.dispose();
+      fixture.cleanup();
+    }
+  });
+
+  it('rolls back a failed SQLite product purge', async () => {
+    const fixture = createTestSqliteDatabase();
+    const service = new WorkProductService({
+      storageType: 'sqlite',
+      sqliteDatabase: fixture.database,
+    });
+    try {
+      const product = await service.create({
+        kind: 'text',
+        title: 'Rollback product',
+        render: { schemaVersion: 1, kind: 'text', text: 'retain after failed purge' },
+      });
+      const connection = fixture.database.getConnection();
+      connection.exec(`
+        CREATE TRIGGER block_product_delete
+        BEFORE DELETE ON work_products
+        BEGIN
+          SELECT RAISE(ABORT, 'blocked');
+        END;
+      `);
+
+      await expect(service.purge(product.id)).rejects.toThrow(/blocked/);
+      await expect(service.get(product.id)).resolves.toEqual(product);
+      connection.exec('DROP TRIGGER block_product_delete;');
+    } finally {
+      service.dispose();
+      fixture.cleanup();
     }
   });
 });

@@ -312,6 +312,21 @@ test('requires changed executable statements themselves to be covered', () => {
   assert.equal(covered.results[0].status, 'pass');
 });
 
+test('does not require executable coverage for a type-only changed critical file', () => {
+  const summary = { server: { 'server/src/middleware/auth.ts': fileCoverage(3, 4) } };
+  const covered = evaluateCoverage(
+    policy,
+    summary,
+    '2026-08-23',
+    ['server/src/middleware/types.ts'],
+    { server: {} },
+    new Map([['server/src/middleware/types.ts', new Set()]])
+  );
+
+  assert.deepEqual(covered.failures, []);
+  assert.equal(covered.results[0].status, 'pass');
+});
+
 test('rejects broad and untracked exceptions', () => {
   const invalid = globalThis.structuredClone(policy);
   invalid.packages[0].boundaries[0].exceptions = [

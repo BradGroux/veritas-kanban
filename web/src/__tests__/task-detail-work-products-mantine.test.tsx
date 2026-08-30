@@ -10,6 +10,7 @@ import type { WorkProductPreview, WorkProductVersion } from '@veritas-kanban/sha
 const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
   execCommand: vi.fn(),
+  downloadArtifact: vi.fn(),
   exportWorkProduct: vi.fn(),
   listForTask: vi.fn(),
   listVersions: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     workProducts: {
       export: mocks.exportWorkProduct,
+      downloadArtifact: mocks.downloadArtifact,
       listForTask: mocks.listForTask,
       listVersions: mocks.listVersions,
       update: mocks.updateWorkProduct,
@@ -31,6 +33,7 @@ const listForTaskMock = vi.mocked(api.workProducts.listForTask);
 const exportWorkProductMock = vi.mocked(api.workProducts.export);
 const listVersionsMock = vi.mocked(api.workProducts.listVersions);
 const updateWorkProductMock = vi.mocked(api.workProducts.update);
+const downloadArtifactMock = vi.mocked(api.workProducts.downloadArtifact);
 
 const product: WorkProductPreview = {
   id: 'wp_launch_readiness',
@@ -78,12 +81,43 @@ const versions: WorkProductVersion[] = [
   },
 ];
 
+const fileProduct: WorkProductPreview = {
+  ...product,
+  id: 'wp_file_release_report',
+  kind: 'file',
+  title: 'Release report PDF',
+  version: 1,
+  redacted: false,
+  snippet: 'release-report.pdf\napplication/pdf\n1024 bytes',
+  artifact: {
+    schemaVersion: 'work-product-artifact/v1',
+    id: `wpa_${'a'.repeat(24)}`,
+    productId: `wp_${'b'.repeat(24)}`,
+    version: 1,
+    workspaceId: 'local',
+    taskId: 'task-work-products',
+    runId: 'run-123',
+    attemptId: 'attempt-123',
+    producingEventId: 'event-123',
+    requestIdDigest: `sha256:${'c'.repeat(64)}`,
+    launchManifestDigest: `sha256:${'d'.repeat(64)}`,
+    mediaType: 'application/pdf',
+    byteSize: 1024,
+    sha256: 'e'.repeat(64),
+    safeName: 'release-report.pdf',
+    state: 'available',
+    redaction: { state: 'none' },
+    createdAt: '2026-06-01T11:00:00.000Z',
+  },
+};
+
 describe('task detail work products surface', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listForTaskMock.mockResolvedValue([product]);
     listVersionsMock.mockResolvedValue(versions);
     exportWorkProductMock.mockResolvedValue('# Redacted launch report');
+    downloadArtifactMock.mockResolvedValue(new Blob(['artifact bytes']));
     updateWorkProductMock.mockResolvedValue({
       id: product.id,
       workspaceId: product.workspaceId,
@@ -209,6 +243,24 @@ describe('task detail work products surface', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:work-product');
     expect(appendSpy).toHaveBeenCalled();
     expect(removeSpy).toHaveBeenCalled();
+  });
+
+  it('shows file integrity and downloads through the authenticated artifact API', async () => {
+    listForTaskMock.mockResolvedValue([fileProduct]);
+    const user = userEvent.setup();
+    renderWithProviders(<WorkProductsSection taskId="task-work-products" />);
+
+    expect(await screen.findByText('Release report PDF')).toBeDefined();
+    expect(screen.getByText(/release-report\.pdf \| application\/pdf \| 1\.0 KiB/)).toBeDefined();
+    expect(screen.getByText(`SHA-256 ${'e'.repeat(64)}`)).toBeDefined();
+    expect(screen.getByText(/Attempt attempt-123 \| Event event-123 \| available/)).toBeDefined();
+    expect(screen.queryByRole('button', { name: /edit release report pdf/i })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Download release-report.pdf' }));
+
+    await waitFor(() => expect(downloadArtifactMock).toHaveBeenCalledWith(fileProduct.id, 1));
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:work-product');
   });
 
   it('loads redacted markdown for manual edits and saves a new version', async () => {

@@ -190,7 +190,8 @@ export type RunLaunchFilesystemRootScope =
   | 'home'
   | 'absolute'
   | 'run-temp'
-  | 'run-cache';
+  | 'run-cache'
+  | 'run-artifact';
 
 export interface RunLaunchFilesystemRootEvidence {
   id: string;
