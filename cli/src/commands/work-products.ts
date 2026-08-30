@@ -132,6 +132,9 @@ export function registerWorkProductCommands(program: Command): void {
           throw new Error(detail || `Download failed with HTTP ${response.status}`);
         }
         const content = Buffer.from(await response.arrayBuffer());
+        // The destination is an explicit local operator argument, not a server-provided path;
+        // exclusive creation remains the default and overwrite requires --force.
+        // codeql[js/http-to-file-access]
         await writeFile(options.output, content, { flag: options.force ? 'w' : 'wx' });
         const result = {
           productId: id,

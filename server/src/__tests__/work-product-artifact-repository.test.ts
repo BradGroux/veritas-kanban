@@ -106,6 +106,20 @@ describe('SecureWorkProductArtifactSourceReader', () => {
 });
 
 describe('FileWorkProductArtifactRepository', () => {
+  it('rejects an artifact storage root with group or public access', async () => {
+    if (process.platform === 'win32') return;
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-public-artifact-repository-'));
+    cleanupPaths.push(root);
+    const baseDir = path.join(root, 'artifacts');
+    await fs.mkdir(baseDir, { mode: 0o755 });
+    await fs.chmod(baseDir, 0o755);
+    const repository = new FileWorkProductArtifactRepository(baseDir);
+
+    await expect(repository.get(lookup(metadata(Buffer.from('a'))))).rejects.toThrow(
+      /group or public access/
+    );
+  });
+
   it('enforces content state, integrity, identity, and immutable payload presence', async () => {
     const { root, repository } = await repositoryFixture();
     const content = Buffer.from('artifact bytes');

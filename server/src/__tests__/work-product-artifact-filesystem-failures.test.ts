@@ -144,6 +144,7 @@ describe('artifact filesystem race handling', () => {
     const productDir = path.join(root, 'artifacts', 'local', 'wp_123456789012345678901234');
     await actualFs.mkdir(path.join(productDir, '1', 'wpa_123456789012345678901234'), {
       recursive: true,
+      mode: 0o700,
     });
     fsMocks.lstat.mockImplementation((target, ...args) => {
       if (String(target).endsWith('payload.bin')) {
