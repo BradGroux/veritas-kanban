@@ -405,6 +405,203 @@ describe('vk agent runtime capability controls', () => {
     });
   });
 
+  it('renders access deltas, enforcement blockers, budget posture, and approval guidance', async () => {
+    const preview = {
+      schemaVersion: 'run-access-change-preview/v1',
+      requestId: 'access-change-operator',
+      requestRevision: `sha256:${'c'.repeat(64)}`,
+      targetPhase: 'publish',
+      authorityDelta: {
+        entries: [{ dimension: 'network', addedScopes: ['release'], removedScopes: ['preview'] }],
+      },
+      enforcement: {
+        state: 'blocked',
+        blockers: [{ code: 'relaunch-required', message: 'Pause before relaunch.' }],
+      },
+      budgetImpact: {
+        classification: 'unchanged',
+        after: { reservationState: 'active' },
+      },
+    };
+    mockApi
+      .mockResolvedValueOnce({
+        phase: {
+          transitionSequence: 2,
+          effectiveEvidence: { digest: `sha256:${'a'.repeat(64)}` },
+          manifestDigest: `sha256:${'b'.repeat(64)}`,
+        },
+      })
+      .mockResolvedValueOnce({ current: { digest: `sha256:${'d'.repeat(64)}` }, history: [] })
+      .mockResolvedValueOnce(preview);
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:change-access',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--target-phase',
+        'publish',
+        '--reason',
+        'Review access.',
+        '--request',
+        'access-change-operator',
+      ],
+      { from: 'user' }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Run Access change blocked'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('network: +release -preview'));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('relaunch-required: Pause before relaunch.')
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Budget: unchanged (active)'));
+  });
+
+  it('renders approval-required and applied access transitions', async () => {
+    const phase = {
+      phase: {
+        transitionSequence: 2,
+        effectiveEvidence: { digest: `sha256:${'a'.repeat(64)}` },
+        manifestDigest: `sha256:${'b'.repeat(64)}`,
+      },
+    };
+    const access = { current: { digest: `sha256:${'d'.repeat(64)}` }, history: [] };
+    const preview = {
+      requestId: 'access-change-apply',
+      requestRevision: `sha256:${'c'.repeat(64)}`,
+      targetPhase: 'publish',
+      authorityDelta: { entries: [] },
+      enforcement: { state: 'ready', blockers: [] },
+      budgetImpact: { classification: 'unchanged', after: { reservationState: 'active' } },
+    };
+    mockApi
+      .mockResolvedValueOnce(phase)
+      .mockResolvedValueOnce(access)
+      .mockResolvedValueOnce(preview)
+      .mockResolvedValueOnce({
+        transition: {
+          status: 'approval-required',
+          approval: { id: 'runapproval_Access123456' },
+        },
+      });
+    const first = new Command();
+    first.exitOverride();
+    registerAgentCommands(first);
+    await first.parseAsync(
+      [
+        'agent:change-access',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--target-phase',
+        'publish',
+        '--reason',
+        'Publish release.',
+        '--request',
+        'access-change-apply',
+        '--apply',
+      ],
+      { from: 'user' }
+    );
+    expect(console.log).toHaveBeenCalledWith('  Approval: runapproval_Access123456');
+
+    mockApi
+      .mockResolvedValueOnce(phase)
+      .mockResolvedValueOnce(access)
+      .mockResolvedValueOnce(preview)
+      .mockResolvedValueOnce({ transition: { status: 'applied', record: { sequence: 3 } } });
+    const second = new Command();
+    second.exitOverride();
+    registerAgentCommands(second);
+    await second.parseAsync(
+      [
+        'agent:change-access',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--target-phase',
+        'publish',
+        '--reason',
+        'Publish release.',
+        '--request',
+        'access-change-apply',
+        '--approval-id',
+        'runapproval_Access123456',
+        '--apply',
+      ],
+      { from: 'user' }
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Applied access version #3'));
+  });
+
+  it('fails closed when phase authority is absent or approval TTL is invalid', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as typeof process.exit);
+    try {
+      mockApi.mockResolvedValueOnce({ phase: null });
+      const missing = new Command();
+      missing.exitOverride();
+      registerAgentCommands(missing);
+      await expect(
+        missing.parseAsync(
+          [
+            'agent:change-access',
+            'task_1',
+            '--attempt',
+            'attempt_1',
+            '--target-phase',
+            'publish',
+            '--reason',
+            'Publish release.',
+          ],
+          { from: 'user' }
+        )
+      ).rejects.toThrow('process.exit called');
+
+      mockApi
+        .mockResolvedValueOnce({
+          phase: {
+            transitionSequence: 2,
+            effectiveEvidence: { digest: `sha256:${'a'.repeat(64)}` },
+            manifestDigest: `sha256:${'b'.repeat(64)}`,
+          },
+        })
+        .mockResolvedValueOnce({ current: { digest: `sha256:${'d'.repeat(64)}` }, history: [] });
+      const invalidTtl = new Command();
+      invalidTtl.exitOverride();
+      registerAgentCommands(invalidTtl);
+      await expect(
+        invalidTtl.parseAsync(
+          [
+            'agent:change-access',
+            'task_1',
+            '--attempt',
+            'attempt_1',
+            '--target-phase',
+            'publish',
+            '--reason',
+            'Publish release.',
+            '--approval-ttl-ms',
+            'not-a-number',
+          ],
+          { from: 'user' }
+        )
+      ).rejects.toThrow('process.exit called');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('--approval-ttl-ms must be an integer')
+      );
+    } finally {
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
+  });
+
   it('renders the redacted access summary and blockers for operators', async () => {
     mockApi.mockResolvedValueOnce({
       current: {
