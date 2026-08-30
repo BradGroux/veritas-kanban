@@ -12,11 +12,14 @@ import {
   WorkProductExportQuerySchema,
   RegisterWorkProductArtifactBodySchema,
   WorkProductArtifactPurgeQuerySchema,
+  WorkProductArtifactPreviewAuditBodySchema,
   WorkProductArtifactPreviewQuerySchema,
   WorkProductArtifactVersionQuerySchema,
   WorkProductListQuerySchema,
 } from '../schemas/work-product-schemas.js';
 import { getWorkProductArtifactPreviewService } from '../services/work-product-artifact-preview-service.js';
+import { auditLog } from '../services/audit-service.js';
+import { actorFromRequest } from '../utils/concurrency.js';
 
 const router: RouterType = Router();
 const taskRouter: RouterType = Router();
@@ -157,13 +160,58 @@ router.get(
     const parsed = WorkProductArtifactPreviewQuerySchema.safeParse(req.query);
     if (!parsed.success) throw validationError(parsed.error);
     res.set('Cache-Control', 'private, no-store');
-    res.json(
-      await getWorkProductArtifactPreviewService().preview({
-        workspaceId: req.auth?.workspaceId || 'local',
-        productId: req.params.id as string,
-        version: parsed.data.version,
-      })
-    );
+    const preview = await getWorkProductArtifactPreviewService().preview({
+      workspaceId: req.auth?.workspaceId || 'local',
+      productId: req.params.id as string,
+      version: parsed.data.version,
+    });
+    if (preview.artifact?.mediaType.toLowerCase().split(';', 1)[0] === 'text/html') {
+      await auditLog({
+        action: 'artifact.preview.html.prepared',
+        actor: actorFromRequest(req),
+        resource: preview.artifact.productId,
+        details: {
+          artifactId: preview.artifact.id,
+          version: preview.artifact.version,
+          status: preview.status,
+          renderer: preview.renderer,
+          interactive: false,
+        },
+      });
+    }
+    res.json(preview);
+  })
+);
+
+router.post(
+  '/:id/artifact/preview/audit',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = WorkProductArtifactPreviewAuditBodySchema.safeParse(req.body);
+    if (!parsed.success) throw validationError(parsed.error);
+    const productId = req.params.id as string;
+    const versions = await getWorkProductArtifactService().listVersions({
+      workspaceId: authenticatedWorkspace(req),
+      productId,
+    });
+    const artifact = parsed.data.version
+      ? versions.find((candidate) => candidate.version === parsed.data.version)
+      : [...versions].sort((left, right) => right.version - left.version)[0];
+    if (!artifact) throw new NotFoundError('Work product artifact version not found');
+    if (artifact.mediaType.toLowerCase().split(';', 1)[0] !== 'text/html') {
+      throw new BadRequestError('HTML preview audit events require an HTML artifact.');
+    }
+    await auditLog({
+      action: `artifact.preview.html.${parsed.data.action}`,
+      actor: actorFromRequest(req),
+      resource: productId,
+      details: {
+        artifactId: artifact.id,
+        version: artifact.version,
+        state: artifact.state,
+        interactive: false,
+      },
+    });
+    res.status(204).end();
   })
 );
 

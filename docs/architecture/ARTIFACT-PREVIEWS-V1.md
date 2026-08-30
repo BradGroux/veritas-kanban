@@ -15,6 +15,16 @@ The server selects a renderer from validated bytes and normalized media type:
 - PDF requires valid PDF magic, bounded bytes and pages, successful parser loading, no external links, and no JavaScript, launch actions, embedded files, forms, rich media, or other active document actions. The client places approved bytes in a sandboxed data-origin frame with no referrer.
 - CSV uses a bounded quoted-cell parser. Open XML spreadsheets first pass archive entry, decompressed-size, compression-ratio, macro, embedding, connection, and external-link checks before workbook parsing. Both formats cap sheets, rows, columns, cell characters, and total rendered output. Formulas are displayed as inert formula text and are never evaluated.
 
+## Isolated HTML boundary
+
+`text/html` uses a separate defense-in-depth path. The server requires strict UTF-8, caps the source at 512 KiB, parses it with `sanitize-html`, and retains only passive semantic elements and a small set of non-URL accessibility and table attributes. It discards scripts, event handlers, document metadata, refresh directives, links, images, frames, forms, embeds, SVG, media, style supplied by the artifact, and every URL-bearing attribute. The server places the reduced body inside a complete host-owned document with fixed dark-theme styles and a CSP that denies scripts, connections, remote assets, frames, objects, forms, workers, manifests, media, fonts, and navigation.
+
+The web client renders that document only through `iframe.srcdoc` with an empty `sandbox` attribute and `referrerPolicy="no-referrer"`. Omitting `allow-same-origin` gives the document a unique opaque origin; omitting every other sandbox token denies scripts, forms, popups, downloads, pointer-lock, presentation, and top-navigation capabilities. The frame never receives an artifact URL, application cookie, authorization header, API credential, local-file path, or storage authority. The same browser boundary applies in desktop and remote clients. Sanitization improves presentation safety but is not the authority boundary; the iframe sandbox and CSP remain mandatory.
+
+Interactive HTML is not supported. Enabling scripts, same-origin authority, network access, or additional sandbox tokens requires a new versioned policy and security review rather than a compatibility exception.
+
+Preparing, opening, closing, refreshing, and navigating away from an HTML preview append bounded audit records. Records contain only the authenticated actor, opaque product and artifact IDs, version, renderer or state, and passive-mode decision. They never copy document bytes or rendered text.
+
 The JSON contract may carry base64 only for bounded raster and passive PDF bytes. The browser never receives an artifact filesystem URL.
 
 ## Fail-closed states
@@ -31,4 +41,4 @@ The shared modal traps and restores focus, announces loading and status changes,
 
 ## Non-capabilities
 
-This contract does not render HTML, execute scripts, evaluate spreadsheet formulas, load remote references, edit files, run macros, expose local-file privileges, or replace the authenticated download path. HTML requires a separate isolated-origin security boundary.
+This contract does not execute scripts, evaluate spreadsheet formulas, load remote references, edit files, run macros, expose local-file privileges, provide an interactive browser, or replace the authenticated download path. HTML preview is passive and remains inside the isolated boundary above.

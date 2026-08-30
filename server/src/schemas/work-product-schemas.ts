@@ -304,6 +304,13 @@ export const WorkProductArtifactPreviewQuerySchema = z
   })
   .strict();
 
+export const WorkProductArtifactPreviewAuditBodySchema = z
+  .object({
+    action: z.enum(['open', 'close', 'refresh', 'navigate']),
+    version: z.number().int().positive().optional(),
+  })
+  .strict();
+
 export const WorkProductArtifactPurgeQuerySchema = z
   .object({
     confirm: z.string().regex(/^wp_[A-Za-z0-9_-]{20,64}$/),

@@ -72,6 +72,22 @@ describe('workProductsApi', () => {
     );
   });
 
+  it('records bounded HTML preview lifecycle events', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, status: 204 } as Response);
+
+    await workProductsApi.recordPreviewAudit('wp/one', 'refresh', 3);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://test-api/work-products/wp%2Fone/artifact/preview/audit',
+      {
+        credentials: 'include',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh', version: 3 }),
+      }
+    );
+  });
+
   it('updates work-product metadata with the JSON API contract', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ id: 'wp-one', title: 'Updated' }));
 

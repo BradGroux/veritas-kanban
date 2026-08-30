@@ -114,6 +114,11 @@ describe('shared API permission metadata', () => {
     expect(
       getApiPermissionRequirement('/api/work-products/wp_123', { method: 'DELETE' }).permissions
     ).toEqual(['work_product:write']);
+    expect(
+      getApiPermissionRequirement('/api/v1/work-products/wp_123/artifact/preview/audit', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['work_product:read']);
   });
 
   it('requires workflow execution for Codex review diff posts', () => {

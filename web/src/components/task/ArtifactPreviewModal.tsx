@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Badge,
@@ -14,8 +14,11 @@ import {
   Text,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Download, ExternalLink, ZoomIn, ZoomOut } from 'lucide-react';
-import type { WorkProductArtifactPreview } from '@veritas-kanban/shared';
+import { AlertTriangle, Download, ExternalLink, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  WORK_PRODUCT_HTML_PREVIEW_SANDBOX,
+  type WorkProductArtifactPreview,
+} from '@veritas-kanban/shared';
 import { workProductsApi } from '@/lib/api/work-products';
 import { useView } from '@/contexts/ViewContext';
 import { toast } from '@/hooks/useToast';
@@ -45,6 +48,21 @@ export function ArtifactPreviewModal({
     staleTime: 30_000,
   });
   const preview = query.data;
+  const auditedSession = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!opened || !productId || preview?.renderer !== 'html' || !preview.artifact) return;
+    const artifactVersion = preview.artifact.version;
+    const session = `${productId}:${artifactVersion}`;
+    if (auditedSession.current === session) return;
+    auditedSession.current = session;
+    void workProductsApi.recordPreviewAudit(productId, 'open', artifactVersion).catch(() => {});
+    return () => {
+      if (auditedSession.current !== session) return;
+      auditedSession.current = null;
+      void workProductsApi.recordPreviewAudit(productId, 'close', artifactVersion).catch(() => {});
+    };
+  }, [opened, preview?.artifact, preview?.renderer, productId]);
 
   const download = async () => {
     if (!productId || !preview?.actions.downloadAllowed || !preview.artifact) return;
@@ -67,15 +85,28 @@ export function ArtifactPreviewModal({
     }
   };
 
-  const openCausalEvent = () => {
+  const openCausalEvent = async () => {
     if (!preview?.causalEvent) return;
     const event = preview.causalEvent;
+    if (productId && preview.renderer === 'html') {
+      await workProductsApi
+        .recordPreviewAudit(productId, 'navigate', preview.artifact?.version ?? version)
+        .catch(() => {});
+    }
     onClose();
     navigateToTask(event.taskId, {
       tab: 'timeline',
       timelineAttemptId: event.attemptId,
       timelineEventId: event.eventId,
     });
+  };
+
+  const refreshPreview = async () => {
+    if (!productId || preview?.renderer !== 'html') return;
+    await workProductsApi
+      .recordPreviewAudit(productId, 'refresh', preview.artifact?.version ?? version)
+      .catch(() => {});
+    await query.refetch();
   };
 
   return (
@@ -121,6 +152,16 @@ export function ArtifactPreviewModal({
         {preview && (
           <Group justify="space-between" wrap="wrap">
             <Group gap="xs">
+              {preview.renderer === 'html' && (
+                <Button
+                  variant="default"
+                  size="xs"
+                  leftSection={<RefreshCw className="h-3 w-3" />}
+                  onClick={refreshPreview}
+                >
+                  Refresh
+                </Button>
+              )}
               {(preview.renderer === 'image' || preview.renderer === 'pdf') && (
                 <>
                   <Button
@@ -211,6 +252,19 @@ function PreviewBody({ preview, zoom }: { preview: WorkProductArtifactPreview; z
           style={{ maxWidth: 'none', transform: `scale(${zoom})`, transformOrigin: 'top left' }}
         />
       </ScrollArea>
+    );
+  }
+  if (preview.content.kind === 'html') {
+    return (
+      <Paper withBorder h={520} style={{ overflow: 'hidden' }}>
+        <iframe
+          title={`${preview.artifact?.safeName ?? 'Artifact'} HTML preview`}
+          srcDoc={preview.content.document}
+          sandbox={WORK_PRODUCT_HTML_PREVIEW_SANDBOX}
+          referrerPolicy="no-referrer"
+          style={{ border: 0, width: '100%', height: '100%' }}
+        />
+      </Paper>
     );
   }
   if (preview.content.kind === 'pdf') {
