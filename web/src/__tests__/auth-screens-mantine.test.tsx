@@ -171,4 +171,88 @@ describe('auth screens Mantine migration', () => {
       expect(mocks.recover).toHaveBeenCalledWith('ABCD-EFGH-1234-5678', 'NewStrongPass1!')
     );
   });
+
+  it('associates setup guidance and announces one failure until the field changes', async () => {
+    mocks.setup.mockResolvedValue({ success: false, error: 'Setup could not be completed' });
+    renderWithProviders(<SetupScreen />);
+
+    const password = screen.getByLabelText('Password');
+    const confirmation = screen.getByLabelText('Confirm Password');
+    fireEvent.change(password, { target: { value: 'StrongPass1!' } });
+    expect(password.getAttribute('aria-describedby')).toBe('setup-password-strength');
+    expect(screen.getByText(/Password strength:/).getAttribute('aria-live')).toBeNull();
+
+    fireEvent.change(confirmation, { target: { value: 'different' } });
+    expect(confirmation.getAttribute('aria-invalid')).toBe('true');
+    expect(confirmation.getAttribute('aria-describedby')).toBe('setup-password-mismatch');
+    fireEvent.change(confirmation, { target: { value: 'StrongPass1!' } });
+    expect(confirmation.getAttribute('aria-invalid')).toBeNull();
+    expect(confirmation.getAttribute('aria-describedby')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Password' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Setup could not be completed');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(password.getAttribute('aria-invalid')).toBe('true');
+    expect(password.getAttribute('aria-describedby')?.split(/\s+/)).toEqual(
+      expect.arrayContaining(['setup-password-strength', 'setup-submission-error'])
+    );
+
+    fireEvent.change(password, { target: { value: 'ChangedPass1!' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(password.getAttribute('aria-invalid')).toBeNull();
+    expect(password.getAttribute('aria-describedby')).toBe('setup-password-strength');
+  });
+
+  it('announces a login failure once and clears stale field semantics on correction', async () => {
+    mocks.login.mockResolvedValue({ success: false, error: 'Invalid password' });
+    renderWithProviders(<LoginScreen />);
+
+    const password = screen.getByLabelText('Password');
+    fireEvent.change(password, { target: { value: 'WrongPass1!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Login' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Invalid password');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(password.getAttribute('aria-invalid')).toBe('true');
+    expect(password.getAttribute('aria-describedby')).toBe('login-submission-error');
+
+    fireEvent.change(password, { target: { value: 'CorrectedPass1!' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(password.getAttribute('aria-invalid')).toBeNull();
+    expect(password.getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('associates recovery mismatch and server failure without moving focus to the alert', async () => {
+    mocks.recover.mockResolvedValue({ success: false, error: 'Recovery failed' });
+    renderWithProviders(<LoginScreen />);
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+
+    const recoveryKey = screen.getByLabelText('Recovery Key');
+    const newPassword = screen.getByLabelText('New Password');
+    const confirmation = screen.getByLabelText('Confirm New Password');
+    fireEvent.change(recoveryKey, { target: { value: 'abcd-efgh-1234-5678' } });
+    fireEvent.change(newPassword, { target: { value: 'NewStrongPass1!' } });
+    fireEvent.change(confirmation, { target: { value: 'different' } });
+    expect(confirmation.getAttribute('aria-invalid')).toBe('true');
+    expect(confirmation.getAttribute('aria-describedby')).toBe('recovery-password-mismatch');
+
+    fireEvent.change(confirmation, { target: { value: 'NewStrongPass1!' } });
+    expect(confirmation.getAttribute('aria-invalid')).toBeNull();
+    expect(confirmation.getAttribute('aria-describedby')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Recovery failed');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(document.activeElement).not.toBe(alert);
+    expect(recoveryKey.getAttribute('aria-invalid')).toBe('true');
+    expect(recoveryKey.getAttribute('aria-describedby')).toBe('recovery-submission-error');
+
+    fireEvent.change(recoveryKey, { target: { value: 'WXYZ-EFGH-1234-5678' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(recoveryKey.getAttribute('aria-invalid')).toBeNull();
+    expect(recoveryKey.getAttribute('aria-describedby')).toBeNull();
+  });
 });
