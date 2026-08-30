@@ -14,6 +14,7 @@ import {
   AdmissionControlService,
   type AdmissionControlServiceOptions,
 } from '../services/admission-control-service.js';
+import { acquireLock } from '../services/file-lock.js';
 import { FileAdmissionReservationRepository } from '../storage/admission-reservation-repository.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteAdmissionReservationRepository } from '../storage/sqlite/admission-reservation-repository.js';
@@ -420,6 +421,60 @@ describe('AdmissionControlService', () => {
         Buffer.from('{"durable":true}\n')
       )
     ).rejects.toThrow(/no forward progress/i);
+  });
+
+  it('does not expose an incomplete admission snapshot to concurrent readers', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-admission-read-lock-'));
+    roots.push(root);
+    const logPath = path.join(root, 'admission.jsonl');
+    const repository = new FileAdmissionReservationRepository(logPath);
+    const service = createService(repository, configuredSettings());
+    await service.admit(request('task-read-lock'));
+    const completeLog = await fs.readFile(logPath);
+    const splitAt = Math.floor(completeLog.byteLength / 2);
+    const unlock = await acquireLock(logPath);
+    const handle = await fs.open(logPath, 'w');
+    let handleClosed = false;
+    let read:
+      | Promise<{
+          records: Awaited<ReturnType<typeof repository.list>> | null;
+          error: unknown;
+        }>
+      | undefined;
+
+    try {
+      await handle.write(completeLog.subarray(0, splitAt));
+      await handle.sync();
+      let readSettled = false;
+      read = repository
+        .list({ taskId: 'task-read-lock' })
+        .then(
+          (records) => ({ records, error: null }),
+          (error: unknown) => ({ records: null, error })
+        )
+        .finally(() => {
+          readSettled = true;
+        });
+
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(readSettled).toBe(false);
+      await handle.write(completeLog.subarray(splitAt));
+      await handle.sync();
+      await handle.close();
+      handleClosed = true;
+    } finally {
+      if (!handleClosed) await handle.close().catch(() => {});
+      await unlock();
+    }
+
+    await expect(read).resolves.toMatchObject({
+      records: [
+        expect.objectContaining({
+          request: expect.objectContaining({ taskId: 'task-read-lock' }),
+        }),
+      ],
+      error: null,
+    });
   });
 
   it('renews a leased queue claim until dispatch ownership takes over', async () => {

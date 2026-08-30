@@ -273,65 +273,77 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
   }
 
   async get(id: string): Promise<AdmissionReservation | null> {
-    return this.materialize(await this.readSnapshots()).get(id) ?? null;
+    await this.prepareParent();
+    return withFileLock(
+      this.filePath,
+      async () => this.materialize(await this.readSnapshots()).get(id) ?? null
+    );
   }
 
   async list(query: AdmissionReservationListQuery): Promise<AdmissionReservation[]> {
-    const states = query.states ? new Set(query.states) : undefined;
-    return [...this.materialize(await this.readSnapshots()).values()]
-      .filter((record) => !query.workspaceId || record.request.workspaceId === query.workspaceId)
-      .filter((record) => !query.taskId || record.request.taskId === query.taskId)
-      .filter((record) => !query.rootTaskId || record.request.rootTaskId === query.rootTaskId)
-      .filter((record) => !query.provider || record.request.provider === query.provider)
-      .filter((record) => !query.hostId || record.request.hostId === query.hostId)
-      .filter(
-        (record) => !query.workflowRunId || record.request.workflowRunId === query.workflowRunId
-      )
-      .filter(
-        (record) => !query.workflowStepId || record.request.workflowStepId === query.workflowStepId
-      )
-      .filter(
-        (record) =>
-          !query.rootReservationId || record.request.rootReservationId === query.rootReservationId
-      )
-      .filter(
-        (record) =>
-          !query.rootObjectiveId ||
-          record.request.executionTree?.rootObjectiveId === query.rootObjectiveId
-      )
-      .filter((record) => !query.nodeId || record.request.executionTree?.nodeId === query.nodeId)
-      .filter(
-        (record) =>
-          !query.parentNodeId || record.request.executionTree?.parentNodeId === query.parentNodeId
-      )
-      .filter((record) => !states || states.has(record.state))
-      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-      .slice(0, query.limit ?? 100);
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const states = query.states ? new Set(query.states) : undefined;
+      return [...this.materialize(await this.readSnapshots()).values()]
+        .filter((record) => !query.workspaceId || record.request.workspaceId === query.workspaceId)
+        .filter((record) => !query.taskId || record.request.taskId === query.taskId)
+        .filter((record) => !query.rootTaskId || record.request.rootTaskId === query.rootTaskId)
+        .filter((record) => !query.provider || record.request.provider === query.provider)
+        .filter((record) => !query.hostId || record.request.hostId === query.hostId)
+        .filter(
+          (record) => !query.workflowRunId || record.request.workflowRunId === query.workflowRunId
+        )
+        .filter(
+          (record) =>
+            !query.workflowStepId || record.request.workflowStepId === query.workflowStepId
+        )
+        .filter(
+          (record) =>
+            !query.rootReservationId || record.request.rootReservationId === query.rootReservationId
+        )
+        .filter(
+          (record) =>
+            !query.rootObjectiveId ||
+            record.request.executionTree?.rootObjectiveId === query.rootObjectiveId
+        )
+        .filter((record) => !query.nodeId || record.request.executionTree?.nodeId === query.nodeId)
+        .filter(
+          (record) =>
+            !query.parentNodeId || record.request.executionTree?.parentNodeId === query.parentNodeId
+        )
+        .filter((record) => !states || states.has(record.state))
+        .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+        .slice(0, query.limit ?? 100);
+    });
   }
 
   async getQueueEntry(id: string): Promise<AdmissionQueueEntry | null> {
-    return (await this.readQueueEntries()).get(id) ?? null;
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => (await this.readQueueEntries()).get(id) ?? null);
   }
 
   async listQueue(query: AdmissionQueueListQuery): Promise<AdmissionQueueEntry[]> {
-    const states = query.states ? new Set(query.states) : undefined;
-    return [...(await this.readQueueEntries()).values()]
-      .filter((entry) => !query.workspaceId || entry.request.workspaceId === query.workspaceId)
-      .filter((entry) => !query.taskId || entry.request.taskId === query.taskId)
-      .filter((entry) => !states || states.has(entry.state))
-      .filter((entry) => !query.withSelectionEvidence || Boolean(entry.selectionEvidence))
-      .filter(
-        (entry) =>
-          !query.eligibleAt || Date.parse(entry.availableAt) <= Date.parse(query.eligibleAt)
-      )
-      .sort((left, right) =>
-        query.order === 'updated-desc'
-          ? Date.parse(right.updatedAt) - Date.parse(left.updatedAt) ||
-            right.enqueueSequence - left.enqueueSequence ||
-            left.id.localeCompare(right.id)
-          : left.enqueueSequence - right.enqueueSequence || left.id.localeCompare(right.id)
-      )
-      .slice(0, query.limit ?? 100);
+    await this.prepareParent();
+    return withFileLock(this.filePath, async () => {
+      const states = query.states ? new Set(query.states) : undefined;
+      return [...(await this.readQueueEntries()).values()]
+        .filter((entry) => !query.workspaceId || entry.request.workspaceId === query.workspaceId)
+        .filter((entry) => !query.taskId || entry.request.taskId === query.taskId)
+        .filter((entry) => !states || states.has(entry.state))
+        .filter((entry) => !query.withSelectionEvidence || Boolean(entry.selectionEvidence))
+        .filter(
+          (entry) =>
+            !query.eligibleAt || Date.parse(entry.availableAt) <= Date.parse(query.eligibleAt)
+        )
+        .sort((left, right) =>
+          query.order === 'updated-desc'
+            ? Date.parse(right.updatedAt) - Date.parse(left.updatedAt) ||
+              right.enqueueSequence - left.enqueueSequence ||
+              left.id.localeCompare(right.id)
+            : left.enqueueSequence - right.enqueueSequence || left.id.localeCompare(right.id)
+        )
+        .slice(0, query.limit ?? 100);
+    });
   }
 
   async compareAndSetQueue(
