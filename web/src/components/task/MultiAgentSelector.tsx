@@ -67,8 +67,7 @@ export function MultiAgentSelector({
   const removeAgent = (agentId: string) => {
     const newAgents = agents.filter((a) => a !== agentId);
     // If we removed the primary, promote next
-    const primary =
-      primaryAgent === agentId ? newAgents[0] || undefined : primaryAgent;
+    const primary = primaryAgent === agentId ? newAgents[0] || undefined : primaryAgent;
     onChange(newAgents, primary);
   };
 
@@ -97,7 +96,7 @@ export function MultiAgentSelector({
           return (
             <span
               key={agent}
-              className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer transition-all ${
+              className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
                 isPrimary ? 'ring-1' : ''
               }`}
               style={{
@@ -110,9 +109,7 @@ export function MultiAgentSelector({
             >
               <Bot className="w-3 h-3" />
               {agent}
-              {isPrimary && (
-                <span className="text-[8px] font-bold opacity-60">★</span>
-              )}
+              {isPrimary && <span className="text-[8px] font-bold opacity-60">★</span>}
               <button
                 className="ml-0.5 hover:bg-white/20 rounded-full p-0.5 transition-colors"
                 onClick={(e) => {
@@ -128,7 +125,7 @@ export function MultiAgentSelector({
 
         {/* Add button */}
         <button
-          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground px-2 py-0.5 rounded-full border border-dashed border-muted-foreground/20 hover:border-muted-foreground/40 transition-all"
+          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground px-2 py-0.5 rounded-full border border-dashed border-muted-foreground/20 hover:border-muted-foreground/40 transition-colors"
           onClick={() => setShowDropdown(!showDropdown)}
         >
           <Plus className="w-3 h-3" />
