@@ -246,7 +246,15 @@ export interface AgentRunTimelineEvent {
   link?: {
     label: string;
     href: string;
-    target?: 'agent' | 'changes' | 'details' | 'review' | 'work-products' | 'workflow' | 'external';
+    target?:
+      | 'agent'
+      | 'artifact-preview'
+      | 'changes'
+      | 'details'
+      | 'review'
+      | 'work-products'
+      | 'workflow'
+      | 'external';
   };
 }
 

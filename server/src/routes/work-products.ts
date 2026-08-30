@@ -12,9 +12,11 @@ import {
   WorkProductExportQuerySchema,
   RegisterWorkProductArtifactBodySchema,
   WorkProductArtifactPurgeQuerySchema,
+  WorkProductArtifactPreviewQuerySchema,
   WorkProductArtifactVersionQuerySchema,
   WorkProductListQuerySchema,
 } from '../schemas/work-product-schemas.js';
+import { getWorkProductArtifactPreviewService } from '../services/work-product-artifact-preview-service.js';
 
 const router: RouterType = Router();
 const taskRouter: RouterType = Router();
@@ -144,6 +146,22 @@ router.get(
       await getWorkProductArtifactService().listVersions({
         workspaceId: req.auth?.workspaceId ?? 'local',
         productId: req.params.id as string,
+      })
+    );
+  })
+);
+
+router.get(
+  '/:id/artifact/preview',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = WorkProductArtifactPreviewQuerySchema.safeParse(req.query);
+    if (!parsed.success) throw validationError(parsed.error);
+    res.set('Cache-Control', 'private, no-store');
+    res.json(
+      await getWorkProductArtifactPreviewService().preview({
+        workspaceId: req.auth?.workspaceId || 'local',
+        productId: req.params.id as string,
+        version: parsed.data.version,
       })
     );
   })

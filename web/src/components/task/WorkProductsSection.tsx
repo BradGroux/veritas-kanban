@@ -21,6 +21,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useTaskWorkProducts, useWorkProductVersions } from '@/hooks/useWorkProducts';
 import { toast } from '@/hooks/useToast';
+import { ArtifactPreviewModal } from './ArtifactPreviewModal';
 import {
   isExternalTargetHref,
   normalizeSafeHref,
@@ -32,6 +33,7 @@ import {
   AlertCircle,
   Clipboard,
   Download,
+  Eye,
   ExternalLink,
   FileText,
   History,
@@ -112,6 +114,7 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
   const [editBody, setEditBody] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [previewProduct, setPreviewProduct] = useState<WorkProductPreview | null>(null);
   const { data: versions = [], isLoading: versionsLoading } = useWorkProductVersions(
     historyProduct?.id ?? null
   );
@@ -350,6 +353,17 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
                     </div>
                     <Group gap={4} wrap="nowrap">
                       {product.kind === 'file' && product.artifact && (
+                        <Tooltip label={`Preview ${product.artifact.safeName}`}>
+                          <ActionIcon
+                            aria-label={`Preview ${product.artifact.safeName}`}
+                            variant="subtle"
+                            onClick={() => setPreviewProduct(product)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      {product.kind === 'file' && product.artifact && (
                         <Tooltip
                           label={
                             product.artifact.state === 'available'
@@ -475,6 +489,14 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
           </Stack>
         )}
       </Stack>
+
+      <ArtifactPreviewModal
+        opened={Boolean(previewProduct)}
+        productId={previewProduct?.id ?? null}
+        version={previewProduct?.version}
+        title={previewProduct?.title}
+        onClose={() => setPreviewProduct(null)}
+      />
 
       <Modal
         opened={Boolean(historyProduct)}

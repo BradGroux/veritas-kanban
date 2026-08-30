@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   exportWorkProduct: vi.fn(),
   listForTask: vi.fn(),
   listVersions: vi.fn(),
+  previewArtifact: vi.fn(),
   updateWorkProduct: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock('@/lib/api', () => ({
       downloadArtifact: mocks.downloadArtifact,
       listForTask: mocks.listForTask,
       listVersions: mocks.listVersions,
+      previewArtifact: mocks.previewArtifact,
       update: mocks.updateWorkProduct,
     },
   },
@@ -34,6 +36,7 @@ const exportWorkProductMock = vi.mocked(api.workProducts.export);
 const listVersionsMock = vi.mocked(api.workProducts.listVersions);
 const updateWorkProductMock = vi.mocked(api.workProducts.update);
 const downloadArtifactMock = vi.mocked(api.workProducts.downloadArtifact);
+const previewArtifactMock = vi.mocked(api.workProducts.previewArtifact);
 
 const product: WorkProductPreview = {
   id: 'wp_launch_readiness',
@@ -118,6 +121,25 @@ describe('task detail work products surface', () => {
     listVersionsMock.mockResolvedValue(versions);
     exportWorkProductMock.mockResolvedValue('# Redacted launch report');
     downloadArtifactMock.mockResolvedValue(new Blob(['artifact bytes']));
+    previewArtifactMock.mockResolvedValue({
+      schemaVersion: 'work-product-artifact-preview/v1',
+      status: 'ready',
+      renderer: 'pdf',
+      message: 'Preview is ready.',
+      artifact: fileProduct.artifact ?? null,
+      sourceRunId: 'run-123',
+      redactionState: 'none',
+      causalEvent: {
+        taskId: 'task-work-products',
+        runId: 'run-123',
+        attemptId: 'attempt-123',
+        eventId: 'event-123',
+      },
+      limits: { maxBytes: 8 * 1024 * 1024, maxPages: 100 },
+      truncation: { truncated: false, reasons: [] },
+      actions: { downloadAllowed: true, openAssociatedAppAllowed: true },
+      content: { kind: 'pdf', base64: 'JVBERg==', pages: 1 },
+    });
     updateWorkProductMock.mockResolvedValue({
       id: product.id,
       workspaceId: product.workspaceId,
@@ -255,6 +277,13 @@ describe('task detail work products surface', () => {
     expect(screen.getByText(`SHA-256 ${'e'.repeat(64)}`)).toBeDefined();
     expect(screen.getByText(/Attempt attempt-123 \| Event event-123 \| available/)).toBeDefined();
     expect(screen.queryByRole('button', { name: /edit release report pdf/i })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Preview release-report.pdf' }));
+    const previewDialog = await screen.findByRole('dialog', {
+      name: 'Preview: Release report PDF',
+    });
+    expect(within(previewDialog).getByTitle('release-report.pdf PDF preview')).toBeDefined();
+    expect(previewArtifactMock).toHaveBeenCalledWith(fileProduct.id, 1);
 
     await user.click(screen.getByRole('button', { name: 'Download release-report.pdf' }));
 
