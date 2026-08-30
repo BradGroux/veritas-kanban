@@ -40,6 +40,8 @@ import {
 
 const require = createRequire(import.meta.url);
 const { autoUpdater } = require('electron-updater') as typeof import('electron-updater');
+const DESKTOP_HELP_URL =
+  'https://github.com/BradGroux/veritas-kanban/blob/main/docs/GETTING-STARTED.md';
 
 let mainWindow: BrowserWindow | null = null;
 let runtime: DesktopRuntime | null = null;
@@ -184,6 +186,9 @@ function refreshDesktopMenu(): void {
     status: runtime.snapshot(),
     updateStatus: updateService?.snapshot(),
     copyVersionInfo: () => clipboard.writeText(formatDesktopVersionInfo(appInfo)),
+    openHelp: () => {
+      void openValidatedExternalUrl(shell, DESKTOP_HELP_URL);
+    },
     dispatch: (command) => {
       if (commandDispatcher) {
         dispatchDesktopMenuCommand(commandDispatcher, command);
