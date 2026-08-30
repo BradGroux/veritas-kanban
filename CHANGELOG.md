@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.3] - 2026-08-30
+
+Veritas Kanban 6.1.3 adds governed file artifacts, provenance-aware execution,
+operator Run Access controls, and recurring automation activation. It also
+closes the August Apple-design audit and hardens concurrent storage and provider
+teardown paths.
+
+### Added
+
+- Added governed downloadable artifacts to versioned Work Products with exact
+  run, request, size, digest, media, quarantine, deletion, and storage evidence
+  across file and SQLite backends (#1247, #1270).
+- Added bounded passive previews for text, JSON, image, audio, video, PDF,
+  archive, and opaque-origin HTML content without granting bridge or execution
+  authority (#1250, #1254, #1278, #1285).
+- Added digest-bound run file provenance for repository, agent, command, tool,
+  attachment, connector, downloaded, operator-provided, and unknown bytes
+  (#1251, #1277).
+- Added an effective Run Access summary and governed active-run transitions with
+  exact evidence, critical approval for authority expansion, and durable
+  reversal (#1248, #1252, #1275, #1279).
+- Added deterministic recurring automation drafts and bounded standing-authority
+  activation with exact readiness, target, expiry, budget, approval, claim, and
+  audit evidence (#1249, #1253, #1276, #1280).
+- Added standard Window and Help menus to the macOS application shell (#1258,
+  #1273).
+
+### Changed
+
+- Run-owned terminal execution now binds executable, script, loader,
+  configuration, archive, and load-path inputs to exact launch-baseline or
+  provenance evidence. External or unknown bytes require a fresh critical human
+  decision and all evidence is revalidated immediately before spawn (#1255,
+  #1286).
+- Authentication, setup, and recovery errors now expose field relationships and
+  concise announcements without unexpected focus movement (#1256, #1271).
+- Secondary task, review, and archive actions reveal on keyboard focus, remain
+  available on coarse pointers, and expose target-specific accessible names
+  (#1257, #1272).
+- Shared primitives and high-frequency board, task, activity, template, and chat
+  surfaces now use explicit transition properties and stable running or unread
+  feedback with deliberate reduced-motion behavior (#1259, #1274).
+- Updated the pinned Node setup action and audited production dependencies while
+  preserving the supported Node floor and package-manager contract (#1245,
+  #1246).
+
+### Fixed
+
+- Completed every admission snapshot append before synchronization and
+  serialized admission reads with concurrent writers (#1281-#1284).
+- Contained detached ACP reply-write failures during teardown without masking
+  awaited transport errors (#1287, #1288).
+- Retried bounded regular-file replacements during atomic workflow-run updates
+  while continuing to reject symbolic links and persistently unstable paths
+  (#1289, #1290).
+- Stabilized desktop fallback-port, workflow-recovery, mobile responsive, and
+  browser-navigation release gates (#1261, #1263-#1269).
+- Preserved the diagnostics ampersand in the packaged macOS Help menu instead
+  of exposing Electron's mnemonic marker as an empty label gap (#1291, #1292).
+
+### Security and compatibility
+
+- The public REST API remains `v1`; new routes and schemas are additive.
+- SQLite migration 34 creates governed work-product artifact storage and
+  indexes. Rollback to 6.1.2 after migration requires restoring the complete
+  stopped-writer 6.1.2 backup.
+- Unsupported indirect file execution and uncertified tool transports remain
+  fail closed. HTML previews remain passive, sandboxed, and restricted by
+  content security policy.
+
 ## [6.1.2] - 2026-08-24
 
 Veritas Kanban 6.1.2 completes the repository-wide reliability, security,
@@ -2547,7 +2617,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.2...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.3...HEAD
+[6.1.3]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.2...v6.1.3
 [6.1.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.1...v6.1.2
 [6.1.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/BradGroux/veritas-kanban/compare/v6.0.2...v6.1.0
