@@ -223,7 +223,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
 
             {isRunning && activeEntry && (
               <Group gap="xs">
-                <Timer className="h-4 w-4 text-green-500 animate-pulse" />
+                <Timer className="h-4 w-4 text-green-500" />
                 <RunningTimer startTime={activeEntry.startTime} />
               </Group>
             )}
@@ -319,7 +319,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
                         <Box className="min-w-0 flex-1">
                           <Group gap="xs">
                             {isActive ? (
-                              <Timer className="h-3 w-3 text-green-500 animate-pulse flex-shrink-0" />
+                              <Timer className="h-3 w-3 text-green-500 flex-shrink-0" />
                             ) : (
                               <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                             )}

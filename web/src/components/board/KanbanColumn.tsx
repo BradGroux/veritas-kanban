@@ -75,7 +75,7 @@ export function KanbanColumn({
       aria-labelledby={`column-heading-${id}`}
       aria-roledescription="kanban column"
       className={cn(
-        'flex flex-col rounded-lg bg-muted/50 border-t-2 transition-all',
+        'flex flex-col rounded-lg bg-muted/50 border-t-2 transition-colors',
         columnColors[id] ?? 'border-t-primary',
         dragEnabled && isOver && 'ring-2 ring-primary/50 bg-muted/70'
       )}

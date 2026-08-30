@@ -368,10 +368,10 @@ export const TaskCard = memo(function TaskCard({
           'group bg-card border border-border rounded-md',
           dragEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
           isCompact ? 'p-2' : 'p-3',
-          'hover:border-muted-foreground/50 hover:bg-card/80 transition-all',
+          'hover:border-muted-foreground/50 hover:bg-card/80 transition-colors',
           'border-l-2',
           typeColor,
-          isDragging && 'opacity-50 shadow-lg rotate-2 scale-105',
+          isDragging && 'opacity-50 shadow-lg motion-safe:rotate-2 motion-safe:scale-105',
           isCurrentlyDragging && 'opacity-50',
           isSelected && 'ring-2 ring-primary border-primary',
           isAgentRunning &&
@@ -423,7 +423,7 @@ export const TaskCard = memo(function TaskCard({
                 </div>
               }
             >
-              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 flex items-center gap-1 animate-pulse">
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 flex items-center gap-1">
                 <span className="sr-only">
                   Agent {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is actively
                   running on this task
@@ -666,7 +666,7 @@ export const TaskCard = memo(function TaskCard({
               )}
             >
               {task.timeTracking?.isRunning ? (
-                <Timer className="h-3 w-3 animate-pulse" />
+                <Timer className="h-3 w-3" />
               ) : (
                 <Clock className="h-3 w-3" />
               )}
