@@ -9,6 +9,7 @@ import { atomicWriteFile } from './fs-helpers.js';
 
 const MAX_WORKFLOW_RUN_BYTES = 16 * 1024 * 1024;
 const MAX_WORKFLOW_SNAPSHOT_BYTES = 4 * 1024 * 1024;
+const MAX_WORKFLOW_RUN_READ_ATTEMPTS = 3;
 
 export type WorkflowRunFilters = { taskId?: string; workflowId?: string; status?: string };
 export type WorkflowRunMetadata = Pick<
@@ -177,31 +178,34 @@ export class FileWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   private async readRun(runPath: string): Promise<WorkflowRun | null> {
-    let handle: Awaited<ReturnType<typeof open>> | undefined;
-    try {
-      handle = await open(runPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-      const [pathStats, stats] = await Promise.all([lstat(runPath), handle.stat()]);
-      if (
-        pathStats.isSymbolicLink() ||
-        pathStats.dev !== stats.dev ||
-        pathStats.ino !== stats.ino
-      ) {
-        throw new Error('Workflow run must not use a symbolic link or changed file');
+    for (let attempt = 0; attempt < MAX_WORKFLOW_RUN_READ_ATTEMPTS; attempt++) {
+      let handle: Awaited<ReturnType<typeof open>> | undefined;
+      try {
+        handle = await open(runPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+        const [pathStats, stats] = await Promise.all([lstat(runPath), handle.stat()]);
+        if (pathStats.isSymbolicLink()) {
+          throw new Error('Workflow run must not use a symbolic link');
+        }
+        if (pathStats.dev !== stats.dev || pathStats.ino !== stats.ino) {
+          if (attempt + 1 < MAX_WORKFLOW_RUN_READ_ATTEMPTS) continue;
+          throw new Error('Workflow run must not use a persistently changed file');
+        }
+        if (!stats.isFile() || stats.size > MAX_WORKFLOW_RUN_BYTES) {
+          throw new Error('Workflow run must use a bounded regular file');
+        }
+        return JSON.parse(await handle.readFile({ encoding: 'utf8' })) as WorkflowRun;
+      } catch (error) {
+        const errorCode = (error as NodeJS.ErrnoException).code;
+        if (errorCode === 'ENOENT') return null;
+        if (errorCode === 'ELOOP') {
+          throw new Error('Workflow run must not use a symbolic link', { cause: error });
+        }
+        throw error;
+      } finally {
+        await handle?.close();
       }
-      if (!stats.isFile() || stats.size > MAX_WORKFLOW_RUN_BYTES) {
-        throw new Error('Workflow run must use a bounded regular file');
-      }
-      return JSON.parse(await handle.readFile({ encoding: 'utf8' })) as WorkflowRun;
-    } catch (error) {
-      const errorCode = (error as NodeJS.ErrnoException).code;
-      if (errorCode === 'ENOENT') return null;
-      if (errorCode === 'ELOOP') {
-        throw new Error('Workflow run must not use a symbolic link', { cause: error });
-      }
-      throw error;
-    } finally {
-      await handle?.close();
     }
+    return null;
   }
 }
 
