@@ -126,6 +126,7 @@ function draftFixture(): AutomationDraft {
     redaction: { safeToExport: true, removedFields: [] },
     requestedBy: 'operator',
     requestId: 'request-1',
+    inputDigest: `sha256:${'b'.repeat(64)}`,
     createdAt: '2026-09-01T00:00:00.000Z',
     digest: `sha256:${'a'.repeat(64)}`,
   };
