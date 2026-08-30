@@ -69,6 +69,23 @@ describe('FileWorkflowRunRepository', () => {
     ).resolves.toContain('workflow-1');
   });
 
+  it('retries when an atomic write replaces the path after open', async () => {
+    await repository.save(run('run_replaced'), 0);
+    const runPath = path.join(runsDir, 'run_replaced', 'run.json');
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    let pathChecks = 0;
+    vi.mocked(lstat).mockImplementation(async (filePath) => {
+      const stats = await actual.lstat(filePath);
+      if (path.resolve(String(filePath)) !== runPath || pathChecks++ > 0) return stats;
+      return Object.assign(Object.create(Object.getPrototypeOf(stats)), stats, {
+        ino: stats.ino + 1,
+      });
+    });
+
+    await expect(repository.get('run_replaced')).resolves.toMatchObject({ id: 'run_replaced' });
+    expect(pathChecks).toBe(2);
+  });
+
   it('rejects symbolic links, changed files, and non-file state', async () => {
     const runDir = path.join(runsDir, 'run_unsafe');
     await mkdir(runDir, { recursive: true });
