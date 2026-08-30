@@ -12,12 +12,33 @@ vi.mock('@/components/dashboard/Dashboard', () => ({
 
 const motionSources = [
   'components/activity/ActivityFeed.tsx',
+  'components/board/BoardSidebar.tsx',
+  'components/board/KanbanColumn.tsx',
+  'components/board/MultiAgentPanel.tsx',
+  'components/chat/FloatingChat.tsx',
   'components/dashboard/Dashboard.tsx',
   'components/dashboard/DashboardPage.tsx',
   'components/dashboard/DashboardSection.tsx',
   'components/dashboard/HourlyActivityChart.tsx',
   'components/dashboard/StatusTimeline.tsx',
   'components/dashboard/WhereTimeWent.tsx',
+  'components/layout/ActivitySidebar.tsx',
+  'components/task/MultiAgentSelector.tsx',
+  'components/task/TaskCard.tsx',
+  'components/templates/TemplatesPage.tsx',
+  'components/ui/badge.tsx',
+  'components/ui/button.tsx',
+  'components/ui/switch.tsx',
+  'components/ui/tabs.tsx',
+];
+
+const stableStatusSources = [
+  'components/board/BoardSidebar.tsx',
+  'components/board/MultiAgentPanel.tsx',
+  'components/chat/FloatingChat.tsx',
+  'components/task/AgentPanel.tsx',
+  'components/task/TaskCard.tsx',
+  'components/task/TimeTrackingSection.tsx',
 ];
 
 const storage = new Map<string, string>();
@@ -51,6 +72,23 @@ describe('dashboard motion contract', () => {
       expect(source, file).not.toMatch(/transition-\[(?:height|max-height|width)/);
       expect(source, file).not.toContain('max-h-[5000px]');
     }
+  });
+
+  it('keeps persistent live and unread status treatments stable', () => {
+    for (const file of stableStatusSources) {
+      const source = readFileSync(resolve(process.cwd(), 'src', file), 'utf8');
+
+      expect(source, file).not.toContain('animate-ping');
+      expect(source, file).not.toContain('animate-pulse');
+      expect(source, file).not.toMatch(/hover:(?:scale|translate)/);
+    }
+
+    const taskCard = readFileSync(
+      resolve(process.cwd(), 'src/components/task/TaskCard.tsx'),
+      'utf8'
+    );
+    expect(taskCard).toContain('motion-safe:rotate-2');
+    expect(taskCard).toContain('motion-safe:scale-105');
   });
 
   it('expands and collapses immediately with explicit accessible state', async () => {

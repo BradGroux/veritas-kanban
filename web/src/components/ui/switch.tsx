@@ -30,7 +30,7 @@ function Switch({ className, size = 'default', onCheckedChange, onChange, ...pro
       classNames={{
         root: 'inline-flex',
         track: cn(
-          'cursor-pointer border-transparent transition-all focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+          'cursor-pointer border-transparent transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
         ),
       }}
       {...props}

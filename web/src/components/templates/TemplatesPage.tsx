@@ -180,7 +180,7 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
                     <div
                       key={template.id}
                       className={cn(
-                        'p-4 cursor-pointer transition-all border rounded-lg hover:border-primary hover:shadow-md',
+                        'p-4 cursor-pointer transition-colors border rounded-lg hover:border-primary hover:bg-muted/30',
                         selectedTemplate?.id === template.id && 'border-primary bg-primary/5'
                       )}
                       onClick={() => setSelectedTemplate(template)}

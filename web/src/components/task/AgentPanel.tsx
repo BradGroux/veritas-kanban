@@ -283,7 +283,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
             )}
             {isAgentRunning && (
               <Text component="span" size="xs" c="green" className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-green-500" />
                 Running
               </Text>
             )}
