@@ -41,6 +41,8 @@ import { getStorage } from '../storage/index.js';
 const DEFAULT_APPROVAL_TTL_MS = 15 * 60_000;
 const MAX_CLAIMS = 1_000;
 const MAX_EVENTS = 200;
+const AUTOMATION_VERSION_ID_PATTERN = /^automation_version_[a-f0-9]{24}$/;
+const AUTOMATION_BINDING_ID_PATTERN = /^automation_binding_[a-f0-9]{24}$/;
 
 export interface AutomationActivationServiceOptions {
   stateRepository?: SchedulerStateRepository;
@@ -412,6 +414,7 @@ export class AutomationActivationService {
   }
 
   async getVersion(versionId: string): Promise<AutomationVersion> {
+    assertOpaqueId(versionId, AUTOMATION_VERSION_ID_PATTERN, 'automation version');
     const version = (await this.stateRepository.read()).automationVersions[versionId];
     if (!version) throw new NotFoundError(`Automation version ${versionId} not found.`);
     return version;
@@ -423,6 +426,7 @@ export class AutomationActivationService {
     status: Extract<AutomationBindingStatus, 'active' | 'paused' | 'revoked'>,
     reason: string
   ): Promise<AutomationBinding> {
+    assertOpaqueId(bindingId, AUTOMATION_BINDING_ID_PATTERN, 'automation binding');
     let result: AutomationBinding | undefined;
     await this.stateRepository.update((state) => {
       const current = state.automationBindings[bindingId];
@@ -443,7 +447,7 @@ export class AutomationActivationService {
         revision: current.revision + 1,
         updatedAt: this.now().toISOString(),
       };
-      state.automationBindings[bindingId] = result;
+      state.automationBindings[current.id] = result;
       state.events = [
         ...state.events,
         automationEvent(
@@ -464,6 +468,7 @@ export class AutomationActivationService {
     trigger: 'due-run' | 'manual-run',
     now = this.now()
   ): Promise<AutomationRunClaimResult> {
+    assertOpaqueId(bindingId, AUTOMATION_BINDING_ID_PATTERN, 'automation binding');
     const snapshot = await this.stateRepository.read();
     const snapshotBinding = snapshot.automationBindings[bindingId];
     if (!snapshotBinding) throw new NotFoundError(`Automation binding ${bindingId} not found.`);
@@ -541,7 +546,7 @@ export class AutomationActivationService {
           updatedAt: timestamp,
         };
       }
-      state.automationBindings[bindingId] = binding;
+      state.automationBindings[binding.id] = binding;
       state.automationClaims = [...state.automationClaims, claim].slice(-MAX_CLAIMS);
       result = { claim, version, binding, replayed: false };
       return state;
@@ -895,6 +900,10 @@ async function currentToolPolicyEvidence(roles: string[]): Promise<Record<string
 function required<T>(value: T | undefined, path: string): T {
   if (value === undefined) throw new ValidationError(`Automation field ${path} is unresolved.`);
   return value;
+}
+
+function assertOpaqueId(value: string, pattern: RegExp, label: string): void {
+  if (!pattern.test(value)) throw new ValidationError(`Invalid ${label} ID.`);
 }
 
 function minuteWindow(now: Date): string {

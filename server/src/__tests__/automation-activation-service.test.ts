@@ -120,6 +120,18 @@ describe('AutomationActivationService', () => {
     ).rejects.toThrow(/preview is stale/i);
   });
 
+  it('rejects prototype property names before reading or writing automation maps', async () => {
+    const service = activationService();
+
+    await expect(service.getVersion('__proto__')).rejects.toThrow(/invalid automation version id/i);
+    await expect(
+      service.updateBinding('__proto__', 1, 'paused', 'Invalid target.')
+    ).rejects.toThrow(/invalid automation binding id/i);
+    await expect(service.claimRun('__proto__', 'manual-run', now)).rejects.toThrow(
+      /invalid automation binding id/i
+    );
+  });
+
   it('claims each due window once and blocks future ownership after pause or budget exhaustion', async () => {
     const draft = await drafts.save(completeInput());
     const service = activationService();
