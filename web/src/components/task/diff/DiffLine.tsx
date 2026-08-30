@@ -26,11 +26,11 @@ export const DiffLineView = memo(function DiffLineView({
 }: DiffLineProps) {
   const lineNumber = line.newNumber || line.oldNumber;
   const lineComments = useMemo(
-    () => comments.filter(c => c.line === lineNumber),
+    () => comments.filter((c) => c.line === lineNumber),
     [comments, lineNumber]
   );
   const isAddingHere = addingCommentAtLine === lineNumber;
-  
+
   return (
     <>
       <div
@@ -46,27 +46,26 @@ export const DiffLineView = memo(function DiffLineView({
           <span className="w-10 px-2 text-right border-r border-border text-[10px]">
             {line.oldNumber || ''}
           </span>
-          <span className="w-10 px-2 text-right text-[10px]">
-            {line.newNumber || ''}
-          </span>
+          <span className="w-10 px-2 text-right text-[10px]">{line.newNumber || ''}</span>
         </div>
-        
+
         {/* Add comment button */}
         {lineNumber && (
           <button
             onClick={() => onStartAddComment(lineNumber)}
-            className="w-6 flex-shrink-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-amber-500"
+            className="veritas-secondary-action w-6 flex-shrink-0 flex items-center justify-center text-muted-foreground hover:text-amber-500"
+            aria-label={`Add comment to line ${lineNumber}`}
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-3 w-3" aria-hidden="true" />
           </button>
         )}
-        
+
         {/* Change indicator */}
         <div className="w-6 flex-shrink-0 flex items-center justify-center">
           {line.type === 'add' && <span className="text-green-500">+</span>}
           {line.type === 'delete' && <span className="text-red-500">-</span>}
         </div>
-        
+
         {/* Content */}
         <pre className="flex-1 px-2 overflow-x-auto whitespace-pre text-xs">
           {line.content || ' '}
@@ -81,7 +80,7 @@ export const DiffLineView = memo(function DiffLineView({
       </div>
 
       {/* Inline comments */}
-      {lineComments.map(comment => (
+      {lineComments.map((comment) => (
         <CommentDisplay
           key={comment.id}
           comment={comment}
@@ -90,12 +89,7 @@ export const DiffLineView = memo(function DiffLineView({
       ))}
 
       {/* Comment input */}
-      {isAddingHere && (
-        <CommentInput
-          onSubmit={onSubmitComment}
-          onCancel={onCancelComment}
-        />
-      )}
+      {isAddingHere && <CommentInput onSubmit={onSubmitComment} onCancel={onCancelComment} />}
     </>
   );
 });

@@ -2,18 +2,39 @@
 
 Durable work products are generated outputs that should outlive a chat message
 or task comment: reports, handoff notes, evidence summaries, checklists, tables,
-and lightweight dashboards.
+lightweight dashboards, and governed files.
 
 ## Model
 
 Each work product stores:
 
-- typed render contract: `text`, `markdown`, `summary`, `checklist`, `report`, `table`, or `dashboard`
+- typed render contract: `text`, `markdown`, `summary`, `checklist`, `report`, `table`, `dashboard`, or governed `file`
 - source provenance: task ID, run ID, agent, model, workspace, and source links
 - redaction metadata for previews and exports
-- bounded version history for refinements, regeneration, restore, and manual edits
+- bounded version history for typed renders; immutable file versions remain downloadable after archive until an exact-confirmation physical purge
 
 The render contract is data-only. It does not execute arbitrary UI code.
+
+File products can only be created through governed artifact registration. Direct `POST` or `PATCH` requests that attempt to forge a `file` render are rejected. See [File-Backed Work Products v1](../architecture/FILE-WORK-PRODUCTS-V1.md) for launch authority, storage, security, lifecycle, and backup behavior.
+
+## Governed files
+
+Runs with an enforceable artifact grant receive `VERITAS_ARTIFACT_ROOT`. After writing a complete file below that directory, register it with the CLI:
+
+```bash
+vk work-products register \
+  --task task_20260531_release \
+  --run run_abc123 \
+  --attempt attempt_abc123 \
+  --request-id release-report-v1 \
+  --event runevt_provider_output \
+  --path release-report.pdf \
+  --title "Release report" \
+  --media-type application/pdf \
+  --json
+```
+
+Use `--product <id>` with a new stable request ID to register a new immutable version. Inspect, list, and download with `vk work-products inspect`, `vk work-products list`, and `vk work-products download`. Archive first, then use `vk work-products purge <id> --confirm <id>` only when every immutable version and its metadata should be physically removed.
 
 ## API
 

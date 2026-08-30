@@ -1,12 +1,18 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
+import type { WorkProduct } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { BadRequestError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { getWorkProductArtifactService } from '../services/work-product-artifact-service.js';
 import { getWorkProductService } from '../services/work-product-service.js';
 import {
   CreateWorkProductBodySchema,
   UpdateWorkProductBodySchema,
   WorkProductExportQuerySchema,
+  RegisterWorkProductArtifactBodySchema,
+  WorkProductArtifactPurgeQuerySchema,
+  WorkProductArtifactVersionQuerySchema,
   WorkProductListQuerySchema,
 } from '../schemas/work-product-schemas.js';
 
@@ -23,24 +29,41 @@ function validationError(error: z.ZodError): ValidationError {
   );
 }
 
+function authenticatedWorkspace(req: AuthenticatedRequest): string {
+  return req.auth?.workspaceId ?? 'local';
+}
+
+function assertWorkspaceAccess(
+  req: AuthenticatedRequest,
+  product: WorkProduct | null
+): WorkProduct {
+  if (!product || product.workspaceId !== authenticatedWorkspace(req)) {
+    throw new NotFoundError('Work product not found');
+  }
+  return product;
+}
+
 router.get(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const parsed = WorkProductListQuerySchema.safeParse(req.query);
     if (!parsed.success) throw validationError(parsed.error);
 
     const service = getWorkProductService();
     const query = parsed.data;
-    const products = await service.list({
-      taskId: query.taskId,
-      sourceRunId: query.sourceRunId,
-      agent: query.agent,
-      kind: query.kind,
-      status: query.status,
-      query: query.q,
-      includeArchived: query.includeArchived === 'true',
-      limit: query.limit,
-    });
+    const products = (
+      await service.list({
+        workspaceId: authenticatedWorkspace(req),
+        taskId: query.taskId,
+        sourceRunId: query.sourceRunId,
+        agent: query.agent,
+        kind: query.kind,
+        status: query.status,
+        query: query.q,
+        includeArchived: query.includeArchived === 'true',
+        limit: query.limit,
+      })
+    ).filter((product) => product.workspaceId === authenticatedWorkspace(req));
 
     res.json(
       query.view === 'preview' ? products.map((product) => service.toPreview(product)) : products
@@ -50,8 +73,11 @@ router.get(
 
 router.post(
   '/',
-  asyncHandler(async (req, res) => {
-    const parsed = CreateWorkProductBodySchema.safeParse(req.body);
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = CreateWorkProductBodySchema.safeParse({
+      ...req.body,
+      workspaceId: authenticatedWorkspace(req),
+    });
     if (!parsed.success) throw validationError(parsed.error);
 
     const product = await getWorkProductService().create(parsed.data);
@@ -66,11 +92,110 @@ router.get(
   })
 );
 
+router.post(
+  '/artifacts/register',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = RegisterWorkProductArtifactBodySchema.safeParse(req.body);
+    if (!parsed.success) throw validationError(parsed.error);
+    const registration = await getWorkProductArtifactService().register({
+      workspaceId: req.auth?.workspaceId ?? 'local',
+      ...parsed.data,
+    });
+    res.status(201).json(registration);
+  })
+);
+
+router.get(
+  '/artifacts',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = WorkProductListQuerySchema.safeParse(req.query);
+    if (!parsed.success) throw validationError(parsed.error);
+    const products = await getWorkProductArtifactService().list({
+      workspaceId: req.auth?.workspaceId ?? 'local',
+      taskId: parsed.data.taskId,
+      sourceRunId: parsed.data.sourceRunId,
+      includeArchived: parsed.data.includeArchived === 'true',
+      limit: parsed.data.limit,
+    });
+    res.json(
+      parsed.data.view === 'preview'
+        ? products.map((product) => getWorkProductService().toPreview(product))
+        : products
+    );
+  })
+);
+
+router.get(
+  '/:id/artifact',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const product = await getWorkProductArtifactService().inspect({
+      workspaceId: req.auth?.workspaceId ?? 'local',
+      productId: req.params.id as string,
+    });
+    if (!product) throw new NotFoundError('File work product not found');
+    res.json(product);
+  })
+);
+
+router.get(
+  '/:id/artifact/versions',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    res.json(
+      await getWorkProductArtifactService().listVersions({
+        workspaceId: req.auth?.workspaceId ?? 'local',
+        productId: req.params.id as string,
+      })
+    );
+  })
+);
+
+router.get(
+  '/:id/artifact/download',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = WorkProductArtifactVersionQuerySchema.safeParse(req.query);
+    if (!parsed.success) throw validationError(parsed.error);
+    const download = await getWorkProductArtifactService().download({
+      workspaceId: req.auth?.workspaceId ?? 'local',
+      productId: req.params.id as string,
+      version: parsed.data.version,
+    });
+    if (!download) throw new NotFoundError('Work product artifact is unavailable');
+    res.attachment(download.metadata.safeName);
+    res.type(download.metadata.mediaType);
+    res.set(
+      'Content-Digest',
+      `sha-256=:${Buffer.from(download.metadata.sha256, 'hex').toString('base64')}:`
+    );
+    res.set('X-Artifact-SHA256', download.metadata.sha256);
+    res.set('ETag', `"sha256-${download.metadata.sha256}"`);
+    res.set('Cache-Control', 'private, immutable');
+    res.set('Content-Length', String(download.content.byteLength));
+    res.send(Buffer.from(download.content));
+  })
+);
+
+router.delete(
+  '/:id/artifact',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const parsed = WorkProductArtifactPurgeQuerySchema.safeParse(req.query);
+    if (!parsed.success) throw validationError(parsed.error);
+    res.json(
+      await getWorkProductArtifactService().purge({
+        workspaceId: authenticatedWorkspace(req),
+        productId: req.params.id as string,
+        confirmation: parsed.data.confirm,
+      })
+    );
+  })
+);
+
 router.get(
   '/:id',
-  asyncHandler(async (req, res) => {
-    const product = await getWorkProductService().get(req.params.id as string);
-    if (!product) throw new NotFoundError('Work product not found');
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const product = assertWorkspaceAccess(
+      req,
+      await getWorkProductService().get(req.params.id as string)
+    );
 
     if (req.query.view === 'preview') {
       res.json(getWorkProductService().toPreview(product));
@@ -83,10 +208,19 @@ router.get(
 
 router.patch(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const parsed = UpdateWorkProductBodySchema.safeParse(req.body);
     if (!parsed.success) throw validationError(parsed.error);
 
+    const current = assertWorkspaceAccess(
+      req,
+      await getWorkProductService().get(req.params.id as string)
+    );
+    if (current.kind === 'file') {
+      throw new BadRequestError(
+        'File Work Products can only be updated through governed artifact registration.'
+      );
+    }
     const product = await getWorkProductService().update(req.params.id as string, parsed.data);
     if (!product) throw new NotFoundError('Work product not found');
 
@@ -96,7 +230,8 @@ router.patch(
 
 router.delete(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    assertWorkspaceAccess(req, await getWorkProductService().get(req.params.id as string));
     const product = await getWorkProductService().archive(req.params.id as string);
     if (!product) throw new NotFoundError('Work product not found');
 
@@ -106,9 +241,11 @@ router.delete(
 
 router.get(
   '/:id/versions',
-  asyncHandler(async (req, res) => {
-    const product = await getWorkProductService().get(req.params.id as string);
-    if (!product) throw new NotFoundError('Work product not found');
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const product = assertWorkspaceAccess(
+      req,
+      await getWorkProductService().get(req.params.id as string)
+    );
 
     res.json(await getWorkProductService().listVersions(product.id));
   })
@@ -116,12 +253,13 @@ router.get(
 
 router.post(
   '/:id/versions/:version/restore',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const version = Number.parseInt(req.params.version as string, 10);
     if (!Number.isInteger(version) || version < 1) {
       throw new ValidationError('Invalid version');
     }
 
+    assertWorkspaceAccess(req, await getWorkProductService().get(req.params.id as string));
     const product = await getWorkProductService().restoreVersion(req.params.id as string, version);
     if (!product) throw new NotFoundError('Work product version not found');
 
@@ -131,12 +269,14 @@ router.post(
 
 router.get(
   '/:id/export',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const parsed = WorkProductExportQuerySchema.safeParse(req.query);
     if (!parsed.success) throw validationError(parsed.error);
 
-    const product = await getWorkProductService().get(req.params.id as string);
-    if (!product) throw new NotFoundError('Work product not found');
+    const product = assertWorkspaceAccess(
+      req,
+      await getWorkProductService().get(req.params.id as string)
+    );
 
     const format = parsed.data.format ?? 'markdown';
     const redacted =
@@ -154,13 +294,16 @@ router.get(
 
 taskRouter.get(
   '/:id/work-products',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const service = getWorkProductService();
-    const products = await service.list({
-      taskId: req.params.id as string,
-      includeArchived: req.query.includeArchived === 'true',
-      limit: req.query.limit ? Number.parseInt(req.query.limit as string, 10) : undefined,
-    });
+    const products = (
+      await service.list({
+        workspaceId: authenticatedWorkspace(req),
+        taskId: req.params.id as string,
+        includeArchived: req.query.includeArchived === 'true',
+        limit: req.query.limit ? Number.parseInt(req.query.limit as string, 10) : undefined,
+      })
+    ).filter((product) => product.workspaceId === authenticatedWorkspace(req));
     res.json(
       req.query.view === 'preview'
         ? products.map((product) => service.toPreview(product))
@@ -171,10 +314,11 @@ taskRouter.get(
 
 taskRouter.post(
   '/:id/work-products',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const parsed = CreateWorkProductBodySchema.safeParse({
       ...req.body,
       taskId: req.params.id,
+      workspaceId: authenticatedWorkspace(req),
     });
     if (!parsed.success) throw validationError(parsed.error);
 

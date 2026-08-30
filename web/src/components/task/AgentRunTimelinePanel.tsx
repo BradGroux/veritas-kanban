@@ -256,6 +256,13 @@ function workflowStartedAt(run: WorkflowRun): string {
 }
 
 function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['link'] {
+  if (product.artifact?.state === 'available') {
+    return {
+      label: 'Download artifact',
+      href: `${BASE_PATH}/api/work-products/${encodeURIComponent(product.id)}/artifact/download?version=${product.version}`,
+      target: 'external',
+    };
+  }
   const sourceLink = product.sourceLinks?.find((link) => link.type === 'pr' || link.type === 'url');
   const href = normalizeSafeHref(sourceLink?.href);
   if (sourceLink && href) {
@@ -797,6 +804,7 @@ export function buildAgentRunTimelineEvents({
         agent: product.agent,
         model: product.model,
         redacted: product.redacted,
+        artifact: product.artifact,
         sourceLinks: product.sourceLinks,
       },
       link: workProductLink(product),

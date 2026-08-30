@@ -33,6 +33,7 @@ export type {
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
   RunOutputArtifactRepository,
+  WorkProductArtifactRepository,
   SetupContextRepository,
   WorkspaceFileRepository,
   WorkspaceExecutionTrustRepository,
@@ -157,6 +158,16 @@ export {
   FileRunOutputArtifactRepository,
   getRunOutputArtifactsDir,
 } from './run-output-artifact-repository.js';
+export {
+  FileWorkProductArtifactRepository,
+  SecureWorkProductArtifactSourceReader,
+  getWorkProductArtifactsDir,
+  type WorkProductArtifactCreateResult,
+  type WorkProductArtifactDeleteResult,
+  type WorkProductArtifactDownload,
+  type WorkProductArtifactLookup,
+  type WorkProductArtifactSourceReader,
+} from './work-product-artifact-repository.js';
 export { FileRunApprovalRepository, getRunApprovalsPath } from './run-approval-repository.js';
 export {
   FilePhaseTransitionRepository,
@@ -199,6 +210,7 @@ export { SqliteStatusHistoryRepository } from './sqlite/status-history-repositor
 export { SqliteTelemetryRepository } from './sqlite/telemetry-repository.js';
 export { SqliteRunEventRepository } from './sqlite/run-event-repository.js';
 export { SqliteRunOutputArtifactRepository } from './sqlite/run-output-artifact-repository.js';
+export { SqliteWorkProductArtifactRepository } from './sqlite/work-product-artifact-repository.js';
 export { SqliteRunApprovalRepository } from './sqlite/run-approval-repository.js';
 export { SqlitePhaseTransitionRepository } from './sqlite/phase-transition-repository.js';
 export { SqliteDurableGoalRepository } from './sqlite/durable-goal-repository.js';

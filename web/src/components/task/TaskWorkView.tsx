@@ -24,6 +24,7 @@ import {
   Clock,
   ClipboardCheck,
   Coins,
+  Download,
   ExternalLink,
   FileText,
   GitBranch,
@@ -58,8 +59,9 @@ import {
   type WorkflowRun,
   type WorkflowRunStatus,
 } from '@/hooks/useWorkflowStats';
-import { sanitizeText } from '@/lib/sanitize';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
+import { API_BASE } from '@/lib/config';
+import { sanitizeText } from '@/lib/sanitize';
 import { RunAccessPanel } from './RunAccessPanel';
 
 export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): TaskReadinessCheck[] {
@@ -984,6 +986,10 @@ export function TaskWorkView({
                     );
                     const href = normalizeSafeHref(sourceLink?.href);
                     const external = isExternalTargetHref(href);
+                    const artifactHref =
+                      product.artifact?.state === 'available'
+                        ? `${API_BASE}/work-products/${encodeURIComponent(product.id)}/artifact/download?version=${product.version}`
+                        : undefined;
                     return (
                       <Group key={product.id} gap="xs" wrap="nowrap" align="flex-start">
                         <History className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
@@ -995,7 +1001,26 @@ export function TaskWorkView({
                             v{product.version} | {product.kind}
                             {product.sourceRunId ? ` | run ${product.sourceRunId}` : ''}
                           </Text>
+                          {product.artifact && (
+                            <Text size="xs" c="dimmed" truncate>
+                              {product.artifact.safeName} | {product.artifact.byteSize} bytes |{' '}
+                              {product.artifact.state}
+                            </Text>
+                          )}
                         </div>
+                        {artifactHref && (
+                          <Tooltip label={`Download ${product.artifact?.safeName}`}>
+                            <ActionIcon
+                              component="a"
+                              href={artifactHref}
+                              size="sm"
+                              variant="subtle"
+                              aria-label={`Download ${product.title}`}
+                            >
+                              <Download className="h-3 w-3" />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
                         {sourceLink && href && (
                           <Tooltip label={`Open ${sourceLink.label}`}>
                             <ActionIcon

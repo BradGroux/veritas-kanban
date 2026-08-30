@@ -44,7 +44,12 @@ describe('desktop native menu', () => {
   it('exposes common actions with keyboard shortcuts', () => {
     const dispatch = vi.fn();
     const copyVersionInfo = vi.fn();
-    const template = createDesktopMenuTemplate({ status: status(), dispatch, copyVersionInfo });
+    const template = createDesktopMenuTemplate({
+      status: status(),
+      dispatch,
+      copyVersionInfo,
+      openHelp: vi.fn(),
+    });
     const labels = template.flatMap((item) =>
       Array.isArray(item.submenu) ? item.submenu.map((child) => child.label) : []
     );
@@ -80,6 +85,7 @@ describe('desktop native menu', () => {
       status: status(),
       dispatch: vi.fn(),
       copyVersionInfo: vi.fn(),
+      openHelp: vi.fn(),
     });
 
     expect(template.some((item) => item.role === 'editMenu')).toBe(true);
@@ -90,6 +96,7 @@ describe('desktop native menu', () => {
       status: status('failed'),
       dispatch: vi.fn(),
       copyVersionInfo: vi.fn(),
+      openHelp: vi.fn(),
     }).find((item) => item.label === 'Desktop');
     const externalTest = Array.isArray(desktopMenu?.submenu)
       ? desktopMenu.submenu.find((item) => item.label === 'Test External Delivery')
@@ -104,6 +111,7 @@ describe('desktop native menu', () => {
       updateStatus: updateStatus('available'),
       dispatch: vi.fn(),
       copyVersionInfo: vi.fn(),
+      openHelp: vi.fn(),
     }).find((item) => item.label === 'Veritas Kanban');
     const downloadUpdate = Array.isArray(appMenu?.submenu)
       ? appMenu.submenu.find((item) => item.label === 'Download Update')
@@ -114,5 +122,55 @@ describe('desktop native menu', () => {
 
     expect(downloadUpdate?.enabled).toBe(true);
     expect(installUpdate?.enabled).toBe(false);
+  });
+
+  it.each(['starting', 'ready', 'failed'] as const)(
+    'keeps the standard macOS Window and Help menus available while the server is %s',
+    (serverState) => {
+      const dispatch = vi.fn();
+      const openHelp = vi.fn();
+      const template = createDesktopMenuTemplate({
+        status: status(serverState),
+        dispatch,
+        copyVersionInfo: vi.fn(),
+        openHelp,
+        platform: 'darwin',
+      });
+
+      expect(template.map((item) => item.role ?? item.label)).toEqual([
+        'Veritas Kanban',
+        'File',
+        'editMenu',
+        'Navigate',
+        'Desktop',
+        'windowMenu',
+        'help',
+      ]);
+
+      const helpMenu = template.find((item) => item.role === 'help');
+      const helpItems = Array.isArray(helpMenu?.submenu) ? helpMenu.submenu : [];
+      const productHelp = helpItems.find((item) => item.label === 'Veritas Kanban Help');
+      const onboarding = helpItems.find((item) => item.label === 'Show Setup & Diagnostics');
+
+      expect(productHelp?.enabled).not.toBe(false);
+      expect(onboarding?.enabled).toBe(true);
+      productHelp?.click?.(undefined as never, undefined as never, undefined as never);
+      onboarding?.click?.(undefined as never, undefined as never, undefined as never);
+      expect(openHelp).toHaveBeenCalledOnce();
+      expect(dispatch).toHaveBeenCalledWith('open-onboarding');
+    }
+  );
+
+  it('does not add macOS-only menus on other platforms', () => {
+    const template = createDesktopMenuTemplate({
+      status: status(),
+      dispatch: vi.fn(),
+      copyVersionInfo: vi.fn(),
+      openHelp: vi.fn(),
+      platform: 'linux',
+    });
+
+    expect(template.some((item) => item.role === 'windowMenu')).toBe(false);
+    expect(template.some((item) => item.role === 'help')).toBe(false);
   });
 });

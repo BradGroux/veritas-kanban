@@ -99,8 +99,8 @@ function ObservationItem({
               variant="subtle"
               color="red"
               size="sm"
-              className="ml-auto opacity-0 transition-opacity group-hover:opacity-100"
-              aria-label="Delete observation"
+              className="veritas-secondary-action ml-auto"
+              aria-label={`Delete observation: ${observation.content}`}
               onClick={() => setDeleteDialogOpen(true)}
             >
               <Trash2

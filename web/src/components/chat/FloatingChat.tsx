@@ -58,16 +58,15 @@ export function FloatingChat() {
         className={cn(
           'floating-chat-trigger z-40 h-14 w-14 rounded-full shadow-lg',
           'bg-primary hover:bg-primary/90 text-primary-foreground',
-          'transition-all duration-200 hover:scale-105',
+          'transition-colors duration-150',
           open && 'hidden'
         )}
         aria-label="Open chat"
       >
         <MessageSquare className="h-6 w-6" />
         {hasUnread && (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500" />
+          <span className="absolute -top-1 -right-1 flex h-4 w-4" aria-hidden="true">
+            <span className="inline-flex h-4 w-4 rounded-full bg-emerald-500" />
           </span>
         )}
       </ActionIcon>

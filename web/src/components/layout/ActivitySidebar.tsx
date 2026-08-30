@@ -169,19 +169,10 @@ function DailySummaryCard() {
       {/* Mini progress bar */}
       {total > 0 && (
         <div className="mt-2 h-1.5 rounded-full overflow-hidden flex bg-muted">
-          <div
-            className="bg-green-500 transition-all"
-            style={{ width: `${(summary.activeMs / total) * 100}%` }}
-          />
-          <div
-            className="bg-gray-400 transition-all"
-            style={{ width: `${(summary.idleMs / total) * 100}%` }}
-          />
+          <div className="bg-green-500" style={{ width: `${(summary.activeMs / total) * 100}%` }} />
+          <div className="bg-gray-400" style={{ width: `${(summary.idleMs / total) * 100}%` }} />
           {summary.errorMs > 0 && (
-            <div
-              className="bg-red-500 transition-all"
-              style={{ width: `${(summary.errorMs / total) * 100}%` }}
-            />
+            <div className="bg-red-500" style={{ width: `${(summary.errorMs / total) * 100}%` }} />
           )}
         </div>
       )}

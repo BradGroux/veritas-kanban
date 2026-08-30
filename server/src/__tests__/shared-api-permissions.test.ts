@@ -95,6 +95,17 @@ describe('shared API permission metadata', () => {
     ).toEqual(['work_product:write']);
   });
 
+  it('reserves physical file Work Product purge for administrators', () => {
+    expect(
+      getApiPermissionRequirement('/api/v1/work-products/wp_123/artifact', {
+        method: 'DELETE',
+      }).permissions
+    ).toEqual(['admin:manage']);
+    expect(
+      getApiPermissionRequirement('/api/work-products/wp_123', { method: 'DELETE' }).permissions
+    ).toEqual(['work_product:write']);
+  });
+
   it('requires workflow execution for Codex review diff posts', () => {
     expect(
       getApiPermissionRequirement('/api/diff/task_1/codex-review', { method: 'POST' }).permissions

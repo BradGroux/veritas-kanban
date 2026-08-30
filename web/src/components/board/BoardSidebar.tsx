@@ -174,7 +174,7 @@ function AgentStatusPanel({ onTaskClick }: { onTaskClick?: (taskId: string) => v
       {/* Status header — large icon + state */}
       <div className="flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ring-2 transition-all"
+          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ring-2 transition-colors"
           style={{ backgroundColor: config.bgColor, ['--tw-ring-color' as string]: config.color }}
         >
           <Icon className="w-5 h-5 transition-colors" style={{ color: config.color }} />
@@ -186,7 +186,7 @@ function AgentStatusPanel({ onTaskClick }: { onTaskClick?: (taskId: string) => v
           >
             {state !== 'idle' && (
               <span
-                className="inline-block w-2 h-2 rounded-full animate-pulse"
+                className="inline-block w-2 h-2 rounded-full"
                 style={{ backgroundColor: config.color }}
               />
             )}
@@ -226,7 +226,7 @@ function AgentStatusPanel({ onTaskClick }: { onTaskClick?: (taskId: string) => v
                     onClick={() => agent.taskId && onTaskClick?.(agent.taskId)}
                   >
                     <span
-                      className="inline-block w-2 h-2 rounded-full mt-1 shrink-0 animate-pulse"
+                      className="inline-block w-2 h-2 rounded-full mt-1 shrink-0"
                       style={{ backgroundColor: agentState.color }}
                     />
                     <div className="min-w-0 flex-1">

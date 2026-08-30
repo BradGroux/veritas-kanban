@@ -48,6 +48,7 @@ import type {
   AdmissionReservationRepository,
   ToolControlPlaneRepository,
   RunOutputArtifactRepository,
+  WorkProductArtifactRepository,
 } from './interfaces.js';
 import { TaskService, type TaskServiceOptions } from '../services/task-service.js';
 import { ConfigService, type ConfigServiceOptions } from '../services/config-service.js';
@@ -80,6 +81,7 @@ import { FileReflectionExtractionJobRepository } from './reflection-extraction-j
 import { FileAdmissionReservationRepository } from './admission-reservation-repository.js';
 import { FileToolControlPlaneRepository } from './tool-control-plane-repository.js';
 import { FileRunOutputArtifactRepository } from './run-output-artifact-repository.js';
+import { FileWorkProductArtifactRepository } from './work-product-artifact-repository.js';
 
 // ---------------------------------------------------------------------------
 // FileTaskRepository
@@ -505,6 +507,7 @@ export interface FileStorageOptions {
   admissionReservationsPath?: string;
   toolControlPlanePath?: string;
   runOutputArtifactsDir?: string;
+  workProductArtifactsDir?: string;
 }
 
 export class FileStorageProvider implements StorageProvider {
@@ -525,6 +528,7 @@ export class FileStorageProvider implements StorageProvider {
   readonly admissionReservations: AdmissionReservationRepository;
   readonly toolControlPlane: ToolControlPlaneRepository;
   readonly runOutputArtifacts: RunOutputArtifactRepository;
+  readonly workProductArtifacts: WorkProductArtifactRepository;
 
   private taskService: TaskService;
   private configService: ConfigService;
@@ -587,6 +591,9 @@ export class FileStorageProvider implements StorageProvider {
     );
     this.toolControlPlane = new FileToolControlPlaneRepository(options.toolControlPlanePath);
     this.runOutputArtifacts = new FileRunOutputArtifactRepository(options.runOutputArtifactsDir);
+    this.workProductArtifacts = new FileWorkProductArtifactRepository(
+      options.workProductArtifactsDir
+    );
   }
 
   async initialize(): Promise<void> {

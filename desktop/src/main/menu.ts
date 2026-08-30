@@ -14,8 +14,10 @@ import type {
 export interface ConfigureDesktopMenuOptions {
   dispatch(command: DesktopCommandName): void;
   copyVersionInfo(): void;
+  openHelp(): void;
   status: DesktopStatusSnapshot;
   updateStatus?: DesktopUpdateStatus;
+  platform?: NodeJS.Platform;
 }
 
 export function configureDesktopMenu(options: ConfigureDesktopMenuOptions): void {
@@ -34,6 +36,26 @@ export function createDesktopMenuTemplate(
       click: () => options.dispatch(name),
     };
   };
+
+  const macosMenus: MenuItemConstructorOptions[] =
+    (options.platform ?? process.platform) === 'darwin'
+      ? [
+          { role: 'windowMenu' },
+          {
+            role: 'help',
+            submenu: [
+              {
+                label: 'Veritas Kanban Help',
+                click: () => options.openHelp(),
+              },
+              {
+                ...command('open-onboarding'),
+                label: 'Show Setup & Diagnostics',
+              },
+            ],
+          },
+        ]
+      : [];
 
   return [
     {
@@ -90,6 +112,7 @@ export function createDesktopMenuTemplate(
         command('copy-redacted-diagnostics'),
       ],
     },
+    ...macosMenus,
   ];
 }
 

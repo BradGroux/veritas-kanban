@@ -6209,6 +6209,41 @@ same portability report used by `/api/v1/sqlite`.
 
 ---
 
+### File Work Products (`/api/v1/work-products`)
+
+File Work Products are governed, immutable deliverables copied from the exact artifact root granted to a run. Read, registration, and archive routes use normal Work Product permissions; physical purge requires `admin:manage`. Every route enforces the authenticated workspace.
+
+| Method   | Path                                                    | Behavior                                                                                                 |
+| -------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/api/v1/work-products/artifacts/register`              | Validate and atomically register one relative run artifact; stable `requestId` retries are idempotent.   |
+| `GET`    | `/api/v1/work-products/artifacts`                       | List file products by optional `taskId`, `sourceRunId`, `includeArchived`, and `limit`.                  |
+| `GET`    | `/api/v1/work-products/:id/artifact`                    | Inspect current file Work Product metadata.                                                              |
+| `GET`    | `/api/v1/work-products/:id/artifact/versions`           | List immutable artifact metadata versions.                                                               |
+| `GET`    | `/api/v1/work-products/:id/artifact/download?version=N` | Download authorized bytes after size and SHA-256 verification.                                           |
+| `DELETE` | `/api/v1/work-products/:id/artifact?confirm=:id`        | Physically purge an archived file product, all versions, and all stored bodies after exact confirmation. |
+
+Registration body:
+
+```json
+{
+  "taskId": "task_release",
+  "runId": "run_release",
+  "attemptId": "attempt_release",
+  "requestId": "release-pdf-v1",
+  "producingEventId": "runevt_output",
+  "relativePath": "release.pdf",
+  "title": "Release PDF",
+  "mediaType": "application/pdf",
+  "workProductId": "wp_optional_refinement_target"
+}
+```
+
+`relativePath` is resolved only beneath the manifest-bound `VERITAS_ARTIFACT_ROOT`; callers cannot supply or discover the host root. Quarantined artifacts remain inspectable but return `404` from download. Successful downloads include `Content-Disposition: attachment`, `Content-Digest`, `X-Artifact-SHA256`, ETag, and private immutable cache headers.
+
+Direct general Work Product creation rejects `kind: "file"`, and generic updates reject existing file products; governed registration is the only creation and refinement path. Archive preserves downloads. Physical purge is explicit, requires the authenticated workspace and `admin:manage`, rejects active products, and requires `confirm` to exactly match the Work Product ID. See [File-Backed Work Products v1](architecture/FILE-WORK-PRODUCTS-V1.md).
+
+---
+
 ### System Health (`/api/v1/system/health`)
 
 Get a real-time snapshot of system health across resources, agents, and operations.

@@ -277,6 +277,10 @@ describe('MaintenanceService', () => {
     expect(JSON.stringify(admissionQueue.treeControls)).not.toContain('objective-a');
     expect(JSON.stringify(admissionQueue.treeControls)).not.toContain('idempotencyKey');
     expect(manifest.files.find((file) => file.id === 'server')?.path).toContain('[redacted-logs]');
+    expect(manifest.excludedCategories).toContain('file Work Product artifact bodies');
+    expect(manifest.redactionRules).toContain(
+      'File Work Product artifact bodies are excluded; only bounded metadata and lifecycle accounting are included.'
+    );
     expect(serverLog).not.toContain('sk_supersecret1234567890');
     expect(summary).not.toContain(root);
     expect(bundleText).toContain('[REDACTED_API_KEY]');

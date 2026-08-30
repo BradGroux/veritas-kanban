@@ -1,11 +1,5 @@
 export type WorkProductKind =
-  | 'text'
-  | 'markdown'
-  | 'summary'
-  | 'checklist'
-  | 'report'
-  | 'table'
-  | 'dashboard';
+  'text' | 'markdown' | 'summary' | 'checklist' | 'report' | 'table' | 'dashboard' | 'file';
 
 export type WorkProductStatus = 'active' | 'archived';
 export type WorkProductChangeType = 'create' | 'refine' | 'regenerate' | 'restore' | 'manual';
@@ -92,6 +86,43 @@ export interface DashboardWorkProductRender extends WorkProductRenderBase {
   }>;
 }
 
+export const WORK_PRODUCT_ARTIFACT_SCHEMA_VERSION = 'work-product-artifact/v1' as const;
+
+export type WorkProductArtifactState = 'available' | 'quarantined' | 'deleted';
+export type WorkProductArtifactRedactionState = 'none' | 'redacted' | 'quarantined';
+export type WorkProductArtifactQuarantineReason =
+  'content-policy' | 'secret-validation' | 'integrity-mismatch';
+
+export interface WorkProductArtifactMetadata {
+  schemaVersion: typeof WORK_PRODUCT_ARTIFACT_SCHEMA_VERSION;
+  id: string;
+  productId: string;
+  version: number;
+  workspaceId: string;
+  taskId: string;
+  runId: string;
+  attemptId: string;
+  producingEventId: string;
+  requestIdDigest: string;
+  launchManifestDigest: string;
+  mediaType: string;
+  byteSize: number;
+  sha256: string;
+  safeName: string;
+  state: WorkProductArtifactState;
+  quarantineReason?: WorkProductArtifactQuarantineReason;
+  redaction: {
+    state: WorkProductArtifactRedactionState;
+    reason?: string;
+  };
+  createdAt: string;
+}
+
+export interface FileWorkProductRender extends WorkProductRenderBase {
+  kind: 'file';
+  artifact: WorkProductArtifactMetadata;
+}
+
 export type WorkProductRender =
   | TextWorkProductRender
   | MarkdownWorkProductRender
@@ -99,7 +130,8 @@ export type WorkProductRender =
   | ChecklistWorkProductRender
   | ReportWorkProductRender
   | TableWorkProductRender
-  | DashboardWorkProductRender;
+  | DashboardWorkProductRender
+  | FileWorkProductRender;
 
 export interface WorkProduct {
   id: string;
@@ -149,6 +181,7 @@ export interface WorkProductPreview {
   agent?: string;
   model?: string;
   sourceLinks?: WorkProductSourceLink[];
+  artifact?: WorkProductArtifactMetadata;
   redacted: boolean;
   snippet: string;
   createdAt: string;
@@ -186,6 +219,7 @@ export interface UpdateWorkProductInput {
 }
 
 export interface WorkProductListOptions {
+  workspaceId?: string;
   taskId?: string;
   sourceRunId?: string;
   agent?: string;

@@ -451,6 +451,45 @@ describe('agent run timeline Mantine surface', () => {
     });
   });
 
+  it('links available file Work Products to authenticated downloads with integrity metadata', () => {
+    const artifact = {
+      schemaVersion: 'work-product-artifact/v1' as const,
+      id: `wpa_${'a'.repeat(24)}`,
+      productId: `wp_${'b'.repeat(24)}`,
+      version: 2,
+      workspaceId: 'local',
+      taskId: task.id,
+      runId: 'attempt-1',
+      attemptId: 'attempt-1',
+      producingEventId: 'event-artifact',
+      requestIdDigest: `sha256:${'c'.repeat(64)}`,
+      launchManifestDigest: `sha256:${'d'.repeat(64)}`,
+      mediaType: 'application/pdf',
+      byteSize: 2048,
+      sha256: 'e'.repeat(64),
+      safeName: 'run-report.pdf',
+      state: 'available' as const,
+      redaction: { state: 'none' as const },
+      createdAt: '2026-06-01T10:06:00.000Z',
+    };
+    const events = buildAgentRunTimelineEvents({
+      task,
+      notifications: [],
+      traces: [],
+      telemetryEvents: [],
+      workProducts: [{ ...product, kind: 'file', artifact }],
+      selectedAttemptId: 'attempt-1',
+    });
+    const event = events.find((entry) => entry.id === `work-product-${product.id}`);
+
+    expect(event?.link).toEqual({
+      label: 'Download artifact',
+      href: `/api/work-products/${product.id}/artifact/download?version=2`,
+      target: 'external',
+    });
+    expect(event?.metadata?.artifact).toEqual(artifact);
+  });
+
   it('renders run replay controls, filters by event type, and links back to task surfaces', async () => {
     const user = userEvent.setup();
     renderWithProviders(

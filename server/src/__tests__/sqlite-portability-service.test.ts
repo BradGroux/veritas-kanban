@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { createHash } from 'node:crypto';
 import matter from '../utils/frontmatter.js';
 import yaml from 'yaml';
 import { SqlitePortabilityService } from '../services/sqlite-portability-service.js';
@@ -12,6 +13,8 @@ import { createDefaultConfig, normalizeAppConfig } from '../services/config-serv
 import { listDataLifecyclePolicies } from '../services/data-lifecycle-policy.js';
 import type { Task } from '@veritas-kanban/shared';
 import type { WorkflowDefinition, WorkflowRun } from '../types/workflow.js';
+import { WorkProductService } from '../services/work-product-service.js';
+import { SqliteWorkProductArtifactRepository } from '../storage/sqlite/work-product-artifact-repository.js';
 
 describe('SqlitePortabilityService', () => {
   let testRoot: string;
@@ -487,6 +490,40 @@ describe('SqlitePortabilityService', () => {
         ...createDefaultConfig(),
         repos: [{ name: 'roundtrip', path: testRoot, defaultBranch: 'main' }],
       });
+      const content = Buffer.from('portable artifact bytes', 'utf8');
+      const productId = `wp_${'p'.repeat(24)}`;
+      const artifact = {
+        schemaVersion: 'work-product-artifact/v1' as const,
+        id: `wpa_${'a'.repeat(24)}`,
+        productId,
+        version: 1,
+        workspaceId: 'local',
+        taskId: task.id,
+        runId: 'run_roundtrip',
+        attemptId: 'attempt_roundtrip',
+        producingEventId: 'event_roundtrip',
+        requestIdDigest: `sha256:${'b'.repeat(64)}`,
+        launchManifestDigest: `sha256:${'c'.repeat(64)}`,
+        mediaType: 'application/octet-stream',
+        byteSize: content.byteLength,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        safeName: 'portable.bin',
+        state: 'available' as const,
+        redaction: { state: 'none' as const },
+        createdAt: '2026-05-31T12:00:00.000Z',
+      };
+      await new WorkProductService({ storageType: 'sqlite', sqliteDatabase: sourceDb }).create(
+        {
+          kind: 'file',
+          title: 'Portable file',
+          render: { schemaVersion: 1, kind: 'file', artifact },
+          workspaceId: 'local',
+          taskId: task.id,
+          sourceRunId: artifact.runId,
+        },
+        { id: productId }
+      );
+      await new SqliteWorkProductArtifactRepository(sourceDb).create(artifact, content);
     } finally {
       sourceDb.close();
     }
@@ -500,7 +537,7 @@ describe('SqlitePortabilityService', () => {
     expect(await exists(path.join(bundleDir, 'manifest.json'))).toBe(true);
     const manifest = JSON.parse(await fs.readFile(path.join(bundleDir, 'manifest.json'), 'utf-8'));
     expect(manifest).toMatchObject({
-      formatVersion: 2,
+      formatVersion: 3,
       scope: { type: 'database' },
       redaction: { backupBundle: 'raw' },
     });
@@ -531,6 +568,9 @@ describe('SqlitePortabilityService', () => {
       replaceExisting: true,
     });
     expect(importReport.counts.find((count) => count.entity === 'table.tasks')?.written).toBe(1);
+    expect(
+      importReport.counts.find((count) => count.entity === 'table.work_product_artifacts')?.written
+    ).toBe(1);
 
     const importedDb = new SqliteDatabase({ databasePath: importedDbPath });
     importedDb.open();
@@ -546,6 +586,13 @@ describe('SqlitePortabilityService', () => {
         normalizeConfig: normalizeAppConfig,
       }).getConfig();
       expect(settings.repos[0]?.name).toBe('roundtrip');
+      const artifact = await new SqliteWorkProductArtifactRepository(importedDb).read({
+        workspaceId: 'local',
+        productId: `wp_${'p'.repeat(24)}`,
+        version: 1,
+        artifactId: `wpa_${'a'.repeat(24)}`,
+      });
+      expect(artifact?.content.toString()).toBe('portable artifact bytes');
     } finally {
       importedDb.close();
     }

@@ -60,7 +60,7 @@ function AgentCard({
 
   return (
     <div
-      className="rounded-md border transition-all"
+      className="rounded-md border transition-colors"
       style={{ borderColor: `${style.color}30`, backgroundColor: style.bg }}
     >
       {/* Header */}
@@ -69,10 +69,7 @@ function AgentCard({
         onClick={() => setExpanded(!expanded)}
       >
         {/* Status dot */}
-        <span
-          className={`w-2 h-2 rounded-full shrink-0 ${isActive ? 'animate-pulse' : ''}`}
-          style={{ backgroundColor: style.color }}
-        />
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: style.color }} />
 
         {/* Name + model */}
         <div className="flex-1 min-w-0">
