@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { scryptSync } from 'node:crypto';
 import {
   AUTOMATION_DRAFT_SCHEMA_VERSION,
   EXECUTABLE_AGENT_PROVIDERS,
@@ -94,7 +94,7 @@ export class AutomationDraftService {
       }
       return {
         ...current,
-        drafts: { ...current.drafts, [draft.id]: [...existing, draft] },
+        drafts: replaceDraftRevisions(current.drafts, draft.id, [...existing, draft]),
       };
     });
     return state.drafts[draft.id]?.at(-1) ?? result;
@@ -145,7 +145,7 @@ export class AutomationDraftService {
       }
       return {
         ...current,
-        drafts: { ...current.drafts, [draftId]: [...revisions, draft] },
+        drafts: replaceDraftRevisions(current.drafts, draftId, [...revisions, draft]),
       };
     });
     return result;
@@ -169,9 +169,7 @@ export class AutomationDraftService {
     await this.stateRepository.update((current) => {
       revisionsDeleted = current.drafts[draftId]?.length ?? 0;
       if (revisionsDeleted === 0) return current;
-      const drafts = { ...current.drafts };
-      delete drafts[draftId];
-      return { ...current, drafts };
+      return { ...current, drafts: removeDraftRevisions(current.drafts, draftId) };
     });
     return { deleted: revisionsDeleted > 0, revisionsDeleted };
   }
@@ -181,7 +179,7 @@ export class AutomationDraftService {
     options: CompileOptions = {}
   ): Promise<AutomationDraft> {
     const input = redactCompileInput(rawInput);
-    const identityDigest = sha256(
+    const identityDigest = draftDigest(
       stableJson({
         intent: input.intent,
         requestId: input.requestId,
@@ -300,7 +298,7 @@ export class AutomationDraftService {
     validateOverlap(draftBase, state.drafts, schedulerItems, issues, options.draftId);
     appendFieldIssues(draftBase, issues);
 
-    const digest = sha256(stableJson({ ...draftBase, validation: issues }));
+    const digest = draftDigest(stableJson({ ...draftBase, validation: issues }));
     const id = options.draftId ?? `automation_${identityDigest.slice(7, 31)}`;
     return {
       ...draftBase,
@@ -1080,8 +1078,33 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function sha256(value: string): string {
-  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+function draftDigest(value: string): string {
+  return `scrypt:${scryptSync(value, 'veritas-kanban:automation-draft:v1', 32, {
+    N: 16_384,
+    r: 8,
+    p: 1,
+    maxmem: 32 * 1024 * 1024,
+  }).toString('hex')}`;
+}
+
+function replaceDraftRevisions(
+  drafts: Readonly<Record<string, AutomationDraft[]>>,
+  draftId: string,
+  revisions: AutomationDraft[]
+): Record<string, AutomationDraft[]> {
+  return Object.fromEntries([
+    ...Object.entries(drafts).filter(([existingId]) => existingId !== draftId),
+    [draftId, revisions],
+  ]);
+}
+
+function removeDraftRevisions(
+  drafts: Readonly<Record<string, AutomationDraft[]>>,
+  draftId: string
+): Record<string, AutomationDraft[]> {
+  return Object.fromEntries(
+    Object.entries(drafts).filter(([existingId]) => existingId !== draftId)
+  );
 }
 
 async function defaultIntegrationReady(id: string): Promise<boolean> {

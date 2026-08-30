@@ -148,9 +148,9 @@ export const AutomationDraftSchema = z
       .strict(),
     requestedBy: identifier,
     requestId: identifier,
-    inputDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    inputDigest: z.string().regex(/^scrypt:[a-f0-9]{64}$/),
     createdAt: z.iso.datetime({ offset: true }),
-    digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    digest: z.string().regex(/^scrypt:[a-f0-9]{64}$/),
   })
   .strict();
 
