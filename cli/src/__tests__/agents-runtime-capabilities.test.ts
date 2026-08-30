@@ -258,6 +258,32 @@ describe('vk agent runtime capability controls', () => {
     );
   });
 
+  it('surfaces access projection failures without printing partial authority', async () => {
+    mockApi.mockRejectedValueOnce(new Error('Access evidence is unavailable.'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as typeof process.exit);
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    try {
+      await expect(
+        program.parseAsync(['agent:access', 'task_1', '--attempt', 'attempt_1'], {
+          from: 'user',
+        })
+      ).rejects.toThrow('process.exit called');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Access evidence is unavailable.')
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
+  });
+
   it('binds the first phase transition to exact evidence and manifest provenance', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-phase-cli-'));
     temporaryRoots.push(root);
