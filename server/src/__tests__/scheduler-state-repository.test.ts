@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { lstat, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SchedulerEvent } from '@veritas-kanban/shared';
+import { AutomationDraftService } from '../services/automation-draft-service.js';
 import { FileSchedulerStateRepository } from '../storage/scheduler-state-repository.js';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -110,5 +111,58 @@ describe('FileSchedulerStateRepository', () => {
     );
 
     await expect(repository.read()).rejects.toThrow();
+  });
+
+  it('validates persisted draft collection bounds, revisions, and identity', async () => {
+    const draft = await new AutomationDraftService({
+      stateRepository: repository,
+      workflowExists: async () => false,
+      taskExists: async () => false,
+      templateExists: async () => false,
+      integrationReady: async () => false,
+      providerSupported: () => false,
+      listSchedulerItems: async () => [],
+    }).preview({
+      intent: 'Draft a recurring report.',
+      requestId: 'coverage-draft',
+      requestedBy: 'operator-1',
+    });
+    const persistDrafts = async (drafts?: unknown): Promise<void> => {
+      await mkdir(path.dirname(stateFile), { recursive: true });
+      await writeFile(
+        stateFile,
+        JSON.stringify({
+          version: 1,
+          items: {},
+          events: [],
+          ...(drafts === undefined ? {} : { drafts }),
+        }),
+        'utf8'
+      );
+    };
+
+    await persistDrafts();
+    await expect(repository.read()).resolves.toMatchObject({ drafts: {} });
+    await persistDrafts({ [draft.id]: [draft] });
+    await expect(repository.read()).resolves.toMatchObject({ drafts: { [draft.id]: [draft] } });
+
+    for (const invalid of [
+      null,
+      [],
+      { [draft.id]: [] },
+      { [draft.id]: {} },
+      { [draft.id]: Array(51).fill(draft) },
+    ]) {
+      await persistDrafts(invalid);
+      await expect(repository.read()).rejects.toThrow(/automation draft/i);
+    }
+
+    await persistDrafts(
+      Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`draft-${index}`, [draft]]))
+    );
+    await expect(repository.read()).rejects.toThrow(/200-draft limit/i);
+
+    await persistDrafts({ automation_ffffffffffffffffffffffff: [draft] });
+    await expect(repository.read()).rejects.toThrow(/conflicting identity or revision order/i);
   });
 });

@@ -183,6 +183,7 @@
         "testFiles": [
           "src/__tests__/api-helpers.test.ts",
           "src/__tests__/api-no-raw-fetch.test.ts",
+          "src/__tests__/api-scheduler.test.ts",
           "src/__tests__/api-tasks.test.ts",
           "src/__tests__/api-work-products.test.ts",
           "src/__tests__/agent-run-timeline-mantine.test.tsx",
