@@ -50,7 +50,7 @@ test.describe('mobile PWA offline behavior', () => {
   });
 
   test('serves install metadata and a static-only service worker', async ({ page, request }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
     expect(manifestHref).toBeTruthy();

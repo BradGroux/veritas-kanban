@@ -12,7 +12,9 @@ const ADMIN_KEY = process.env.VERITAS_ADMIN_KEY || 'dev-admin-key';
  * Vite proxy issues (IPv4/IPv6 binding differences on macOS).
  */
 const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
-const AGENT_STATUS_PATH = /\/api\/agent\/status(?:\?.*)?$/;
+const API_REQUEST_URL = /^https?:\/\/[^/]+\/api(?:\/|$)/;
+const AUTH_STATUS_URL = /^https?:\/\/[^/]+\/api\/auth\/status(?:\?.*)?$/;
+const AGENT_STATUS_URL = /^https?:\/\/[^/]+\/api\/agent\/status(?:\?.*)?$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -48,7 +50,7 @@ export function unwrapTaskList<T = { id: string; title?: string }>(body: unknown
  */
 export async function bypassAuth(page: Page): Promise<void> {
   // Bypass auth check — mock the auth status endpoint
-  await page.route('**/api/auth/status', (route) =>
+  await page.route(AUTH_STATUS_URL, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -62,7 +64,7 @@ export async function bypassAuth(page: Page): Promise<void> {
   );
 
   // Keep browser E2E focused on user flows instead of live agent-status polling.
-  await page.route(AGENT_STATUS_PATH, (route) =>
+  await page.route(AGENT_STATUS_URL, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -83,12 +85,12 @@ export async function bypassAuth(page: Page): Promise<void> {
 
   // Add 429 retry interceptor for all API calls from the browser.
   // The dev server has rate limiting which E2E tests can exceed.
-  await page.route('**/api/**', async (route: Route) => {
+  await page.route(API_REQUEST_URL, async (route: Route) => {
     const url = route.request().url();
     // Skip routes already handled by specific handlers above.
     // Use route.fallback() so Playwright passes the request to the next matching
     // handler instead of hanging (routes are matched LIFO).
-    if (url.includes('/api/auth/status') || AGENT_STATUS_PATH.test(url)) {
+    if (AUTH_STATUS_URL.test(url) || AGENT_STATUS_URL.test(url)) {
       await route.fallback();
       return;
     }

@@ -11,7 +11,7 @@ test.describe('Template registry', () => {
   });
 
   test('renders templates view and create controls', async ({ page }) => {
-    await page.goto('/templates', { timeout: 15_000 });
+    await page.goto('/templates', { timeout: 15_000, waitUntil: 'domcontentloaded' });
 
     await expect(page.getByRole('heading', { name: 'Task Templates' })).toBeVisible({
       timeout: 15_000,
