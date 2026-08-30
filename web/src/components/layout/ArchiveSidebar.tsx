@@ -124,7 +124,7 @@ function ArchivedTaskItem({
           variant="subtle"
           color="gray"
           size="sm"
-          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+          className="veritas-secondary-action h-8 w-8 flex-shrink-0"
           onClick={(e) => {
             e.stopPropagation();
             onRestore();

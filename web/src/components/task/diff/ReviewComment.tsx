@@ -54,12 +54,12 @@ export function CommentDisplay({ comment, onRemove }: CommentDisplayProps) {
           {sanitizeText(comment.content)}
         </Text>
         <ActionIcon
-          aria-label="Remove review comment"
+          aria-label={`Remove review comment on line ${comment.line}`}
           variant="subtle"
           color="red"
           size="xs"
           onClick={onRemove}
-          className="opacity-0 transition-opacity group-hover:opacity-100"
+          className="veritas-secondary-action"
         >
           <X className="h-3 w-3" />
         </ActionIcon>

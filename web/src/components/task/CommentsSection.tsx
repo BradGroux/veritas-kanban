@@ -99,15 +99,12 @@ function CommentItem({
               {formatRelativeTime(comment.timestamp)}
             </Text>
             {/* Edit/Delete buttons - visible on hover */}
-            <Group
-              gap={4}
-              className="ml-auto opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-            >
+            <Group gap={4} className="veritas-secondary-action ml-auto">
               <ActionIcon
                 variant="subtle"
                 color="gray"
                 size="sm"
-                aria-label="Edit comment"
+                aria-label={`Edit comment by ${comment.author}`}
                 onClick={() => {
                   setEditText(comment.text);
                   setIsEditing(true);
@@ -119,7 +116,7 @@ function CommentItem({
                 variant="subtle"
                 color="red"
                 size="sm"
-                aria-label="Delete comment"
+                aria-label={`Delete comment by ${comment.author}`}
                 onClick={() => setDeleteDialogOpen(true)}
               >
                 <Trash2 className="h-3 w-3" />

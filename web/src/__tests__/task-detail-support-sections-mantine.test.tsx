@@ -108,7 +108,7 @@ describe('task detail support sections Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: 'Edit comment' }));
+    await user.click(screen.getByRole('button', { name: 'Edit comment by Veritas' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Edit comment text' }), {
       target: { value: 'Edited review note' },
     });
@@ -122,7 +122,7 @@ describe('task detail support sections Mantine migration', () => {
     });
     await user.click(screen.getByRole('button', { name: 'Add Comment' }));
 
-    await user.click(screen.getByRole('button', { name: 'Delete comment' }));
+    await user.click(screen.getByRole('button', { name: 'Delete comment by Veritas' }));
     const dialog = screen.getByRole('dialog', { name: 'Delete comment?' });
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
@@ -243,7 +243,9 @@ describe('task detail support sections Mantine migration', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Add Observation' }));
 
-    await user.click(screen.getByRole('button', { name: 'Delete observation' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Delete observation: Documented rollout risk' })
+    );
     const dialog = screen.getByRole('dialog', { name: 'Delete Observation' });
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
