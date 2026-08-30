@@ -76,6 +76,19 @@ describe('artifact filesystem race handling', () => {
     ).rejects.toThrow(/regular file/);
     expect(close).toHaveBeenCalledOnce();
 
+    fsMocks.lstat.mockResolvedValueOnce({
+      ...sourceStat,
+      isFile: () => false,
+      isSymbolicLink: () => false,
+    });
+    fsMocks.open.mockResolvedValueOnce({
+      stat: vi.fn().mockResolvedValue(openedStat(sourceStat)),
+      close,
+    });
+    await expect(
+      new SecureWorkProductArtifactSourceReader().read(root, 'artifact.txt', 10)
+    ).rejects.toThrow(/regular file/);
+
     fsMocks.open.mockResolvedValueOnce({
       stat: vi.fn().mockResolvedValue(openedStat(sourceStat, { ino: sourceStat.ino + 1 })),
       close,
