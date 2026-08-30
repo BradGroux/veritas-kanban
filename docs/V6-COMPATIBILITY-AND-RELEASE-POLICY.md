@@ -1,11 +1,11 @@
 # Veritas Kanban v6 Compatibility And Release Policy
 
-This policy defines supported v6.1.2 combinations, harness evidence, release
+This policy defines supported v6.1.3 combinations, harness evidence, release
 channels, and rollback limits. The machine-readable harness record at
 `GET /api/config/harness-compatibility` is authoritative for exact capability
 digests, fixture revisions, and the current host's live state.
 
-Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
+Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
 
 ## Harness Support Tiers
 
@@ -25,7 +25,7 @@ are incompatible with v6.
 
 | Component                              | Supported v6 combination                                                                    | Detection/evidence                                                                                      | Fail-closed boundary                                                                                                            |
 | -------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Server, web, shared, CLI, MCP, desktop | All release packages are exactly 6.1.2.                                                     | Package manifests, `/api/health.version`, `vk --version`, MCP metadata, desktop bundle/update metadata. | Mixed release packages are unsupported for publication.                                                                         |
+| Server, web, shared, CLI, MCP, desktop | All release packages are exactly 6.1.3.                                                     | Package manifests, `/api/health.version`, `vk --version`, MCP metadata, desktop bundle/update metadata. | Mixed release packages are unsupported for publication.                                                                         |
 | Public API                             | REST API remains `v1` at `/api/v1`, with `/api` compatibility aliases where documented.     | `X-API-Version`, OpenAPI/reference docs, CLI/MCP smoke.                                                 | Unknown API versions or incompatible auth fail before mutation.                                                                 |
 | Buzz Agent                             | Buzz v0.4.24 commit `710ed9fff57878a1d69f809b80a6ee0416c53fc4`; `buzz-agent 0.1.0`; ACP v1. | Exact initialize identity, capability digest, probe revision, composed Buzz fixtures.                   | Unknown build, `buzz-acp`, resume, HTTP/SSE MCP, or capability drift blocks.                                                    |
 | Buzz relay integration                 | Buzz v0.4.24; NIP-11, NIP-29, NIP-42; optional NIP-43 membership.                           | Pinned relay compatibility evidence, signed query/event fixtures, mapping state.                        | Host/TLS drift, unsafe URL, bad signature, identity mismatch, replay, or disabled mapping blocks.                               |
@@ -37,7 +37,7 @@ are incompatible with v6.
 | GitHub Copilot CLI                     | v1.0.74 public-preview ACP; tag commit `2b809c84e87dbcc88f897cb4f3fb97c43b77af95`.          | Version and ACP initialize handshake; authentication remains provider-managed.                          | Version drift, broad allow, remote/plugin/config injection, or unsupported controls blocks.                                     |
 | Hermes Agent                           | v2026.7.7.2 one-shot process adapter.                                                       | `hermes --version` and allowlisted boot authentication.                                                 | Resume/follow-up remains unsupported.                                                                                           |
 | OpenClaw                               | v2026.6.11 gateway adapter.                                                                 | Gateway health, runtime manifest, explicit operator tool policy.                                        | Missing `sessions_spawn`/`sessions_send`, unknown evidence, or unsupported task controls blocks.                                |
-| macOS desktop                          | macOS arm64 signed/notarized app with bundled 6.1.2 server/web.                             | Bundle version, signature, Gatekeeper, stapling, `/api/health.version`, update metadata.                | Mixed bundle/runtime, failed readiness, signature, or metadata checks blocks stable publication.                                |
+| macOS desktop                          | macOS arm64 signed/notarized app with bundled 6.1.3 server/web.                             | Bundle version, signature, Gatekeeper, stapling, `/api/health.version`, update metadata.                | Mixed bundle/runtime, failed readiness, signature, or metadata checks blocks stable publication.                                |
 | Linux/Windows desktop                  | Unsigned preview artifacts only.                                                            | Cross-platform packaging workflows.                                                                     | Not a supported stable install or update channel.                                                                               |
 | Desktop SQLite/profile                 | Existing v5.2.5 workspace upgraded in place after a complete backup.                        | Data/profile counts, integrity check, startup normalization, board/runtime smoke.                       | Competing writers, unsafe filesystem, failed migration, or missing recovery evidence blocks acceptance.                         |
 
@@ -110,9 +110,13 @@ packaging workflows pass.
 | macOS app bundle       | Reinstall the previous signed release or correct updater metadata.                            | Safe only when current data/profile records remain compatible with the older app. |
 | Bundled server/web     | Roll back with the complete app bundle.                                                       | Never mix payloads from different commits.                                        |
 | Self-hosted server     | Install the prior release and restore the pre-upgrade backup when required.                   | No automatic destructive schema down-migration promise.                           |
-| Desktop SQLite/profile | Restore the stopped-writer v5.2.5 backup.                                                     | Do not copy over a live database or treat app downgrade as data rollback.         |
+| Desktop SQLite/profile | Restore the complete stopped-writer backup captured immediately before the upgrade.           | Do not copy over a live database or treat app downgrade as data rollback.         |
 | Provider profile       | Disable the changed profile or restore reviewed v5 configuration from backup.                 | Do not re-enable an ambiguous legacy profile or bypass support evidence.          |
 | Buzz connection        | Disable trigger rules, mapping, and adapter while retaining audits and local Squad Chat data. | Veritas does not delete remote Buzz events or write imported definitions back.    |
 
 Follow [v6 Upgrade, Install, Remote, And Admin Guide](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md)
 and [Migration Recovery](MIGRATION-RECOVERY.md) for the concrete recovery path.
+
+Version 6.1.3 adds SQLite migration 34 for governed work-product artifacts.
+After that migration runs, rollback to 6.1.2 requires the complete stopped-writer
+6.1.2 backup; reinstalling the older application alone is not a data rollback.

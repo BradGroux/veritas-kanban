@@ -77,11 +77,11 @@ SQLite portability export format 3 includes `work_product_artifacts` metadata an
 
 ## Downgrade Policy
 
-For pre-GA v5 testing, schema `down` migrations may exist to support developer
-iteration and controlled drills.
+During development, schema `down` migrations may exist to support controlled
+iteration and recovery drills.
 
 For GA users, rollback means restoring the pre-migration file-backed backup.
-Indefinite downgrade from all future v5 SQLite schema versions is unsupported.
+Indefinite downgrade from newer SQLite schema versions is unsupported.
 If an older app sees a newer SQLite database, it must refuse normal startup,
 report the schema version, and direct the admin to restore the pre-migration
 backup or use a compatible newer app. The runtime enforces this with

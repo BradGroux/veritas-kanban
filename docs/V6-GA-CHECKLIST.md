@@ -1,13 +1,40 @@
 # Veritas Kanban v6 GA Checklist
 
 This checklist contains the active stable-release gate for Veritas Kanban
-6.1.2 and retains the completed 6.1.1, 6.1.0, and 6.0.2 evidence below. Command results, platform
-details, workflow links, limitations, and artifact hashes belong in
+6.1.3 and retains the completed 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
+Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
+Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
 
-## 6.1.2 Release Gate
+## 6.1.3 Release Gate
+
+- [x] Release tracker #1262 and its implementation dependencies are merged or
+      have an evidence-backed disposition; only the final release matrix and
+      publication gates remain open.
+- [x] Root, shared, server, web, CLI, MCP, and desktop manifests are 6.1.3.
+- [x] README, canonical instructions, API reference, compatibility policy,
+      upgrade guide, release notes, canonical GitHub body, freshness record,
+      and changelog are synchronized for 6.1.3.
+- [x] Governed artifacts, previews, file provenance and execution, Run Access,
+      recurring automation, accessibility, native menus, motion, SQLite
+      migration 34, and reliability follow-ups are represented in release docs.
+- [x] The pre-release security audit has no open Dependabot or secret-scanning
+      alerts. The reviewed CodeQL metadata-hash false positive is dismissed and
+      default-branch CodeQL has zero open alerts.
+- [x] Packaged authentication, secondary-action, macOS menu, motion, compact
+      width, keyboard, reduced-motion, and accessibility smoke evidence is
+      recorded for #1256-#1260.
+- [ ] One clean final candidate passes the complete Node-floor and current-Node
+      release matrix with exact counts, skips, retries, image size, and
+      limitations recorded in the evidence packet.
+- [ ] The release PR merges and its exact merge is published as annotated
+      `v6.1.3` with a live body matching `docs/releases/v6.1.3.md`.
+- [ ] Signed/notarized macOS assets, updater metadata, installed-app readiness,
+      and the live Homebrew cask are verified.
+- [ ] Release tracker #1262 closes only after every publication readback passes.
+
+## Historical 6.1.2 Completed Release Gate
 
 - [x] Audit issues #1162-#1173 are closed through merged, evidence-linked pull
       requests and the single final regression milestone.
@@ -84,7 +111,7 @@ Documentation freshness: 2026-08-24 for Veritas Kanban 6.1.2.
 Apply `ci:full` to the release pull request and keep it applied through the
 final candidate synchronization. That single milestone runs the complete
 workspace suite, critical-path coverage, unsigned desktop artifacts, and
-Docker image contract. Run the following commands once from the clean 6.1.2
+Docker image contract. Run the following commands once from the clean 6.1.3
 release candidate at the supported Node floor and current supported Node:
 
 ```bash
@@ -114,8 +141,8 @@ pnpm desktop:dev:fresh
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
 pnpm test:release-format
-pnpm validate:release -- --version 6.1.2 --skip-build-output
-pnpm validate:release -- --version 6.1.2 --docker-build
+pnpm validate:release -- --version 6.1.3 --skip-build-output
+pnpm validate:release -- --version 6.1.3 --docker-build
 ```
 
 Mount and inspect the unsigned DMG and ZIP, exercise the visible native
@@ -127,11 +154,10 @@ gates at Node 22.22.1 and the current supported Node runtime.
 
 ## Distribution And Post-Publication
 
-The 6.1.2 publication gate is complete. The final candidate, release merge,
-annotated tag, signed/notarized artifacts, independent launch verification,
-post-publication validator, live Homebrew cask, and approved advisory
-disposition are verified in the evidence packet. Completed 6.1.1 evidence
-remains recorded below.
+The 6.1.3 publication gate remains pending the final candidate, release merge,
+annotated tag, signed/notarized artifacts, installed-app verification,
+post-publication validator, and live Homebrew cask. Completed 6.1.2 and earlier
+evidence remains recorded below.
 
 ## Historical 6.0.2 Source And Scope
 

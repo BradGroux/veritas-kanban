@@ -1,50 +1,59 @@
-# Veritas Kanban 6.1.2 Release Notes
+# Veritas Kanban 6.1.3 Release Notes
 
-Veritas Kanban 6.1.2 completes the reliability, security, persistence, provider-runtime, CI, container, and supportability audit tracked by [#1174](https://github.com/BradGroux/veritas-kanban/issues/1174). It is a backward-compatible patch release for 6.1.1.
+Veritas Kanban 6.1.3 adds governed file artifacts, provenance-aware execution, operator Run Access controls, and recurring automation activation. It also closes the August Apple-design audit and hardens concurrent storage and provider teardown paths. This is a backward-compatible patch release for 6.1.2 with additive REST contracts and one SQLite migration.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.2 is the supported stable v6 release; its annotated tag, signed assets, updater metadata, and Homebrew cask are published and verified.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.3 is the supported stable v6 release after its annotated tag, signed assets, updater metadata, and Homebrew cask are published and verified.
 
-## Audit Outcomes And Traceability
+## Backlog Outcomes And Traceability
 
-| Issue | Operational outcome | Pull requests |
-| --- | --- | --- |
-| [#1162](https://github.com/BradGroux/veritas-kanban/issues/1162) | Canonical runtime data paths, legacy discovery, and migration compatibility | #1184 |
-| [#1163](https://github.com/BradGroux/veritas-kanban/issues/1163) | Service persistence restored behind explicit file and SQLite repositories | #1190-#1220 |
-| [#1164](https://github.com/BradGroux/veritas-kanban/issues/1164) | Provider launch, runtime, event, completion, mutation, and adapter contracts decomposed | #1223-#1230 |
-| [#1165](https://github.com/BradGroux/veritas-kanban/issues/1165) | Credential-aware JSON, blob, stream, and download API helpers | #1218 |
-| [#1166](https://github.com/BradGroux/veritas-kanban/issues/1166) | Measured non-root production Docker runtime and size contract | #1222 |
-| [#1167](https://github.com/BradGroux/veritas-kanban/issues/1167) | Immutable external GitHub Actions | #1179 |
-| [#1168](https://github.com/BradGroux/veritas-kanban/issues/1168) | Continuous CodeQL, dependency, and secret scanning | #1180 |
-| [#1169](https://github.com/BradGroux/veritas-kanban/issues/1169) | Risk-weighted critical-path coverage baselines and ratchets | #1183 |
-| [#1170](https://github.com/BradGroux/veritas-kanban/issues/1170) | Four unused direct dependencies removed | #1217 |
-| [#1171](https://github.com/BradGroux/veritas-kanban/issues/1171) | Native-loader-compatible Vite and Vitest configuration | #1178 |
-| [#1172](https://github.com/BradGroux/veritas-kanban/issues/1172) | Deterministic, milestone-scoped workspace and browser gates | #1175, #1177, #1181, #1228 |
-| [#1173](https://github.com/BradGroux/veritas-kanban/issues/1173) | Server lint-warning budget reduced from 600 to 458 | #1221 |
-| [#1231](https://github.com/BradGroux/veritas-kanban/issues/1231) | Initial CodeQL baseline triaged, remediated, and dispositioned | #1232-#1235 |
+| Issue                                                            | Operational outcome                                 | Pull request |
+| ---------------------------------------------------------------- | --------------------------------------------------- | ------------ |
+| [#1247](https://github.com/BradGroux/veritas-kanban/issues/1247) | Governed file-backed Work Products                  | #1270        |
+| [#1248](https://github.com/BradGroux/veritas-kanban/issues/1248) | Effective Run Access summary                        | #1275        |
+| [#1249](https://github.com/BradGroux/veritas-kanban/issues/1249) | Deterministic recurring automation drafts           | #1276        |
+| [#1250](https://github.com/BradGroux/veritas-kanban/issues/1250) | Passive rich artifact previews                      | #1278        |
+| [#1251](https://github.com/BradGroux/veritas-kanban/issues/1251) | Digest-bound run file provenance                    | #1277        |
+| [#1252](https://github.com/BradGroux/veritas-kanban/issues/1252) | Governed active Run Access transitions              | #1279        |
+| [#1253](https://github.com/BradGroux/veritas-kanban/issues/1253) | Bounded standing-authority automation activation    | #1280        |
+| [#1254](https://github.com/BradGroux/veritas-kanban/issues/1254) | Isolated HTML artifact previews                     | #1285        |
+| [#1255](https://github.com/BradGroux/veritas-kanban/issues/1255) | Provenance-aware execution approval                 | #1286        |
+| [#1256](https://github.com/BradGroux/veritas-kanban/issues/1256) | Accessible authentication validation                | #1271        |
+| [#1257](https://github.com/BradGroux/veritas-kanban/issues/1257) | Keyboard and touch visibility for secondary actions | #1272        |
+| [#1258](https://github.com/BradGroux/veritas-kanban/issues/1258) | Standard macOS Window and Help menus                | #1273        |
+| [#1259](https://github.com/BradGroux/veritas-kanban/issues/1259) | Explicit shared motion and stable status feedback   | #1274        |
+| [#1291](https://github.com/BradGroux/veritas-kanban/issues/1291) | Correct packaged diagnostics menu label             | #1292        |
 
-## Persistence And Runtime Paths
+## Governed Artifacts, Provenance, And Execution
 
-`DATA_DIR` and `VERITAS_DATA_DIR` now resolve through one canonical path contract. Live services, health, backup, integrity, migrations, and the production container use the same root. Legacy locations remain discoverable and migrate through explicit compatibility paths rather than creating split authoritative state.
+Work Products can now retain downloadable file artifacts with exact workspace, product version, task, attempt, request, size, digest, media, state, and storage evidence. File and SQLite backends enforce the same idempotency, quarantine, deletion, and integrity contracts. Passive previews support bounded text, JSON, image, audio, video, PDF, archive, and isolated HTML surfaces without granting execution authority.
 
-Service-layer filesystem access has been moved into deep repository modules across activity, progress, status history, scheduled deliverables, workflows, broadcasts, conflicts, delegation, ceremony, error analyses, permissions, lifecycle configuration, scheduler, reflection, chat, tasks, telemetry, and managed content. File and SQLite backends preserve their containment, locking, atomic-write, and parity contracts.
+Run file provenance projects causal run events into digest-bound file history. Operators and agents can distinguish repository-baseline, agent-created, command-created, tool-created, attachment-derived, connector-derived, downloaded, operator-provided, and unknown bytes without persisting credential values.
 
-## Provider Runtime And Frontend API
+Run-owned terminal execution now binds direct executable, script, loader, configuration, archive, and load-path inputs to the exact launch baseline or provenance record. External and unknown bytes require a fresh critical human decision. The server rechecks the task envelope, launch manifest, active phase, file bytes, provenance, and approval evidence immediately before spawn. Unsupported indirect or tool transports fail with typed blockers.
 
-Provider work now flows through cohesive launch-compiler, runtime-resolution, event-interpreter, completion, attempt-lifecycle, and adapter-registry boundaries. Explicitly executable providers retain their supported behavior. Provider-less, unknown, or profile/adapter-mismatched records still fail before attempt creation and never route through an implicit OpenClaw fallback.
+## Run Access And Recurring Automation
 
-Frontend JSON, blob, stream, log, and download operations now share credential-aware API boundaries. Cross-origin `VITE_API_URL` cookie authentication, configured base paths, and server error envelopes remain consistent across supported workflows.
+Operators now receive one redacted, digest-bound Run Access summary spanning filesystem, command, network, tools, integrations, credentials, budgets, provider support, and historical authority. Active access changes use server-owned targets, exact compare-and-set evidence, critical approval where authority expands, durable reversal, and the same phase contract used by dispatch.
 
-## Verification, Security, Dependencies, And Container
+Recurring automation drafts are deterministic and revisioned. Activation previews bind the effective Run Access ceiling, provider and workflow readiness, tools, integrations, targets, expiry, budgets, and blockers. Critical human approval is required before standing authority becomes active, and run claims remain bounded, idempotent, and auditable.
 
-Ordinary pull requests now run source-policy, lint, typecheck, build, dependency-audit, secret-scanning, and CodeQL checks without repeatedly executing workspace tests, coverage, E2E, desktop packaging, load, or Docker contracts. Those expensive gates run at explicit `ci:full`, scheduled, manual, integration, security, and release milestones.
+## Accessibility, Desktop, And Motion
 
-The complete final release matrix is recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md). Historical test counts are not reused as 6.1.2 evidence.
+Authentication, setup, and recovery errors now expose field relationships and concise announcements without moving focus. Secondary task, review, and archive actions reveal on keyboard focus and remain available on coarse pointers, with target-specific accessible names for icon-only controls.
 
-The production Docker closure excludes unrelated workspace dependencies, runs as a non-root user, and has architecture-specific size ceilings. The implementation baseline measured 195,910,880 bytes on arm64 against a 200,000,000-byte ceiling. The final release candidate measured 571,628,184 bytes on amd64 against its 600,000,000-byte ceiling.
+The macOS shell adds standard Window and Help menus while retaining the existing product commands. Shared primitives and high-frequency board, task, activity, template, and chat surfaces use explicit transition properties and stable running or unread states instead of broad or competing perpetual motion. Reduced-motion behavior remains intentional and immediate.
 
-Four verified unused direct dependencies were removed. The server lint-warning budget dropped from 600 to 458 without weakening rules or adding broad suppressions. A coordinated security remediation is integrated through #1236 and the [repository security advisory](https://github.com/BradGroux/veritas-kanban/security/advisories/GHSA-4r99-qpvh-wrqf) was published after the supported 6.1.2 artifacts were verified. Final milestone validation also corrected recovery-key alphabet generation, WebSocket upgrade header forwarding, same-task lifecycle ordering, and sanitized URI prefix handling through #1239, #1241, and #1243.
+## Reliability And Security Audit
 
-The initial 195-alert CodeQL baseline was reviewed alert by alert: 67 findings were fixed and 128 non-exploitable alerts received evidence-backed dispositions. Validated request, logging, persisted-key, file-handling, and sandbox-read findings were fixed in #1232-#1235. Alerts that were limited to test fixtures or were already contained by explicit authentication, path, descriptor, ownership, or atomic-write controls received documented dispositions rather than speculative code churn. The post-merge default-branch analysis reports zero open alerts.
+Admission snapshot appends now complete every byte before synchronization, and admission reads serialize with concurrent writers. ACP teardown contains detached reply-write failures without masking awaited transport errors. Workflow-run reads retry bounded regular-file replacements caused by atomic updates while continuing to reject symbolic links and persistently unstable paths.
+
+Packaged macOS acceptance also found and corrected Electron's mnemonic handling for the diagnostics Help item, so the native menu and accessibility tree expose the intended ampersand.
+
+The release audit found no open Dependabot or secret-scanning alerts. One high-severity CodeQL password-hashing alert was dispositioned as a false positive after source review confirmed the SHA-256 input contains only workspace, task, attempt, event-kind, and event-identity metadata. Default-branch CodeQL remains at zero open alerts.
+
+## Verification
+
+The complete release matrix is recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md). Normal changes used focused tests. Full workspace units, critical-path coverage, lint, typecheck, builds, security gates, Playwright, load smoke, Docker contract, and macOS/Linux/Windows unsigned artifacts ran at the integration and release milestones.
 
 ## Install Or Upgrade
 
@@ -61,30 +70,18 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.2 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.2). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.3 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.3). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
-There is no public REST API version change, configuration breaking change, or new SQLite schema migration in 6.1.2. Migrations remain at 30 through 33. Runtime-path normalization can move legacy files into the configured canonical data directory; verify the selected data root, health, integrity, and backup evidence before resuming writers or automation.
+The public REST API remains `v1`, and the new routes and schemas are additive. SQLite migration 34 creates governed work-product artifact storage and indexes. Upgrading from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
 
-Rollback is restore-first. Stop every writer. Reinstall 6.1.1 only when the current data contracts remain compatible; otherwise restore the complete pre-upgrade stopped-writer workspace. Never copy an older database over a live instance.
+Rollback is restore-first. Stop every writer, reinstall 6.1.2 only when using an unmigrated workspace, and otherwise restore the complete stopped-writer 6.1.2 backup. Never copy an older database over a running instance.
 
 ## Known Limitations
 
-Buzz Agent sessions remain in-memory and do not support session load/resume. Buzz files, reactions, forums, direct messages, and destructive edit/delete projection are not bridged. GitHub Copilot CLI ACP remains public preview. Grok Build's stable artifact still self-reports alpha and cannot be fully traced to the current public source tree. Claude Code's complete CLI implementation is not public, so certification remains bound to exact release behavior and checked-in fixtures.
-
-Deterministic compatibility does not prove provider authentication, subscription availability, quota, or live inference. Linux and Windows desktop artifacts remain unsigned previews; signed and notarized macOS arm64 is the supported stable desktop distribution.
+Linux and Windows desktop artifacts remain unsigned verification previews. Signed and notarized macOS arm64 is the supported stable desktop distribution. Credential-gated provider smoke remains supplemental and cannot be inferred from deterministic fixtures. HTML previews remain passive, opaque-origin documents with restrictive content security policy and no bridge or run authority. Unsupported indirect file execution and uncertified tool execution remain blocked.
 
 ## Release Artifacts
 
-The supported stable desktop release provides signed and notarized `Veritas-Kanban-6.1.2-mac-arm64.dmg` and `Veritas-Kanban-6.1.2-mac-arm64.zip`, blockmaps, SHA-256 sidecars, and `latest-mac.yml` updater metadata from the annotated `v6.1.2` tag. Exact sizes, hashes, signing, notarization, stapling, Gatekeeper, launch, updater, workflow, release, and Homebrew evidence are recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
-
-## Documentation And Evidence
-
-- [Agent provider setup and operations](AGENT-PROVIDERS.md)
-- [Harness compatibility matrix](HARNESS-COMPATIBILITY.md)
-- [v6 runtime architecture](architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
-- [v6 compatibility and release policy](V6-COMPATIBILITY-AND-RELEASE-POLICY.md)
-- [v6 upgrade and administration guide](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md)
-- [v6 release candidate evidence](V6-RC-EVIDENCE-PACKET.md)
-- [Changelog](../CHANGELOG.md)
+Exact release merge, annotated tag, GitHub release body, signed artifact names, sizes, checksums, updater metadata, signing, notarization, stapling, Gatekeeper, launch/reopen, and Homebrew evidence are recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).

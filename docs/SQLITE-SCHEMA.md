@@ -1188,6 +1188,11 @@ center search, and export flows.
 | `work_product_artifacts` | Immutable file metadata and verified BLOB bytes keyed by workspace, product, version, attempt, and idempotent request digest.            |
 | `work_product_search`    | FTS index for command-center and search reachability without walking task/comment files; file entries index safe metadata, never bodies. |
 
+SQLite migration 34 creates `work_product_artifacts` plus its product/version
+and state/creation indexes. It is additive and does not rewrite existing Work
+Product rows. A 6.1.3 upgrade backup remains required because 6.1.2 does not
+understand schema 34.
+
 ## Operational Provenance Repository Implementation
 
 SQLite mode also exposes a lightweight operational provenance repository over
