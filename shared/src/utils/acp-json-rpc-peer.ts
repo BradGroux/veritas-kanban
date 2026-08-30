@@ -76,7 +76,7 @@ export class AcpJsonRpcPeer {
       try {
         record = JSON.parse(line);
       } catch {
-        void this.send(jsonRpcError(null, -32700, 'Parse error'));
+        this.sendDetached(jsonRpcError(null, -32700, 'Parse error'));
         continue;
       }
       this.acceptRecord(record);
@@ -117,7 +117,7 @@ export class AcpJsonRpcPeer {
     }
 
     if (typeof value.method !== 'string' || !value.method.trim()) {
-      if (id !== undefined) void this.send(jsonRpcError(id, -32600, 'Invalid Request'));
+      if (id !== undefined) this.sendDetached(jsonRpcError(id, -32600, 'Invalid Request'));
       return;
     }
     if (id === undefined) {
@@ -127,14 +127,18 @@ export class AcpJsonRpcPeer {
       return;
     }
     if (!this.options.onRequest) {
-      void this.send(jsonRpcError(id, -32601, 'Method not found'));
+      this.sendDetached(jsonRpcError(id, -32601, 'Method not found'));
       return;
     }
-    void Promise.resolve(this.options.onRequest(value.method, value.params, id))
-      .then((result) => this.send({ jsonrpc: '2.0', id, result: result ?? {} }))
-      .catch((error) =>
-        this.send(jsonRpcError(id, -32603, boundedMessage(error, 'Internal error')))
-      );
+    void Promise.resolve(this.options.onRequest(value.method, value.params, id)).then(
+      (result) => this.sendDetached({ jsonrpc: '2.0', id, result: result ?? {} }),
+      (error) =>
+        this.sendDetached(jsonRpcError(id, -32603, boundedMessage(error, 'Internal error')))
+    );
+  }
+
+  private sendDetached(record: AcpJsonRpcMessage): void {
+    void this.send(record).catch(() => undefined);
   }
 
   private send(record: AcpJsonRpcMessage): Promise<void> {
