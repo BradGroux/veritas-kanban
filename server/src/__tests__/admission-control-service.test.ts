@@ -100,6 +100,26 @@ async function repositoryFor(backend: 'file' | 'sqlite') {
   return new SqliteAdmissionReservationRepository(database);
 }
 
+type CompleteAppend = (
+  handle: {
+    write: (
+      buffer: Uint8Array,
+      offset: number,
+      length: number,
+      position: number | null
+    ) => Promise<{ bytesWritten: number }>;
+  },
+  content: Uint8Array
+) => Promise<void>;
+
+function completeAppend(repository: FileAdmissionReservationRepository): CompleteAppend {
+  return (
+    repository as unknown as {
+      writeCompleteAppend: CompleteAppend;
+    }
+  ).writeCompleteAppend.bind(repository);
+}
+
 const treePolicy: ExecutionTreeBudgetPolicy = {
   id: 'budget_root_objective',
   scope: 'root-objective',
@@ -369,6 +389,37 @@ describe('AdmissionControlService', () => {
       lease: { heartbeatAt: compacted.lease.heartbeatAt },
     });
     expect(compacted.revision).toBe(renewed.revision + 1);
+  });
+
+  it('completes partial file admission appends before returning', async () => {
+    const writes: string[] = [];
+    const write = vi.fn(
+      async (buffer: Uint8Array, offset: number, length: number, position: number | null) => {
+        expect(position).toBeNull();
+        const bytesWritten = Math.min(3, length);
+        writes.push(Buffer.from(buffer.subarray(offset, offset + bytesWritten)).toString('utf8'));
+        return { bytesWritten };
+      }
+    );
+
+    await completeAppend(new FileAdmissionReservationRepository('/tmp/admission.jsonl'))(
+      { write },
+      Buffer.from('{"durable":true}\n')
+    );
+
+    expect(writes.join('')).toBe('{"durable":true}\n');
+    expect(write).toHaveBeenCalledTimes(6);
+  });
+
+  it('fails closed when a file admission append makes no forward progress', async () => {
+    const write = vi.fn().mockResolvedValue({ bytesWritten: 0 });
+
+    await expect(
+      completeAppend(new FileAdmissionReservationRepository('/tmp/admission.jsonl'))(
+        { write },
+        Buffer.from('{"durable":true}\n')
+      )
+    ).rejects.toThrow(/no forward progress/i);
   });
 
   it('renews a leased queue claim until dispatch ownership takes over', async () => {

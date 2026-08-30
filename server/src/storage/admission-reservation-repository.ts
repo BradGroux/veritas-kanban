@@ -571,14 +571,14 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
     snapshot: AdmissionReservation,
     existing: AdmissionReservation[]
   ): Promise<void> {
-    const line = `${JSON.stringify(snapshot)}\n`;
+    const line = Buffer.from(`${JSON.stringify(snapshot)}\n`, 'utf8');
     const existingBytes = existing.reduce(
       (total, candidate) => total + Buffer.byteLength(JSON.stringify(candidate), 'utf8') + 1,
       0
     );
     if (
       existing.length >= this.compactSnapshots ||
-      existingBytes + Buffer.byteLength(line, 'utf8') > COMPACT_LOG_BYTES
+      existingBytes + line.byteLength > COMPACT_LOG_BYTES
     ) {
       const materialized = this.materialize(existing);
       materialized.set(snapshot.id, snapshot);
@@ -588,7 +588,7 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
     if (existing.length >= MAX_SNAPSHOTS) {
       throw new Error('Admission reservation log reached its bounded snapshot limit.');
     }
-    if (existingBytes + Buffer.byteLength(line, 'utf8') > MAX_LOG_BYTES) {
+    if (existingBytes + line.byteLength > MAX_LOG_BYTES) {
       throw new Error('Admission reservation log reached its bounded byte limit.');
     }
     const handle = await open(
@@ -597,13 +597,24 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       0o600
     );
     try {
-      // FileHandle.write() may complete with fewer bytes than requested. A
-      // partial JSONL record makes the entire durable admission log unreadable,
-      // so use writeFile() to complete the full append before syncing.
-      await handle.writeFile(line, 'utf8');
+      await this.writeCompleteAppend(handle, line);
       await handle.sync();
     } finally {
       await handle.close();
+    }
+  }
+
+  private async writeCompleteAppend(
+    handle: Awaited<ReturnType<typeof open>>,
+    content: Uint8Array
+  ): Promise<void> {
+    let offset = 0;
+    while (offset < content.byteLength) {
+      const result = await handle.write(content, offset, content.byteLength - offset, null);
+      if (result.bytesWritten < 1) {
+        throw new Error('Admission reservation append made no forward progress.');
+      }
+      offset += result.bytesWritten;
     }
   }
 
