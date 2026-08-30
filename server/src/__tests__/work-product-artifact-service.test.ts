@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 const taskServiceMocks = vi.hoisted(() => ({ getTask: vi.fn() }));
@@ -35,7 +34,7 @@ async function fixture(
     sourceReader?: WorkProductArtifactSourceReader;
   } = {}
 ) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-work-product-artifact-'));
+  const root = await fs.mkdtemp(path.join(process.cwd(), '.veritas-work-product-artifact-'));
   cleanupPaths.push(root);
   const artifactRoot = path.join(root, 'sandbox', 'artifacts');
   await fs.mkdir(artifactRoot, { recursive: true });

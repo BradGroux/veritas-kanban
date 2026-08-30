@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type {
   FileWorkProductRender,
@@ -495,17 +495,13 @@ function deterministicId(
 ): string {
   const identity = [
     prefix,
-    input.workspaceId,
     input.taskId,
     input.runId,
     input.attemptId,
     productId ?? '',
     requestIdDigest,
   ].join('\0');
-  return `${prefix}_${createHmac('sha256', 'veritas-work-product-artifact-id/v1')
-    .update(identity)
-    .digest('base64url')
-    .slice(0, 24)}`;
+  return `${prefix}_${createHash('sha256').update(identity).digest('base64url').slice(0, 24)}`;
 }
 
 export async function resolveWorkProductArtifactGrant(

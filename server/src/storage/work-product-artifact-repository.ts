@@ -116,24 +116,22 @@ export class SecureWorkProductArtifactSourceReader implements WorkProductArtifac
     const resolvedRoot = path.resolve(rootPath);
     const sourcePath = ensureWithinBase(resolvedRoot, path.resolve(resolvedRoot, relativePath));
     const canonicalRoot = await realpath(resolvedRoot);
-    const sourceLstat = await lstat(sourcePath);
-    if (sourceLstat.isSymbolicLink() || !sourceLstat.isFile()) {
-      throw new Error('Artifact source must be a regular file and cannot be a symbolic link.');
-    }
-    if (sourceLstat.nlink !== 1) {
-      throw new Error('Artifact source cannot have external hard-link aliases.');
-    }
-    const canonicalSource = await realpath(sourcePath);
-    ensureWithinBase(canonicalRoot, canonicalSource);
-
-    // The descriptor is opened without following links and its identity is compared with the
-    // checked file before any bytes are trusted, closing the check/use race CodeQL cannot model.
-    // codeql[js/file-system-race]
     const handle = await open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
       const before = await handle.stat();
       if (!before.isFile()) throw new Error('Artifact source must be a regular file.');
-      if (before.nlink !== 1 || before.ino !== sourceLstat.ino || before.dev !== sourceLstat.dev) {
+      if (before.nlink !== 1) {
+        throw new Error('Artifact source cannot have external hard-link aliases.');
+      }
+      const [sourceLstat, canonicalSource] = await Promise.all([
+        lstat(sourcePath),
+        realpath(sourcePath),
+      ]);
+      if (sourceLstat.isSymbolicLink() || !sourceLstat.isFile()) {
+        throw new Error('Artifact source must be a regular file and cannot be a symbolic link.');
+      }
+      ensureWithinBase(canonicalRoot, canonicalSource);
+      if (before.ino !== sourceLstat.ino || before.dev !== sourceLstat.dev) {
         throw new Error('Artifact source identity changed before registration.');
       }
       if (before.size > maxBytes) {
@@ -189,7 +187,7 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
     candidate: WorkProductArtifactMetadata,
     content: Uint8Array | null
   ): Promise<WorkProductArtifactCreateResult> {
-    await this.ensurePrivateBaseDir();
+    await this.ensureBaseDir();
     const metadata = WorkProductArtifactMetadataSchema.parse(candidate);
     if (metadata.state === 'available' && !content) {
       throw new Error('Available work product artifacts require persisted download bytes.');
@@ -243,13 +241,10 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
   }
 
   async get(lookup: WorkProductArtifactLookup): Promise<WorkProductArtifactMetadata | null> {
-    await this.ensurePrivateBaseDir();
+    await this.ensureBaseDir();
     const metadataPath = path.join(this.artifactPath(lookup), 'metadata.json');
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      // Tests may inject a private mkdtemp root; the production root is persistent and every
-      // descriptor still uses no-follow, bounded reads, and private directory permissions.
-      // codeql[js/insecure-temporary-file]
       handle = await open(metadataPath, constants.O_RDONLY | constants.O_NOFOLLOW);
       const stat = await handle.stat();
       if (!stat.isFile() || stat.size > 64 * 1024) {
@@ -271,9 +266,6 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
     const metadata = await this.get(lookup);
     if (!metadata || metadata.state !== 'available') return null;
     const payloadPath = path.join(this.artifactPath(lookup), 'payload.bin');
-    // Tests may inject a private mkdtemp root; the immutable payload is opened no-follow and
-    // verified against its persisted size and digest before it is returned.
-    // codeql[js/insecure-temporary-file]
     const handle = await open(payloadPath, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
       const stat = await handle.stat();
@@ -294,7 +286,7 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
     workspaceId: string,
     productId: string
   ): Promise<WorkProductArtifactDeleteResult> {
-    await this.ensurePrivateBaseDir();
+    await this.ensureBaseDir();
     validatePathSegment(workspaceId);
     validatePathSegment(productId);
     const workspaceDir = ensureWithinBase(this.baseDir, path.join(this.baseDir, workspaceId));
@@ -378,6 +370,14 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
     );
   }
 
+  private async ensureBaseDir(): Promise<void> {
+    await mkdir(this.baseDir, { recursive: true, mode: 0o700 });
+    const baseStat = await lstat(this.baseDir);
+    if (!baseStat.isDirectory() || baseStat.isSymbolicLink()) {
+      throw new Error('Work product artifact storage must be a regular directory.');
+    }
+  }
+
   private async writeExclusive(filePath: string, content: Uint8Array): Promise<void> {
     const handle = await open(
       filePath,
@@ -396,17 +396,6 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
       await handle.sync();
     } finally {
       await handle.close();
-    }
-  }
-
-  private async ensurePrivateBaseDir(): Promise<void> {
-    await mkdir(this.baseDir, { recursive: true, mode: 0o700 });
-    const baseStat = await lstat(this.baseDir);
-    if (!baseStat.isDirectory() || baseStat.isSymbolicLink()) {
-      throw new Error('Work product artifact storage must be a private regular directory.');
-    }
-    if (process.platform !== 'win32' && (baseStat.mode & 0o077) !== 0) {
-      throw new Error('Work product artifact storage cannot grant group or public access.');
     }
   }
 
@@ -448,9 +437,6 @@ export class FileWorkProductArtifactRepository implements WorkProductArtifactRep
 
   private async syncDirectory(directoryPath: string): Promise<void> {
     if (process.platform === 'win32') return;
-    // Tests may inject a private mkdtemp root; syncing an already private, no-follow directory
-    // does not create a predictable shared temporary file.
-    // codeql[js/insecure-temporary-file]
     const handle = await open(directoryPath, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
       await handle.sync();

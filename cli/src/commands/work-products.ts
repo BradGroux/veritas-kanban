@@ -1,4 +1,6 @@
-import { writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import type { WorkProduct, WorkProductArtifactMetadata } from '@veritas-kanban/shared';
@@ -7,6 +9,44 @@ import { API_BASE, api, assertApiPermissionForRequest, buildApiHeaders } from '.
 interface WorkProductArtifactRegistration {
   product: WorkProduct;
   metadata: WorkProductArtifactMetadata;
+}
+
+async function writeVerifiedArtifact(
+  outputPath: string,
+  content: Buffer,
+  expectedSha256: string,
+  force: boolean
+): Promise<void> {
+  if (!/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    throw new Error('Download response did not include a valid artifact SHA-256 digest.');
+  }
+  const actualSha256 = createHash('sha256').update(content).digest('hex');
+  if (actualSha256 !== expectedSha256) {
+    throw new Error('Downloaded artifact bytes did not match the server integrity digest.');
+  }
+
+  const flags =
+    constants.O_WRONLY |
+    constants.O_CREAT |
+    constants.O_NOFOLLOW |
+    (force ? constants.O_TRUNC : constants.O_EXCL);
+  const handle = await open(outputPath, flags, 0o600);
+  try {
+    let offset = 0;
+    while (offset < content.byteLength) {
+      const { bytesWritten } = await handle.write(
+        content,
+        offset,
+        content.byteLength - offset,
+        offset
+      );
+      if (bytesWritten <= 0) throw new Error('Artifact download write made no progress.');
+      offset += bytesWritten;
+    }
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
 }
 
 function printError(error: unknown): void {
@@ -132,16 +172,14 @@ export function registerWorkProductCommands(program: Command): void {
           throw new Error(detail || `Download failed with HTTP ${response.status}`);
         }
         const content = Buffer.from(await response.arrayBuffer());
-        // The destination is an explicit local operator argument, not a server-provided path;
-        // exclusive creation remains the default and overwrite requires --force.
-        // codeql[js/http-to-file-access]
-        await writeFile(options.output, content, { flag: options.force ? 'w' : 'wx' });
+        const sha256 = response.headers.get('x-artifact-sha256');
+        await writeVerifiedArtifact(options.output, content, sha256 ?? '', Boolean(options.force));
         const result = {
           productId: id,
           version: options.version ? Number(options.version) : undefined,
           output: options.output,
           byteSize: content.byteLength,
-          sha256: response.headers.get('x-artifact-sha256') ?? undefined,
+          sha256,
           contentDigest: response.headers.get('content-digest') ?? undefined,
         };
         if (options.json) console.log(JSON.stringify(result, null, 2));

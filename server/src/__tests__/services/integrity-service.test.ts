@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import { createBackup, runIntegrityChecks } from '../../services/integrity-service.js';
 import { FileWorkProductArtifactRepository } from '../../storage/work-product-artifact-repository.js';
 
@@ -11,8 +10,7 @@ describe('integrity-service', () => {
   let tasksDir: string;
 
   beforeEach(async () => {
-    const suffix = Math.random().toString(36).substring(7);
-    tmpDir = path.join(os.tmpdir(), `veritas-integrity-test-${suffix}`);
+    tmpDir = await fs.mkdtemp(path.join(process.cwd(), '.veritas-integrity-test-'));
     // Layout: tmpDir/.veritas-kanban (data), tmpDir/tasks/active (tasks)
     dataDir = path.join(tmpDir, '.veritas-kanban');
     tasksDir = path.join(tmpDir, 'tasks', 'active');

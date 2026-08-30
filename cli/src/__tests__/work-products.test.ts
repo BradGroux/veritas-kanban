@@ -1,5 +1,5 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -107,9 +107,10 @@ describe('vk work-products commands', () => {
   });
 
   it('downloads bytes without overwriting an existing destination by default', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-work-product-download-'));
+    const root = await fs.mkdtemp(path.join(process.cwd(), '.vk-work-product-download-'));
     cleanupPaths.push(root);
     const outputPath = path.join(root, 'artifact.bin');
+    const sha256 = createHash('sha256').update('artifact bytes').digest('hex');
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -118,7 +119,7 @@ describe('vk work-products commands', () => {
             status: 200,
             headers: {
               'content-digest': 'sha-256=:q8Ej:',
-              'x-artifact-sha256': 'abc123',
+              'x-artifact-sha256': sha256,
             },
           })
       )
@@ -151,10 +152,44 @@ describe('vk work-products commands', () => {
       version: 2,
       output: outputPath,
       byteSize: 14,
-      sha256: 'abc123',
+      sha256,
       contentDigest: 'sha-256=:q8Ej:',
     });
     output.mockRestore();
+  });
+
+  it('rejects downloaded bytes that do not match the server integrity digest', async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), '.vk-work-product-download-'));
+    cleanupPaths.push(root);
+    const outputPath = path.join(root, 'artifact.bin');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(Buffer.from('tampered bytes'), {
+            status: 200,
+            headers: { 'x-artifact-sha256': '0'.repeat(64) },
+          })
+      )
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await program().parseAsync([
+      'node',
+      'vk',
+      'work-products',
+      'download',
+      'wp_1',
+      '--output',
+      outputPath,
+    ]);
+
+    await expect(fs.access(outputPath)).rejects.toThrow();
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('Downloaded artifact bytes did not match the server integrity digest')
+    );
+    expect(process.exitCode).toBe(1);
+    error.mockRestore();
   });
 
   it('requires exact explicit confirmation for physical purge requests', async () => {

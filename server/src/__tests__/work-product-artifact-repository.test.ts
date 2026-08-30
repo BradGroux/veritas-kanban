@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkProductArtifactMetadata } from '@veritas-kanban/shared';
@@ -48,7 +47,7 @@ function metadata(
 }
 
 async function repositoryFixture() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-file-artifact-repository-'));
+  const root = await fs.mkdtemp(path.join(process.cwd(), '.veritas-file-artifact-repository-'));
   cleanupPaths.push(root);
   return {
     root,
@@ -89,7 +88,7 @@ describe('SecureWorkProductArtifactSourceReader', () => {
   });
 
   it('reads a stable regular file and returns exact integrity metadata', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-artifact-source-reader-'));
+    const root = await fs.mkdtemp(path.join(process.cwd(), '.veritas-artifact-source-reader-'));
     cleanupPaths.push(root);
     const content = Buffer.from('stable source bytes');
     await fs.writeFile(path.join(root, 'artifact.txt'), content);
@@ -106,17 +105,18 @@ describe('SecureWorkProductArtifactSourceReader', () => {
 });
 
 describe('FileWorkProductArtifactRepository', () => {
-  it('rejects an artifact storage root with group or public access', async () => {
+  it('rejects a symbolic-link artifact storage root', async () => {
     if (process.platform === 'win32') return;
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-public-artifact-repository-'));
+    const root = await fs.mkdtemp(path.join(process.cwd(), '.veritas-artifact-root-'));
     cleanupPaths.push(root);
+    const target = path.join(root, 'target');
     const baseDir = path.join(root, 'artifacts');
-    await fs.mkdir(baseDir, { mode: 0o755 });
-    await fs.chmod(baseDir, 0o755);
+    await fs.mkdir(target);
+    await fs.symlink(target, baseDir);
     const repository = new FileWorkProductArtifactRepository(baseDir);
 
     await expect(repository.get(lookup(metadata(Buffer.from('a'))))).rejects.toThrow(
-      /group or public access/
+      /regular directory/
     );
   });
 

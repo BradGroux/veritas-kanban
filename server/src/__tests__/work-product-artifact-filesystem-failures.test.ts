@@ -1,4 +1,3 @@
-import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,7 +37,9 @@ afterEach(async () => {
 });
 
 async function sourceFixture(content: string) {
-  const root = await actualFs.mkdtemp(path.join(os.tmpdir(), 'veritas-artifact-source-failure-'));
+  const root = await actualFs.mkdtemp(
+    path.join(process.cwd(), '.veritas-artifact-source-failure-')
+  );
   cleanupPaths.push(root);
   const sourcePath = path.join(root, 'artifact.txt');
   await actualFs.writeFile(sourcePath, content);
@@ -125,7 +126,9 @@ describe('artifact filesystem race handling', () => {
   });
 
   it('rejects artifact writes without progress and unexpected payload stat failures', async () => {
-    const root = await actualFs.mkdtemp(path.join(os.tmpdir(), 'veritas-artifact-write-failure-'));
+    const root = await actualFs.mkdtemp(
+      path.join(process.cwd(), '.veritas-artifact-write-failure-')
+    );
     cleanupPaths.push(root);
     const repository = new FileWorkProductArtifactRepository(path.join(root, 'artifacts'));
     fsMocks.open.mockResolvedValueOnce({
