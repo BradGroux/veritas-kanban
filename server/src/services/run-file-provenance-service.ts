@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { scryptSync } from 'node:crypto';
 import path from 'node:path';
 import {
   RUN_FILE_PROVENANCE_RESPONSE_SCHEMA_VERSION,
@@ -491,7 +491,7 @@ function boundedMediaType(value: string): string {
 }
 
 function hash(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+  return scryptSync(value, 'run-file-provenance/v1', 32).toString('hex');
 }
 
 function digest(value: string): string {

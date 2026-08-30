@@ -236,6 +236,48 @@ describe('vk agent runtime capability controls', () => {
     );
   });
 
+  it('renders exact file provenance and capture gaps for operators', async () => {
+    mockApi.mockResolvedValueOnce({
+      schemaVersion: 'run-file-provenance-response/v1',
+      status: 'exact',
+      query: {
+        root: 'run-artifact',
+        relativePath: 'reports/final.pdf',
+        sha256: `sha256:${'a'.repeat(64)}`,
+      },
+      current: {
+        source: 'artifact-registration',
+        operation: 'create',
+        producer: { eventId: 'runevt_000000000001' },
+      },
+      chain: [{ id: 'provenance-1' }],
+      gaps: [{ code: 'capture-unavailable', message: 'Provider omitted a causal event.' }],
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:file-provenance',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--root',
+        'run-artifact',
+        '--path',
+        'reports/final.pdf',
+        '--sha256',
+        `sha256:${'a'.repeat(64)}`,
+      ],
+      { from: 'user' }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('File provenance: exact'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Chain: 1 record(s)'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('capture-unavailable'));
+  });
+
   it('reads the versioned access projection for one exact attempt', async () => {
     mockApi.mockResolvedValueOnce({
       current: { schemaVersion: 'run-access-summary/v1', status: 'complete' },
