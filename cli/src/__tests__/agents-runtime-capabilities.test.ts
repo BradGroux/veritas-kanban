@@ -199,6 +199,43 @@ describe('vk agent runtime capability controls', () => {
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/phase?attemptId=attempt_1&limit=25');
   });
 
+  it('resolves exact file provenance with encoded bounded evidence', async () => {
+    mockApi.mockResolvedValueOnce({
+      schemaVersion: 'run-file-provenance-response/v1',
+      status: 'unknown',
+      query: {},
+      current: null,
+      chain: [],
+      gaps: [],
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:file-provenance',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--root',
+        'run-artifact',
+        '--path',
+        'reports/final report.pdf',
+        '--sha256',
+        `sha256:${'a'.repeat(64)}`,
+        '--limit',
+        '10',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith(
+      `/api/agents/task_1/file-provenance/resolve?attemptId=attempt_1&root=run-artifact&path=reports%2Ffinal+report.pdf&sha256=sha256%3A${'a'.repeat(64)}&limit=10`
+    );
+  });
+
   it('binds the first phase transition to exact evidence and manifest provenance', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-phase-cli-'));
     temporaryRoots.push(root);

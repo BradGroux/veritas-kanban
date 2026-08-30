@@ -22,11 +22,7 @@ import {
   TASK_VERIFICATION_STATUSES,
 } from '@veritas-kanban/shared';
 import { asyncHandler } from '../middleware/async-handler.js';
-import {
-  ConflictError,
-  NotFoundError,
-  ValidationError,
-} from '../middleware/error-handler.js';
+import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { requireLocalAgentCapability } from '../middleware/local-agent-capability.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 import {
@@ -41,7 +37,12 @@ import {
   RunOutputArtifactDownloadQuerySchema,
   RunOutputArtifactHttpQuerySchema,
 } from '../schemas/run-output-artifact-schemas.js';
+import {
+  RunFileProvenanceListQuerySchema,
+  RunFileProvenanceReadQuerySchema,
+} from '../schemas/run-file-provenance-schemas.js';
 import { RunOutputArtifactService } from '../services/run-output-artifact-service.js';
+import { getRunFileProvenanceService } from '../services/run-file-provenance-service.js';
 import {
   workspaceExecutionTrustDecisionInputSchema,
   workspaceExecutionTrustRevokeInputSchema,
@@ -510,6 +511,40 @@ router.get(
   })
 );
 
+// GET /api/agents/:taskId/file-provenance/resolve - Resolve provenance for exact bytes.
+router.get(
+  '/:taskId/file-provenance/resolve',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = RunFileProvenanceReadQuerySchema.parse(req.query);
+    const taskId = req.params.taskId as string;
+    const workspaceId = await authorizedTaskWorkspace(req, taskId, query.attemptId);
+    res.json(
+      await getRunFileProvenanceService().resolve({
+        workspaceId,
+        taskId,
+        attemptId: query.attemptId,
+        root: query.root,
+        relativePath: query.path,
+        sha256: query.sha256,
+        limit: query.limit,
+      })
+    );
+  })
+);
+
+// GET /api/agents/:taskId/file-provenance - List bounded redacted run evidence.
+router.get(
+  '/:taskId/file-provenance',
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = RunFileProvenanceListQuerySchema.parse(req.query);
+    const taskId = req.params.taskId as string;
+    const workspaceId = await authorizedTaskWorkspace(req, taskId, query.attemptId);
+    res.json(
+      await getRunFileProvenanceService().list(workspaceId, taskId, query.attemptId, query.limit)
+    );
+  })
+);
+
 // GET /api/agents/:taskId/output-artifacts/:artifactId - Query governed run output.
 router.get(
   '/:taskId/output-artifacts/:artifactId',
@@ -579,10 +614,7 @@ router.get(
     if (!range) throw new ConflictError('Run output artifact body is unavailable.');
     res.status(206);
     res.setHeader('Content-Type', range.metadata.mediaType);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${range.metadata.id}.bin"`
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${range.metadata.id}.bin"`);
     res.setHeader(
       'Content-Range',
       `bytes ${range.offset}-${Math.max(range.offset, range.offset + range.length - 1)}/${range.metadata.storedBytes}`
@@ -1013,6 +1045,22 @@ router.post(
 
 // Export service for WebSocket use
 export { router as agentRoutes, clawdbotAgentService as agentService };
+
+async function authorizedTaskWorkspace(
+  req: AuthenticatedRequest,
+  taskId: string,
+  attemptId: string
+): Promise<string> {
+  const workspaceId = req.auth?.workspaceId || 'local';
+  const task = await getTaskService().getTask(taskId);
+  const attempt = task
+    ? [task.attempt, ...(task.attempts ?? [])].find((candidate) => candidate?.id === attemptId)
+    : undefined;
+  if (!task || !attempt || attempt.taskEnvelope?.workspace.workspaceId !== workspaceId) {
+    throw new NotFoundError('Task not found');
+  }
+  return workspaceId;
+}
 
 function getProgressWatchdogControl(): ProgressWatchdogControlService {
   progressWatchdogControl ??= new ProgressWatchdogControlService(undefined, clawdbotAgentService);

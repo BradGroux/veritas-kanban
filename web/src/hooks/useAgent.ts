@@ -12,6 +12,7 @@ import type {
   ProviderRuntimeCapabilityId,
   RunApprovalDecisionInput,
   RunApprovalRequest,
+  RunFileProvenanceListResponse,
   RunPhaseAuthoritySnapshot,
   TaskCommitPolicy,
 } from '@veritas-kanban/shared';
@@ -195,6 +196,22 @@ export function useAgentPhase(
       apiFetch<{ phase: RunPhaseAuthoritySnapshot | null }>(
         `${API_BASE}/agents/${encodeURIComponent(requiredQueryParam(taskId, 'taskId'))}/phase?attemptId=${encodeURIComponent(requiredQueryParam(attemptId, 'attemptId'))}`
       ).then((result) => result.phase),
+    enabled: !!taskId && !!attemptId,
+    refetchInterval: live ? 2_000 : false,
+  });
+}
+
+export function useRunFileProvenance(
+  taskId: string | undefined,
+  attemptId: string | undefined,
+  live = false
+) {
+  return useQuery({
+    queryKey: ['agent', 'file-provenance', taskId, attemptId],
+    queryFn: () =>
+      apiFetch<RunFileProvenanceListResponse>(
+        `${API_BASE}/agents/${encodeURIComponent(requiredQueryParam(taskId, 'taskId'))}/file-provenance?attemptId=${encodeURIComponent(requiredQueryParam(attemptId, 'attemptId'))}&limit=25`
+      ),
     enabled: !!taskId && !!attemptId,
     refetchInterval: live ? 2_000 : false,
   });

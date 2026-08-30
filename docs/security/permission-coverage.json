@@ -708,6 +708,14 @@
       "denialReason": "Reading active phase state requires task and agent read access."
     },
     {
+      "id": "cli:agents:agent:file-provenance",
+      "kind": "cli",
+      "classification": "authenticated-read",
+      "permissions": ["task:read", "agent:read"],
+      "source": "cli/src/commands/agents.ts",
+      "denialReason": "Resolving redacted file provenance requires task and agent read access."
+    },
+    {
       "id": "cli:agents:agent:transition-phase",
       "kind": "cli",
       "classification": "agent-scoped",

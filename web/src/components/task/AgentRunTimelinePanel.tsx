@@ -49,6 +49,7 @@ import {
   useDecideRunApproval,
   useAgentPhase,
   usePendingAgentApprovals,
+  useRunFileProvenance,
   type AgentApprovalRequest,
 } from '@/hooks/useAgent';
 import { useAgentRunTraces, useTaskTelemetryEvents } from '@/hooks/useAgentRunTimeline';
@@ -1089,6 +1090,11 @@ export function AgentRunTimelinePanel({
     selectedAttemptId ?? undefined,
     hasLiveAttempt && selectedAttemptId === task.attempt?.id
   );
+  const { data: fileProvenance, isLoading: fileProvenanceLoading } = useRunFileProvenance(
+    task.id,
+    selectedAttemptId ?? undefined,
+    hasLiveAttempt && selectedAttemptId === task.attempt?.id
+  );
   const [filter, setFilter] = useState<AgentRunTimelineEventType | 'all'>('all');
   const [visibleCount, setVisibleCount] = useState(TIMELINE_PAGE_SIZE);
   const highlightedEventRef = useRef<HTMLDivElement | null>(null);
@@ -1172,6 +1178,7 @@ export function AgentRunTimelinePanel({
     notificationsLoading ||
     approvalsLoading ||
     phaseLoading ||
+    fileProvenanceLoading ||
     activeRunsLoading ||
     recentRunsLoading;
   const phaseIdentity = phase?.effectiveEvidence.identity;
@@ -1609,6 +1616,41 @@ export function AgentRunTimelinePanel({
                 <Badge size="xs" variant="outline">
                   v{product.version}
                 </Badge>
+              </Group>
+            ))}
+          </Stack>
+        </Paper>
+      )}
+
+      {fileProvenance && (fileProvenance.records.length > 0 || fileProvenance.gaps.length > 0) && (
+        <Paper withBorder p="md" radius="md">
+          <Stack gap="xs">
+            <Group gap="xs">
+              <GitBranch className="h-4 w-4 text-muted-foreground" />
+              <Text fw={600} size="sm">
+                File Provenance
+              </Text>
+              <Badge variant="light">{fileProvenance.records.length}</Badge>
+            </Group>
+            {fileProvenance.records.slice(0, 4).map((record) => (
+              <Group key={record.id} gap="xs" wrap="nowrap" align="flex-start">
+                <FileText className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <Text size="sm" truncate>
+                    {record.location.root}/{record.location.relativePath}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {record.source} · {record.operation} · {record.content.sha256.slice(0, 19)}
+                  </Text>
+                </div>
+              </Group>
+            ))}
+            {fileProvenance.gaps.slice(0, 3).map((gap, index) => (
+              <Group key={`${gap.code}:${gap.eventId ?? index}`} gap="xs" wrap="nowrap">
+                <AlertTriangle className="h-3 w-3 shrink-0 text-yellow-600" />
+                <Text size="xs" c="yellow">
+                  {gap.code}: {gap.message}
+                </Text>
               </Group>
             ))}
           </Stack>

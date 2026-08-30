@@ -13,8 +13,10 @@ import {
   getBuiltInPhaseCapabilityProfile,
 } from '../../services/phase-capability-service.js';
 
-const { mockGetPhase, mockTransition } = vi.hoisted(() => ({
+const { mockGetFileProvenance, mockGetPhase, mockGetTask, mockTransition } = vi.hoisted(() => ({
+  mockGetFileProvenance: vi.fn(),
   mockGetPhase: vi.fn(),
+  mockGetTask: vi.fn(),
   mockTransition: vi.fn(),
 }));
 
@@ -30,13 +32,20 @@ vi.mock('../../services/run-phase-authority-service.js', () => ({
   }),
 }));
 
+vi.mock('../../services/run-file-provenance-service.js', () => ({
+  getRunFileProvenanceService: () => ({
+    resolve: mockGetFileProvenance,
+    list: vi.fn(),
+  }),
+}));
+
 vi.mock('../../services/clawdbot-agent-service.js', () => ({
   AgentReadinessError: class AgentReadinessError extends Error {},
   clawdbotAgentService: {},
 }));
 
 vi.mock('../../services/task-service.js', () => ({
-  getTaskService: () => ({ getTask: vi.fn() }),
+  getTaskService: () => ({ getTask: mockGetTask }),
 }));
 
 vi.mock('../../services/telemetry-service.js', () => ({
@@ -53,6 +62,13 @@ describe('phase transition routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetPhase.mockResolvedValue(null);
+    mockGetTask.mockResolvedValue({
+      id: 'task-1',
+      attempt: {
+        id: 'attempt-1',
+        taskEnvelope: { workspace: { workspaceId: 'local' } },
+      },
+    });
   });
 
   it('reads current state and bounded history for one exact run', async () => {
@@ -101,6 +117,48 @@ describe('phase transition routes', () => {
         }),
       })
     );
+  });
+
+  it('resolves exact file provenance within the authenticated attempt workspace', async () => {
+    mockGetFileProvenance.mockResolvedValue({ status: 'exact', current: { id: 'runfile_1' } });
+
+    const response = await request(app())
+      .get('/api/agents/task-1/file-provenance/resolve')
+      .query({
+        attemptId: 'attempt-1',
+        root: 'run-artifact',
+        path: 'reports/final.pdf',
+        sha256: `sha256:${'a'.repeat(64)}`,
+        limit: 10,
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockGetFileProvenance).toHaveBeenCalledWith({
+      workspaceId: 'local',
+      taskId: 'task-1',
+      attemptId: 'attempt-1',
+      root: 'run-artifact',
+      relativePath: 'reports/final.pdf',
+      sha256: `sha256:${'a'.repeat(64)}`,
+      limit: 10,
+    });
+
+    mockGetTask.mockResolvedValueOnce({
+      id: 'task-1',
+      attempt: {
+        id: 'attempt-1',
+        taskEnvelope: { workspace: { workspaceId: 'other-workspace' } },
+      },
+    });
+    const denied = await request(app())
+      .get('/api/agents/task-1/file-provenance/resolve')
+      .query({
+        attemptId: 'attempt-1',
+        root: 'run-artifact',
+        path: 'reports/final.pdf',
+        sha256: `sha256:${'a'.repeat(64)}`,
+      });
+    expect(denied.status).toBe(404);
   });
 });
 
