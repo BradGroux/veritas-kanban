@@ -150,7 +150,7 @@ describe('desktop native menu', () => {
       const helpMenu = template.find((item) => item.role === 'help');
       const helpItems = Array.isArray(helpMenu?.submenu) ? helpMenu.submenu : [];
       const productHelp = helpItems.find((item) => item.label === 'Veritas Kanban Help');
-      const onboarding = helpItems.find((item) => item.label === 'Show Setup & Diagnostics');
+      const onboarding = helpItems.find((item) => item.label === 'Show Setup && Diagnostics');
 
       expect(productHelp?.enabled).not.toBe(false);
       expect(onboarding?.enabled).toBe(true);

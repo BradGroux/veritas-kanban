@@ -50,7 +50,7 @@ export function createDesktopMenuTemplate(
               },
               {
                 ...command('open-onboarding'),
-                label: 'Show Setup & Diagnostics',
+                label: 'Show Setup && Diagnostics',
               },
             ],
           },
