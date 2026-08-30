@@ -4,15 +4,24 @@ import userEvent from '@testing-library/user-event';
 import type { RunAccessSummary } from '@veritas-kanban/shared';
 import { renderWithProviders } from './test-utils';
 
-const { mockUseAgentAccess } = vi.hoisted(() => ({ mockUseAgentAccess: vi.fn() }));
+const { mockApplyMutate, mockPreviewMutate, mockUseAgentAccess } = vi.hoisted(() => ({
+  mockApplyMutate: vi.fn(),
+  mockPreviewMutate: vi.fn(),
+  mockUseAgentAccess: vi.fn(),
+}));
 
-vi.mock('@/hooks/useAgent', () => ({ useAgentAccess: mockUseAgentAccess }));
+vi.mock('@/hooks/useAgent', () => ({
+  useAgentAccess: mockUseAgentAccess,
+  useApplyRunAccessChange: () => ({ mutate: mockApplyMutate, isPending: false, error: null }),
+  usePreviewRunAccessChange: () => ({ mutate: mockPreviewMutate, isPending: false, error: null }),
+}));
 
 import { RunAccessPanel } from '@/components/task/RunAccessPanel';
 
 afterEach(cleanup);
 
 beforeEach(() => {
+  vi.clearAllMocks();
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
@@ -62,6 +71,80 @@ describe('RunAccessPanel', () => {
     await user.click(screen.getByRole('option', { name: 'Prior · #0' }));
     expect(screen.getByText('disabled · supported')).toBeDefined();
     expect(screen.getByText(/sequence 0/)).toBeDefined();
+  });
+
+  it('previews and applies the exact reviewed access revision', async () => {
+    const user = userEvent.setup();
+    const current = summaryFixture();
+    const preview = {
+      schemaVersion: 'run-access-change-preview/v1' as const,
+      requestRevision: `sha256:${'a'.repeat(64)}`,
+      taskId: 'task-access',
+      attemptId: 'attempt-access',
+      requestId: 'access-change-1',
+      operation: 'transition-phase' as const,
+      targetPhase: 'verify' as const,
+      reason: 'Verify the active run.',
+      expectedAccessSummaryDigest: current.digest,
+      expectedSequence: 0,
+      expectedPhaseEvidenceDigest: current.identity.phaseEvidenceDigest as string,
+      expectedManifestDigest: current.identity.launchManifestDigest as string,
+      targetEvidence: {} as never,
+      authorityDelta: {
+        classification: 'narrowing' as const,
+        entries: [
+          { dimension: 'credential.access' as const, addedScopes: [], removedScopes: ['*'] },
+        ],
+      },
+      affectedTools: [],
+      affectedIntegrations: [],
+      budgetImpact: {
+        classification: 'unchanged' as const,
+        before: current.budgets,
+        after: current.budgets,
+      },
+      approval: { required: false, class: 'none' as const },
+      enforcement: {
+        state: 'ready' as const,
+        provider: 'acp-stdio',
+        safeBoundary: 'active-run' as const,
+        requiresRelaunch: false,
+        blockers: [],
+      },
+    };
+    mockUseAgentAccess.mockReturnValue({
+      data: { current, history: [] },
+      isLoading: false,
+      error: null,
+    });
+    mockPreviewMutate.mockImplementation((_variables, callbacks) => callbacks.onSuccess(preview));
+
+    renderWithProviders(<RunAccessPanel taskId="task-access" attemptId="attempt-access" live />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Reason' }), 'Verify the active run.');
+    await user.click(screen.getByRole('button', { name: 'Preview change' }));
+    expect(mockPreviewMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-access',
+        request: expect.objectContaining({
+          attemptId: 'attempt-access',
+          operation: 'transition-phase',
+          targetPhase: 'verify',
+          expectedAccessSummaryDigest: current.digest,
+          expectedSequence: 0,
+        }),
+      }),
+      expect.any(Object)
+    );
+    expect(screen.getByText('Reviewed narrowing change')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'Apply reviewed change' }));
+    expect(mockApplyMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({ requestRevision: preview.requestRevision }),
+      }),
+      expect.any(Object)
+    );
   });
 });
 

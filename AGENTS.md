@@ -233,6 +233,14 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
   exact phase evidence and transition sequence. ACP stdio is the only current
   adapter with enforceable command and external-action mediation; other
   adapters return typed blockers for explicit phases.
+- Operator Run Access changes compile server-owned built-in phase targets
+  against the immutable launch authority ceiling. Preview and apply bind the
+  exact attempt, manifest, Run Access digest, phase digest, sequence, stable
+  request ID, requested operation, reason, and request revision. Added scopes
+  require exact-action approval. ACP stdio
+  may apply only live mediated command, external-action, and plan-artifact
+  changes; process-boundary changes require pause and relaunch, and unsupported
+  adapters fail closed without appending a transition.
 - Credential-bound tool servers persist only exact definition/scope digests and
   safe target names in `run-tool-catalog/v1`. Discovery strips their source
   environment/header values, native provider injection omits them, and

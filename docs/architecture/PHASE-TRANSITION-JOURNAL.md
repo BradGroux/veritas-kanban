@@ -92,10 +92,32 @@ evidence document. Reads require `agent:read`; transition requests require
 `task:write`. Expansion is not applied until an administrator resolves its
 approval. Emergency override authority is checked independently by the service.
 
+Operator-facing Run Access controls use the narrower server-owned surface:
+
+```http
+POST /api/agents/:taskId/access/changes/preview
+POST /api/agents/:taskId/access/changes
+```
+
+The caller selects a built-in target phase and supplies the exact Run Access
+summary digest plus current compare-and-set evidence. The server compiles the
+target against the immutable launch ceiling, returns the exact delta, affected
+surfaces, unchanged budget projection, and a deterministic request revision,
+and requires that revision on apply. This prevents the UI or CLI from authoring
+phase evidence.
+The apply endpoint still writes only through this journal.
+
 ## CLI controls
 
 ```bash
 vk agent:phase TASK-001 --attempt attempt_123 --json
+
+vk agent:change-access TASK-001 \
+  --attempt attempt_123 \
+  --target-phase verify \
+  --reason "Use the reviewed verification boundary." \
+  --apply \
+  --json
 
 vk agent:transition-phase TASK-001 \
   --attempt attempt_123 \
@@ -131,3 +153,9 @@ The journal still does not prove provider enforcement by itself. ACP stdio
 supplies the current pre-execution mediation contract. An adapter without
 equivalent command and external-action controls fails an explicit phase launch
 closed.
+
+The Run Access change service narrows that boundary further for active runs.
+ACP stdio may change only mediated command, external-action, and plan-artifact
+authority in place. Filesystem, network, or credential changes stop at a typed
+pause-before-relaunch boundary. Other adapters report live transitions as
+unsupported instead of mutating the journal optimistically.

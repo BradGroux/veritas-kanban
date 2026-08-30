@@ -2565,6 +2565,37 @@ and header values, local filesystem paths, and URL paths or query strings. See
 [Run Access Summary v1](architecture/RUN-ACCESS-SUMMARY-V1.md) for the full
 contract and failure states.
 
+### Governed Run Access Changes
+
+```
+POST /api/agents/:taskId/access/changes/preview
+POST /api/agents/:taskId/access/changes
+```
+
+The preview endpoint accepts the exact attempt, stable request ID,
+`transition-phase` operation, target phase, reason, Run Access summary digest,
+transition sequence, phase-evidence digest, and launch-manifest digest.
+It compiles the target from built-in server profiles and the immutable launch
+authority ceiling. The response is `run-access-change-preview/v1`: an exact
+before/after authority delta, affected tool and integration names, unchanged
+budget projection, approval class, provider enforcement decision, safe boundary,
+and deterministic request revision. Callers cannot submit mutable target evidence
+through this surface.
+
+Applying the change repeats the preview input with `requestRevision`. The server
+recompiles and rejects a stale sequence, digest, manifest, request revision, or
+changed reuse of the request ID before delegating to the append-only phase
+transition journal. Added scopes require exact-action approval. Retry the same
+request and approval ID after approval; rejected and expired approvals cannot
+mutate authority. Removals apply without widening only when the active provider
+can prove atomic enforcement.
+
+ACP stdio currently supports live mediated command, external-action, and plan
+artifact changes. Filesystem, network, and credential boundary changes return a
+typed `pause-before-relaunch` blocker. Other providers return a typed unsupported
+blocker for any live authority change. Preview requires `agent:read`; apply
+requires `task:write`.
+
 ### Automatic Run Recovery
 
 ```

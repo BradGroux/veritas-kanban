@@ -13,14 +13,30 @@ import {
   getBuiltInPhaseCapabilityProfile,
 } from '../../services/phase-capability-service.js';
 
-const { mockGetFileProvenance, mockGetPhase, mockGetRunAccess, mockGetTask, mockTransition } =
-  vi.hoisted(() => ({
-    mockGetFileProvenance: vi.fn(),
-    mockGetPhase: vi.fn(),
-    mockGetTask: vi.fn(),
-    mockGetRunAccess: vi.fn(),
-    mockTransition: vi.fn(),
-  }));
+const {
+  mockApplyAccessChange,
+  mockGetFileProvenance,
+  mockGetPhase,
+  mockGetRunAccess,
+  mockGetTask,
+  mockPreviewAccessChange,
+  mockTransition,
+} = vi.hoisted(() => ({
+  mockApplyAccessChange: vi.fn(),
+  mockGetFileProvenance: vi.fn(),
+  mockGetPhase: vi.fn(),
+  mockGetRunAccess: vi.fn(),
+  mockGetTask: vi.fn(),
+  mockPreviewAccessChange: vi.fn(),
+  mockTransition: vi.fn(),
+}));
+
+vi.mock('../../services/run-access-change-service.js', () => ({
+  getRunAccessChangeService: () => ({
+    apply: mockApplyAccessChange,
+    preview: mockPreviewAccessChange,
+  }),
+}));
 
 vi.mock('../../services/run-access-summary-service.js', () => ({
   getRunAccessSummaryService: () => ({ get: mockGetRunAccess }),
@@ -139,6 +155,48 @@ describe('phase transition routes', () => {
           type: 'user',
         }),
       })
+    );
+  });
+
+  it('previews and applies a server-owned Run Access change', async () => {
+    const body = {
+      attemptId: 'attempt-1',
+      requestId: 'access-change-1',
+      operation: 'transition-phase',
+      targetPhase: 'publish',
+      reason: 'Move the active run into reviewed publication authority.',
+      expectedAccessSummaryDigest: `sha256:${'4'.repeat(64)}`,
+      expectedSequence: 0,
+      expectedPhaseEvidenceDigest: `sha256:${'2'.repeat(64)}`,
+      expectedManifestDigest: `sha256:${'1'.repeat(64)}`,
+    };
+    mockPreviewAccessChange.mockResolvedValue({
+      schemaVersion: 'run-access-change-preview/v1',
+      requestRevision: `sha256:${'3'.repeat(64)}`,
+    });
+
+    const preview = await request(app())
+      .post('/api/agents/task-1/access/changes/preview')
+      .send(body);
+
+    expect(preview.status).toBe(200);
+    expect(mockPreviewAccessChange).toHaveBeenCalledWith('local', 'task-1', body);
+
+    const appliedBody = { ...body, requestRevision: preview.body.requestRevision };
+    mockApplyAccessChange.mockResolvedValue({
+      preview: preview.body,
+      transition: { status: 'approval-required' },
+    });
+    const applied = await request(app())
+      .post('/api/agents/task-1/access/changes')
+      .send(appliedBody);
+
+    expect(applied.status).toBe(202);
+    expect(mockApplyAccessChange).toHaveBeenCalledWith(
+      'local',
+      'task-1',
+      appliedBody,
+      expect.objectContaining({ administrator: true })
     );
   });
 

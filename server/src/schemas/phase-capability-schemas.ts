@@ -373,6 +373,31 @@ export const phaseTransitionResultSchema = z
   })
   .strict();
 
+export const runAccessChangeInputSchema = z
+  .object({
+    attemptId: identifierSchema,
+    requestId: identifierSchema,
+    operation: z.literal('transition-phase'),
+    targetPhase: phaseNameSchema,
+    reason: safeTextSchema,
+    expectedAccessSummaryDigest: digestSchema,
+    expectedSequence: z.number().int().nonnegative(),
+    expectedPhaseEvidenceDigest: digestSchema,
+    expectedManifestDigest: digestSchema,
+    requestRevision: digestSchema.optional(),
+    approvalId: z
+      .string()
+      .regex(/^runapproval_[A-Za-z0-9_-]{12,32}$/)
+      .optional(),
+    approvalTtlMs: z
+      .number()
+      .int()
+      .min(1_000)
+      .max(24 * 60 * 60 * 1_000)
+      .optional(),
+  })
+  .strict();
+
 function hasControlCharacters(value: string): boolean {
   return [...value].some((character) => {
     const code = character.charCodeAt(0);

@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useAgent', () => ({
   useAgentAccess: mocks.useAgentAccess,
+  useApplyRunAccessChange: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  usePreviewRunAccessChange: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAgentStatus: mocks.useAgentStatus,
   useAgentStream: mocks.useAgentStream,
   useStopAgent: () => ({

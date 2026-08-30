@@ -179,11 +179,21 @@ const ROUTE_PERMISSIONS: RoutePermissionConfig[] = [
       { methods: ['POST'], path: /^\/route\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/hosts\/preview\/?$/, permissions: 'agent:read' },
       { methods: ['POST'], path: /^\/[^/]+\/launch-preview\/?$/, permissions: 'agent:read' },
+      {
+        methods: ['POST'],
+        path: /^\/[^/]+\/access\/changes\/preview\/?$/,
+        permissions: 'agent:read',
+      },
       { methods: ['POST'], path: /^\/[^/]+\/(start|stop)\/?$/, permissions: 'agent:write' },
       { methods: ['POST'], path: /^\/[^/]+\/message\/?$/, permissions: 'task:write' },
       {
         methods: ['POST'],
         path: /^\/[^/]+\/phase\/transitions\/?$/,
+        permissions: 'task:write',
+      },
+      {
+        methods: ['POST'],
+        path: /^\/[^/]+\/access\/changes\/?$/,
         permissions: 'task:write',
       },
       {

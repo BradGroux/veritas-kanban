@@ -53,6 +53,16 @@ describe('shared API permission metadata', () => {
         method: 'POST',
       }).permissions
     ).toEqual(['task:write']);
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/access/changes/preview', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['agent:read']);
+    expect(
+      getApiPermissionRequirement('/api/agents/task_1/access/changes', {
+        method: 'POST',
+      }).permissions
+    ).toEqual(['task:write']);
   });
 
   it('separates conversation steering from lifecycle mutation authority', () => {

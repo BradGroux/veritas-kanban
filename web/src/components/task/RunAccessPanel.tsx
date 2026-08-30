@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Accordion,
+  Alert,
   Badge,
+  Button,
   Code,
+  Divider,
   Group,
   Loader,
   Paper,
@@ -10,10 +13,20 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  Textarea,
 } from '@mantine/core';
 import { FolderLock, Gauge, KeyRound, ShieldCheck, Wifi, Wrench } from 'lucide-react';
-import type { RunAccessSummary } from '@veritas-kanban/shared';
-import { useAgentAccess } from '@/hooks/useAgent';
+import type {
+  PhaseName,
+  RunAccessChangeInput,
+  RunAccessChangePreview,
+  RunAccessSummary,
+} from '@veritas-kanban/shared';
+import {
+  useAgentAccess,
+  useApplyRunAccessChange,
+  usePreviewRunAccessChange,
+} from '@/hooks/useAgent';
 
 interface RunAccessPanelProps {
   taskId: string;
@@ -29,16 +42,29 @@ const STATUS_COLOR: Record<RunAccessSummary['status'], string> = {
 
 export function RunAccessPanel({ taskId, attemptId, live = false }: RunAccessPanelProps) {
   const query = useAgentAccess(taskId, attemptId, live);
+  const previewChange = usePreviewRunAccessChange();
+  const applyChange = useApplyRunAccessChange();
   const versions = useMemo(
     () => (query.data ? [query.data.current, ...query.data.history] : []),
     [query.data]
   );
   const currentSequence = query.data?.current.version.sequence;
   const [sequence, setSequence] = useState<string>('');
+  const [targetPhase, setTargetPhase] = useState<PhaseName>('verify');
+  const [reason, setReason] = useState('');
+  const [requestId, setRequestId] = useState(() => newAccessRequestId());
+  const [preview, setPreview] = useState<RunAccessChangePreview>();
+  const [approvalId, setApprovalId] = useState<string>();
 
   useEffect(() => {
     setSequence(currentSequence === undefined ? '' : String(currentSequence));
   }, [attemptId, currentSequence]);
+
+  useEffect(() => {
+    setRequestId(newAccessRequestId());
+    setPreview(undefined);
+    setApprovalId(undefined);
+  }, [attemptId]);
 
   if (query.isLoading) {
     return (
@@ -68,6 +94,28 @@ export function RunAccessPanel({ taskId, attemptId, live = false }: RunAccessPan
     query.data.current;
   const phase = summary.identity.phase;
   const phaseLabel = phase?.mode === 'profile' ? phase.phase : (phase?.phase ?? 'unavailable');
+  const current = query.data.current;
+  const canChange =
+    live &&
+    summary.version.sequence === current.version.sequence &&
+    current.identity.phaseEvidenceDigest !== null &&
+    current.identity.launchManifestDigest !== null;
+  const changeInput = (): RunAccessChangeInput => ({
+    attemptId,
+    requestId,
+    operation: 'transition-phase',
+    targetPhase,
+    reason,
+    expectedAccessSummaryDigest: current.digest,
+    expectedSequence: current.identity.transitionSequence,
+    expectedPhaseEvidenceDigest: current.identity.phaseEvidenceDigest as string,
+    expectedManifestDigest: current.identity.launchManifestDigest as string,
+  });
+  const resetPreview = () => {
+    setPreview(undefined);
+    setApprovalId(undefined);
+    setRequestId(newAccessRequestId());
+  };
 
   return (
     <Paper withBorder p="md" radius="md" aria-label="Run Access">
@@ -236,9 +284,129 @@ export function RunAccessPanel({ taskId, attemptId, live = false }: RunAccessPan
             </Accordion.Panel>
           </Accordion.Item>
         </Accordion>
+
+        {canChange && (
+          <>
+            <Divider />
+            <Stack gap="xs" aria-label="Change Run Access">
+              <Text fw={600} size="sm">
+                Change active access
+              </Text>
+              <Text size="xs" c="dimmed">
+                Preview a server-owned authority diff. Changes that the active provider cannot apply
+                atomically stop at a relaunch boundary.
+              </Text>
+              <Select
+                label="Target phase"
+                value={targetPhase}
+                data={['explore', 'plan', 'implement', 'verify', 'publish']}
+                onChange={(value) => {
+                  setTargetPhase((value ?? 'verify') as PhaseName);
+                  resetPreview();
+                }}
+              />
+              <Textarea
+                label="Reason"
+                value={reason}
+                minRows={2}
+                maxLength={20_000}
+                onChange={(event) => {
+                  setReason(event.currentTarget.value);
+                  resetPreview();
+                }}
+              />
+              <Group gap="xs">
+                <Button
+                  variant="light"
+                  loading={previewChange.isPending}
+                  disabled={reason.trim().length === 0}
+                  onClick={() =>
+                    previewChange.mutate(
+                      { taskId, request: changeInput() },
+                      { onSuccess: setPreview }
+                    )
+                  }
+                >
+                  Preview change
+                </Button>
+                {preview?.enforcement.state === 'ready' && (
+                  <Button
+                    loading={applyChange.isPending}
+                    onClick={() =>
+                      applyChange.mutate(
+                        {
+                          taskId,
+                          request: {
+                            ...changeInput(),
+                            requestRevision: preview.requestRevision,
+                            approvalId,
+                          },
+                        },
+                        {
+                          onSuccess: (result) => {
+                            setPreview(result.preview);
+                            setApprovalId(result.transition.approval?.id);
+                          },
+                        }
+                      )
+                    }
+                  >
+                    Apply reviewed change
+                  </Button>
+                )}
+              </Group>
+              {(previewChange.error || applyChange.error) && (
+                <Alert color="red" title="Run Access change failed">
+                  {(previewChange.error ?? applyChange.error)?.message}
+                </Alert>
+              )}
+              {preview && (
+                <Alert
+                  color={preview.enforcement.state === 'ready' ? 'blue' : 'yellow'}
+                  title={
+                    preview.enforcement.state === 'ready'
+                      ? `Reviewed ${preview.authorityDelta.classification} change`
+                      : 'Relaunch or provider change required'
+                  }
+                >
+                  <Stack gap={4}>
+                    {preview.authorityDelta.entries.map((entry) => (
+                      <Text size="xs" key={entry.dimension}>
+                        {entry.dimension}: +{entry.addedScopes.join(', ') || 'none'} · −
+                        {entry.removedScopes.join(', ') || 'none'}
+                      </Text>
+                    ))}
+                    {preview.enforcement.blockers.map((blocker) => (
+                      <Text size="xs" key={blocker.code}>
+                        {blocker.code}: {blocker.message}
+                      </Text>
+                    ))}
+                    <Text size="xs">
+                      Budget impact: {preview.budgetImpact.classification} · reservation{' '}
+                      {preview.budgetImpact.after.reservationState}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Revision {preview.requestRevision}
+                    </Text>
+                    {approvalId && (
+                      <Text size="xs">
+                        Approval {approvalId} is pending. Decide it in Run Approvals, then retry
+                        this exact change.
+                      </Text>
+                    )}
+                  </Stack>
+                </Alert>
+              )}
+            </Stack>
+          </>
+        )}
       </Stack>
     </Paper>
   );
+}
+
+function newAccessRequestId(): string {
+  return `access-${crypto.randomUUID()}`;
 }
 
 function AccessMetric({

@@ -14,6 +14,9 @@ import type {
   RunApprovalRequest,
   RunFileProvenanceListResponse,
   RunAccessSummaryResponse,
+  RunAccessChangeInput,
+  RunAccessChangePreview,
+  RunAccessChangeResult,
   RunPhaseAuthoritySnapshot,
   TaskCommitPolicy,
 } from '@veritas-kanban/shared';
@@ -231,6 +234,40 @@ export function useAgentAccess(
       ),
     enabled: !!taskId && !!attemptId,
     refetchInterval: live ? 2_000 : false,
+  });
+}
+
+export function usePreviewRunAccessChange() {
+  return useMutation({
+    mutationFn: ({ taskId, request }: { taskId: string; request: RunAccessChangeInput }) =>
+      apiFetch<RunAccessChangePreview>(
+        `${API_BASE}/agents/${encodeURIComponent(taskId)}/access/changes/preview`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request),
+        }
+      ),
+  });
+}
+
+export function useApplyRunAccessChange() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, request }: { taskId: string; request: RunAccessChangeInput }) =>
+      apiFetch<RunAccessChangeResult>(
+        `${API_BASE}/agents/${encodeURIComponent(taskId)}/access/changes`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request),
+        }
+      ),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['agent', 'access', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['agent', 'phase', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['agent', 'permissions', 'approvals'] });
+    },
   });
 }
 

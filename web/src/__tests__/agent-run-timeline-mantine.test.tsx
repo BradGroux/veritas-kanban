@@ -42,6 +42,8 @@ vi.mock('@/hooks/useAgent', () => ({
   useAgentPhase: mocks.useAgentPhase,
   useRunFileProvenance: mocks.useRunFileProvenance,
   useAgentAccess: mocks.useAgentAccess,
+  useApplyRunAccessChange: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  usePreviewRunAccessChange: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDecideRunApproval: () => ({
     mutateAsync: mocks.decideApprovalMutateAsync,
     isPending: false,
