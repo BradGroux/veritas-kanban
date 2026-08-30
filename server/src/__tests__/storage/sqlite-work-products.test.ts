@@ -339,4 +339,34 @@ describe('SQLite work products', () => {
       fixture.cleanup();
     }
   });
+
+  it('rolls back a failed SQLite product purge', async () => {
+    const fixture = createTestSqliteDatabase();
+    const service = new WorkProductService({
+      storageType: 'sqlite',
+      sqliteDatabase: fixture.database,
+    });
+    try {
+      const product = await service.create({
+        kind: 'text',
+        title: 'Rollback product',
+        render: { schemaVersion: 1, kind: 'text', text: 'retain after failed purge' },
+      });
+      const connection = fixture.database.getConnection();
+      connection.exec(`
+        CREATE TRIGGER block_product_delete
+        BEFORE DELETE ON work_products
+        BEGIN
+          SELECT RAISE(ABORT, 'blocked');
+        END;
+      `);
+
+      await expect(service.purge(product.id)).rejects.toThrow(/blocked/);
+      await expect(service.get(product.id)).resolves.toEqual(product);
+      connection.exec('DROP TRIGGER block_product_delete;');
+    } finally {
+      service.dispose();
+      fixture.cleanup();
+    }
+  });
 });
