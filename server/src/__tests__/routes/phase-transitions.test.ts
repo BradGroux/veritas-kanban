@@ -13,11 +13,17 @@ import {
   getBuiltInPhaseCapabilityProfile,
 } from '../../services/phase-capability-service.js';
 
-const { mockGetFileProvenance, mockGetPhase, mockGetTask, mockTransition } = vi.hoisted(() => ({
-  mockGetFileProvenance: vi.fn(),
-  mockGetPhase: vi.fn(),
-  mockGetTask: vi.fn(),
-  mockTransition: vi.fn(),
+const { mockGetFileProvenance, mockGetPhase, mockGetRunAccess, mockGetTask, mockTransition } =
+  vi.hoisted(() => ({
+    mockGetFileProvenance: vi.fn(),
+    mockGetPhase: vi.fn(),
+    mockGetTask: vi.fn(),
+    mockGetRunAccess: vi.fn(),
+    mockTransition: vi.fn(),
+  }));
+
+vi.mock('../../services/run-access-summary-service.js', () => ({
+  getRunAccessSummaryService: () => ({ get: mockGetRunAccess }),
 }));
 
 vi.mock('../../services/phase-transition-service.js', () => ({
@@ -69,6 +75,10 @@ describe('phase transition routes', () => {
         taskEnvelope: { workspace: { workspaceId: 'local' } },
       },
     });
+    mockGetRunAccess.mockResolvedValue({
+      current: { schemaVersion: 'run-access-summary/v1' },
+      history: [],
+    });
   });
 
   it('reads current state and bounded history for one exact run', async () => {
@@ -79,6 +89,19 @@ describe('phase transition routes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ phase: null, current: null, history: [] });
     expect(mockGetPhase).toHaveBeenCalledWith('local', 'task-1', 'attempt-1', 25);
+  });
+
+  it('reads one exact run access projection through agent read authority', async () => {
+    const response = await request(app())
+      .get('/api/agents/task-1/access')
+      .query({ attemptId: 'attempt-1' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      current: { schemaVersion: 'run-access-summary/v1' },
+      history: [],
+    });
+    expect(mockGetRunAccess).toHaveBeenCalledWith('local', 'task-1', 'attempt-1');
   });
 
   it('forwards a validated compare-and-set transition and actor authority', async () => {

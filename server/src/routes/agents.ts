@@ -57,6 +57,7 @@ import {
   type PhaseTransitionActorContext,
 } from '../services/phase-transition-service.js';
 import { getRunPhaseAuthorityService } from '../services/run-phase-authority-service.js';
+import { getRunAccessSummaryService } from '../services/run-access-summary-service.js';
 import { ProgressWatchdogOverrideInputSchema } from '../schemas/progress-watchdog-schemas.js';
 import { ProgressWatchdogControlService } from '../services/progress-watchdog-control-service.js';
 
@@ -72,6 +73,9 @@ function getRunOutputArtifactService(): RunOutputArtifactService {
 
 // Validation schemas
 const AgentTypeSchema = z.string().min(1).max(50);
+const runAccessReadQuerySchema = z
+  .object({ attemptId: z.string().trim().min(1).max(160) })
+  .strict();
 
 const startAgentSchema = z.object({
   agent: AgentTypeSchema.optional(),
@@ -514,6 +518,7 @@ router.get(
 // GET /api/agents/:taskId/file-provenance/resolve - Resolve provenance for exact bytes.
 router.get(
   '/:taskId/file-provenance/resolve',
+  authorizePermission('agent:read'),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const query = RunFileProvenanceReadQuerySchema.parse(req.query);
     const taskId = req.params.taskId as string;
@@ -535,12 +540,29 @@ router.get(
 // GET /api/agents/:taskId/file-provenance - List bounded redacted run evidence.
 router.get(
   '/:taskId/file-provenance',
+  authorizePermission('agent:read'),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const query = RunFileProvenanceListQuerySchema.parse(req.query);
     const taskId = req.params.taskId as string;
     const workspaceId = await authorizedTaskWorkspace(req, taskId, query.attemptId);
     res.json(
       await getRunFileProvenanceService().list(workspaceId, taskId, query.attemptId, query.limit)
+    );
+  })
+);
+
+// GET /api/agents/:taskId/access - Project exact redacted run authority and prior versions.
+router.get(
+  '/:taskId/access',
+  authorizePermission('agent:read'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = runAccessReadQuerySchema.parse(req.query);
+    res.json(
+      await getRunAccessSummaryService().get(
+        req.auth?.workspaceId || 'local',
+        req.params.taskId as string,
+        query.attemptId
+      )
     );
   })
 );

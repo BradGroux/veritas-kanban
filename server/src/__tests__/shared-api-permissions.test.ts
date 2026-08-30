@@ -46,6 +46,9 @@ describe('shared API permission metadata', () => {
       getApiPermissionRequirement('/api/agents/task_1/phase', { method: 'GET' }).permissions
     ).toEqual(['agent:read']);
     expect(
+      getApiPermissionRequirement('/api/agents/task_1/access', { method: 'GET' }).permissions
+    ).toEqual(['agent:read']);
+    expect(
       getApiPermissionRequirement('/api/agents/task_1/phase/transitions', {
         method: 'POST',
       }).permissions

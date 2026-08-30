@@ -17,6 +17,7 @@
           "src/__tests__/acp-stdio-provider.test.ts",
           "src/__tests__/admission-control-service.test.ts",
           "src/__tests__/agent-permission-repository.test.ts",
+          "src/__tests__/automation-draft-service.test.ts",
           "src/__tests__/broadcast-storage-service.test.ts",
           "src/__tests__/chat-repository.test.ts",
           "src/__tests__/chat-service.test.ts",
@@ -67,6 +68,7 @@
           "src/__tests__/routes/v1-permission-guards.test.ts",
           "src/__tests__/run-launch-manifest-service.test.ts",
           "src/__tests__/run-file-provenance-service.test.ts",
+          "src/__tests__/run-access-summary-service.test.ts",
           "src/__tests__/run-recovery-policy-service.test.ts",
           "src/__tests__/run-supervisor-service.test.ts",
           "src/__tests__/schemas.test.ts",
@@ -183,6 +185,7 @@
         "testFiles": [
           "src/__tests__/api-helpers.test.ts",
           "src/__tests__/api-no-raw-fetch.test.ts",
+          "src/__tests__/api-scheduler.test.ts",
           "src/__tests__/api-tasks.test.ts",
           "src/__tests__/api-work-products.test.ts",
           "src/__tests__/agent-run-timeline-mantine.test.tsx",

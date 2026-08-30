@@ -459,6 +459,7 @@ Manage AI agents on code tasks.
 | `vk agent:file-provenance <id> --attempt <id> --root <root> --path <path> --sha256 <digest>` | Resolve exact, stale, unknown, or unsupported file provenance |
 | `vk agent:cancel-recovery <id> --attempt <id>`                                               | Cancel the exact pending recovery parent                      |
 | `vk agent:phase <id> --attempt <id>`                                                         | Read effective launch phase, sources, and transition history  |
+| `vk agent:access <id> --attempt <id>`                                                        | Read exact redacted run authority and historical versions     |
 | `vk agent:transition-phase <id> ...`                                                         | Apply or request approval for one exact phase transition      |
 | `vk agent:decide-phase-approval <approvalId> ...`                                            | Approve or reject an exact pending phase expansion            |
 | `vk agent:resume <id> --source-attempt <id> -m <text> [--phase <phase>]`                     | Resume the exact persisted provider conversation              |
@@ -581,6 +582,12 @@ vk agent:transition-phase TASK-001 \
 `agent:phase` reports the launch phase even before the first transition. Human
 output distinguishes parent, agent-profile, sandbox, tool-catalog, and launch
 policy sources; `--json` returns the server-owned snapshot unchanged.
+
+Use `vk agent:access TASK-001 --attempt attempt_123` for the joined operator
+view of filesystem, network, tools, integrations, approvals, budgets,
+concurrency, and harness support. Human output is compact; `--json` preserves
+the exact `run-access-summary/v1` response and its prior immutable phase
+versions. See [Run Access Summary v1](architecture/RUN-ACCESS-SUMMARY-V1.md).
 
 The first transition also requires `--from-evidence <file>` and
 `--manifest <sha256:...>`. Later requests read the current journal record and
@@ -783,16 +790,25 @@ Manage automation tasks.
 
 Inspect and control recurring work from the terminal.
 
-| Command                      | Description                                      |
-| ---------------------------- | ------------------------------------------------ |
-| `vk scheduler list`          | List recurring scheduler items and recent events |
-| `vk scheduler run-due`       | Run all due scheduler items                      |
-| `vk scheduler run <id>`      | Run one scheduler item now                       |
-| `vk scheduler pause <id>`    | Pause one scheduler item                         |
-| `vk scheduler resume <id>`   | Resume one scheduler item                        |
-| `vk scheduler validate <id>` | Validate one scheduler item                      |
+| Command                      | Description                                       |
+| ---------------------------- | ------------------------------------------------- |
+| `vk scheduler list`          | List recurring scheduler items and recent events  |
+| `vk scheduler run-due`       | Run all due scheduler items                       |
+| `vk scheduler run <id>`      | Run one scheduler item now                        |
+| `vk scheduler pause <id>`    | Pause one scheduler item                          |
+| `vk scheduler resume <id>`   | Resume one scheduler item                         |
+| `vk scheduler validate <id>` | Validate one scheduler item                       |
+| `vk scheduler draft preview` | Compile intent without saving or activating       |
+| `vk scheduler draft save`    | Save an inactive draft                            |
+| `vk scheduler draft list`    | List latest inactive draft revisions              |
+| `vk scheduler draft show`    | Inspect a latest or exact draft revision          |
+| `vk scheduler draft revise`  | Append an immutable inactive revision             |
+| `vk scheduler draft clone`   | Clone an inactive draft                           |
+| `vk scheduler draft delete`  | Delete inactive revisions with exact confirmation |
 
 Item IDs include a source prefix: `scheduled-deliverable:<id>`, `workflow:<id>`, or `queue-monitor:<id>`.
+
+Draft preview, save, and revise require `--intent` and `--request-id`; optional structured values are supplied through `--hints '<json>'`. Use `--json` to receive the exact `automation-draft/v1` body shown by the Settings preview. Preview requires `workflow:read`; mutations require `workflow:write`. Draft commands never activate a schedule.
 
 ---
 

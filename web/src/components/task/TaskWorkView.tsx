@@ -59,9 +59,10 @@ import {
   type WorkflowRun,
   type WorkflowRunStatus,
 } from '@/hooks/useWorkflowStats';
-import { sanitizeText } from '@/lib/sanitize';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 import { API_BASE } from '@/lib/config';
+import { sanitizeText } from '@/lib/sanitize';
+import { RunAccessPanel } from './RunAccessPanel';
 
 export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): TaskReadinessCheck[] {
   return getSharedTaskReadinessChecks(task, { isCodeTask });
@@ -496,6 +497,14 @@ export function TaskWorkView({
             Agent start, stop, and retry controls are hidden for this client. Review, comments,
             gates, timelines, and work products remain available.
           </Alert>
+        )}
+
+        {task.attempt?.id && (
+          <RunAccessPanel
+            taskId={task.id}
+            attemptId={task.attempt.id}
+            live={task.attempt.status === 'running'}
+          />
         )}
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">

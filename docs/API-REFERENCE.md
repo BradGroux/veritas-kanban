@@ -1938,6 +1938,34 @@ POST /api/scheduler/due/run
 
 Runs all due standard schedules and refuses overlapping due-run passes.
 
+### Preview an Automation Draft
+
+```
+POST /api/scheduler/drafts/preview
+```
+
+Accepts `intent`, a stable `requestId`, and optional structured `hints`. Returns an export-safe `automation-draft/v1` with normalized cron and timezone values, three future-run examples, field origins and statuses, standing scope, budgets, stop conditions, and exact validation blockers. This endpoint requires `workflow:read` and performs no scheduler or execution mutation.
+
+### Save and Inspect Inactive Drafts
+
+```
+POST /api/scheduler/drafts
+GET /api/scheduler/drafts
+GET /api/scheduler/drafts/:id?revision=2
+```
+
+Saving appends only an inactive draft record. It does not create or enable a scheduler definition. Replaying an identical stable `requestId` returns the saved draft; reusing it with different input returns `409`. List returns the latest revision of each draft; the item endpoint can read the latest or an exact immutable revision.
+
+### Revise, Clone, or Delete an Inactive Draft
+
+```
+POST /api/scheduler/drafts/:id/revisions
+POST /api/scheduler/drafts/:id/clone
+DELETE /api/scheduler/drafts/:id?confirm=:id
+```
+
+Revision accepts the same body as preview and appends an immutable version. Clone requires a new stable `requestId`. Delete requires the exact draft ID in the `confirm` query parameter and removes only inactive draft revisions. These write endpoints require `workflow:write`; none can activate recurring work.
+
 ---
 
 ## Operations Digest
@@ -2518,6 +2546,24 @@ decisions use `/api/run-approvals/:approvalId/decision` and require an
 administrator. See
 [Phase Transition Journal](architecture/PHASE-TRANSITION-JOURNAL.md) for
 storage, idempotency, and delivery boundaries.
+
+### Effective Run Access
+
+```
+GET /api/agents/:taskId/access?attemptId=attempt_123
+```
+
+The endpoint returns `run-access-summary/v1` for one exact attempt. `current`
+is the launch authority or latest phase transition; `history` preserves prior
+immutable versions. The projection joins the launch manifest, phase evidence,
+provider capability manifest, tool catalog, brokered integration metadata, and
+admission reservation. Every section names its source digest, and missing or
+conflicting source records return typed blockers instead of inferred access.
+
+Reads require `agent:read`. Responses omit credential values, raw environment
+and header values, local filesystem paths, and URL paths or query strings. See
+[Run Access Summary v1](architecture/RUN-ACCESS-SUMMARY-V1.md) for the full
+contract and failure states.
 
 ### Automatic Run Recovery
 

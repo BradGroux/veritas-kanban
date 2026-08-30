@@ -1495,6 +1495,8 @@ Unified operator surface for scheduled deliverables, scheduled workflow definiti
 - **Existing service adapters** — Deliverables execute through the scheduled deliverables runner; workflows start through the workflow run service; queue monitors scan through the GitHub adapter
 - **Operations telemetry** — Scheduler events emit bounded run telemetry with `agent=scheduler` for operations digest visibility
 - **Custom cron guardrail** — Cron schedules are visible and manually runnable, but automatic custom-cron due execution is deferred until a cron adapter is configured
+- **Automation draft compiler** — Natural recurring intent and structured hints compile into inactive `automation-draft/v1` previews with timezone-aware run examples, field provenance, standing scope, budgets, stop conditions, redaction, and exact blockers
+- **No activation side effect** — Preview, save, revise, clone, and delete operations never create scheduler definitions, reservations, runs, provider queues, approvals, or external actions
 
 → [Full guide](features/recurring-work-scheduler.md) — API, CLI, execution model, and scheduler guardrails
 
@@ -1509,6 +1511,10 @@ Unified operator surface for scheduled deliverables, scheduled workflow definiti
 | `/api/scheduler/items/:id/resume`   | POST   | Resume one scheduler item       |
 | `/api/scheduler/items/:id/validate` | POST   | Validate one scheduler item     |
 | `/api/scheduler/due/run`            | POST   | Run due scheduler items         |
+| `/api/scheduler/drafts/preview`     | POST   | Compile an inactive preview     |
+| `/api/scheduler/drafts`             | GET    | List latest inactive drafts     |
+| `/api/scheduler/drafts`             | POST   | Save an inactive draft          |
+| `/api/scheduler/drafts/:id`         | GET    | Read a draft revision           |
 
 ---
 
