@@ -112,8 +112,13 @@ export const WorkProductArtifactMetadataSchema = z
       })
       .strict(),
     createdAt: z.string().datetime(),
+    expiresAt: z.string().datetime().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => !value.expiresAt || Date.parse(value.expiresAt) > Date.parse(value.createdAt),
+    { path: ['expiresAt'], message: 'expiresAt must be later than createdAt' }
+  );
 
 export const WorkProductRenderSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -288,6 +293,12 @@ export const RegisterWorkProductArtifactBodySchema = z
   .strict();
 
 export const WorkProductArtifactVersionQuerySchema = z
+  .object({
+    version: z.coerce.number().int().positive().optional(),
+  })
+  .strict();
+
+export const WorkProductArtifactPreviewQuerySchema = z
   .object({
     version: z.coerce.number().int().positive().optional(),
   })

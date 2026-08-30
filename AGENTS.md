@@ -449,6 +449,7 @@ src/scripts/run-harness-conformance.ts -- --suite <suite.json>
   then rescan before provider creation. Project policy may narrow trust only.
 - **Log redaction.** Trace logs and telemetry run through `TRACE_SECRET_PATTERNS` before storage.
 - **No credentials in PR descriptions, test fixtures, or log snippets.**
+- **Artifact previews.** Passive file previews use `work-product-artifact-preview/v1`, authenticated artifact reads, validated content types, format-specific resource limits, and fail-closed statuses. Never render HTML in this boundary or expose host paths and storage keys.
 
 ---
 

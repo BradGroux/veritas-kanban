@@ -1,6 +1,7 @@
 import type {
   UpdateWorkProductInput,
   WorkProduct,
+  WorkProductArtifactPreview,
   WorkProductMaintenancePreview,
   WorkProductPreview,
   WorkProductVersion,
@@ -57,6 +58,13 @@ export const workProductsApi = {
         `${API_BASE}/work-products/${encodeURIComponent(id)}/artifact/download${query}`
       )
     ).blob();
+  },
+
+  previewArtifact: async (id: string, version?: number): Promise<WorkProductArtifactPreview> => {
+    const query = buildQuery({ version });
+    return apiFetch<WorkProductArtifactPreview>(
+      `${API_BASE}/work-products/${encodeURIComponent(id)}/artifact/preview${query}`
+    );
   },
 
   update: async (id: string, input: UpdateWorkProductInput): Promise<WorkProduct> => {

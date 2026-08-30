@@ -49,6 +49,7 @@ import {
   useDecideRunApproval,
   useAgentPhase,
   usePendingAgentApprovals,
+  useRunFileProvenance,
   type AgentApprovalRequest,
 } from '@/hooks/useAgent';
 import { useAgentRunTraces, useTaskTelemetryEvents } from '@/hooks/useAgentRunTimeline';
@@ -56,6 +57,7 @@ import { useTaskNotifications, type AgentNotification } from '@/hooks/useNotific
 import { useTaskWorkProducts } from '@/hooks/useWorkProducts';
 import { useActiveRuns, useRecentRuns, type WorkflowRun } from '@/hooks/useWorkflowStats';
 import { sanitizeText } from '@/lib/sanitize';
+import { ArtifactPreviewModal } from './ArtifactPreviewModal';
 import { RunAccessPanel } from './RunAccessPanel';
 
 type TimelineTabTarget = 'agent' | 'changes' | 'details' | 'review' | 'work-products';
@@ -256,11 +258,11 @@ function workflowStartedAt(run: WorkflowRun): string {
 }
 
 function workProductLink(product: WorkProductPreview): AgentRunTimelineEvent['link'] {
-  if (product.artifact?.state === 'available') {
+  if (product.artifact) {
     return {
-      label: 'Download artifact',
-      href: `${BASE_PATH}/api/work-products/${encodeURIComponent(product.id)}/artifact/download?version=${product.version}`,
-      target: 'external',
+      label: 'Preview artifact',
+      href: product.id,
+      target: 'artifact-preview',
     };
   }
   const sourceLink = product.sourceLinks?.find((link) => link.type === 'pr' || link.type === 'url');
@@ -801,6 +803,7 @@ export function buildAgentRunTimelineEvents({
         version: product.version,
         status: product.status,
         sourceRunId: product.sourceRunId,
+        productId: product.id,
         agent: product.agent,
         model: product.model,
         redacted: product.redacted,
@@ -943,18 +946,29 @@ function EventRow({
   highlighted,
   onOpenTab,
   onOpenWorkflow,
+  onPreviewArtifact,
 }: {
   event: AgentRunTimelineEvent;
   highlighted?: boolean;
   onOpenTab?: (target: TimelineTabTarget) => void;
   onOpenWorkflow?: (runId?: string) => void;
+  onPreviewArtifact?: (productId: string, version: number) => void;
 }) {
   const Icon = EVENT_ICONS[event.type];
   const metadata = stringifyMetadata(event.metadata);
   const linkTarget = event.link?.target;
   const canOpenInternal =
-    linkTarget && linkTarget !== 'external' && linkTarget !== 'workflow' && onOpenTab;
+    linkTarget &&
+    linkTarget !== 'external' &&
+    linkTarget !== 'workflow' &&
+    linkTarget !== 'artifact-preview' &&
+    onOpenTab;
   const canOpenWorkflow = linkTarget === 'workflow' && onOpenWorkflow;
+  const previewProductId = safeString(event.metadata?.productId);
+  const previewVersion =
+    typeof event.metadata?.version === 'number' ? event.metadata.version : undefined;
+  const canPreviewArtifact =
+    linkTarget === 'artifact-preview' && previewProductId && previewVersion && onPreviewArtifact;
   const canOpenExternal = linkTarget === 'external' && event.link?.href;
   const governanceTraceHref = governanceTraceHrefForEvent(event);
 
@@ -1004,7 +1018,11 @@ function EventRow({
             {metadata}
           </Code>
         )}
-        {(canOpenInternal || canOpenWorkflow || canOpenExternal || governanceTraceHref) && (
+        {(canOpenInternal ||
+          canOpenWorkflow ||
+          canOpenExternal ||
+          canPreviewArtifact ||
+          governanceTraceHref) && (
           <Group gap="xs">
             {canOpenInternal && linkTarget && event.link && (
               <Button
@@ -1020,6 +1038,15 @@ function EventRow({
                 size="compact-xs"
                 variant="subtle"
                 onClick={() => onOpenWorkflow?.(safeString(event.metadata?.runId))}
+              >
+                {event.link.label}
+              </Button>
+            )}
+            {canPreviewArtifact && event.link && (
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                onClick={() => onPreviewArtifact(previewProductId, previewVersion)}
               >
                 {event.link.label}
               </Button>
@@ -1062,6 +1089,11 @@ export function AgentRunTimelinePanel({
   onOpenTab,
   onOpenWorkflow,
 }: AgentRunTimelinePanelProps) {
+  const [previewArtifact, setPreviewArtifact] = useState<{
+    productId: string;
+    version: number;
+    title?: string;
+  } | null>(null);
   const hasLiveAttempt = task.attempt?.status === 'running';
   const { data: traces = [], isLoading: tracesLoading } = useAgentRunTraces(task.id, {
     live: hasLiveAttempt,
@@ -1086,6 +1118,11 @@ export function AgentRunTimelinePanel({
     initialAttemptId ?? task.attempt?.id ?? null
   );
   const { data: phase, isLoading: phaseLoading } = useAgentPhase(
+    task.id,
+    selectedAttemptId ?? undefined,
+    hasLiveAttempt && selectedAttemptId === task.attempt?.id
+  );
+  const { data: fileProvenance, isLoading: fileProvenanceLoading } = useRunFileProvenance(
     task.id,
     selectedAttemptId ?? undefined,
     hasLiveAttempt && selectedAttemptId === task.attempt?.id
@@ -1173,6 +1210,7 @@ export function AgentRunTimelinePanel({
     notificationsLoading ||
     approvalsLoading ||
     phaseLoading ||
+    fileProvenanceLoading ||
     activeRunsLoading ||
     recentRunsLoading;
   const phaseIdentity = phase?.effectiveEvidence.identity;
@@ -1623,6 +1661,41 @@ export function AgentRunTimelinePanel({
         </Paper>
       )}
 
+      {fileProvenance && (fileProvenance.records.length > 0 || fileProvenance.gaps.length > 0) && (
+        <Paper withBorder p="md" radius="md">
+          <Stack gap="xs">
+            <Group gap="xs">
+              <GitBranch className="h-4 w-4 text-muted-foreground" />
+              <Text fw={600} size="sm">
+                File Provenance
+              </Text>
+              <Badge variant="light">{fileProvenance.records.length}</Badge>
+            </Group>
+            {fileProvenance.records.slice(0, 4).map((record) => (
+              <Group key={record.id} gap="xs" wrap="nowrap" align="flex-start">
+                <FileText className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <Text size="sm" truncate>
+                    {record.location.root}/{record.location.relativePath}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {record.source} · {record.operation} · {record.content.sha256.slice(0, 19)}
+                  </Text>
+                </div>
+              </Group>
+            ))}
+            {fileProvenance.gaps.slice(0, 3).map((gap, index) => (
+              <Group key={`${gap.code}:${gap.eventId ?? index}`} gap="xs" wrap="nowrap">
+                <AlertTriangle className="h-3 w-3 shrink-0 text-yellow-600" />
+                <Text size="xs" c="yellow">
+                  {gap.code}: {gap.message}
+                </Text>
+              </Group>
+            ))}
+          </Stack>
+        </Paper>
+      )}
+
       <ScrollArea.Autosize mah={520} type="auto">
         <Stack gap="xs" pr="xs">
           {visibleEvents.length > 0 ? (
@@ -1639,6 +1712,9 @@ export function AgentRunTimelinePanel({
                     highlighted={highlighted}
                     onOpenTab={onOpenTab}
                     onOpenWorkflow={onOpenWorkflow}
+                    onPreviewArtifact={(productId, version) =>
+                      setPreviewArtifact({ productId, version, title: event.title })
+                    }
                   />
                 </div>
               );
@@ -1679,6 +1755,14 @@ export function AgentRunTimelinePanel({
           )}
         </Stack>
       </ScrollArea.Autosize>
+
+      <ArtifactPreviewModal
+        opened={Boolean(previewArtifact)}
+        productId={previewArtifact?.productId ?? null}
+        version={previewArtifact?.version}
+        title={previewArtifact?.title}
+        onClose={() => setPreviewArtifact(null)}
+      />
     </Stack>
   );
 }

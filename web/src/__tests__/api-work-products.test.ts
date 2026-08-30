@@ -57,6 +57,21 @@ describe('workProductsApi', () => {
     );
   });
 
+  it('loads the bounded artifact preview contract for an exact version', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ schemaVersion: 'work-product-artifact-preview/v1', status: 'ready' })
+    );
+
+    await expect(workProductsApi.previewArtifact('wp/one', 3)).resolves.toMatchObject({
+      schemaVersion: 'work-product-artifact-preview/v1',
+      status: 'ready',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://test-api/work-products/wp%2Fone/artifact/preview?version=3',
+      { credentials: 'include' }
+    );
+  });
+
   it('updates work-product metadata with the JSON API contract', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ id: 'wp-one', title: 'Updated' }));
 

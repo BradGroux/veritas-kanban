@@ -36,6 +36,14 @@ vk work-products register \
 
 Use `--product <id>` with a new stable request ID to register a new immutable version. Inspect, list, and download with `vk work-products inspect`, `vk work-products list`, and `vk work-products download`. Archive first, then use `vk work-products purge <id> --confirm <id>` only when every immutable version and its metadata should be physically removed.
 
+## Passive previews
+
+Task Work, the Run Timeline, and the Work Products tab share one authenticated preview contract. Text and Markdown, common raster images, passive PDFs, CSV, and Open XML spreadsheets can be inspected without exposing the artifact store or a local file URL. Renderer selection uses validated bytes and media type rather than the filename alone.
+
+Preview parsing is bounded by format-specific byte, row, column, cell, page, pixel, archive-entry, decompressed-size, and compression-ratio limits. Spreadsheet formulas are displayed as inert formula text and are never evaluated. Markdown cannot load images or activate links. PDF previews reject active actions, embedded content, and external links, then render in a sandboxed data-origin frame.
+
+Every preview shows the immutable version, SHA-256 digest, media type, source run, redaction state, and a route to the causal timeline event. Truncation is explicit. Unsupported, quarantined, missing, malformed, oversized, or policy-blocked files keep only the fallback actions allowed by artifact policy. HTML is intentionally unsupported by this passive boundary; see [Governed Artifact Previews v1](../architecture/ARTIFACT-PREVIEWS-V1.md).
+
 ## API
 
 ```bash
@@ -62,6 +70,7 @@ Useful reads:
 curl -s "http://localhost:3001/api/work-products?taskId=task_20260531_release"
 curl -s "http://localhost:3001/api/tasks/task_20260531_release/work-products?view=preview"
 curl -s "http://localhost:3001/api/work-products/{id}/versions"
+curl -s "http://localhost:3001/api/work-products/{id}/artifact/preview?version=1"
 curl -s "http://localhost:3001/api/work-products/{id}/export"
 ```
 

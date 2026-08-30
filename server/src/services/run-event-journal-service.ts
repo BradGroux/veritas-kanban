@@ -79,6 +79,7 @@ function normalizeJson(
     addOriginalBytes(state, value);
     const safeEvidenceValue =
       /^sha256:[a-f0-9]{64}$/.test(value) ||
+      /^runfile_[a-f0-9]{32}$/.test(value) ||
       /^watchdog_[a-f0-9]{8}(?:-[a-f0-9]{8}){3}$/.test(value);
     const redacted = safeEvidenceValue ? value : redactString(value);
     const bounded =

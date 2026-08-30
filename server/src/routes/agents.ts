@@ -37,7 +37,12 @@ import {
   RunOutputArtifactDownloadQuerySchema,
   RunOutputArtifactHttpQuerySchema,
 } from '../schemas/run-output-artifact-schemas.js';
+import {
+  RunFileProvenanceListQuerySchema,
+  RunFileProvenanceReadQuerySchema,
+} from '../schemas/run-file-provenance-schemas.js';
 import { RunOutputArtifactService } from '../services/run-output-artifact-service.js';
+import { getRunFileProvenanceService } from '../services/run-file-provenance-service.js';
 import {
   workspaceExecutionTrustDecisionInputSchema,
   workspaceExecutionTrustRevokeInputSchema,
@@ -539,6 +544,42 @@ router.get(
       current: phase?.current ?? null,
       history: phase?.history ?? [],
     });
+  })
+);
+
+// GET /api/agents/:taskId/file-provenance/resolve - Resolve provenance for exact bytes.
+router.get(
+  '/:taskId/file-provenance/resolve',
+  authorizePermission('agent:read'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = RunFileProvenanceReadQuerySchema.parse(req.query);
+    const taskId = req.params.taskId as string;
+    const workspaceId = await authorizedTaskWorkspace(req, taskId, query.attemptId);
+    res.json(
+      await getRunFileProvenanceService().resolve({
+        workspaceId,
+        taskId,
+        attemptId: query.attemptId,
+        root: query.root,
+        relativePath: query.path,
+        sha256: query.sha256,
+        limit: query.limit,
+      })
+    );
+  })
+);
+
+// GET /api/agents/:taskId/file-provenance - List bounded redacted run evidence.
+router.get(
+  '/:taskId/file-provenance',
+  authorizePermission('agent:read'),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const query = RunFileProvenanceListQuerySchema.parse(req.query);
+    const taskId = req.params.taskId as string;
+    const workspaceId = await authorizedTaskWorkspace(req, taskId, query.attemptId);
+    res.json(
+      await getRunFileProvenanceService().list(workspaceId, taskId, query.attemptId, query.limit)
+    );
   })
 );
 
@@ -1058,6 +1099,22 @@ router.post(
 
 // Export service for WebSocket use
 export { router as agentRoutes, clawdbotAgentService as agentService };
+
+async function authorizedTaskWorkspace(
+  req: AuthenticatedRequest,
+  taskId: string,
+  attemptId: string
+): Promise<string> {
+  const workspaceId = req.auth?.workspaceId || 'local';
+  const task = await getTaskService().getTask(taskId);
+  const attempt = task
+    ? [task.attempt, ...(task.attempts ?? [])].find((candidate) => candidate?.id === attemptId)
+    : undefined;
+  if (!task || !attempt || attempt.taskEnvelope?.workspace.workspaceId !== workspaceId) {
+    throw new NotFoundError('Task not found');
+  }
+  return workspaceId;
+}
 
 function getProgressWatchdogControl(): ProgressWatchdogControlService {
   progressWatchdogControl ??= new ProgressWatchdogControlService(undefined, clawdbotAgentService);

@@ -199,6 +199,125 @@ describe('vk agent runtime capability controls', () => {
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/phase?attemptId=attempt_1&limit=25');
   });
 
+  it('resolves exact file provenance with encoded bounded evidence', async () => {
+    mockApi.mockResolvedValueOnce({
+      schemaVersion: 'run-file-provenance-response/v1',
+      status: 'unknown',
+      query: {},
+      current: null,
+      chain: [],
+      gaps: [],
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:file-provenance',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--root',
+        'run-artifact',
+        '--path',
+        'reports/final report.pdf',
+        '--sha256',
+        `sha256:${'a'.repeat(64)}`,
+        '--limit',
+        '10',
+        '--json',
+      ],
+      { from: 'user' }
+    );
+
+    expect(mockApi).toHaveBeenCalledWith(
+      `/api/agents/task_1/file-provenance/resolve?attemptId=attempt_1&root=run-artifact&path=reports%2Ffinal+report.pdf&sha256=sha256%3A${'a'.repeat(64)}&limit=10`
+    );
+  });
+
+  it('renders exact file provenance and capture gaps for operators', async () => {
+    mockApi.mockResolvedValueOnce({
+      schemaVersion: 'run-file-provenance-response/v1',
+      status: 'exact',
+      query: {
+        root: 'run-artifact',
+        relativePath: 'reports/final.pdf',
+        sha256: `sha256:${'a'.repeat(64)}`,
+      },
+      current: {
+        source: 'artifact-registration',
+        operation: 'create',
+        producer: { eventId: 'runevt_000000000001' },
+      },
+      chain: [{ id: 'provenance-1' }],
+      gaps: [{ code: 'capture-unavailable', message: 'Provider omitted a causal event.' }],
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(
+      [
+        'agent:file-provenance',
+        'task_1',
+        '--attempt',
+        'attempt_1',
+        '--root',
+        'run-artifact',
+        '--path',
+        'reports/final.pdf',
+        '--sha256',
+        `sha256:${'a'.repeat(64)}`,
+      ],
+      { from: 'user' }
+    );
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('File provenance: exact'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Chain: 1 record(s)'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('capture-unavailable'));
+  });
+
+  it('reports provenance lookup failures to operators', async () => {
+    mockApi.mockRejectedValueOnce(new Error('Provenance evidence is unavailable.'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
+      _code?: number | string | null
+    ) => {
+      throw new Error('process.exit called');
+    }) as typeof process.exit);
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    try {
+      await expect(
+        program.parseAsync(
+          [
+            'agent:file-provenance',
+            'task_1',
+            '--attempt',
+            'attempt_1',
+            '--root',
+            'run-artifact',
+            '--path',
+            'reports/final.pdf',
+            '--sha256',
+            `sha256:${'a'.repeat(64)}`,
+          ],
+          { from: 'user' }
+        )
+      ).rejects.toThrow('process.exit called');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Provenance evidence is unavailable.')
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
+  });
+
   it('reads the versioned access projection for one exact attempt', async () => {
     mockApi.mockResolvedValueOnce({
       current: { schemaVersion: 'run-access-summary/v1', status: 'complete' },

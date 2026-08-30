@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   download: vi.fn(),
   listVersions: vi.fn(),
   purge: vi.fn(),
+  preview: vi.fn(),
   workProducts: {
     get: vi.fn(),
     list: vi.fn(),
@@ -28,6 +29,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../services/work-product-artifact-service.js', () => ({
   getWorkProductArtifactService: () => mocks,
+}));
+
+vi.mock('../../services/work-product-artifact-preview-service.js', () => ({
+  getWorkProductArtifactPreviewService: () => ({ preview: mocks.preview }),
 }));
 
 vi.mock('../../services/work-product-service.js', () => ({
@@ -113,6 +118,28 @@ describe('work product artifact routes', () => {
       workspaceId: 'local',
       productId: 'wp_1',
       version: 1,
+    });
+  });
+
+  it('returns bounded preview contracts from the authenticated workspace', async () => {
+    mocks.preview.mockResolvedValue({
+      schemaVersion: 'work-product-artifact-preview/v1',
+      status: 'ready',
+      renderer: 'text',
+    });
+
+    const response = await request(app).get('/api/work-products/wp_1/artifact/preview?version=2');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.body).toMatchObject({
+      schemaVersion: 'work-product-artifact-preview/v1',
+      status: 'ready',
+    });
+    expect(mocks.preview).toHaveBeenCalledWith({
+      workspaceId: 'local',
+      productId: 'wp_1',
+      version: 2,
     });
   });
 

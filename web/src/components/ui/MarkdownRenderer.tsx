@@ -8,6 +8,7 @@ import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  artifactSafe?: boolean;
 }
 
 const components: Components = {
@@ -60,7 +61,11 @@ const components: Components = {
   ),
 };
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+  content,
+  className,
+  artifactSafe = false,
+}: MarkdownRendererProps) {
   const { settings } = useFeatureSettings();
   const enableCodeHighlighting = settings.markdown?.enableCodeHighlighting ?? true;
 
@@ -71,8 +76,17 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={enableCodeHighlighting ? [rehypeHighlight] : []}
-        components={components}
+        components={
+          artifactSafe
+            ? {
+                ...components,
+                a: ({ children }) => <span>{children} (external link omitted)</span>,
+                img: ({ alt }) => <span>[image omitted{alt ? `: ${alt}` : ''}]</span>,
+              }
+            : components
+        }
         urlTransform={(url) => {
+          if (artifactSafe) return '';
           if (url.match(/^\s*javascript:/i)) return '#';
           return url;
         }}

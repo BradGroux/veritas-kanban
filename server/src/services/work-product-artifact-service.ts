@@ -23,6 +23,8 @@ import { validatePathSegment } from '../utils/sanitize.js';
 import { redactRunOutputText } from './run-output-spill-service.js';
 import type { RunEventJournalService } from './run-event-journal-service.js';
 import { getRunEventJournalService } from './run-event-journal-service.js';
+import type { RunFileProvenanceService } from './run-file-provenance-service.js';
+import { getRunFileProvenanceService } from './run-file-provenance-service.js';
 import { getTaskService } from './task-service.js';
 import type { WorkProductService } from './work-product-service.js';
 import { getWorkProductService } from './work-product-service.js';
@@ -44,6 +46,9 @@ export interface WorkProductArtifactScope {
 export interface WorkProductArtifactGrant {
   artifactRoot: string;
   manifestDigest: string;
+  rootObjectiveId?: string;
+  executionNodeId?: string;
+  workflowStepId?: string;
 }
 
 export interface RegisterWorkProductArtifactInput extends WorkProductArtifactScope {
@@ -60,6 +65,12 @@ export interface WorkProductArtifactRegistration {
   metadata: WorkProductArtifactMetadata;
 }
 
+export interface WorkProductArtifactPreviewSource {
+  metadata: WorkProductArtifactMetadata;
+  productStatus: WorkProduct['status'];
+  content: Uint8Array | null;
+}
+
 export interface WorkProductArtifactPurgeResult {
   productId: string;
   artifactsDeleted: number;
@@ -73,6 +84,7 @@ export interface WorkProductArtifactServiceOptions {
     'create' | 'get' | 'update' | 'list' | 'listVersions' | 'purge'
   >;
   events: Pick<RunEventJournalService, 'append'>;
+  provenance?: Pick<RunFileProvenanceService, 'record'>;
   resolveGrant: (scope: WorkProductArtifactScope) => Promise<WorkProductArtifactGrant | null>;
   sourceReader?: WorkProductArtifactSourceReader;
   maxArtifactBytes?: number;
@@ -144,7 +156,8 @@ export class WorkProductArtifactService {
             'The request ID is already bound to a different artifact registration.'
           );
         }
-        await this.appendCreatedEvent(input, idempotentVersion.render.artifact);
+        const event = await this.appendCreatedEvent(input, idempotentVersion.render.artifact);
+        await this.recordProvenance(input, idempotentVersion.render.artifact, grant, event);
         return {
           product: {
             ...existing,
@@ -243,7 +256,8 @@ export class WorkProductArtifactService {
         );
     if (!product) throw new NotFoundError('Work product disappeared during artifact registration.');
 
-    await this.appendCreatedEvent(input, stored.metadata);
+    const event = await this.appendCreatedEvent(input, stored.metadata);
+    await this.recordProvenance(input, stored.metadata, grant, event);
     return { product, metadata: stored.metadata };
   }
 
@@ -252,6 +266,15 @@ export class WorkProductArtifactService {
     productId: string;
     version?: number;
   }): Promise<WorkProductArtifactDownload | null> {
+    const source = await this.readPreviewSource(input);
+    return source?.content ? { metadata: source.metadata, content: source.content } : null;
+  }
+
+  async readPreviewSource(input: {
+    workspaceId: string;
+    productId: string;
+    version?: number;
+  }): Promise<WorkProductArtifactPreviewSource | null> {
     const product = await this.options.workProducts.get(input.productId);
     if (!product) return null;
     if (product.workspaceId !== input.workspaceId) {
@@ -266,13 +289,20 @@ export class WorkProductArtifactService {
           )?.render;
     if (!render || render.kind !== 'file') return null;
     const metadata = render.artifact;
-    if (metadata.state !== 'available') return null;
-    return this.options.repository.read({
-      workspaceId: metadata.workspaceId,
-      productId: metadata.productId,
-      version: metadata.version,
-      artifactId: metadata.id,
-    });
+    const stored =
+      metadata.state === 'available'
+        ? await this.options.repository.read({
+            workspaceId: metadata.workspaceId,
+            productId: metadata.productId,
+            version: metadata.version,
+            artifactId: metadata.id,
+          })
+        : null;
+    return {
+      metadata,
+      productStatus: product.status,
+      content: stored?.content ?? null,
+    };
   }
 
   async inspect(input: { workspaceId: string; productId: string }): Promise<WorkProduct | null> {
@@ -363,8 +393,8 @@ export class WorkProductArtifactService {
   private async appendCreatedEvent(
     input: RegisterWorkProductArtifactInput,
     metadata: WorkProductArtifactMetadata
-  ): Promise<void> {
-    await this.options.events.append({
+  ) {
+    return this.options.events.append({
       workspaceId: input.workspaceId,
       taskId: input.taskId,
       attemptId: input.attemptId,
@@ -382,6 +412,48 @@ export class WorkProductArtifactService {
         state: metadata.state,
       },
       dedupeKey: `work-product-artifact:${metadata.requestIdDigest}`,
+    });
+  }
+
+  private async recordProvenance(
+    input: RegisterWorkProductArtifactInput,
+    metadata: WorkProductArtifactMetadata,
+    grant: WorkProductArtifactGrant,
+    event: Awaited<ReturnType<RunEventJournalService['append']>>
+  ): Promise<void> {
+    if (!this.options.provenance) return;
+    await this.options.provenance.record({
+      scope: {
+        workspaceId: input.workspaceId,
+        taskId: input.taskId,
+        rootObjectiveId: grant.rootObjectiveId ?? 'unavailable',
+        executionNodeId: grant.executionNodeId ?? 'unavailable',
+        runId: input.runId,
+        attemptId: input.attemptId,
+        workflowStepId: grant.workflowStepId ?? null,
+      },
+      source: 'agent-created',
+      operation: metadata.version === 1 ? 'create' : 'replace',
+      producer: {
+        eventId: event.event.eventId,
+        eventSequence: event.event.sequence,
+        metadata: {
+          artifactId: metadata.id,
+          workProductId: metadata.productId,
+          launchManifestDigest: metadata.launchManifestDigest,
+        },
+      },
+      location: {
+        root: 'run-artifact',
+        relativePath: input.relativePath,
+        linkKind: 'regular',
+      },
+      content: {
+        sha256: metadata.sha256,
+        byteSize: metadata.byteSize,
+        mediaType: metadata.mediaType,
+        mediaClass: classifyMedia(metadata.mediaType),
+      },
     });
   }
 
@@ -483,6 +555,18 @@ function looksExecutable(content: Uint8Array): boolean {
   return content.byteLength >= 2 && content[0] === 0x4d && content[1] === 0x5a;
 }
 
+function classifyMedia(mediaType: string) {
+  const normalized = mediaType.toLowerCase().split(';', 1)[0] ?? '';
+  if (normalized === 'application/json' || normalized.endsWith('+json')) return 'json' as const;
+  if (normalized.startsWith('text/')) return 'text' as const;
+  if (normalized.startsWith('image/')) return 'image' as const;
+  if (normalized.startsWith('audio/')) return 'audio' as const;
+  if (normalized.startsWith('video/')) return 'video' as const;
+  if (/zip|gzip|tar|compressed|archive/.test(normalized)) return 'archive' as const;
+  if (EXECUTABLE_MEDIA_TYPES.has(normalized)) return 'executable' as const;
+  return normalized ? ('binary' as const) : ('unknown' as const);
+}
+
 function digest(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
@@ -524,7 +608,14 @@ export async function resolveWorkProductArtifactGrant(
       root.pathDigest === artifactRootDigest
   );
   if (!granted || !manifest.enforcement.enforceable) return null;
-  return { artifactRoot: directories.artifactPath, manifestDigest: manifest.digest };
+  return {
+    artifactRoot: directories.artifactPath,
+    manifestDigest: manifest.digest,
+    rootObjectiveId: attempt.executionTree?.rootObjectiveId,
+    executionNodeId: attempt.executionTree?.nodeId,
+    workflowStepId:
+      attempt.executionTree?.edge === 'workflow-step' ? attempt.executionTree.nodeId : undefined,
+  };
 }
 
 let workProductArtifactService: WorkProductArtifactService | undefined;
@@ -537,6 +628,7 @@ export function getWorkProductArtifactService(): WorkProductArtifactService {
         : new FileWorkProductArtifactRepository(),
     workProducts: getWorkProductService(),
     events: getRunEventJournalService(),
+    provenance: getRunFileProvenanceService(),
     resolveGrant: resolveWorkProductArtifactGrant,
   });
   return workProductArtifactService;
