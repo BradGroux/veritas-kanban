@@ -1,4 +1,7 @@
 import type {
+  AutomationDraft,
+  AutomationDraftHints,
+  AutomationDraftListResponse,
   SchedulerDueRunResult,
   SchedulerListResponse,
   SchedulerRunResult,
@@ -13,6 +16,20 @@ function itemPath(itemId: string, action?: string): string {
 
 export const schedulerApi = {
   list: () => apiFetch<SchedulerListResponse>(`${API_BASE}/scheduler`),
+
+  listDrafts: () => apiFetch<AutomationDraftListResponse>(`${API_BASE}/scheduler/drafts`),
+
+  previewDraft: (input: { intent: string; requestId: string; hints?: AutomationDraftHints }) =>
+    apiFetch<AutomationDraft>(`${API_BASE}/scheduler/drafts/preview`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  saveDraft: (input: { intent: string; requestId: string; hints?: AutomationDraftHints }) =>
+    apiFetch<AutomationDraft>(`${API_BASE}/scheduler/drafts`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   runDue: () =>
     apiFetch<SchedulerDueRunResult>(`${API_BASE}/scheduler/due/run`, {

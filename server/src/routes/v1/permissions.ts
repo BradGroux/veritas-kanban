@@ -134,6 +134,7 @@ export const workflowAccess = routeAccess('workflow:read', 'workflow:write', [
 ]);
 
 export const schedulerAccess = routeAccess('workflow:read', 'workflow:write', [
+  { methods: ['POST'], path: /^\/drafts\/preview\/?$/, permissions: 'workflow:read' },
   { methods: ['POST'], path: /^\/items\/[^/]+\/run\/?$/, permissions: 'workflow:execute' },
   { methods: ['POST'], path: /^\/items\/[^/]+\/validate\/?$/, permissions: 'workflow:read' },
   { methods: ['POST'], path: /^\/due\/run\/?$/, permissions: 'workflow:execute' },

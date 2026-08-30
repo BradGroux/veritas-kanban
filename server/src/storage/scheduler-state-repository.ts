@@ -1,14 +1,17 @@
 import { constants } from 'node:fs';
 import { lstat, mkdir, open } from 'node:fs/promises';
 import path from 'node:path';
-import type { SchedulerEvent, SchedulerRunStatus } from '@veritas-kanban/shared';
+import type { AutomationDraft, SchedulerEvent, SchedulerRunStatus } from '@veritas-kanban/shared';
 import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import { atomicWriteFile } from './fs-helpers.js';
+import { AutomationDraftSchema } from '../schemas/automation-draft-schemas.js';
 
 const MAX_SCHEDULER_STATE_BYTES = 8 * 1024 * 1024;
 const MAX_EVENTS = 200;
+const MAX_AUTOMATION_DRAFTS = 200;
+const MAX_AUTOMATION_DRAFT_REVISIONS = 50;
 
 export interface SchedulerItemState {
   attempts?: number;
@@ -25,6 +28,7 @@ export interface SchedulerState {
   version: 1;
   items: Record<string, SchedulerItemState>;
   events: SchedulerEvent[];
+  drafts: Record<string, AutomationDraft[]>;
 }
 
 export interface SchedulerStateRepository {
@@ -33,7 +37,7 @@ export interface SchedulerStateRepository {
 }
 
 function emptyState(): SchedulerState {
-  return { version: 1, items: {}, events: [] };
+  return { version: 1, items: {}, events: [], drafts: {} };
 }
 
 function normalizeState(parsed: Partial<SchedulerState>): SchedulerState {
@@ -41,7 +45,40 @@ function normalizeState(parsed: Partial<SchedulerState>): SchedulerState {
     version: 1,
     items: parsed.items && typeof parsed.items === 'object' ? parsed.items : {},
     events: Array.isArray(parsed.events) ? parsed.events.slice(-MAX_EVENTS) : [],
+    drafts: normalizeDrafts(parsed.drafts),
   };
+}
+
+function normalizeDrafts(value: unknown): Record<string, AutomationDraft[]> {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Scheduler automation drafts must be a versioned record.');
+  }
+  const entries = Object.entries(value);
+  if (entries.length > MAX_AUTOMATION_DRAFTS) {
+    throw new Error(`Scheduler automation drafts exceed the ${MAX_AUTOMATION_DRAFTS}-draft limit.`);
+  }
+  return Object.fromEntries(
+    entries.map(([draftId, rawRevisions]) => {
+      if (
+        !Array.isArray(rawRevisions) ||
+        rawRevisions.length < 1 ||
+        rawRevisions.length > MAX_AUTOMATION_DRAFT_REVISIONS
+      ) {
+        throw new Error(`Scheduler automation draft ${draftId} has invalid revision history.`);
+      }
+      const revisions = rawRevisions.map((candidate, index) => {
+        const draft = AutomationDraftSchema.parse(candidate) as AutomationDraft;
+        if (draft.id !== draftId || draft.revision !== index + 1) {
+          throw new Error(
+            `Scheduler automation draft ${draftId} has conflicting identity or revision order.`
+          );
+        }
+        return draft;
+      });
+      return [draftId, revisions];
+    })
+  );
 }
 
 export class FileSchedulerStateRepository implements SchedulerStateRepository {

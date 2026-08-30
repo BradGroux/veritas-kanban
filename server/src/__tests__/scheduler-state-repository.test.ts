@@ -38,7 +38,12 @@ describe('FileSchedulerStateRepository', () => {
   });
 
   it('normalizes missing state and preserves concurrent mutations', async () => {
-    await expect(repository.read()).resolves.toEqual({ version: 1, items: {}, events: [] });
+    await expect(repository.read()).resolves.toEqual({
+      version: 1,
+      items: {},
+      events: [],
+      drafts: {},
+    });
     await Promise.all(
       ['one', 'two'].map((id) =>
         repository.update((state) => ({
@@ -94,5 +99,16 @@ describe('FileSchedulerStateRepository', () => {
         items: { large: { lastSummary: 'x'.repeat(8 * 1024 * 1024) } },
       }))
     ).rejects.toThrow(/8 MiB/i);
+  });
+
+  it('rejects malformed persisted automation drafts', async () => {
+    await mkdir(path.dirname(stateFile), { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({ version: 1, items: {}, events: [], drafts: { bad: [{}] } }),
+      'utf8'
+    );
+
+    await expect(repository.read()).rejects.toThrow();
   });
 });
