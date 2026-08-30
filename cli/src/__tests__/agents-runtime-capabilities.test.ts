@@ -218,6 +218,46 @@ describe('vk agent runtime capability controls', () => {
     );
   });
 
+  it('renders the redacted access summary and blockers for operators', async () => {
+    mockApi.mockResolvedValueOnce({
+      current: {
+        status: 'blocked',
+        identity: {
+          attemptId: 'attempt_1',
+          selectedHost: null,
+          transitionSequence: 3,
+        },
+        filesystem: { sandboxMode: 'workspace-write' },
+        network: { policy: 'denied' },
+        tools: [{ decision: 'allow' }, { decision: 'approval' }, { decision: 'deny' }],
+        approvals: { toolCount: 1 },
+        integrations: [{ definitionId: 'github' }],
+        blockers: [{ code: 'host-unavailable', message: 'No eligible host is ready.' }],
+        digest: `sha256:${'a'.repeat(64)}`,
+      },
+      history: [{ digest: `sha256:${'b'.repeat(64)}` }],
+    });
+    const program = new Command();
+    program.exitOverride();
+    registerAgentCommands(program);
+
+    await program.parseAsync(['agent:access', 'task_1', '--attempt', 'attempt_1'], {
+      from: 'user',
+    });
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Run access: blocked'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Host: unavailable'));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('Tools: 1 allowed, 1 approval, 1 denied')
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('host-unavailable: No eligible host is ready.')
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('Prior immutable versions: 1')
+    );
+  });
+
   it('binds the first phase transition to exact evidence and manifest provenance', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vk-phase-cli-'));
     temporaryRoots.push(root);
