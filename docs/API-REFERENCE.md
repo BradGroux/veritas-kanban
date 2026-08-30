@@ -2519,6 +2519,24 @@ administrator. See
 [Phase Transition Journal](architecture/PHASE-TRANSITION-JOURNAL.md) for
 storage, idempotency, and delivery boundaries.
 
+### Effective Run Access
+
+```
+GET /api/agents/:taskId/access?attemptId=attempt_123
+```
+
+The endpoint returns `run-access-summary/v1` for one exact attempt. `current`
+is the launch authority or latest phase transition; `history` preserves prior
+immutable versions. The projection joins the launch manifest, phase evidence,
+provider capability manifest, tool catalog, brokered integration metadata, and
+admission reservation. Every section names its source digest, and missing or
+conflicting source records return typed blockers instead of inferred access.
+
+Reads require `agent:read`. Responses omit credential values, raw environment
+and header values, local filesystem paths, and URL paths or query strings. See
+[Run Access Summary v1](architecture/RUN-ACCESS-SUMMARY-V1.md) for the full
+contract and failure states.
+
 ### Automatic Run Recovery
 
 ```
