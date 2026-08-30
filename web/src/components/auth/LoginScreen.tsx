@@ -22,6 +22,10 @@ export function LoginScreen() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [savedConfirmed, setSavedConfirmed] = useState(false);
 
+  const clearSubmissionError = () => {
+    if (error) setError(null);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password || isSubmitting) return;
@@ -166,13 +170,19 @@ export function LoginScreen() {
               name="recovery-key"
               label="Recovery Key"
               value={recoveryKey}
-              onChange={(e) => setRecoveryKey(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setRecoveryKey(e.target.value.toUpperCase());
+                clearSubmissionError();
+              }}
               placeholder="XXXX-XXXX-XXXX-XXXX"
               classNames={{ input: 'font-mono tracking-wider' }}
               size="md"
               autoCapitalize="characters"
               spellCheck={false}
               autoFocus
+              error={error || undefined}
+              errorProps={{ id: 'recovery-submission-error', role: 'alert' }}
+              aria-invalid={error ? true : undefined}
             />
 
             <PasswordInput
@@ -180,7 +190,10 @@ export function LoginScreen() {
               name="new-password"
               label="New Password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                clearSubmissionError();
+              }}
               placeholder="Enter new password (8+ characters)"
               visible={showPassword}
               onVisibilityChange={setShowPassword}
@@ -194,23 +207,20 @@ export function LoginScreen() {
                 name="confirm-new-password"
                 label="Confirm New Password"
                 value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmNewPassword(e.target.value);
+                  clearSubmissionError();
+                }}
                 placeholder="Confirm new password"
                 visible={showPassword}
                 onVisibilityChange={setShowPassword}
                 autoComplete="new-password"
                 size="md"
+                error={confirmNewPassword && !passwordsMatch ? 'Passwords do not match' : undefined}
+                errorProps={{ id: 'recovery-password-mismatch' }}
+                aria-invalid={confirmNewPassword && !passwordsMatch ? true : undefined}
               />
-              {confirmNewPassword && !passwordsMatch && (
-                <p className="mt-2 text-xs text-destructive">Passwords do not match</p>
-              )}
             </div>
-
-            {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-                {error}
-              </div>
-            )}
 
             <Stack gap="xs">
               <Button type="submit" fullWidth size="md" disabled={!isValid || isSubmitting}>
@@ -254,13 +264,19 @@ export function LoginScreen() {
             name="password"
             label="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearSubmissionError();
+            }}
             placeholder="Enter your password"
             visible={showPassword}
             onVisibilityChange={setShowPassword}
             autoComplete="current-password"
             size="md"
             autoFocus
+            error={error || undefined}
+            errorProps={{ id: 'login-submission-error', role: 'alert' }}
+            aria-invalid={error ? true : undefined}
           />
 
           <Checkbox
@@ -270,12 +286,6 @@ export function LoginScreen() {
             label="Remember me for 30 days"
             classNames={{ label: 'text-sm cursor-pointer' }}
           />
-
-          {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-              {error}
-            </div>
-          )}
 
           <Stack gap="xs">
             <Button type="submit" fullWidth size="md" disabled={!password || isSubmitting}>
