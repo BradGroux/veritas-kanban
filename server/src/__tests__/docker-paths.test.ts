@@ -8,6 +8,7 @@ const createFsPromisesMock = vi.hoisted(() => () => {
     cp: vi.fn().mockResolvedValue(undefined),
     lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
     mkdir: vi.fn().mockResolvedValue(undefined),
+    mkdtemp: vi.fn().mockResolvedValue('/tmp/veritas-test'),
     open: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(''),
     writeFile: vi.fn().mockResolvedValue(undefined),
