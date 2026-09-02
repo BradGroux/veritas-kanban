@@ -6,10 +6,16 @@ import {
   findSecurityWorkflowViolations,
 } from './check-security-gates.mjs';
 
-const SHA = 'db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28';
+const SHA_4_37_8 = 'db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28';
+const SHA_4_37_9 = 'cdf488f595d80d6e07e03d4674febd5ab45fa938';
 
-test('accepts a least-privilege scheduled CodeQL and gitleaks workflow', () => {
-  const workflow = `
+function securityWorkflow({
+  initSha = SHA_4_37_8,
+  initVersion = 'v4.37.8',
+  analyzeSha = SHA_4_37_8,
+  analyzeVersion = 'v4.37.8',
+} = {}) {
+  return `
 name: Security Gates
 on:
   pull_request:
@@ -25,16 +31,18 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: github/codeql-action/init@${SHA} # v4.37.8
-      - uses: github/codeql-action/analyze@${SHA} # v4.37.8
+      - uses: github/codeql-action/init@${initSha} # ${initVersion}
+      - uses: github/codeql-action/analyze@${analyzeSha} # ${analyzeVersion}
   gitleaks:
     permissions:
       contents: read
     steps:
       - run: pnpm check:gitleaks
 `;
+}
 
-  assert.deepEqual(findSecurityWorkflowViolations(workflow), []);
+test('accepts a least-privilege scheduled CodeQL and gitleaks workflow', () => {
+  assert.deepEqual(findSecurityWorkflowViolations(securityWorkflow()), []);
 });
 
 test('rejects missing schedules, broad permissions, and incomplete gates', () => {
@@ -59,6 +67,19 @@ jobs:
       'runner context must not be used in job-level environment values',
       'gitleaks job must run pnpm check:gitleaks with contents: read permission',
     ]
+  );
+});
+
+test('rejects mixed CodeQL action revisions', () => {
+  assert.deepEqual(findSecurityWorkflowViolations(securityWorkflow({ analyzeSha: SHA_4_37_9 })), [
+    'CodeQL init and analyze actions must use the same pinned revision',
+  ]);
+});
+
+test('rejects mismatched CodeQL action version annotations', () => {
+  assert.deepEqual(
+    findSecurityWorkflowViolations(securityWorkflow({ analyzeVersion: 'v4.37.9' })),
+    ['CodeQL init and analyze actions must use the same pinned revision']
   );
 });
 
