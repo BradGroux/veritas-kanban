@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { ViewProvider } from '@/contexts/ViewContext';
 import { KeyboardProvider } from '@/hooks/useKeyboard';
 import { Header } from '@/components/layout/Header';
+import { DesktopBottomPanel } from '@/components/layout/DesktopBottomPanel';
 import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
@@ -137,7 +138,7 @@ function renderHeaderChrome() {
   );
 }
 
-function renderDesktopHeaderChrome() {
+function renderDesktopHeaderChrome(options: { withBottomPanel?: boolean } = {}) {
   Object.defineProperty(window, 'veritasDesktop', {
     configurable: true,
     value: {
@@ -151,6 +152,7 @@ function renderDesktopHeaderChrome() {
       <ViewProvider>
         <DesktopShellProvider>
           <Header />
+          {options.withBottomPanel && <DesktopBottomPanel />}
         </DesktopShellProvider>
       </ViewProvider>
     </KeyboardProvider>
@@ -159,7 +161,22 @@ function renderDesktopHeaderChrome() {
 
 describe('layout chrome Mantine migration', () => {
   beforeEach(() => {
+    const storage = new Map<string, string>();
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        get length() {
+          return storage.size;
+        },
+        clear: () => storage.clear(),
+        getItem: (key: string) => storage.get(key) ?? null,
+        key: (index: number) => Array.from(storage.keys())[index] ?? null,
+        removeItem: (key: string) => storage.delete(key),
+        setItem: (key: string, value: string) => storage.set(key, value),
+      } satisfies Storage,
+    });
     vi.clearAllMocks();
+    window.localStorage.clear();
     window.history.replaceState({}, '', '/');
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
@@ -257,12 +274,52 @@ describe('layout chrome Mantine migration', () => {
     expect(screen.getByRole('button', { name: 'Collapse left sidebar' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Expand right sidebar' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Open chat dock' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Board Chat' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Squad Chat' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Open Squad Chat' })).toBeDefined();
 
     const brandIcon = screen
       .getByRole('button', { name: 'Refresh page' })
       .querySelector('img[src="/icons/pwa-icon-192.png"]');
     expect(brandIcon).toBeDefined();
   });
+
+  it.each(['right', 'bottom'] as const)(
+    'toggles and switches the header chat controls with the %s dock',
+    async (dockPosition) => {
+      window.localStorage.setItem('veritas.workbench.dockPosition', dockPosition);
+      const user = userEvent.setup();
+      renderDesktopHeaderChrome({ withBottomPanel: true });
+
+      const openBoard = screen.getByRole('button', { name: 'Open Board Chat' });
+      const openSquad = screen.getByRole('button', { name: 'Open Squad Chat' });
+      expect(openBoard.getAttribute('aria-pressed')).toBe('false');
+      expect(openSquad.getAttribute('aria-pressed')).toBe('false');
+
+      await user.click(openBoard);
+      const closeBoard = screen.getByRole('button', { name: 'Close Board Chat' });
+      expect(closeBoard.getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByRole('button', { name: 'Switch to Squad Chat' })).toBeDefined();
+
+      await user.click(closeBoard);
+      expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+
+      await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
+      await user.click(screen.getByRole('button', { name: 'Switch to Squad Chat' }));
+      const closeSquad = screen.getByRole('button', { name: 'Close Squad Chat' });
+      expect(closeSquad.getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByRole('button', { name: 'Switch to Board Chat' })).toBeDefined();
+
+      await user.click(closeSquad);
+      await waitFor(() => {
+        const board = screen.getByRole('button', { name: 'Open Board Chat' });
+        const squad = screen.getByRole('button', { name: 'Open Squad Chat' });
+        expect([board, squad]).toContain(document.activeElement);
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
+      const dock = screen.getByRole('region', { name: `Workbench ${dockPosition} dock` });
+      await user.click(within(dock).getByRole('button', { name: `Close ${dockPosition} dock` }));
+      expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+    }
+  );
 });
