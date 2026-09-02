@@ -10,12 +10,26 @@ import type {
   BoardColumnConfig,
   TaskStatus,
   TaskAttempt,
+  MoveTaskInput,
+  MoveTaskResult,
+  TaskBoardMoveReceipt,
 } from '@veritas-kanban/shared';
-import { normalizeBoardColumns, normalizeBoardDefaultStatus } from '@veritas-kanban/shared';
+import {
+  normalizeBoardColumns,
+  normalizeBoardDefaultStatus,
+  sortTasksByBoardPosition,
+  taskBoardRankAtIndex,
+  taskBoardPositionAtIndex,
+} from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { ConfigService } from './config-service.js';
 import { createLogger } from '../lib/logger.js';
-import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import {
+  ConflictError,
+  InternalError,
+  NotFoundError,
+  ValidationError,
+} from '../middleware/error-handler.js';
 import { fireHook, getHookEventForStatusChange } from './hook-service.js';
 import {
   validateTransition,
@@ -58,6 +72,20 @@ function normalizedTaskRevision(task: Pick<Task, 'revision'>): number {
     : 1;
 }
 
+function normalizedBoardPosition(task: Pick<Task, 'position'>): number | null {
+  return typeof task.position === 'number' && Number.isFinite(task.position) ? task.position : null;
+}
+
+function boardMoveReceiptMatches(receipt: TaskBoardMoveReceipt, input: MoveTaskInput): boolean {
+  return (
+    receipt.operationId === input.operationId &&
+    receipt.sourceStatus === input.sourceStatus &&
+    receipt.sourcePosition === input.sourcePosition &&
+    receipt.destinationStatus === input.destinationStatus &&
+    receipt.destinationIndex === input.destinationIndex
+  );
+}
+
 interface BoardStatusConfig {
   columns: BoardColumnConfig[];
   defaultStatus: TaskStatus;
@@ -66,6 +94,8 @@ interface BoardStatusConfig {
 
 type TaskMutationInput = UpdateTaskInput & {
   attemptPatch?: Pick<TaskAttempt, 'id'> & Partial<Omit<TaskAttempt, 'id'>>;
+  lastBoardMove?: TaskBoardMoveReceipt;
+  boardRank?: string | null;
 };
 
 // Default paths are resolved via the shared paths utility so Docker, tests,
@@ -97,6 +127,7 @@ export class TaskService {
   private sqliteTasks: SqliteTaskRepository | null = null;
   private fileTasks: FileTaskRepository | null = null;
   private sqliteMutationQueue: Promise<unknown> = Promise.resolve();
+  private boardMoveQueue: Promise<unknown> = Promise.resolve();
   private taskMutationQueues = new Map<string, Promise<void>>();
   private configService: Pick<ConfigService, 'getFeatureSettings'>;
   private ceremonyService: Pick<CeremonyService, 'evaluateTaskCompletion'>;
@@ -224,6 +255,139 @@ export class TaskService {
       release();
       if (this.taskMutationQueues.get(id) === current) this.taskMutationQueues.delete(id);
     });
+  }
+
+  private withBoardMoveMutex<T>(callback: (commitStorage: () => void) => Promise<T>): Promise<T> {
+    const storageLockedCallback = async (): Promise<T> => {
+      if (this.sqliteDatabase) {
+        return this.runSqliteMutation(async () => {
+          const database = this.sqliteDatabase?.getConnection();
+          if (!database) throw new Error('SQLite task storage is unavailable');
+          database.exec('BEGIN IMMEDIATE;');
+          let transactionOpen = true;
+          const commitStorage = () => {
+            if (!transactionOpen) return;
+            database.exec('COMMIT;');
+            transactionOpen = false;
+          };
+          try {
+            const result = await callback(commitStorage);
+            commitStorage();
+            return result;
+          } catch (error) {
+            if (transactionOpen) {
+              try {
+                database.exec('ROLLBACK;');
+              } catch {
+                // Preserve the original failure.
+              }
+            }
+            throw error;
+          }
+        });
+      }
+
+      return this.requireFileTasks().withBoardMutation(async () => {
+        await this.loadCacheFromDisk();
+        return callback(() => undefined);
+      });
+    };
+    const run = this.boardMoveQueue.then(storageLockedCallback, storageLockedCallback);
+    this.boardMoveQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
+  private async ensureBoardMoveTelemetry(
+    task: Task,
+    receipt: TaskBoardMoveReceipt
+  ): Promise<boolean> {
+    if (!this.telemetry.isEnabled() || receipt.sourceStatus === task.status) return true;
+
+    try {
+      const wasRecorded = async (): Promise<boolean> =>
+        (await this.telemetry.getTaskEvents(task.id)).some(
+          (event) =>
+            event.type === 'task.status_changed' &&
+            'operationId' in event &&
+            event.operationId === receipt.operationId
+        );
+      if (await wasRecorded()) return true;
+
+      await this.telemetry.emit<TaskTelemetryEvent>({
+        type: 'task.status_changed',
+        taskId: task.id,
+        project: task.project,
+        status: task.status,
+        previousStatus: receipt.sourceStatus,
+        operationId: receipt.operationId,
+      });
+      return wasRecorded();
+    } catch (error) {
+      log.warn(
+        { taskId: task.id, operationId: receipt.operationId, err: error },
+        'Board move telemetry will be retried if the operation is replayed'
+      );
+      return false;
+    }
+  }
+
+  async reconcileBoardMoveTelemetry(task: Task): Promise<boolean> {
+    if (!task.lastBoardMove || task.lastBoardMove.auditCompletedAt) return true;
+    return this.ensureBoardMoveTelemetry(task, task.lastBoardMove);
+  }
+
+  async markBoardMoveAuditComplete(id: string, operationId: string): Promise<Task | null> {
+    return this.withBoardMoveMutex(() =>
+      this.withTaskMutex(id, async () => {
+        if (this.sqliteTasks) {
+          const current = await this.sqliteTasks.findById(id);
+          if (!current) return null;
+          if (
+            current.lastBoardMove?.operationId !== operationId ||
+            current.lastBoardMove.auditCompletedAt
+          ) {
+            return current;
+          }
+          const completed: Task = {
+            ...current,
+            lastBoardMove: {
+              ...current.lastBoardMove,
+              auditCompletedAt: new Date().toISOString(),
+            },
+          };
+          await this.sqliteTasks.replaceActive(completed);
+          return completed;
+        }
+
+        let completed: Task | null = null;
+        const result = await this.requireFileTasks().withActiveMutation(
+          id,
+          async (current, persist) => {
+            if (
+              current.lastBoardMove?.operationId !== operationId ||
+              current.lastBoardMove.auditCompletedAt
+            ) {
+              completed = current;
+              return true;
+            }
+            completed = {
+              ...current,
+              lastBoardMove: {
+                ...current.lastBoardMove,
+                auditCompletedAt: new Date().toISOString(),
+              },
+            };
+            await persist(completed);
+            this.cache.set(id, completed);
+            return true;
+          }
+        );
+        return result === null ? null : completed;
+      })
+    );
   }
 
   /** Get a task from the cache */
@@ -618,7 +782,22 @@ export class TaskService {
   }
 
   async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
-    return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
+    const affectsBoard = input.position !== undefined || input.status !== undefined;
+    const mutationInput: TaskMutationInput =
+      input.position !== undefined ? { ...input, boardRank: null } : input;
+    if (affectsBoard) {
+      return this.withBoardMoveMutex((commitStorage) =>
+        this.withTaskMutex(id, () =>
+          this.updateTaskMutation(id, mutationInput, true, commitStorage)
+        )
+      );
+    }
+    if (this.sqliteTasks) {
+      return this.runSqliteMutation(() =>
+        this.withTaskMutex(id, () => this.updateTaskMutation(id, mutationInput, true))
+      );
+    }
+    return this.withTaskMutex(id, () => this.updateTaskMutation(id, mutationInput));
   }
 
   async patchTaskAttempt(
@@ -629,10 +808,20 @@ export class TaskService {
     const input: TaskMutationInput = {
       attemptPatch: { id: attemptId, ...patch },
     };
+    if (this.sqliteTasks) {
+      return this.runSqliteMutation(() =>
+        this.withTaskMutex(id, () => this.updateTaskMutation(id, input, true))
+      );
+    }
     return this.withTaskMutex(id, () => this.updateTaskMutation(id, input));
   }
 
-  private async updateTaskMutation(id: string, input: TaskMutationInput): Promise<Task | null> {
+  private async updateTaskMutation(
+    id: string,
+    input: TaskMutationInput,
+    boardStorageLocked = false,
+    afterPersistence?: () => void
+  ): Promise<Task | null> {
     await this.assertTaskIdentityIntegrity('task.update', id);
 
     // Initial read to check existence and compute the lock filepath.
@@ -646,6 +835,7 @@ export class TaskService {
       git: gitUpdate,
       github: githubUpdate,
       blockedReason: blockedReasonUpdate,
+      boardRank: boardRankUpdate,
       expectedRevision: _expectedRevision,
       attemptPatch,
       ...restInput
@@ -659,7 +849,8 @@ export class TaskService {
     let mutationFound = true;
     const runMutation = async (callback: () => Promise<void>): Promise<void> => {
       if (this.sqliteTasks) {
-        await this.runSqliteMutation(callback);
+        if (boardStorageLocked) await callback();
+        else await this.runSqliteMutation(callback);
         return;
       }
 
@@ -898,6 +1089,7 @@ export class TaskService {
               : freshTask.attempt,
         git: gitUpdate ? ({ ...freshTask.git, ...gitUpdate } as Task['git']) : freshTask.git,
         github: githubUpdate ?? freshTask.github,
+        boardRank: boardRankUpdate === null ? undefined : (boardRankUpdate ?? freshTask.boardRank),
         // Handle blockedReason: null means clear, undefined means keep existing
         blockedReason:
           blockedReasonUpdate === null
@@ -931,18 +1123,34 @@ export class TaskService {
         this.identityDiagnosticsCache = null;
         this.cache.set(updatedTask.id, updatedTask);
       }
+      afterPersistence?.();
 
       // Emit telemetry event if status changed
       if (statusChanged) {
-        this.syncAgentRegistryForStatusTransition(updatedTask);
+        if (input.lastBoardMove) {
+          try {
+            this.syncAgentRegistryForStatusTransition(updatedTask);
+          } catch (error) {
+            log.warn(
+              { taskId: updatedTask.id, operationId: input.lastBoardMove.operationId, err: error },
+              'Board move agent registry sync will be repaired by reconciliation'
+            );
+          }
+        } else {
+          this.syncAgentRegistryForStatusTransition(updatedTask);
+        }
 
-        await this.telemetry.emit<TaskTelemetryEvent>({
-          type: 'task.status_changed',
-          taskId: updatedTask.id,
-          project: updatedTask.project,
-          status: updatedTask.status,
-          previousStatus,
-        });
+        if (input.lastBoardMove) {
+          await this.ensureBoardMoveTelemetry(updatedTask, input.lastBoardMove);
+        } else {
+          await this.telemetry.emit<TaskTelemetryEvent>({
+            type: 'task.status_changed',
+            taskId: updatedTask.id,
+            project: updatedTask.project,
+            status: updatedTask.status,
+            previousStatus,
+          });
+        }
 
         // Fire lifecycle hook if applicable
         const hookEvent = getHookEventForStatusChange(previousStatus, updatedTask.status);
@@ -1064,10 +1272,15 @@ export class TaskService {
   }
 
   async deleteTask(id: string): Promise<boolean> {
+    if (this.sqliteTasks) {
+      return this.runSqliteMutation(() =>
+        this.withTaskMutex(id, () => this.deleteTaskMutation(id, true))
+      );
+    }
     return this.withTaskMutex(id, () => this.deleteTaskMutation(id));
   }
 
-  private async deleteTaskMutation(id: string): Promise<boolean> {
+  private async deleteTaskMutation(id: string, sqliteStorageLocked = false): Promise<boolean> {
     if (this.sqliteTasks) {
       await this.assertTaskIdentityIntegrity('task.delete', id, {
         allowSameLocationTaskIdDuplicates: true,
@@ -1076,7 +1289,9 @@ export class TaskService {
       if (!task) return false;
 
       const sqliteTasks = this.sqliteTasks;
-      return this.runSqliteMutation(() => sqliteTasks.deleteActive(id));
+      return sqliteStorageLocked
+        ? sqliteTasks.deleteActive(id)
+        : this.runSqliteMutation(() => sqliteTasks.deleteActive(id));
     }
 
     await this.assertTaskIdentityIntegrity('task.delete', id, {
@@ -1099,12 +1314,18 @@ export class TaskService {
     id: string,
     options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string }
   ): Promise<boolean> {
+    if (this.sqliteTasks) {
+      return this.runSqliteMutation(() =>
+        this.withTaskMutex(id, () => this.archiveTaskMutation(id, options, true))
+      );
+    }
     return this.withTaskMutex(id, () => this.archiveTaskMutation(id, options));
   }
 
   private async archiveTaskMutation(
     id: string,
-    options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string }
+    options?: { deletedAt?: string; deletedBy?: string; purgeAfter?: string },
+    sqliteStorageLocked = false
   ): Promise<boolean> {
     if (this.sqliteTasks) {
       await this.assertTaskIdentityIntegrity('task.archive', id, {
@@ -1121,7 +1342,9 @@ export class TaskService {
         purgeAfter: options?.purgeAfter ?? task.purgeAfter,
       };
       const sqliteTasks = this.sqliteTasks;
-      const archived = await this.runSqliteMutation(() => sqliteTasks.archive(id, archivedTask));
+      const archived = await (sqliteStorageLocked
+        ? sqliteTasks.archive(id, archivedTask)
+        : this.runSqliteMutation(() => sqliteTasks.archive(id, archivedTask)));
       if (!archived) return false;
 
       await this.telemetry.emit<TaskTelemetryEvent>({
@@ -1210,17 +1433,24 @@ export class TaskService {
   }
 
   async restoreTask(id: string): Promise<Task | null> {
+    if (this.sqliteTasks) {
+      return this.runSqliteMutation(() =>
+        this.withTaskMutex(id, () => this.restoreTaskMutation(id, true))
+      );
+    }
     return this.withTaskMutex(id, () => this.restoreTaskMutation(id));
   }
 
-  private async restoreTaskMutation(id: string): Promise<Task | null> {
+  private async restoreTaskMutation(id: string, sqliteStorageLocked = false): Promise<Task | null> {
     if (this.sqliteTasks) {
       await this.assertTaskIdentityIntegrity('task.restore', id);
       const task = await this.getArchivedTask(id);
       if (!task || this.isRestoreWindowExpired(task)) return null;
 
       const sqliteTasks = this.sqliteTasks;
-      const restoredTask = await this.runSqliteMutation(() => sqliteTasks.restore(id));
+      const restoredTask = await (sqliteStorageLocked
+        ? sqliteTasks.restore(id)
+        : this.runSqliteMutation(() => sqliteTasks.restore(id)));
       if (!restoredTask) return null;
 
       await this.telemetry.emit<TaskTelemetryEvent>({
@@ -1796,6 +2026,115 @@ export class TaskService {
   }
 
   /**
+   * Atomically move one task to an authoritative board position.
+   *
+   * Only the moved task is written: an exact rank between its destination neighbors
+   * preserves their revisions and makes status plus order one storage mutation.
+   */
+  async moveTask(id: string, input: MoveTaskInput): Promise<MoveTaskResult | null> {
+    return this.withBoardMoveMutex(async (commitStorage) => {
+      const current = await this.getTask(id);
+      if (!current) return null;
+
+      if (current.lastBoardMove?.operationId === input.operationId) {
+        if (!boardMoveReceiptMatches(current.lastBoardMove, input)) {
+          throw new ConflictError('Board move operation ID was reused with different input.', {
+            resourceType: 'task',
+            resourceId: id,
+            reason: 'OPERATION_ID_REUSED',
+            current,
+          });
+        }
+        commitStorage();
+        await this.reconcileBoardMoveTelemetry(current);
+        const currentColumn = sortTasksByBoardPosition(
+          (await this.listTasks()).filter((task) => task.status === current.status)
+        );
+        return {
+          task: current,
+          operationId: input.operationId,
+          orderedTaskIds: currentColumn.map((task) => task.id),
+          replayed: true,
+        };
+      }
+
+      if (current.lastBoardMove && !(await this.reconcileBoardMoveTelemetry(current))) {
+        throw new InternalError(
+          'The previous board move is committed but its telemetry is still pending. Retry shortly.'
+        );
+      }
+
+      const currentPosition = normalizedBoardPosition(current);
+      if (current.status !== input.sourceStatus || currentPosition !== input.sourcePosition) {
+        throw new ConflictError(`task ${id} moved since it was loaded. Reload and try again.`, {
+          resourceType: 'task',
+          resourceId: id,
+          expectedRevision: input.expectedRevision,
+          currentRevision: normalizedTaskRevision(current),
+          reason: 'BOARD_SOURCE_CHANGED',
+          current,
+        });
+      }
+
+      const destinationTasks = sortTasksByBoardPosition(
+        (await this.listTasks()).filter(
+          (task) => task.id !== id && task.status === input.destinationStatus
+        )
+      );
+      if (
+        !Number.isInteger(input.destinationIndex) ||
+        input.destinationIndex < 0 ||
+        input.destinationIndex > destinationTasks.length
+      ) {
+        throw new ValidationError('Destination index is outside the destination column', [
+          {
+            code: 'INVALID_DESTINATION_INDEX',
+            message: `destinationIndex must be between 0 and ${destinationTasks.length}`,
+            path: ['destinationIndex'],
+          },
+        ]);
+      }
+
+      const boardRank = taskBoardRankAtIndex(destinationTasks, input.destinationIndex);
+      const position = taskBoardPositionAtIndex(destinationTasks, input.destinationIndex);
+      const completedAt = new Date().toISOString();
+      const receipt: TaskBoardMoveReceipt = {
+        operationId: input.operationId,
+        sourceStatus: input.sourceStatus,
+        sourcePosition: input.sourcePosition,
+        destinationStatus: input.destinationStatus,
+        destinationIndex: input.destinationIndex,
+        completedAt,
+      };
+      const updated = await this.withTaskMutex(id, () =>
+        this.updateTaskMutation(
+          id,
+          {
+            status: input.destinationStatus,
+            position,
+            boardRank,
+            expectedRevision: input.expectedRevision,
+            updatedBy: input.updatedBy,
+            lastBoardMove: receipt,
+          } as TaskMutationInput,
+          true,
+          commitStorage
+        )
+      );
+      if (!updated) return null;
+
+      const orderedTaskIds = destinationTasks.map((task) => task.id);
+      orderedTaskIds.splice(input.destinationIndex, 0, updated.id);
+      return {
+        task: updated,
+        operationId: input.operationId,
+        orderedTaskIds,
+        replayed: false,
+      };
+    });
+  }
+
+  /**
    * Reorder tasks within a status column.
    * Accepts an ordered array of task IDs and assigns sequential position values.
    */
@@ -1805,18 +2144,23 @@ export class TaskService {
         `Cannot reorder more than ${MAX_TASK_REORDER_ITEMS} tasks in one request`
       );
     }
-    const tasks = await this.listTasks();
-    const updated: Task[] = [];
+    return this.withBoardMoveMutex(async () => {
+      const tasks = await this.listTasks();
+      const updated: Task[] = [];
 
-    for (let i = 0; i < orderedIds.length; i++) {
-      const task = tasks.find((t) => t.id === orderedIds[i]);
-      if (task && task.position !== i) {
-        const result = await this.updateTask(task.id, { position: i });
-        if (result) updated.push(result);
+      const reorderCount = Math.min(orderedIds.length, MAX_TASK_REORDER_ITEMS);
+      for (let i = 0; i < reorderCount; i++) {
+        const task = tasks.find((candidate) => candidate.id === orderedIds[i]);
+        if (task && task.position !== i) {
+          const result = await this.withTaskMutex(task.id, () =>
+            this.updateTaskMutation(task.id, { position: i, boardRank: null }, true)
+          );
+          if (result) updated.push(result);
+        }
       }
-    }
 
-    return updated;
+      return updated;
+    });
   }
 
   /**

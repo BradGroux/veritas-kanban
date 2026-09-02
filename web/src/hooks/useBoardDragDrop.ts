@@ -16,20 +16,30 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import type { BoardColumnConfig, Task, TaskStatus } from '@veritas-kanban/shared';
+import type {
+  BoardColumnConfig,
+  MoveTaskInput,
+  MoveTaskResult,
+  Task,
+  TaskStatus,
+} from '@veritas-kanban/shared';
 
 interface UseBoardDragDropOptions {
   tasks: Task[];
   tasksByStatus: Record<string, Task[]>;
+  allTasksByStatus?: Record<string, Task[]>;
   columns: BoardColumnConfig[];
-  onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
-  onReorder: (taskIds: string[]) => Promise<void>;
+  onMove: (
+    taskId: string,
+    input: Omit<MoveTaskInput, 'expectedRevision' | 'updatedBy'>
+  ) => Promise<MoveTaskResult>;
   announce: (message: string) => void;
 }
 
 interface UseBoardDragDropReturn {
   activeTask: Task | null;
   isDragActive: boolean;
+  isMovePending: boolean;
   /** Use this for rendering columns — reflects real-time drag state */
   liveTasksByStatus: Record<string, Task[]>;
   sensors: ReturnType<typeof useSensors>;
@@ -146,12 +156,13 @@ export function createBoardKeyboardCoordinates(columnIds: string[]): KeyboardCoo
 export function useBoardDragDrop({
   tasks,
   tasksByStatus,
+  allTasksByStatus = tasksByStatus,
   columns,
-  onStatusChange,
-  onReorder,
+  onMove,
   announce,
 }: UseBoardDragDropOptions): UseBoardDragDropReturn {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [isMovePending, setIsMovePending] = useState(false);
   // Local copy of tasksByStatus that updates in real-time during drag.
   // null = not dragging, use server state; non-null = mid-drag, use local state
   const [dragState, setDragState] = useState<Record<string, Task[]> | null>(null);
@@ -245,6 +256,7 @@ export function useBoardDragDrop({
     (taskId: string | null) => {
       setActiveTask(null);
       setDragState(null);
+      setIsMovePending(false);
       activeIdRef.current = null;
       if (taskId) focusTask(taskId);
     },
@@ -279,6 +291,10 @@ export function useBoardDragDrop({
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      if (activeIdRef.current) {
+        announce('Wait for the current task move to finish before starting another move.');
+        return;
+      }
       const task = tasks?.find((t) => t.id === event.active.id);
       if (task) {
         setActiveTask(task);
@@ -287,12 +303,13 @@ export function useBoardDragDrop({
         setDragState({ ...tasksByStatus });
       }
     },
-    [tasks, tasksByStatus]
+    [announce, tasks, tasksByStatus]
   );
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       const { active, over } = event;
+      if (activeIdRef.current !== active.id) return;
       if (!over) return;
 
       const activeId = active.id as string;
@@ -361,82 +378,92 @@ export function useBoardDragDrop({
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       const { active, over } = event;
+      if (activeIdRef.current !== active.id) return;
       const finalState = dragState;
       const activeId = active.id as string;
       const originalPosition = describeTaskPosition(activeId, tasksByStatus);
 
-      clearDragState(activeId);
+      // The pointer/keyboard overlay can close at drop, but keep the projected
+      // columns rendered until the one authoritative move command settles.
+      setActiveTask(null);
 
-      if (!over || !finalState) return;
-
-      const overId = over.id as string;
+      if (!over || !finalState) {
+        clearDragState(activeId);
+        return;
+      }
 
       // Find where the task ended up in our local drag state
       const originalColumn = findColumn(activeId, tasksByStatus);
       const finalColumn = findColumn(activeId, finalState);
 
-      if (!originalColumn || !finalColumn) return;
-
-      if (originalColumn === finalColumn && !columnIds.includes(overId as TaskStatus)) {
-        // Same column — check for reorder
-        const columnTasks = finalState[finalColumn] ?? [];
-        const origColumnTasks = tasksByStatus[originalColumn] ?? [];
-        const oldIndex = origColumnTasks.findIndex((t: Task) => t.id === activeId);
-        const newIndex = columnTasks.findIndex((t: Task) => t.id === activeId);
-
-        if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
-          const reordered = arrayMove(origColumnTasks, oldIndex, newIndex);
-          try {
-            await onReorder(reordered.map((t: Task) => t.id));
-            announce(
-              `${taskTitle(activeId)} moved to ${describeTaskPosition(activeId, finalState)}`
-            );
-          } catch {
-            announce(`Move failed. ${taskTitle(activeId)} returned to ${originalPosition}`);
-          }
-        }
-      } else if (originalColumn !== finalColumn) {
-        let statusChanged = false;
-        try {
-          await onStatusChange(activeId, finalColumn);
-          statusChanged = true;
-          const newOrder = (finalState[finalColumn] ?? []).map((t: Task) => t.id);
-          await onReorder(newOrder);
-          announce(`${taskTitle(activeId)} moved to ${describeTaskPosition(activeId, finalState)}`);
-        } catch {
-          if (statusChanged) {
-            try {
-              await onStatusChange(activeId, originalColumn);
-            } catch {
-              const finalColumnTitle =
-                columns.find((column) => column.id === finalColumn)?.title ?? finalColumn;
-              announce(
-                `Move partially failed. ${taskTitle(activeId)} may still be in ${finalColumnTitle} because automatic rollback failed; refresh the board before trying again`
-              );
-              focusTask(activeId);
-              return;
-            }
-          }
-          announce(`Move failed. ${taskTitle(activeId)} returned to ${originalPosition}`);
-        }
+      if (!originalColumn || !finalColumn) {
+        clearDragState(activeId);
+        return;
       }
 
-      // Status changes can remount the card in another column. Restore focus only
-      // after the commit or rollback has updated the task cache.
-      focusTask(activeId);
+      const originalTasks = tasksByStatus[originalColumn] ?? [];
+      const destinationTasks = finalState[finalColumn] ?? [];
+      const oldIndex = originalTasks.findIndex((task) => task.id === activeId);
+      const projectedIndex = destinationTasks.findIndex((task) => task.id === activeId);
+      const fullDestinationTasks = (allTasksByStatus[finalColumn] ?? []).filter(
+        (task) => task.id !== activeId
+      );
+      const followingVisibleId = destinationTasks[projectedIndex + 1]?.id;
+      const precedingVisibleId = destinationTasks[projectedIndex - 1]?.id;
+      const followingIndex = followingVisibleId
+        ? fullDestinationTasks.findIndex((task) => task.id === followingVisibleId)
+        : -1;
+      const precedingIndex = precedingVisibleId
+        ? fullDestinationTasks.findIndex((task) => task.id === precedingVisibleId)
+        : -1;
+      const destinationIndex =
+        followingIndex >= 0
+          ? followingIndex
+          : precedingIndex >= 0
+            ? precedingIndex + 1
+            : fullDestinationTasks.length;
+      const movedTask = tasks.find((task) => task.id === activeId);
+      const changed = originalColumn !== finalColumn || oldIndex !== projectedIndex;
+      if (!movedTask || !changed || projectedIndex < 0) {
+        clearDragState(activeId);
+        return;
+      }
+
+      setIsMovePending(true);
+      try {
+        const result = await onMove(activeId, {
+          operationId: crypto.randomUUID(),
+          sourceStatus: originalColumn,
+          sourcePosition:
+            typeof movedTask.position === 'number' && Number.isFinite(movedTask.position)
+              ? movedTask.position
+              : null,
+          destinationStatus: finalColumn,
+          destinationIndex,
+        });
+        const committedIndex = result.orderedTaskIds.indexOf(result.task.id);
+        const columnTitle =
+          columns.find((column) => column.id === result.task.status)?.title ?? result.task.status;
+        announce(
+          `${result.task.title} moved to ${columnTitle}, position ${committedIndex + 1} of ${result.orderedTaskIds.length}`
+        );
+      } catch {
+        announce(`Move failed. ${taskTitle(activeId)} returned to ${originalPosition}`);
+      } finally {
+        clearDragState(activeId);
+      }
     },
     [
       announce,
+      allTasksByStatus,
       clearDragState,
-      columnIds,
       columns,
       describeTaskPosition,
       dragState,
       findColumn,
-      focusTask,
-      onReorder,
-      onStatusChange,
+      onMove,
       taskTitle,
+      tasks,
       tasksByStatus,
     ]
   );
@@ -456,6 +483,7 @@ export function useBoardDragDrop({
   return {
     activeTask,
     isDragActive: activeTask !== null,
+    isMovePending,
     liveTasksByStatus,
     sensors,
     collisionDetection,

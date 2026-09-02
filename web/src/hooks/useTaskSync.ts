@@ -75,6 +75,7 @@ export function useTaskSync(): {
         // Invalidate activity feed so new events appear in real-time
         queryClient.invalidateQueries({ queryKey: ['activities'] });
         queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
+        queryClient.invalidateQueries({ queryKey: ['activity'] });
 
         // Debounced invalidation of task-counts to prevent rapid re-fetches during bulk operations
         // Clear any existing timer

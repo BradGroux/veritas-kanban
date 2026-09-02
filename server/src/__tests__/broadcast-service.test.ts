@@ -176,12 +176,37 @@ describe('BroadcastService', () => {
       wss.addClient(1);
       initBroadcast(asWebSocketServer(wss));
 
-      const types = ['created', 'updated', 'deleted', 'archived', 'restored', 'reordered'] as const;
+      const types = [
+        'created',
+        'updated',
+        'deleted',
+        'archived',
+        'restored',
+        'reordered',
+        'moved',
+      ] as const;
       for (const type of types) {
         broadcastTaskChange(type);
       }
 
-      expect(wss.sentMessages).toHaveLength(6);
+      expect(wss.sentMessages).toHaveLength(7);
+    });
+
+    it('includes the originating operation ID on board move events', () => {
+      const wss = createMockWss();
+      wss.addClient(1);
+      initBroadcast(asWebSocketServer(wss));
+
+      broadcastTaskChange('moved', 'task_456', undefined, {
+        operationId: '00000000-0000-4000-8000-000000000013',
+      });
+
+      expect(JSON.parse(wss.sentMessages[0])).toMatchObject({
+        type: 'task:changed',
+        changeType: 'moved',
+        taskId: 'task_456',
+        operationId: '00000000-0000-4000-8000-000000000013',
+      });
     });
 
     it('should filter task events by client workspace', () => {

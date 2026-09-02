@@ -35,6 +35,7 @@ export interface TaskTelemetryEvent extends TelemetryEvent {
   taskId: string;
   status?: TaskStatus;
   previousStatus?: TaskStatus;
+  operationId?: string;
 }
 
 /** Agent run started event */

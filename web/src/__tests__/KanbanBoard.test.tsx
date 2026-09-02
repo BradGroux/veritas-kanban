@@ -22,6 +22,8 @@ const mockTasks: Task[] = [
 ];
 
 let mockUseTasks: () => { data: Task[] | undefined; isLoading: boolean; error: Error | null };
+let mockDragDropActiveTask: Task | null = null;
+let mockDragDropMovePending = false;
 let mockFeatureSettingsResult: { isPlaceholderData: boolean; settings: FeatureSettings } = {
   isPlaceholderData: false,
   settings: createFeatureSettings(),
@@ -56,17 +58,23 @@ vi.mock('@/hooks/useTasks', () => ({
     }
     return result;
   },
-  useUpdateTask: () => ({ mutate: vi.fn() }),
-  useReorderTasks: () => ({ mutate: vi.fn() }),
+  useMoveTask: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('@/hooks/useBoardDragDrop', () => ({
-  useBoardDragDrop: () => ({
-    activeTask: null,
+  useBoardDragDrop: ({ tasksByStatus }: { tasksByStatus: Record<string, Task[]> }) => ({
+    activeTask: mockDragDropActiveTask,
+    isDragActive: mockDragDropActiveTask !== null,
+    isMovePending: mockDragDropMovePending,
+    liveTasksByStatus: tasksByStatus,
     sensors: [],
+    collisionDetection: vi.fn(),
+    announcements: {},
+    screenReaderInstructions: {},
     handleDragStart: vi.fn(),
     handleDragOver: vi.fn(),
     handleDragEnd: vi.fn(),
+    handleDragCancel: vi.fn(),
   }),
 }));
 
@@ -126,15 +134,21 @@ vi.mock('@/components/board/KanbanColumn', () => ({
     title,
     tasks,
     canChangeStatus,
+    dragEnabled,
     onTaskClick,
   }: {
     id: string;
     title: string;
     tasks: Task[];
     canChangeStatus?: boolean;
+    dragEnabled?: boolean;
     onTaskClick?: (task: Task) => void;
   }) => (
-    <div data-testid={`column-${id}`} data-can-change-status={String(canChangeStatus)}>
+    <div
+      data-testid={`column-${id}`}
+      data-can-change-status={String(canChangeStatus)}
+      data-drag-enabled={String(dragEnabled)}
+    >
       <h2>{title}</h2>
       {tasks.map((t: Task) => (
         <button
@@ -202,12 +216,29 @@ vi.mock('@/components/shared/LiveAnnouncer', () => ({
 }));
 
 vi.mock('@/components/task/TaskCard', () => ({
-  TaskCard: () => null,
+  TaskCard: ({
+    task,
+    dragEnabled,
+    isDragActive,
+  }: {
+    task: Task;
+    dragEnabled?: boolean;
+    isDragActive?: boolean;
+  }) => (
+    <div
+      data-testid="drag-preview-card"
+      data-task-id={task.id}
+      data-drag-enabled={String(dragEnabled)}
+      data-drag-active={String(isDragActive)}
+    />
+  ),
 }));
 
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DragOverlay: () => null,
+  DragOverlay: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dnd-overlay-layer">{children}</div>
+  ),
   closestCorners: vi.fn(),
 }));
 
@@ -270,6 +301,9 @@ afterEach(() => {
     isPlaceholderData: false,
     settings: createFeatureSettings(),
   };
+  mockDragDropActiveTask = null;
+  mockDragDropMovePending = false;
+  document.documentElement.classList.remove('dark');
   window.history.replaceState({}, '', '/');
 });
 
@@ -392,9 +426,50 @@ describe('KanbanBoard', () => {
     mockUseTasks = () => ({ data: [], isLoading: false, error: null });
     renderDesktopBoard();
 
-    expect(screen.getByRole('group', { name: 'Kanban columns' }).style.gridTemplateColumns).toBe(
-      'repeat(4, minmax(0, 1fr))'
-    );
+    const columns = screen.getByRole('group', { name: 'Kanban columns' });
+    expect(columns.style.gridTemplateColumns).toBe('repeat(4, minmax(0, 1fr))');
+    expect(columns.closest('section')?.parentElement?.className).toContain('items-start');
+  });
+
+  it.each(['light', 'dark'])(
+    'isolates one theme-token drag preview from board geometry in %s mode',
+    (theme) => {
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+      mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+      mockFeatureSettingsResult = {
+        isPlaceholderData: false,
+        settings: createFeatureSettings({ enableDragAndDrop: true }),
+      };
+      mockDragDropActiveTask = mockTasks[0];
+
+      renderBoard();
+
+      const grid = screen.getByRole('group', { name: 'Kanban columns' });
+      const overlay = document.querySelector<HTMLElement>('[data-board-drag-overlay]');
+      expect(overlay).not.toBeNull();
+      expect(grid.contains(overlay)).toBe(false);
+      expect(overlay?.className).toContain('pointer-events-none');
+      expect(overlay?.className).toContain('h-full');
+      expect(overlay?.className).toContain('w-full');
+      expect(overlay?.className).toContain('bg-card');
+      expect(overlay?.style.contain).toBe('layout paint');
+      expect(screen.getAllByTestId('drag-preview-card')).toHaveLength(1);
+      expect(screen.getByTestId('drag-preview-card').dataset.dragEnabled).toBe('false');
+    }
+  );
+
+  it('disables task dragging while an authoritative move is pending', () => {
+    mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+    mockFeatureSettingsResult = {
+      isPlaceholderData: false,
+      settings: createFeatureSettings({ enableDragAndDrop: true }),
+    };
+    mockDragDropMovePending = true;
+
+    renderBoard();
+
+    expect(screen.getByTestId('column-todo').dataset.dragEnabled).toBe('false');
+    expect(screen.getByTestId('column-done').dataset.dragEnabled).toBe('false');
   });
 
   it('disables explicit status changes while the browser is offline', () => {

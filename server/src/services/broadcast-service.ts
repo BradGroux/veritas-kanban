@@ -115,7 +115,7 @@ function broadcastToClients(payload: string, options: WebSocketDeliveryOptions =
 }
 
 export type TaskChangeType =
-  'created' | 'updated' | 'deleted' | 'archived' | 'restored' | 'reordered';
+  'created' | 'updated' | 'deleted' | 'archived' | 'restored' | 'reordered' | 'moved';
 
 export interface TaskChangeEvent {
   type: 'task:changed';
@@ -124,6 +124,7 @@ export interface TaskChangeEvent {
   timestamp: string;
   sequence: number;
   workspaceId: string;
+  operationId?: string;
 }
 
 export interface TelemetryBroadcastEvent {
@@ -144,7 +145,7 @@ export function broadcastTaskChange(
   changeType: TaskChangeType,
   taskId?: string,
   taskContext?: TaskContext,
-  options: { workspaceId?: string } = {}
+  options: { workspaceId?: string; operationId?: string } = {}
 ): void {
   if (!wssRef) return;
   const workspaceId = normalizeWorkspaceId(options.workspaceId);
@@ -156,6 +157,7 @@ export function broadcastTaskChange(
     timestamp: new Date().toISOString(),
     sequence: nextWebSocketEventSequence(),
     workspaceId,
+    ...(options.operationId ? { operationId: options.operationId } : {}),
   };
 
   const payload = JSON.stringify(message);

@@ -463,6 +463,7 @@ export class SqliteTaskRepository implements TaskRepository {
 
   private transaction<T>(callback: () => T): T {
     const db = this.database.getConnection();
+    if (db.isTransaction) return callback();
 
     try {
       db.exec('BEGIN IMMEDIATE;');

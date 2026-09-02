@@ -132,6 +132,11 @@ export class FileTaskRepository {
     });
   }
 
+  async withBoardMutation<T>(mutation: () => Promise<T>): Promise<T> {
+    await this.ensureReady();
+    return withFileLock(path.join(this.taskRoot, 'board-position'), mutation);
+  }
+
   async withActiveMutation<T>(id: string, mutation: ActiveMutation<T>): Promise<T | null> {
     assertLookupId(id);
     await this.ensureReady();
@@ -416,6 +421,8 @@ export class FileTaskRepository {
         observations: data.observations,
         attachments: data.attachments,
         position: data.position,
+        boardRank: data.boardRank,
+        lastBoardMove: data.lastBoardMove,
         costPrediction: data.costPrediction,
         actualCost: data.actualCost,
         lessonsLearned: data.lessonsLearned,
