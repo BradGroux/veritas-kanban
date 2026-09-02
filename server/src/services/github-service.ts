@@ -43,6 +43,10 @@ interface GitHubConfigSource {
 
 interface PublicationAuthoritySource {
   resolvePublicationAuthority(taskId: string): Promise<WorktreePublicationAuthority>;
+  withPublicationAuthority<T>(
+    taskId: string,
+    operation: (authority: WorktreePublicationAuthority) => Promise<T>
+  ): Promise<T>;
 }
 
 export interface GitHubServiceOptions {
@@ -162,7 +166,7 @@ export class GitHubService {
         )
       );
 
-      const data = (
+      const matchingPR = (
         JSON.parse(stdout) as Array<{
           url: string;
           number: number;
@@ -179,15 +183,15 @@ export class GitHubService {
           candidate.baseRefName === baseBranch &&
           candidate.headRepository?.nameWithOwner === expectedHeadRepository
       );
-      if (!data) return null;
+      if (!matchingPR) return null;
       return {
-        url: data.url,
-        number: data.number,
-        title: data.title,
-        state: data.state,
-        draft: data.isDraft,
-        headBranch: data.headRefName,
-        baseBranch: data.baseRefName,
+        url: matchingPR.url,
+        number: matchingPR.number,
+        title: matchingPR.title,
+        state: matchingPR.state,
+        draft: matchingPR.isDraft,
+        headBranch: matchingPR.headRefName,
+        baseBranch: matchingPR.baseRefName,
       };
     } catch {
       // Intentionally silent: no PR exists for this branch
@@ -346,52 +350,60 @@ export class GitHubService {
       return existingPR;
     }
 
-    // Re-resolve immediately before publication so task or worktree drift fails closed.
-    authority = await this.worktreeService.resolvePublicationAuthority(input.taskId);
-    task = authority.task;
-    if (requestedTarget !== authority.baseBranch) {
-      throw new ConflictError('The managed PR base changed before publication.', {
-        taskId: input.taskId,
-        requestedBase: requestedTarget,
-        authorizedBase: authority.baseBranch,
-      });
-    }
-    const headRef = `refs/heads/${authority.branch}`;
-    const { stdout: existingRemoteOutput } = await execFileAsync(
-      'git',
-      ['ls-remote', '--heads', 'origin', headRef],
-      { cwd: authority.worktreePath }
-    );
-    const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
-    if (existingRemoteHead && existingRemoteHead !== authority.headCommit) {
-      try {
-        await execFileAsync(
+    // Hold the task's manifest lock while re-resolving and publishing the exact authority.
+    authority = await this.worktreeService.withPublicationAuthority(
+      input.taskId,
+      async (currentAuthority) => {
+        if (requestedTarget !== currentAuthority.baseBranch) {
+          throw new ConflictError('The managed PR base changed before publication.', {
+            taskId: input.taskId,
+            requestedBase: requestedTarget,
+            authorizedBase: currentAuthority.baseBranch,
+          });
+        }
+        const headRef = `refs/heads/${currentAuthority.branch}`;
+        const { stdout: existingRemoteOutput } = await execFileAsync(
           'git',
-          ['merge-base', '--is-ancestor', existingRemoteHead, authority.headCommit],
-          { cwd: authority.worktreePath }
+          ['ls-remote', '--heads', 'origin', headRef],
+          { cwd: currentAuthority.worktreePath }
         );
-      } catch {
-        throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
-          taskId: input.taskId,
-          manifestId: authority.manifestId,
+        const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
+        if (existingRemoteHead && existingRemoteHead !== currentAuthority.headCommit) {
+          try {
+            await execFileAsync(
+              'git',
+              ['merge-base', '--is-ancestor', existingRemoteHead, currentAuthority.headCommit],
+              { cwd: currentAuthority.worktreePath }
+            );
+          } catch {
+            throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
+              taskId: input.taskId,
+              manifestId: currentAuthority.manifestId,
+            });
+          }
+        }
+        await execFileAsync('git', ['push', '-u', 'origin', `${headRef}:${headRef}`], {
+          cwd: currentAuthority.worktreePath,
         });
+        const { stdout: remoteHeadOutput } = await execFileAsync(
+          'git',
+          ['ls-remote', '--exit-code', 'origin', headRef],
+          { cwd: currentAuthority.worktreePath }
+        );
+        const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
+        if (remoteHead !== currentAuthority.headCommit) {
+          throw new ConflictError(
+            'The published remote branch does not match the managed worktree.',
+            {
+              taskId: input.taskId,
+              manifestId: currentAuthority.manifestId,
+            }
+          );
+        }
+        return currentAuthority;
       }
-    }
-    await execFileAsync('git', ['push', '-u', 'origin', `${headRef}:${headRef}`], {
-      cwd: authority.worktreePath,
-    });
-    const { stdout: remoteHeadOutput } = await execFileAsync(
-      'git',
-      ['ls-remote', '--exit-code', 'origin', headRef],
-      { cwd: authority.worktreePath }
     );
-    const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
-    if (remoteHead !== authority.headCommit) {
-      throw new ConflictError('The published remote branch does not match the managed worktree.', {
-        taskId: input.taskId,
-        manifestId: authority.manifestId,
-      });
-    }
+    task = authority.task;
 
     // Build PR title and body
     const prTitle = input.title || task.title;

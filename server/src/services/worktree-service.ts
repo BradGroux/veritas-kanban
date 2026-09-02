@@ -619,9 +619,16 @@ export class WorktreeService {
   }
 
   async resolvePublicationAuthority(taskId: string): Promise<WorktreePublicationAuthority> {
+    return this.withPublicationAuthority(taskId, async (authority) => authority);
+  }
+
+  async withPublicationAuthority<T>(
+    taskId: string,
+    operation: (authority: WorktreePublicationAuthority) => Promise<T>
+  ): Promise<T> {
     validatePathSegment(taskId);
-    return this.manifests.withTaskLock(taskId, () =>
-      this.resolvePublicationAuthorityLocked(taskId)
+    return this.manifests.withTaskLock(taskId, async () =>
+      operation(await this.resolvePublicationAuthorityLocked(taskId))
     );
   }
 
@@ -1241,6 +1248,11 @@ export class WorktreeService {
     task: Task | null,
     manifest: WorktreeManifest
   ): Promise<WorktreeCleanupPreview> {
+    await this.validateRefNames(
+      manifest.repository.rootPath,
+      manifest.branch,
+      manifest.base.branch
+    );
     const blockedReasons: WorktreeCleanupReason[] = [];
     const checkedAt = this.now().toISOString();
     const add = (code: WorktreeCleanupReasonCode, message: string, overrideable: boolean): void => {

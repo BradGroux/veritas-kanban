@@ -104,6 +104,7 @@ describe('GitHubService repository publication boundary', () => {
     };
     configSource: { getConfig(): Promise<AppConfig> };
     worktreeService: WorktreeService;
+    manifestRepository: FileWorktreeManifestRepository;
   } {
     const taskStore = {
       async getTask(taskId: string): Promise<Task | null> {
@@ -127,15 +128,16 @@ describe('GitHubService repository publication boundary', () => {
         return structuredClone(fixtures.config);
       },
     };
+    const manifestRepository = new FileWorktreeManifestRepository({
+      manifestsDir: path.join(root, 'worktree-manifests'),
+    });
     const worktreeService = new WorktreeService({
       worktreesDir: path.join(root, 'worktrees'),
       taskService: taskStore,
       configService: configSource,
-      manifestRepository: new FileWorktreeManifestRepository({
-        manifestsDir: path.join(root, 'worktree-manifests'),
-      }),
+      manifestRepository,
     });
-    return { taskStore, configSource, worktreeService };
+    return { taskStore, configSource, worktreeService, manifestRepository };
   }
 
   async function prepareManagedBranch(
@@ -175,18 +177,53 @@ describe('GitHubService repository publication boundary', () => {
     return argsFile;
   }
 
-  it('rejects a refspec-shaped task branch before it mutates the remote', async () => {
-    const service = new GitHubService();
-    vi.spyOn(service, 'checkGhCli').mockResolvedValue({
-      installed: true,
-      authenticated: true,
-      user: 'VeritasTest',
+  it.each(['HEAD:refs/heads/canary', '+HEAD:refs/heads/main'])(
+    'rejects stored refspec-shaped branch %s before it mutates the remote',
+    async (hostileBranch) => {
+      const { taskStore, configSource, worktreeService, manifestRepository } =
+        await prepareManagedBranch();
+      const manifest = await manifestRepository.read('task_publication');
+      if (!manifest) throw new Error('managed manifest was not created');
+      await taskStore.updateTask('task_publication', {
+        git: { ...fixtures.task?.git, branch: hostileBranch },
+      });
+      await manifestRepository.save({ ...manifest, branch: hostileBranch });
+      const mainBefore = await git(remotePath, 'rev-parse', 'refs/heads/main');
+      const service = new GitHubService({
+        taskService: taskStore,
+        configService: configSource,
+        worktreeService,
+      });
+
+      await expect(service.createPR({ taskId: 'task_publication' })).rejects.toThrow(
+        /Invalid Git branch name/i
+      );
+
+      expect(await git(remotePath, 'rev-parse', 'refs/heads/main')).toBe(mainBefore);
+      await expect(git(remotePath, 'show-ref', '--verify', 'refs/heads/canary')).rejects.toThrow();
+    }
+  );
+
+  it('rejects legacy task paths until the existing adoption flow records authority', async () => {
+    fixtures.task = {
+      ...fixtures.task!,
+      git: {
+        repo: 'veritas',
+        branch: 'feature/legacy-publication',
+        baseBranch: 'main',
+        worktreePath: primaryPath,
+      },
+    };
+    const { taskStore, configSource, worktreeService } = managedServices();
+    const service = new GitHubService({
+      taskService: taskStore,
+      configService: configSource,
+      worktreeService,
     });
-    vi.spyOn(service, 'getPRForBranch').mockResolvedValue(null);
 
-    await service.createPR({ taskId: 'task_publication' }).catch(() => undefined);
-
-    await expect(git(remotePath, 'show-ref', '--verify', 'refs/heads/canary')).rejects.toThrow();
+    await expect(service.createPR({ taskId: 'task_publication' })).rejects.toThrow(
+      /requires an active managed worktree/i
+    );
   });
 
   it('publishes only the exact managed branch to a throwaway bare remote', async () => {
@@ -266,6 +303,26 @@ describe('GitHubService repository publication boundary', () => {
     await git(primaryPath, 'remote', 'set-url', 'origin', path.join(root, 'other.git'));
     await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
       /durable worktree manifest/i
+    );
+  });
+
+  it('rejects actual branch drift and invalid legacy manifest refs', async () => {
+    const { worktreeService, manifestRepository } = await prepareManagedBranch();
+    const managedPath = fixtures.task!.git!.worktreePath!;
+    await git(managedPath, 'checkout', '-b', 'feature/unexpected');
+    await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
+      /branch does not match/i
+    );
+
+    await git(managedPath, 'checkout', 'feature/repository-publication');
+    const manifest = await manifestRepository.read('task_publication');
+    if (!manifest) throw new Error('managed manifest was not created');
+    await manifestRepository.save({
+      ...manifest,
+      base: { ...manifest.base, branch: 'main:refs/heads/canary' },
+    });
+    await expect(worktreeService.previewCleanup('task_publication')).rejects.toThrow(
+      /Invalid Git branch name/i
     );
   });
 

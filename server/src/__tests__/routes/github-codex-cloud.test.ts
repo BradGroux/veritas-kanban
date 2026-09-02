@@ -75,4 +75,17 @@ describe('GitHub Codex Cloud routes', () => {
     expect(response.status).toBe(400);
     expect(mockGithubService.delegateToCodexCloud).not.toHaveBeenCalled();
   });
+
+  it.each(['HEAD:refs/heads/canary', '-force-like-option'])(
+    'rejects invalid PR target branch %s at the route boundary',
+    async (targetBranch) => {
+      const response = await request(app).post('/api/github/pr').send({
+        taskId: 'task_123',
+        targetBranch,
+      });
+
+      expect(response.status).toBe(400);
+      expect(mockGithubService.createPR).not.toHaveBeenCalled();
+    }
+  );
 });

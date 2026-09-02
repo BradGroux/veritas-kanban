@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { z } from 'zod';
 
 export function isCanonicalGitBranchName(value: string): boolean {
@@ -5,7 +6,7 @@ export function isCanonicalGitBranchName(value: string): boolean {
     const code = character.charCodeAt(0);
     return code <= 0x20 || code === 0x7f;
   });
-  return (
+  const passesStructuralChecks =
     value.length > 0 &&
     value.length <= 240 &&
     value === value.trim() &&
@@ -19,7 +20,14 @@ export function isCanonicalGitBranchName(value: string): boolean {
     !value.includes('//') &&
     !value.includes('@{') &&
     !hasForbiddenControl &&
-    !/[~^:?*[\\]/.test(value)
+    !/[~^:?*[\\]/.test(value);
+  if (!passesStructuralChecks) return false;
+
+  return (
+    spawnSync('git', ['check-ref-format', '--branch', value], {
+      stdio: 'ignore',
+      timeout: 2_000,
+    }).status === 0
   );
 }
 

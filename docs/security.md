@@ -109,6 +109,15 @@ credential-redacted remote identity before any push. Integration uses a
 detached temporary worktree and a non-force push, so the configured primary
 checkout is not mutated.
 
+Git branch and base names are validated at the task and pull-request API
+boundaries and revalidated with Git before use. Pull-request publication and
+Git-backed diff/review operations resolve authority from the durable worktree
+manifest rather than mutable task paths. Publication holds the task manifest
+lock, rechecks repository, origin, path, branch, base, and lease ownership,
+pushes only the exact fully qualified task branch without force, and verifies
+the remote commit before creating or associating a pull request. Missing,
+legacy, removed, or mismatched worktree evidence fails closed.
+
 Repository-controlled execution is a separate trust boundary from worktree
 ownership. Before an executable provider launch, Veritas inventories recognized
 agent instructions, provider configuration, MCP servers, hooks, language-server
