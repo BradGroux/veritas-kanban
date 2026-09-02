@@ -54,11 +54,14 @@ export function findSecurityWorkflowViolations(content) {
   ) {
     violations.push('CodeQL job must grant only contents: read and security-events: write');
   }
-  if (
-    !/uses:\s*github\/codeql-action\/init@[0-9a-f]{40}\s+#\s*\S+/.test(codeqlJob) ||
-    !/uses:\s*github\/codeql-action\/analyze@[0-9a-f]{40}\s+#\s*\S+/.test(codeqlJob)
-  ) {
+  const codeqlInit =
+    /uses:\s*github\/codeql-action\/init@([0-9a-f]{40})\s+#\s*(\S+)/.exec(codeqlJob);
+  const codeqlAnalyze =
+    /uses:\s*github\/codeql-action\/analyze@([0-9a-f]{40})\s+#\s*(\S+)/.exec(codeqlJob);
+  if (!codeqlInit || !codeqlAnalyze) {
     violations.push('CodeQL init and analyze actions must both be present');
+  } else if (codeqlInit[1] !== codeqlAnalyze[1] || codeqlInit[2] !== codeqlAnalyze[2]) {
+    violations.push('CodeQL init and analyze actions must use the same pinned revision');
   }
 
   const gitleaksJob = yamlBlock(content, 'gitleaks', 2);
