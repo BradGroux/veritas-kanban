@@ -23,6 +23,7 @@ import {
 } from '../services/dependency-circuit-runtime.js';
 import { getSqliteStorageDiagnostics } from '../storage/sqlite/database.js';
 import type { WebSocketServer } from 'ws';
+import { getMemoryPressure } from '../utils/memory-pressure.js';
 import { getRuntimeDir } from '../utils/paths.js';
 
 const log = createLogger('health');
@@ -112,22 +113,6 @@ async function checkDisk(): Promise<'ok' | 'fail'> {
 }
 
 /**
- * Check that memory usage is below 90% of heap.
- */
-function checkMemory(): 'ok' | 'warn' {
-  const mem = process.memoryUsage();
-  const usedPercent = mem.heapUsed / mem.heapTotal;
-  if (usedPercent > 0.9) {
-    log.warn(
-      { heapUsed: mem.heapUsed, heapTotal: mem.heapTotal, usedPercent },
-      'Memory usage high'
-    );
-    return 'warn';
-  }
-  return 'ok';
-}
-
-/**
  * Check that tasks.json is readable and valid JSON.
  */
 async function checkTasksFile(): Promise<'ok' | 'fail'> {
@@ -213,8 +198,13 @@ healthRouter.get('/ready', async (_req, res) => {
       checkDisk(),
       checkTasksFile(),
     ]);
-    const memory = checkMemory();
+    const memoryPressure = getMemoryPressure();
+    const memory = memoryPressure.status;
     const sqlite = getSqliteStorageDiagnostics();
+
+    if (memory === 'warn') {
+      log.warn({ memoryPressure }, 'Memory pressure high');
+    }
 
     // Storage encompasses both the directory check and the tasks file check
     const storageStatus = storage === 'fail' || tasksFile === 'fail' ? 'fail' : 'ok';
@@ -232,12 +222,13 @@ healthRouter.get('/ready', async (_req, res) => {
       checks.storage === 'fail' ||
       checks.disk === 'fail' ||
       ('sqlite' in checks && checks.sqlite === 'fail');
-    const status = hasCriticalFailure ? 'degraded' : 'ok';
+    const status = hasCriticalFailure || memory === 'warn' ? 'degraded' : 'ok';
     const httpStatus = hasCriticalFailure ? 503 : 200;
 
     res.status(httpStatus).json({
       status,
       checks,
+      memoryPressure,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -264,8 +255,8 @@ async function buildDeepHealthPayload() {
     checkDisk(),
     checkTasksFile(),
   ]);
-  const memory = checkMemory();
-  const memUsage = process.memoryUsage();
+  const memoryPressure = getMemoryPressure();
+  const memory = memoryPressure.status;
 
   const storageStatus = storage === 'fail' || tasksFile === 'fail' ? 'fail' : 'ok';
   const sqlite = getSqliteStorageDiagnostics();
@@ -323,6 +314,7 @@ async function buildDeepHealthPayload() {
       dependencyCircuitSummary.open > 0 ||
       dependencyCircuitSummary.halfOpen > 0 ||
       dependencyCircuitError !== undefined ||
+      memory === 'warn' ||
       (process.env.VERITAS_STORAGE === 'sqlite' && sqlite?.healthPosture !== 'healthy')
         ? 'degraded'
         : 'ok',
@@ -333,11 +325,15 @@ async function buildDeepHealthPayload() {
     },
     uptime: process.uptime(),
     version,
+    memoryPressure,
     memory: {
-      heapUsed: memUsage.heapUsed,
-      heapTotal: memUsage.heapTotal,
-      rss: memUsage.rss,
-      external: memUsage.external,
+      heapUsed: memoryPressure.sample.heapUsedBytes,
+      heapTotal: memoryPressure.sample.heapAllocatedBytes,
+      heapSizeLimit: memoryPressure.sample.heapLimitBytes,
+      rss: memoryPressure.sample.rssBytes,
+      external: memoryPressure.sample.externalBytes,
+      effectiveMemoryLimit: memoryPressure.sample.effectiveMemoryLimitBytes,
+      effectiveMemoryLimitSource: memoryPressure.sample.effectiveMemoryLimitSource,
     },
     wsConnections,
     circuitBreakers,

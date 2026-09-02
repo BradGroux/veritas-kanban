@@ -23,6 +23,26 @@ export type HealthLevel = 'stable' | 'reviewing' | 'drifting' | 'elevated' | 'al
 // inline types that already exist in the server route.
 export type OverallStatus = HealthLevel;
 
+/** Non-sensitive evidence used to classify process memory pressure. */
+export interface MemoryPressureDiagnostics {
+  status: 'ok' | 'warn';
+  reason: 'within-limits' | 'v8-heap-limit' | 'rss-memory-limit';
+  metric: 'heapUsed' | 'rss';
+  usedBytes: number;
+  limitBytes: number;
+  utilization: number;
+  threshold: number;
+  sample: {
+    heapUsedBytes: number;
+    heapAllocatedBytes: number;
+    heapLimitBytes: number;
+    rssBytes: number;
+    externalBytes: number;
+    effectiveMemoryLimitBytes: number;
+    effectiveMemoryLimitSource: 'process-constrained' | 'host-total';
+  };
+}
+
 // ─── Individual Signals ────────────────────────────────────────
 
 /** Infrastructure / system-level signal */
@@ -31,6 +51,7 @@ export interface SystemSignal {
   storage: boolean;
   disk: boolean;
   memory: boolean;
+  memoryPressure: MemoryPressureDiagnostics;
 }
 
 /** Agent registry signal */
