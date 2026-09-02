@@ -44,6 +44,7 @@ import {
 } from '../services/worktree-service.js';
 import { FileWorktreeManifestRepository } from '../storage/worktree-manifest-repository.js';
 import { errorHandler } from '../middleware/error-handler.js';
+import { writeRateLimit } from '../middleware/rate-limit.js';
 import { createGitHubPRHandler } from '../routes/github.js';
 import { taskAccess } from '../routes/v1/permissions.js';
 
@@ -306,7 +307,7 @@ describe('GitHubService repository publication boundary', () => {
       (req as AuthenticatedRequest).auth = { role: 'agent', isLocalhost: false };
       next();
     });
-    app.post('/api/v1/github/pr', taskAccess, createGitHubPRHandler(service));
+    app.post('/api/v1/github/pr', writeRateLimit, taskAccess, createGitHubPRHandler(service));
     app.use(errorHandler);
 
     const rejected = await request(app).post('/api/v1/github/pr').send({
