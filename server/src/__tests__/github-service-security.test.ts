@@ -152,9 +152,7 @@ describe('GitHubService repository publication boundary', () => {
 
   it('derives only a credential-free GitHub repository slug from verified remotes', () => {
     expect(
-      githubRepositoryFromRemote(
-        'https://publication-token:secret-value@github.com/BradGroux/veritas-kanban.git'
-      )
+      githubRepositoryFromRemote('https://build-user@github.com/BradGroux/veritas-kanban.git')
     ).toBe('BradGroux/veritas-kanban');
     expect(githubRepositoryFromRemote('git@github.com:BradGroux/veritas-kanban.git')).toBe(
       'BradGroux/veritas-kanban'

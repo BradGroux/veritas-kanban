@@ -2,7 +2,7 @@
 cli/src/__tests__/snapshot.test.ts:generic-api-key:220
 
 # API documentation contains non-functional response examples.
-docs/API-REFERENCE.md:generic-api-key:991
+docs/API-REFERENCE.md:generic-api-key:1000
 docs/API-WORKFLOWS.md:generic-api-key:1460
 
 # Operator documentation uses placeholders in curl authentication examples.
