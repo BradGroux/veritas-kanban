@@ -166,6 +166,23 @@ export function Header() {
     openBottomPanel,
     toggleBottomPanel,
   } = useDesktopShell();
+  const usesWorkbenchChat = isDesktopClient || supportsWorkbenchPanel;
+  const boardChatActive = usesWorkbenchChat && bottomPanel === 'board-chat';
+  const squadChatActive = usesWorkbenchChat && bottomPanel === 'squad-chat';
+  const boardChatAction = !usesWorkbenchChat
+    ? 'Open Board Chat'
+    : boardChatActive
+      ? 'Close Board Chat'
+      : bottomPanel
+        ? 'Switch to Board Chat'
+        : 'Open Board Chat';
+  const squadChatAction = !usesWorkbenchChat
+    ? 'Open Squad Chat'
+    : squadChatActive
+      ? 'Close Squad Chat'
+      : bottomPanel
+        ? 'Switch to Squad Chat'
+        : 'Open Squad Chat';
 
   const toggleView = useCallback(
     (nextView: NavigationItem['view']) => setView(view === nextView ? 'board' : nextView),
@@ -196,6 +213,14 @@ export function Header() {
     setChatOpen(true);
   }, [isDesktopClient, markPanelLoaded, openBottomPanel, supportsWorkbenchPanel]);
 
+  const toggleChatPanel = useCallback(() => {
+    if (usesWorkbenchChat) {
+      toggleBottomPanel('board-chat');
+      return;
+    }
+    openChatPanel();
+  }, [openChatPanel, toggleBottomPanel, usesWorkbenchChat]);
+
   const openSearchDialog = useCallback(
     (preset?: SearchPreset) => {
       markPanelLoaded('search');
@@ -213,6 +238,14 @@ export function Header() {
     markPanelLoaded('squadChat');
     setSquadChatOpen(true);
   }, [isDesktopClient, markPanelLoaded, openBottomPanel, supportsWorkbenchPanel]);
+
+  const toggleSquadChatPanel = useCallback(() => {
+    if (usesWorkbenchChat) {
+      toggleBottomPanel('squad-chat');
+      return;
+    }
+    openSquadChatPanel();
+  }, [openSquadChatPanel, toggleBottomPanel, usesWorkbenchChat]);
 
   const openSettingsDialog = useCallback(
     (section?: string) => {
@@ -504,22 +537,24 @@ export function Header() {
             {!isCompactHeader && (
               <>
                 <ActionIcon
-                  variant="subtle"
-                  color="gray"
+                  variant={boardChatActive ? 'light' : 'subtle'}
+                  color={boardChatActive ? 'veritas' : 'gray'}
                   size={32}
-                  onClick={openChatPanel}
-                  aria-label="Board Chat"
-                  title="Board Chat"
+                  onClick={toggleChatPanel}
+                  aria-label={boardChatAction}
+                  aria-pressed={boardChatActive}
+                  title={boardChatAction}
                 >
                   <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 </ActionIcon>
                 <ActionIcon
-                  variant="subtle"
-                  color="gray"
+                  variant={squadChatActive ? 'light' : 'subtle'}
+                  color={squadChatActive ? 'veritas' : 'gray'}
                   size={32}
-                  onClick={openSquadChatPanel}
-                  aria-label="Squad Chat"
-                  title="Squad Chat — Agent communication"
+                  onClick={toggleSquadChatPanel}
+                  aria-label={squadChatAction}
+                  aria-pressed={squadChatActive}
+                  title={squadChatAction}
                 >
                   <Users className="h-4 w-4" aria-hidden="true" />
                 </ActionIcon>
