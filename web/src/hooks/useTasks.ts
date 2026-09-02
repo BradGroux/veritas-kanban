@@ -1,8 +1,16 @@
+import { createElement } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { toast } from '@/hooks/useToast';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
+import {
+  openTaskConflict,
+  recordTaskConflict,
+  resolveTaskConflict,
+  taskConflictToastId,
+  type TaskConflictOperation,
+} from '@/hooks/useTaskConflicts';
 import {
   DEFAULT_FEATURE_SETTINGS,
   normalizeBoardColumns,
@@ -46,6 +54,13 @@ function cachedTaskRevision(queryClient: QueryClient, taskId: string): number | 
   return typeof listTask?.revision === 'number' ? listTask.revision : undefined;
 }
 
+function cachedTask(queryClient: QueryClient, taskId: string): Task | undefined {
+  return (
+    queryClient.getQueryData<Task>(['tasks', taskId]) ??
+    queryClient.getQueryData<Task[]>(['tasks'])?.find((task) => task.id === taskId)
+  );
+}
+
 function conflictCurrentTask(error: ApiMutationError): Task | undefined {
   const details = error.details as { current?: unknown } | undefined;
   const current = details?.current;
@@ -71,7 +86,8 @@ export function isRevisionConflict(error: unknown): error is ApiMutationError {
 function handleRevisionConflict(
   queryClient: QueryClient,
   error: ApiMutationError,
-  taskId: string
+  taskId: string,
+  operation: TaskConflictOperation = 'task update'
 ): boolean {
   if (!isRevisionConflict(error)) {
     return false;
@@ -85,12 +101,34 @@ function handleRevisionConflict(
   queryClient.invalidateQueries({ queryKey: ['tasks'] });
   queryClient.invalidateQueries({ queryKey: ['tasks', taskId] });
 
-  toast({
-    title: 'Task changed elsewhere',
-    description: 'Loaded the latest task. Review your edit and save again.',
-    variant: 'destructive',
-    duration: 10000,
+  const knownTask = current ?? cachedTask(queryClient, taskId);
+  const taskTitle = knownTask?.title ?? taskId;
+  const recorded = recordTaskConflict({
+    taskId,
+    taskTitle,
+    currentTask: current,
+    operation,
   });
+  if (recorded.isNewIdentity && !recorded.hasOpenSurface) {
+    toast({
+      id: taskConflictToastId(taskId),
+      title: 'Task updated before your change',
+      description: `The latest version of ${taskTitle} was loaded. Review the task before trying your ${operation} again.`,
+      action: createElement(
+        'button',
+        {
+          type: 'button',
+          className:
+            'rounded-md border border-current px-2.5 py-1.5 text-xs font-medium hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current',
+          'aria-label': `Review conflict for ${taskTitle}`,
+          onClick: () => openTaskConflict(taskId),
+        },
+        'Review task'
+      ),
+      variant: 'destructive',
+      duration: 10000,
+    });
+  }
 
   return true;
 }
@@ -197,6 +235,7 @@ export function useUpdateTask() {
     // save response (which doesn't include timeTracking changes) would
     // overwrite the timer stop/start that happened in between.
     onSuccess: (serverTask, { input }) => {
+      resolveTaskConflict(serverTask.id, 'task update');
       const mergeWithCachedTimeTracking = (cached: Task | undefined): Task => {
         if (!cached || input.timeTracking !== undefined) {
           // If this update explicitly included timeTracking, use server response as-is
@@ -623,10 +662,11 @@ export function useAddComment() {
     mutationFn: ({ taskId, author, text }: { taskId: string; author: string; text: string }) =>
       api.tasks.addComment(taskId, author, text, cachedTaskRevision(queryClient, taskId)),
     onSuccess: (task) => {
+      resolveTaskConflict(task.id, 'comment change');
       patchTaskInCaches(queryClient, task);
     },
     onError: (error, { taskId }) => {
-      handleRevisionConflict(queryClient, error as ApiMutationError, taskId);
+      handleRevisionConflict(queryClient, error as ApiMutationError, taskId, 'comment change');
     },
   });
 }
@@ -645,10 +685,11 @@ export function useEditComment() {
       text: string;
     }) => api.tasks.editComment(taskId, commentId, text, cachedTaskRevision(queryClient, taskId)),
     onSuccess: (task) => {
+      resolveTaskConflict(task.id, 'comment change');
       patchTaskInCaches(queryClient, task);
     },
     onError: (error, { taskId }) => {
-      handleRevisionConflict(queryClient, error as ApiMutationError, taskId);
+      handleRevisionConflict(queryClient, error as ApiMutationError, taskId, 'comment change');
     },
   });
 }
@@ -660,10 +701,11 @@ export function useDeleteComment() {
     mutationFn: ({ taskId, commentId }: { taskId: string; commentId: string }) =>
       api.tasks.deleteComment(taskId, commentId, cachedTaskRevision(queryClient, taskId)),
     onSuccess: (task) => {
+      resolveTaskConflict(task.id, 'comment change');
       patchTaskInCaches(queryClient, task);
     },
     onError: (error, { taskId }) => {
-      handleRevisionConflict(queryClient, error as ApiMutationError, taskId);
+      handleRevisionConflict(queryClient, error as ApiMutationError, taskId, 'comment change');
     },
   });
 }
