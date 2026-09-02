@@ -25,6 +25,7 @@ import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../ut
 import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
 import { TaskExecutionPolicySchema } from '../schemas/task-envelope-schemas.js';
 import { ReorderTasksBodySchema } from '../schemas/task-mutation-schemas.js';
+import { GitBranchNameSchema } from '../schemas/git-ref-schemas.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -85,8 +86,8 @@ const createTaskSchema = z.object({
 const gitSchema = z
   .object({
     repo: z.string().optional(),
-    branch: z.string().optional(),
-    baseBranch: z.string().optional(),
+    branch: GitBranchNameSchema.optional(),
+    baseBranch: GitBranchNameSchema.optional(),
     worktreePath: z.string().optional(),
   })
   .optional();

@@ -330,6 +330,18 @@ describe('Tasks Routes (actual module)', () => {
       expect(mockTaskService.updateTask).not.toHaveBeenCalled();
     });
 
+    it.each(['HEAD:refs/heads/canary', '+HEAD:refs/heads/main', '-force-like-option'])(
+      'rejects invalid task branch %s at the route boundary',
+      async (branch) => {
+        const res = await request(app)
+          .patch('/api/tasks/t1')
+          .send({ git: { repo: 'veritas', branch, baseBranch: 'main' } });
+
+        expect(res.status).toBe(400);
+        expect(mockTaskService.updateTask).not.toHaveBeenCalled();
+      }
+    );
+
     it('rejects generic PATCH attempts that mutate authoritative run contracts', async () => {
       for (const field of ['taskEnvelope', 'completionResult']) {
         const res = await request(app)

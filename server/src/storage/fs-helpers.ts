@@ -18,6 +18,7 @@ import {
   copyFile as copyFileAsync,
   cp as cpAsync,
   lstat as lstatAsync,
+  mkdtemp as mkdtempAsync,
   mkdir as mkdirAsync,
   open as openAsync,
   readFile as readFileAsync,
@@ -77,6 +78,7 @@ export const createWriteStream = fs.createWriteStream;
 // ---------------------------------------------------------------------------
 
 export const mkdir = mkdirAsync;
+export const mkdtemp = mkdtempAsync;
 export const open = openAsync;
 export { access };
 export const appendFile = appendFileAsync;

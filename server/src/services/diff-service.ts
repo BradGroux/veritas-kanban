@@ -1,5 +1,5 @@
 import { simpleGit } from 'simple-git';
-import { TaskService } from './task-service.js';
+import { WorktreeService } from './worktree-service.js';
 import { createLogger } from '../lib/logger.js';
 const log = createLogger('diff-service');
 
@@ -43,14 +43,14 @@ export interface DiffSummary {
 }
 
 export class DiffService {
-  private taskService: TaskService;
+  private readonly worktreeService: Pick<WorktreeService, 'resolvePublicationAuthority'>;
 
-  constructor() {
-    this.taskService = new TaskService();
-  }
-
-  private expandPath(p: string): string {
-    return p.replace(/^~/, process.env.HOME || '');
+  constructor(
+    options: {
+      worktreeService?: Pick<WorktreeService, 'resolvePublicationAuthority'>;
+    } = {}
+  ) {
+    this.worktreeService = options.worktreeService ?? new WorktreeService();
   }
 
   private getLanguageFromPath(filePath: string): string {
@@ -95,19 +95,11 @@ export class DiffService {
   }
 
   async getDiffSummary(taskId: string): Promise<DiffSummary> {
-    const task = await this.taskService.getTask(taskId);
-    if (!task?.git?.worktreePath) {
-      throw new Error('Task does not have an active worktree');
-    }
-
-    const worktreePath = this.expandPath(task.git.worktreePath);
-    const git = simpleGit(worktreePath);
-
-    // Get diff against base branch
-    const baseBranch = task.git.baseBranch || 'main';
+    const authority = await this.worktreeService.resolvePublicationAuthority(taskId);
+    const git = simpleGit(authority.worktreePath);
 
     // Get list of changed files with stats
-    const diffStat = await git.diffSummary([baseBranch]);
+    const diffStat = await git.diffSummary([authority.baseCommit]);
 
     const files: FileChange[] = diffStat.files.map((file) => {
       const additions = 'insertions' in file ? file.insertions : 0;
@@ -137,20 +129,14 @@ export class DiffService {
   }
 
   async getFileDiff(taskId: string, filePath: string): Promise<FileDiff> {
-    const task = await this.taskService.getTask(taskId);
-    if (!task?.git?.worktreePath) {
-      throw new Error('Task does not have an active worktree');
-    }
-
-    const worktreePath = this.expandPath(task.git.worktreePath);
-    const git = simpleGit(worktreePath);
-    const baseBranch = task.git.baseBranch || 'main';
+    const authority = await this.worktreeService.resolvePublicationAuthority(taskId);
+    const git = simpleGit(authority.worktreePath);
 
     // Get unified diff for the file
-    const diffOutput = await git.diff([baseBranch, '--', filePath]);
+    const diffOutput = await git.diff([authority.baseCommit, '--', filePath]);
 
     // Get file stats
-    const diffStat = await git.diffSummary([baseBranch, '--', filePath]);
+    const diffStat = await git.diffSummary([authority.baseCommit, '--', filePath]);
     const fileStat = diffStat.files[0];
 
     // Parse the unified diff

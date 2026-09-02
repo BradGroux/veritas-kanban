@@ -52,6 +52,10 @@ function runGuard(handler: AccessGuard, req: AuthenticatedRequest) {
 }
 
 describe('v1 REST permission guard presets', () => {
+  it('allows the agent role through the task-write guard used by GitHub PR routes', () => {
+    expect(runGuard(taskAccess, mockRequest('POST', '/pr', 'agent')).next).toHaveBeenCalled();
+  });
+
   it('allows admission inspection but reserves future mutations for administrators', () => {
     expect(
       runGuard(admissionAccess, mockRequest('GET', '/', 'agent', ['agent:read'])).next

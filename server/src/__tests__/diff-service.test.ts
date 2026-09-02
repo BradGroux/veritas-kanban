@@ -133,22 +133,6 @@ describe('DiffService', () => {
     });
   });
 
-  describe('expandPath (private)', () => {
-    const expandPath = (p: string) => {
-      return (service as any).expandPath(p);
-    };
-
-    it('should expand ~ to HOME', () => {
-      const result = expandPath('~/projects/test');
-      expect(result).not.toContain('~');
-      expect(result).toContain('projects/test');
-    });
-
-    it('should not modify absolute paths', () => {
-      expect(expandPath('/usr/local/bin')).toBe('/usr/local/bin');
-    });
-  });
-
   describe('parseUnifiedDiff (private)', () => {
     const parseDiff = (output: string) => {
       return (service as any).parseUnifiedDiff(output);

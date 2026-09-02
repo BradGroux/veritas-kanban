@@ -1,9 +1,10 @@
-import { Router, type Router as RouterType } from 'express';
+import { Router, type RequestHandler, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { GitHubService } from '../services/github-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
+import { GitBranchNameSchema } from '../schemas/git-ref-schemas.js';
 
 const router: RouterType = Router();
 const githubService = new GitHubService();
@@ -14,7 +15,7 @@ const createPRSchema = z.object({
   taskId: z.string().min(1),
   title: z.string().optional(),
   body: z.string().optional(),
-  targetBranch: z.string().optional(),
+  targetBranch: GitBranchNameSchema.optional(),
   draft: z.boolean().optional(),
 });
 
@@ -45,10 +46,10 @@ router.get(
   })
 );
 
-// POST /api/github/pr - Create a PR for a task
-router.post(
-  '/pr',
-  asyncHandler(async (req, res) => {
+export function createGitHubPRHandler(
+  service: Pick<GitHubService, 'createPR'> = githubService
+): RequestHandler {
+  return asyncHandler(async (req, res) => {
     let input;
     try {
       input = createPRSchema.parse(req.body);
@@ -58,10 +59,13 @@ router.post(
       }
       throw error;
     }
-    const pr = await githubService.createPR(input);
+    const pr = await service.createPR(input);
     res.status(201).json(pr);
-  })
-);
+  });
+}
+
+// POST /api/github/pr - Create a PR for a task
+router.post('/pr', createGitHubPRHandler());
 
 // POST /api/github/pr/:taskId/open - Open PR in browser
 router.post(

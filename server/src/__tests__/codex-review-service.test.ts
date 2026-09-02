@@ -82,7 +82,20 @@ describe('CodexReviewService', () => {
     process.env.VK_API_URL = 'http://127.0.0.1:3001';
 
     try {
-      const service = new CodexReviewService();
+      const service = new CodexReviewService({
+        worktreeService: {
+          resolvePublicationAuthority: vi.fn().mockResolvedValue({
+            task: await mockGetTask('task_1'),
+            repoPath: '/tmp/repository',
+            worktreePath: '/tmp/review-worktree',
+            branch: 'feature/review',
+            baseBranch: 'main',
+            baseCommit: 'a'.repeat(40),
+            headCommit: 'b'.repeat(40),
+            manifestId: 'worktree_review',
+          }),
+        },
+      });
       await service.reviewTask({ taskId: 'task_1', save: false });
 
       const env = (
