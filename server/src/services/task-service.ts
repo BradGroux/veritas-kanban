@@ -2148,7 +2148,8 @@ export class TaskService {
       const tasks = await this.listTasks();
       const updated: Task[] = [];
 
-      for (let i = 0; i < orderedIds.length; i++) {
+      const reorderCount = Math.min(orderedIds.length, MAX_TASK_REORDER_ITEMS);
+      for (let i = 0; i < reorderCount; i++) {
         const task = tasks.find((candidate) => candidate.id === orderedIds[i]);
         if (task && task.position !== i) {
           const result = await this.withTaskMutex(task.id, () =>
