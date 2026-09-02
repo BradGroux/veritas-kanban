@@ -92,12 +92,34 @@ interface CommandItem extends CommandDescriptor {
   iconNode: ReactNode;
 }
 
+function firstEnabledIndex(commands: readonly CommandItem[]): number {
+  return commands.findIndex((command) => !command.disabledReason);
+}
+
+function nextEnabledIndex(
+  commands: readonly CommandItem[],
+  selectedIndex: number,
+  direction: 1 | -1
+): number {
+  if (commands.length === 0) return -1;
+
+  let index = selectedIndex;
+  for (let visited = 0; visited < commands.length; visited++) {
+    index = (index + direction + commands.length) % commands.length;
+    if (!commands[index]?.disabledReason) return index;
+  }
+
+  return -1;
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchMounted, setSearchMounted] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -179,6 +201,9 @@ export function CommandPalette() {
     return groups;
   }, [filtered]);
 
+  const orderedCommands = useMemo(() => grouped.flatMap((group) => group.items), [grouped]);
+  const unavailableCount = filtered.filter((command) => command.disabledReason).length;
+
   // Reset on open/close
   useEffect(() => {
     if (open) {
@@ -188,12 +213,16 @@ export function CommandPalette() {
     }
   }, [open]);
 
-  // Clamp selected index
+  // Keep selection on an executable command after filtering or registry changes.
   useEffect(() => {
-    if (selectedIndex >= filtered.length) {
-      setSelectedIndex(Math.max(0, filtered.length - 1));
+    if (
+      selectedIndex < 0 ||
+      selectedIndex >= orderedCommands.length ||
+      orderedCommands[selectedIndex]?.disabledReason
+    ) {
+      setSelectedIndex(firstEnabledIndex(orderedCommands));
     }
-  }, [filtered.length, selectedIndex]);
+  }, [orderedCommands, selectedIndex]);
 
   // ⌘K listener
   useEffect(() => {
@@ -220,21 +249,41 @@ export function CommandPalette() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((i) => (i < filtered.length - 1 ? i + 1 : 0));
+      setSelectedIndex((index) => nextEnabledIndex(orderedCommands, index, 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex((i) => (i > 0 ? i - 1 : filtered.length - 1));
-    } else if (e.key === 'Enter' && filtered[selectedIndex]) {
+      setSelectedIndex((index) => nextEnabledIndex(orderedCommands, index, -1));
+    } else if (e.key === 'Enter' && orderedCommands[selectedIndex]) {
       e.preventDefault();
-      runCommand(filtered[selectedIndex]);
+      runCommand(orderedCommands[selectedIndex]);
     }
   };
+
+  const updateScrollCues = useCallback(() => {
+    const viewport = listRef.current;
+    if (!viewport) return;
+
+    const remaining = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+    setCanScrollUp(viewport.scrollTop > 1);
+    setCanScrollDown(remaining > 1);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(updateScrollCues);
+    window.addEventListener('resize', updateScrollCues);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateScrollCues);
+    };
+  }, [open, orderedCommands, updateScrollCues]);
 
   // Scroll selected item into view
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-index="${selectedIndex}"]`);
     el?.scrollIntoView({ block: 'nearest' });
-  }, [selectedIndex]);
+    updateScrollCues();
+  }, [selectedIndex, updateScrollCues]);
 
   // Don't show if help dialog is open
   if (isHelpOpen) return null;
@@ -246,13 +295,17 @@ export function CommandPalette() {
       <Modal
         opened={open}
         onClose={() => setOpen(false)}
-        size={520}
+        size={600}
         padding={0}
         title={<span className="sr-only">Command palette</span>}
         withCloseButton={false}
         classNames={{ content: 'overflow-hidden', header: 'sr-only', body: 'p-0' }}
       >
-        <Box onKeyDown={handleKeyDown}>
+        <Box
+          onKeyDown={handleKeyDown}
+          className="flex h-[min(42rem,calc(100dvh-7rem))] min-h-0 flex-col"
+          data-testid="command-palette-surface"
+        >
           <Text component="p" className="sr-only">
             Search and run board actions, navigation commands, and shortcuts.
           </Text>
@@ -267,6 +320,11 @@ export function CommandPalette() {
               }}
               placeholder="Type a command or search..."
               aria-label="Search commands"
+              aria-activedescendant={
+                orderedCommands[selectedIndex]
+                  ? `command-${orderedCommands[selectedIndex].id}`
+                  : undefined
+              }
               variant="unstyled"
               leftSection={<Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
               className="min-w-0 flex-1"
@@ -279,68 +337,145 @@ export function CommandPalette() {
             </Kbd>
           </Group>
 
-          <ScrollArea viewportRef={listRef} mah={320} p="xs">
-            {filtered.length === 0 ? (
-              <Text ta="center" py="xl" size="sm" c="dimmed">
-                No commands found
-              </Text>
-            ) : (
-              grouped.map((group) => (
-                <Box key={group.category}>
-                  <Text
-                    px="xs"
-                    py={6}
-                    size="xs"
-                    fw={600}
-                    c="dimmed"
-                    tt="uppercase"
-                    className="tracking-wider"
-                  >
-                    {group.category}
-                  </Text>
-                  <Stack gap={2}>
-                    {group.items.map((cmd) => {
-                      flatIndex++;
-                      const idx = flatIndex;
-                      return (
-                        <UnstyledButton
-                          key={cmd.id}
-                          data-index={idx}
-                          disabled={Boolean(cmd.disabledReason)}
-                          title={cmd.disabledReason}
-                          className={cn(
-                            'flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors',
-                            cmd.disabledReason
-                              ? 'cursor-not-allowed opacity-60'
-                              : idx === selectedIndex
-                                ? 'bg-primary/10 text-primary'
-                                : 'text-foreground hover:bg-muted/50'
-                          )}
-                          onClick={() => runCommand(cmd)}
-                          onMouseEnter={() => setSelectedIndex(idx)}
-                        >
-                          <span
+          <Box className="relative min-h-0 flex-1">
+            <ScrollArea
+              viewportRef={listRef}
+              h="100%"
+              p="xs"
+              type="always"
+              scrollbarSize={8}
+              viewportProps={{
+                'aria-label': 'Available commands',
+                onScroll: updateScrollCues,
+              }}
+            >
+              {filtered.length === 0 ? (
+                <Text ta="center" py="xl" size="sm" c="dimmed">
+                  No commands found
+                </Text>
+              ) : (
+                grouped.map((group) => (
+                  <Box key={group.category}>
+                    <Text
+                      px="xs"
+                      py={6}
+                      size="xs"
+                      fw={600}
+                      c="dimmed"
+                      tt="uppercase"
+                      className="tracking-wider"
+                    >
+                      {group.category}
+                    </Text>
+                    <Stack gap={2}>
+                      {group.items.map((cmd) => {
+                        flatIndex++;
+                        const idx = flatIndex;
+                        const isSelected = idx === selectedIndex;
+                        const disabledDescriptionId = cmd.disabledReason
+                          ? `command-disabled-${cmd.id}`
+                          : undefined;
+                        return (
+                          <UnstyledButton
+                            key={cmd.id}
+                            id={`command-${cmd.id}`}
+                            data-index={idx}
+                            data-command-id={cmd.id}
+                            data-selected={isSelected || undefined}
+                            aria-disabled={Boolean(cmd.disabledReason)}
+                            aria-describedby={disabledDescriptionId}
                             className={cn(
-                              'shrink-0',
-                              idx === selectedIndex ? 'text-primary' : 'text-muted-foreground'
+                              'flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                              cmd.disabledReason
+                                ? 'cursor-not-allowed bg-muted/20 text-muted-foreground'
+                                : isSelected
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'text-foreground hover:bg-muted/50'
                             )}
+                            onClick={() => runCommand(cmd)}
+                            onFocus={() => !cmd.disabledReason && setSelectedIndex(idx)}
+                            onMouseEnter={() => !cmd.disabledReason && setSelectedIndex(idx)}
                           >
-                            {cmd.iconNode}
-                          </span>
-                          <span className="flex-1 text-left">{cmd.label}</span>
-                          {cmd.shortcut && (
-                            <Kbd className="ml-auto hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
-                              {cmd.shortcut}
-                            </Kbd>
-                          )}
-                        </UnstyledButton>
-                      );
-                    })}
-                  </Stack>
-                </Box>
-              ))
+                            <span
+                              className={cn(
+                                'shrink-0',
+                                isSelected ? 'text-primary' : 'text-muted-foreground'
+                              )}
+                            >
+                              {cmd.iconNode}
+                            </span>
+                            <span className="min-w-0 flex-1 text-left">
+                              <span className="block">{cmd.label}</span>
+                              {cmd.disabledReason && (
+                                <span
+                                  id={disabledDescriptionId}
+                                  className="mt-0.5 block text-[11px] leading-4 text-muted-foreground/80"
+                                >
+                                  {cmd.disabledReason}
+                                </span>
+                              )}
+                            </span>
+                            {cmd.shortcut && (
+                              <Kbd className="ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
+                                {cmd.shortcut}
+                              </Kbd>
+                            )}
+                          </UnstyledButton>
+                        );
+                      })}
+                    </Stack>
+                  </Box>
+                ))
+              )}
+            </ScrollArea>
+            {canScrollUp && (
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent"
+                aria-hidden="true"
+                data-testid="commands-above-cue"
+              />
             )}
-          </ScrollArea>
+            {canScrollDown && (
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background to-transparent"
+                aria-hidden="true"
+                data-testid="commands-below-cue"
+              />
+            )}
+          </Box>
+
+          <Group
+            justify="space-between"
+            gap="xs"
+            px="md"
+            py={8}
+            wrap="nowrap"
+            className="shrink-0 border-t bg-muted/20"
+          >
+            <Text size="xs" c="dimmed">
+              {filtered.length} command{filtered.length === 1 ? '' : 's'}
+              {unavailableCount > 0 ? ` · ${unavailableCount} unavailable` : ''}
+            </Text>
+            <Text size="xs" c="dimmed" aria-live="polite">
+              {canScrollUp && canScrollDown
+                ? 'More above and below'
+                : canScrollUp
+                  ? 'More commands above'
+                  : canScrollDown
+                    ? 'More commands below'
+                    : 'All commands visible'}
+            </Text>
+            <Group gap={6} wrap="nowrap" className="hidden sm:flex">
+              <Kbd>↑↓</Kbd>
+              <Text size="xs" c="dimmed">
+                Navigate
+              </Text>
+              <Kbd>Enter</Kbd>
+              <Text size="xs" c="dimmed">
+                Run
+              </Text>
+            </Group>
+          </Group>
         </Box>
       </Modal>
       {searchMounted && (
