@@ -3,8 +3,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import express from 'express';
+import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppConfig, Task } from '@veritas-kanban/shared';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const execFileAsync = promisify(execFile);
 const fixtures = vi.hoisted(() => ({
@@ -34,12 +37,15 @@ vi.mock('../services/task-service.js', () => ({
   },
 }));
 
-import { GitHubService } from '../services/github-service.js';
+import { GitHubService, githubRepositoryFromRemote } from '../services/github-service.js';
 import {
   WorktreeService,
   type WorktreePublicationAuthority,
 } from '../services/worktree-service.js';
 import { FileWorktreeManifestRepository } from '../storage/worktree-manifest-repository.js';
+import { errorHandler } from '../middleware/error-handler.js';
+import { createGitHubPRHandler } from '../routes/github.js';
+import { taskAccess } from '../routes/v1/permissions.js';
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const result = await execFileAsync('git', args, { cwd });
@@ -143,6 +149,17 @@ describe('GitHubService repository publication boundary', () => {
     return { taskStore, configSource, worktreeService, manifestRepository };
   }
 
+  it('derives only a credential-free GitHub repository slug from verified remotes', () => {
+    expect(
+      githubRepositoryFromRemote(
+        'https://publication-token:secret-value@github.com/BradGroux/veritas-kanban.git'
+      )
+    ).toBe('BradGroux/veritas-kanban');
+    expect(githubRepositoryFromRemote('git@github.com:BradGroux/veritas-kanban.git')).toBe(
+      'BradGroux/veritas-kanban'
+    );
+  });
+
   async function prepareManagedBranch(
     remoteBehind = false
   ): Promise<ReturnType<typeof managedServices>> {
@@ -222,6 +239,7 @@ describe('GitHubService repository publication boundary', () => {
       taskService: taskStore,
       configService: configSource,
       worktreeService,
+      repositoryResolver: () => 'BradGroux/veritas-kanban',
     });
 
     await expect(service.createPR({ taskId: 'task_publication' })).rejects.toThrow(
@@ -236,6 +254,7 @@ describe('GitHubService repository publication boundary', () => {
       taskService: taskStore,
       configService: configSource,
       worktreeService,
+      repositoryResolver: () => 'BradGroux/veritas-kanban',
     });
     vi.spyOn(service, 'checkGhCli').mockResolvedValue({
       installed: true,
@@ -256,12 +275,61 @@ describe('GitHubService repository publication boundary', () => {
     );
   });
 
+  it('enforces the publication boundary for an authenticated agent task-write request', async () => {
+    const { taskStore, configSource, worktreeService } = await prepareManagedBranch(true);
+    await installFakeGh();
+    const service = new GitHubService({
+      taskService: taskStore,
+      configService: configSource,
+      worktreeService,
+      repositoryResolver: () => 'BradGroux/veritas-kanban',
+    });
+    vi.spyOn(service, 'checkGhCli').mockResolvedValue({
+      installed: true,
+      authenticated: true,
+      user: 'VeritasTest',
+    });
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      (req as AuthenticatedRequest).auth = { role: 'agent', isLocalhost: false };
+      next();
+    });
+    app.post('/api/v1/github/pr', taskAccess, createGitHubPRHandler(service));
+    app.use(errorHandler);
+
+    const rejected = await request(app).post('/api/v1/github/pr').send({
+      taskId: 'task_publication',
+      targetBranch: 'HEAD:refs/heads/canary',
+    });
+    expect(rejected.status).toBe(400);
+    await expect(git(remotePath, 'show-ref', '--verify', 'refs/heads/canary')).rejects.toThrow();
+
+    const accepted = await request(app).post('/api/v1/github/pr').send({
+      taskId: 'task_publication',
+    });
+    expect(accepted.status).toBe(201);
+    expect(accepted.body).toEqual(
+      expect.objectContaining({
+        url: 'https://github.com/example/repo/pull/17',
+        headBranch: 'feature/repository-publication',
+        baseBranch: 'main',
+      })
+    );
+  });
+
   it('binds publication to the captured commit and remote when mutable Git state drifts', async () => {
     const { taskStore, configSource, worktreeService } = await prepareManagedBranch(true);
     await installFakeGh();
     const decoyRemotePath = path.join(root, 'decoy.git');
     await fs.mkdir(decoyRemotePath, { recursive: true });
     await git(decoyRemotePath, 'init', '--bare', '--initial-branch=main');
+    await git(
+      fixtures.task!.git!.worktreePath!,
+      'config',
+      'remote.veritas-publication-authority.pushurl',
+      decoyRemotePath
+    );
     let capturedHead = '';
     const authoritySource = {
       resolvePublicationAuthority: (taskId: string) =>
@@ -283,6 +351,7 @@ describe('GitHubService repository publication boundary', () => {
       taskService: taskStore,
       configService: configSource,
       worktreeService: authoritySource,
+      repositoryResolver: () => 'BradGroux/veritas-kanban',
     });
     vi.spyOn(service, 'checkGhCli').mockResolvedValue({
       installed: true,
@@ -310,6 +379,7 @@ describe('GitHubService repository publication boundary', () => {
       taskService: taskStore,
       configService: configSource,
       worktreeService,
+      repositoryResolver: () => 'BradGroux/veritas-kanban',
     });
 
     await expect(
@@ -387,6 +457,7 @@ describe('GitHubService repository publication boundary', () => {
       taskService: taskStore,
       configService: configSource,
       worktreeService,
+      repositoryResolver: () => 'BradGroux/veritas-kanban',
     });
     vi.spyOn(service, 'checkGhCli').mockResolvedValue({
       installed: true,

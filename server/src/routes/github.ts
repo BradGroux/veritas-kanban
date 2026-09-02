@@ -1,4 +1,4 @@
-import { Router, type Router as RouterType } from 'express';
+import { Router, type RequestHandler, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { GitHubService } from '../services/github-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
@@ -46,10 +46,10 @@ router.get(
   })
 );
 
-// POST /api/github/pr - Create a PR for a task
-router.post(
-  '/pr',
-  asyncHandler(async (req, res) => {
+export function createGitHubPRHandler(
+  service: Pick<GitHubService, 'createPR'> = githubService
+): RequestHandler {
+  return asyncHandler(async (req, res) => {
     let input;
     try {
       input = createPRSchema.parse(req.body);
@@ -59,10 +59,13 @@ router.post(
       }
       throw error;
     }
-    const pr = await githubService.createPR(input);
+    const pr = await service.createPR(input);
     res.status(201).json(pr);
-  })
-);
+  });
+}
+
+// POST /api/github/pr - Create a PR for a task
+router.post('/pr', createGitHubPRHandler());
 
 // POST /api/github/pr/:taskId/open - Open PR in browser
 router.post(

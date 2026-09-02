@@ -1,4 +1,5 @@
 import { exec, execFile } from 'child_process';
+import { URL } from 'node:url';
 import { promisify } from 'util';
 import { nanoid } from 'nanoid';
 import { ConfigService } from './config-service.js';
@@ -10,6 +11,25 @@ import { ConflictError } from '../middleware/error-handler.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+
+export function githubRepositoryFromRemote(remoteUrl: string): string {
+  let repositoryPath: string | undefined;
+  try {
+    const parsed = new URL(remoteUrl);
+    if (parsed.hostname.toLowerCase() === 'github.com') {
+      repositoryPath = parsed.pathname;
+    }
+  } catch {
+    const scpMatch = remoteUrl.match(/^(?:[^@/]+@)?github\.com:(.+)$/i);
+    repositoryPath = scpMatch?.[1];
+  }
+
+  const repository = repositoryPath?.replace(/^\/+/, '').replace(/\.git$/, '');
+  if (repository && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    return repository;
+  }
+  throw new Error('Could not determine GitHub owner/repo from the managed repository remote');
+}
 
 export interface CreatePRInput {
   taskId: string;
@@ -53,6 +73,7 @@ export interface GitHubServiceOptions {
   taskService?: GitHubTaskStore;
   configService?: GitHubConfigSource;
   worktreeService?: PublicationAuthoritySource;
+  repositoryResolver?: (remoteUrl: string) => string;
 }
 
 export type CodexCloudTarget = 'issue' | 'issue-comment' | 'pr-comment';
@@ -79,6 +100,7 @@ export class GitHubService {
   private readonly configService: GitHubConfigSource;
   private readonly taskService: GitHubTaskStore;
   private readonly worktreeService: PublicationAuthoritySource;
+  private readonly repositoryResolver: (remoteUrl: string) => string;
 
   constructor(options: GitHubServiceOptions = {}) {
     this.configService = options.configService ?? new ConfigService();
@@ -89,6 +111,7 @@ export class GitHubService {
         taskService: this.taskService,
         configService: this.configService,
       });
+    this.repositoryResolver = options.repositoryResolver ?? githubRepositoryFromRemote;
   }
 
   private expandPath(p: string): string {
@@ -343,32 +366,22 @@ export class GitHubService {
           authorizedBase: currentAuthority.baseBranch,
         });
       }
-      const expectedRepository = await this.getRepoNameWithOwnerForRemote(
-        currentAuthority.repoPath,
-        currentAuthority.originUrl
-      );
-      const match = await this.getPRForBranch(
-        currentAuthority.repoPath,
-        currentAuthority.branch,
-        currentAuthority.baseBranch,
-        expectedRepository
-      );
-      if (match) {
-        await this.associatePR(input.taskId, currentAuthority, match.url, match.number);
-        return match;
-      }
+      const expectedRepository = this.repositoryResolver(currentAuthority.originUrl);
 
-      const publicationRemote = 'veritas-publication-authority';
+      const publicationRemote = `veritas-publication-${nanoid(12)}`;
       const publicationRemoteEnv = 'VERITAS_PUBLICATION_REMOTE_URL';
       const publicationEnvironment = {
         ...process.env,
         [publicationRemoteEnv]: currentAuthority.originUrl,
       };
-      const remoteConfig = `--config-env=remote.${publicationRemote}.url=${publicationRemoteEnv}`;
+      const remoteConfig = [
+        `--config-env=remote.${publicationRemote}.url=${publicationRemoteEnv}`,
+        `--config-env=remote.${publicationRemote}.pushurl=${publicationRemoteEnv}`,
+      ];
       const headRef = `refs/heads/${currentAuthority.branch}`;
       const { stdout: existingRemoteOutput } = await execFileAsync(
         'git',
-        [remoteConfig, 'ls-remote', '--heads', publicationRemote, headRef],
+        [...remoteConfig, 'ls-remote', '--heads', publicationRemote, headRef],
         { cwd: currentAuthority.worktreePath, env: publicationEnvironment }
       );
       const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
@@ -388,7 +401,7 @@ export class GitHubService {
       }
       await execFileAsync(
         'git',
-        [remoteConfig, 'push', publicationRemote, `${currentAuthority.headCommit}:${headRef}`],
+        [...remoteConfig, 'push', publicationRemote, `${currentAuthority.headCommit}:${headRef}`],
         {
           cwd: currentAuthority.worktreePath,
           env: publicationEnvironment,
@@ -396,7 +409,7 @@ export class GitHubService {
       );
       const { stdout: remoteHeadOutput } = await execFileAsync(
         'git',
-        [remoteConfig, 'ls-remote', '--exit-code', publicationRemote, headRef],
+        [...remoteConfig, 'ls-remote', '--exit-code', publicationRemote, headRef],
         { cwd: currentAuthority.worktreePath, env: publicationEnvironment }
       );
       const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
@@ -408,6 +421,16 @@ export class GitHubService {
             manifestId: currentAuthority.manifestId,
           }
         );
+      }
+      const match = await this.getPRForBranch(
+        currentAuthority.repoPath,
+        currentAuthority.branch,
+        currentAuthority.baseBranch,
+        expectedRepository
+      );
+      if (match) {
+        await this.associatePR(input.taskId, currentAuthority, match.url, match.number);
+        return match;
       }
       const task = currentAuthority.task;
       const prTitle = input.title || task.title;
@@ -580,27 +603,6 @@ export class GitHubService {
     const match = remote?.match(/github\.com[:/](.+?\/.+?)(?:\.git)?$/);
     if (match?.[1]) return match[1];
     throw new Error('Could not determine GitHub owner/repo for Codex Cloud delegation');
-  }
-
-  private async getRepoNameWithOwnerForRemote(
-    repoPath: string,
-    remoteUrl: string
-  ): Promise<string> {
-    try {
-      const { stdout } = await execFileAsync(
-        'gh',
-        ['repo', 'view', remoteUrl, '--json', 'nameWithOwner'],
-        { cwd: repoPath }
-      );
-      const parsed = JSON.parse(stdout) as { nameWithOwner?: string };
-      if (parsed.nameWithOwner) return parsed.nameWithOwner;
-    } catch {
-      // Fall back to parsing the already verified remote URL.
-    }
-
-    const match = remoteUrl.match(/github\.com[:/](.+?\/.+?)(?:\.git)?$/);
-    if (match?.[1]) return match[1];
-    throw new Error('Could not determine GitHub owner/repo from the managed repository remote');
   }
 
   private async getIssueInfo(
