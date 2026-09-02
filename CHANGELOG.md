@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.4] - 2026-09-02
+
+Veritas Kanban 6.1.4 is a focused security release that binds repository
+publication to the managed task worktree and its captured Git state.
+
+### Security
+
+- Validated task and pull-request branch inputs as canonical Git branch names.
+- Bound pull-request lookup, push, creation, and readback to the configured
+  repository, captured commit, exact head and base branches, and verified
+  origin.
+- Isolated publication transport from repository-controlled Git configuration
+  and rejected missing, stale, or mismatched publication authority.
+- Updated the `fast-uri` security override to patched version 3.1.6.
+
 ## [6.1.3] - 2026-08-30
 
 Veritas Kanban 6.1.3 adds governed file artifacts, provenance-aware execution,
@@ -2617,7 +2632,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.3...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.4...HEAD
+[6.1.4]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.3...v6.1.4
 [6.1.3]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.2...v6.1.3
 [6.1.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.1...v6.1.2
 [6.1.1]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.0...v6.1.1
