@@ -14,7 +14,9 @@ import {
 import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
+import { registerOpenTaskConflictSurface, resolveTaskConflict } from '@/hooks/useTaskConflicts';
 import { ChatPanel } from '@/components/chat/ChatPanel';
+import { TaskConflictAlert } from './TaskConflictAlert';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
 import { WorkflowSection } from './WorkflowSection';
 import { shouldDefaultTaskDetailToWork } from './TaskWorkView';
@@ -61,7 +63,8 @@ export function TaskDetailPanel({
   const taskSettings = featureSettings.tasks;
   const agentSettings = featureSettings.agents;
   const canUseLocalAgentControls = clientAllowsLocalAgentControls(authContext);
-  const { localTask, updateField, isDirty } = useDebouncedSave(task);
+  const { localTask, updateField, isDirty, isSaving, conflict, retryConflict, discardConflict } =
+    useDebouncedSave(task);
   const [activeTab, setActiveTab] = useState<TaskDetailTabId>('details');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
@@ -73,6 +76,12 @@ export function TaskDetailPanel({
   const addObservation = useAddObservation();
   const deleteObservation = useDeleteObservation();
   const nestedOverlayOpen = previewOpen || applyTemplateOpen || taskChatOpen || workflowOpen;
+  const activeTaskId = localTask?.id;
+
+  useEffect(() => {
+    if (!open || !activeTaskId) return;
+    return registerOpenTaskConflictSurface(activeTaskId);
+  }, [activeTaskId, open]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -86,7 +95,6 @@ export function TaskDetailPanel({
 
   const isCodeTask = localTask?.type === 'code';
   const hasWorktree = !!localTask?.git?.worktreePath;
-  const activeTaskId = localTask?.id;
   const defaultTab = localTask && shouldDefaultTaskDetailToWork(localTask) ? 'work' : 'details';
   const tabAvailabilityContext = useMemo(
     () => ({
@@ -230,7 +238,7 @@ export function TaskDetailPanel({
                     )}
                     {!readOnly && isDirty && (
                       <Text size="xs" c="yellow.5">
-                        Saving...
+                        {isSaving ? 'Saving...' : 'Unsaved changes'}
                       </Text>
                     )}
                     <ActionIcon
@@ -262,6 +270,16 @@ export function TaskDetailPanel({
                   )}
                 </Drawer.Title>
               </header>
+
+              {conflict && (
+                <TaskConflictAlert
+                  conflict={conflict}
+                  taskTitle={localTask.title}
+                  onRetry={retryConflict}
+                  onDiscard={discardConflict}
+                  onDismiss={() => resolveTaskConflict(localTask.id)}
+                />
+              )}
 
               {/* Action buttons above tabs */}
               <SimpleGrid
