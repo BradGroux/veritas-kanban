@@ -1,6 +1,7 @@
 import { simpleGit } from 'simple-git';
 import { nanoid } from 'nanoid';
 import { TaskService } from './task-service.js';
+import { WorktreeService } from './worktree-service.js';
 import type { ReviewComment, ReviewDecision, Task } from '@veritas-kanban/shared';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
 
@@ -30,24 +31,23 @@ export interface CodexReviewResult {
 }
 
 export class CodexReviewService {
-  private taskService: TaskService;
+  private readonly taskService: TaskService;
+  private readonly worktreeService: Pick<WorktreeService, 'resolvePublicationAuthority'>;
 
-  constructor() {
+  constructor(
+    options: {
+      worktreeService?: Pick<WorktreeService, 'resolvePublicationAuthority'>;
+    } = {}
+  ) {
     this.taskService = new TaskService();
-  }
-
-  private expandPath(p: string): string {
-    return p.replace(/^~/, process.env.HOME || '');
+    this.worktreeService = options.worktreeService ?? new WorktreeService();
   }
 
   async reviewTask(input: CodexReviewInput): Promise<CodexReviewResult> {
-    const task = await this.taskService.getTask(input.taskId);
-    if (!task) throw new Error('Task not found');
-    if (!task.git?.worktreePath) throw new Error('Task must have an active worktree to review');
-
-    const worktreePath = this.expandPath(task.git.worktreePath);
-    const baseBranch = task.git.baseBranch || 'main';
-    const diff = await simpleGit(worktreePath).diff([baseBranch]);
+    const authority = await this.worktreeService.resolvePublicationAuthority(input.taskId);
+    const task = authority.task;
+    const worktreePath = authority.worktreePath;
+    const diff = await simpleGit(worktreePath).diff([authority.baseCommit]);
     if (!diff.trim()) throw new Error('Task branch has no diff to review');
 
     const prompt = this.buildReviewPrompt(task, diff, input.instructions);

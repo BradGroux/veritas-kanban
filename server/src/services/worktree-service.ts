@@ -179,6 +179,17 @@ interface RepoContext {
   identity: WorktreeRepositoryIdentity;
 }
 
+export interface WorktreePublicationAuthority {
+  task: Task;
+  repoPath: string;
+  worktreePath: string;
+  branch: string;
+  baseBranch: string;
+  baseCommit: string;
+  headCommit: string;
+  manifestId: string;
+}
+
 export interface WorktreeServiceOptions {
   worktreesDir?: string;
   taskService?: WorktreeTaskStore;
@@ -357,6 +368,7 @@ export class WorktreeService {
         );
       }
       const repo = await this.getRepoContext(task.git.repo);
+      await this.validateRefNames(repo.rootPath, task.git.branch, task.git.baseBranch);
       return this.manifests.withAllocationLock(repo.identity.commonGitDir, async () => {
         const existing = await this.manifests.read(taskId);
         if (existing && existing.lifecycle.cleanup !== 'removed') {
@@ -606,6 +618,13 @@ export class WorktreeService {
     return this.buildWorktreeInfo(taskId, task, manifest);
   }
 
+  async resolvePublicationAuthority(taskId: string): Promise<WorktreePublicationAuthority> {
+    validatePathSegment(taskId);
+    return this.manifests.withTaskLock(taskId, () =>
+      this.resolvePublicationAuthorityLocked(taskId)
+    );
+  }
+
   async previewCleanup(taskId: string): Promise<WorktreeCleanupPreview> {
     const task = await this.taskService.getTask(taskId);
     const manifest = await this.requireActiveManifest(taskId);
@@ -717,6 +736,7 @@ export class WorktreeService {
       this.assertNoActiveRun(task);
       let manifest = await this.requireActiveManifest(taskId);
       const repo = await this.getRepoContext(task.git.repo);
+      await this.validateRefNames(repo.rootPath, task.git.branch, task.git.baseBranch);
       this.assertManifestOwnership(manifest, task, repo);
       this.assertNoCompetingLease(task, manifest);
       await this.assertWorktreeIdentity(manifest);
@@ -771,6 +791,7 @@ export class WorktreeService {
       this.assertNoActiveRun(task);
       let manifest = await this.requireActiveManifest(taskId);
       const repo = await this.getRepoContext(task.git.repo);
+      await this.validateRefNames(repo.rootPath, task.git.branch, task.git.baseBranch);
       this.assertManifestOwnership(manifest, task, repo);
       this.assertNoCompetingLease(task, manifest);
       const sourceExists = await fileExists(manifest.path);
@@ -1182,11 +1203,7 @@ export class WorktreeService {
       });
     }
     const status = await simpleGit(manifest.path).status(['--untracked-files=all']);
-    const comparisonBase =
-      (await this.tryResolveCommit(
-        manifest.repository.rootPath,
-        `refs/remotes/origin/${manifest.base.branch}^{commit}`
-      )) ?? manifest.base.commit;
+    const comparisonBase = manifest.base.commit;
     const counts = await this.git.run(manifest.path, [
       'rev-list',
       '--left-right',
@@ -1482,6 +1499,97 @@ export class WorktreeService {
     };
   }
 
+  private async resolvePublicationAuthorityLocked(
+    taskId: string
+  ): Promise<WorktreePublicationAuthority> {
+    const task = await this.requireCodeTask(taskId);
+    const manifest = await this.manifests.read(taskId);
+    if (!manifest || manifest.lifecycle.cleanup === 'removed') {
+      throw new ConflictError('PR publication requires an active managed worktree.', {
+        taskId,
+        remediation: 'Create or adopt the task worktree before publishing it.',
+      });
+    }
+    const repo = await this.getRepoContext(task.git.repo);
+    await this.validateRefNames(repo.rootPath, manifest.branch, manifest.base.branch);
+    this.assertManifestOwnership(manifest, task, repo);
+
+    if (manifest.lifecycle.creation !== 'ready') {
+      throw new ConflictError('The worktree is not ready for repository publication.', {
+        taskId,
+        manifestId: manifest.id,
+        creation: manifest.lifecycle.creation,
+      });
+    }
+    if (!['active', 'blocked'].includes(manifest.lifecycle.cleanup)) {
+      throw new ConflictError('The worktree is not active for repository publication.', {
+        taskId,
+        manifestId: manifest.id,
+        cleanup: manifest.lifecycle.cleanup,
+      });
+    }
+    if (
+      task.git.worktreeManifestId !== manifest.id ||
+      task.git.worktreeLeaseId !== manifest.lease.id ||
+      task.git.worktreePath !== manifest.path
+    ) {
+      throw new ConflictError('The task allocation does not match the durable worktree manifest.', {
+        taskId,
+        manifestId: manifest.id,
+        remediation: 'Reconcile or adopt the task worktree before publishing it.',
+      });
+    }
+    if (!(await fileExists(manifest.path))) {
+      throw new ConflictError('The managed worktree path is missing.', {
+        taskId,
+        manifestId: manifest.id,
+      });
+    }
+
+    const canonicalPath = await realpath(manifest.path);
+    await this.assertPathRepositoryIdentity(canonicalPath, repo.identity);
+    const actualBranch = await this.currentBranch(canonicalPath);
+    if (actualBranch !== manifest.branch) {
+      throw new ConflictError('The worktree branch does not match its publication authority.', {
+        taskId,
+        expected: manifest.branch,
+        actual: actualBranch,
+      });
+    }
+
+    const registered = parseWorktreeList(
+      (await this.git.run(repo.rootPath, ['worktree', 'list', '--porcelain'])).stdout
+    );
+    const exactRegistration = await Promise.all(
+      registered.map(async (worktree) => ({
+        ...worktree,
+        canonicalPath: await realpath(worktree.path).catch(() => path.resolve(worktree.path)),
+      }))
+    ).then((worktrees) =>
+      worktrees.find(
+        (worktree) =>
+          worktree.canonicalPath === canonicalPath && worktree.branch === manifest.branch
+      )
+    );
+    if (!exactRegistration) {
+      throw new ConflictError('The publication path is not the task-owned Git worktree.', {
+        taskId,
+        manifestId: manifest.id,
+      });
+    }
+
+    return {
+      task: structuredClone(task),
+      repoPath: repo.rootPath,
+      worktreePath: canonicalPath,
+      branch: manifest.branch,
+      baseBranch: manifest.base.branch,
+      baseCommit: manifest.base.commit,
+      headCommit: await this.resolveCommit(canonicalPath, 'HEAD^{commit}'),
+      manifestId: manifest.id,
+    };
+  }
+
   private async repoContextForManifest(
     task: Task | null,
     manifest: WorktreeManifest
@@ -1562,6 +1670,8 @@ export class WorktreeService {
   private assertManifestOwnership(manifest: WorktreeManifest, task: Task, repo: RepoContext): void {
     if (
       manifest.taskId !== task.id ||
+      manifest.repository.name !== task.git?.repo ||
+      manifest.repository.rootPath !== repo.rootPath ||
       manifest.branch !== task.git?.branch ||
       manifest.base.branch !== task.git?.baseBranch ||
       manifest.repository.commonGitDir !== repo.identity.commonGitDir ||

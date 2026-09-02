@@ -1,0 +1,293 @@
+import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AppConfig, Task } from '@veritas-kanban/shared';
+
+const execFileAsync = promisify(execFile);
+const fixtures = vi.hoisted(() => ({
+  config: undefined as AppConfig | undefined,
+  task: undefined as Task | undefined,
+}));
+
+vi.mock('../services/config-service.js', () => ({
+  ConfigService: class MockConfigService {
+    async getConfig(): Promise<AppConfig> {
+      if (!fixtures.config) throw new Error('config fixture is not initialized');
+      return structuredClone(fixtures.config);
+    }
+  },
+}));
+
+vi.mock('../services/task-service.js', () => ({
+  TaskService: class MockTaskService {
+    async getTask(taskId: string): Promise<Task | null> {
+      return fixtures.task?.id === taskId ? structuredClone(fixtures.task) : null;
+    }
+
+    async updateTask(): Promise<Task> {
+      if (!fixtures.task) throw new Error('task fixture is not initialized');
+      return structuredClone(fixtures.task);
+    }
+  },
+}));
+
+import { GitHubService } from '../services/github-service.js';
+import { WorktreeService } from '../services/worktree-service.js';
+import { FileWorktreeManifestRepository } from '../storage/worktree-manifest-repository.js';
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  const result = await execFileAsync('git', args, { cwd });
+  return result.stdout.trim();
+}
+
+describe('GitHubService repository publication boundary', () => {
+  let root: string;
+  let remotePath: string;
+  let primaryPath: string;
+  let originalPath: string | undefined;
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-github-service-'));
+    remotePath = path.join(root, 'remote.git');
+    primaryPath = path.join(root, 'primary');
+    originalPath = process.env.PATH;
+
+    await fs.mkdir(remotePath, { recursive: true });
+    await git(remotePath, 'init', '--bare', '--initial-branch=main');
+    await git(root, 'clone', remotePath, primaryPath);
+    await git(primaryPath, 'config', 'user.name', 'Veritas Test');
+    await git(primaryPath, 'config', 'user.email', 'veritas@example.test');
+    await fs.writeFile(path.join(primaryPath, 'README.md'), 'baseline\n');
+    await git(primaryPath, 'add', 'README.md');
+    await git(primaryPath, 'commit', '-m', 'baseline');
+    await git(primaryPath, 'push', '-u', 'origin', 'main');
+
+    fixtures.config = {
+      repos: [{ name: 'veritas', path: primaryPath, defaultBranch: 'main' }],
+      agents: [],
+      defaultAgent: 'codex',
+    };
+    fixtures.task = {
+      id: 'task_publication',
+      title: 'Repository publication boundary',
+      description: '',
+      type: 'code',
+      status: 'todo',
+      priority: 'high',
+      created: '2026-09-02T12:00:00.000Z',
+      updated: '2026-09-02T12:00:00.000Z',
+      git: {
+        repo: 'veritas',
+        branch: 'HEAD:refs/heads/canary',
+        baseBranch: 'main',
+        worktreePath: primaryPath,
+      },
+    };
+  });
+
+  afterEach(async () => {
+    fixtures.config = undefined;
+    fixtures.task = undefined;
+    process.env.PATH = originalPath;
+    delete process.env.GH_ARGS_FILE;
+    delete process.env.GH_LIST_JSON;
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  function managedServices(): {
+    taskStore: {
+      getTask(taskId: string): Promise<Task | null>;
+      updateTask(taskId: string, update: Partial<Task>): Promise<Task | null>;
+    };
+    configSource: { getConfig(): Promise<AppConfig> };
+    worktreeService: WorktreeService;
+  } {
+    const taskStore = {
+      async getTask(taskId: string): Promise<Task | null> {
+        return fixtures.task?.id === taskId ? structuredClone(fixtures.task) : null;
+      },
+      async updateTask(taskId: string, update: Partial<Task>): Promise<Task | null> {
+        if (!fixtures.task || fixtures.task.id !== taskId) return null;
+        fixtures.task = {
+          ...fixtures.task,
+          ...structuredClone(update),
+          git: update.git
+            ? ({ ...fixtures.task.git, ...structuredClone(update.git) } as Task['git'])
+            : fixtures.task.git,
+        };
+        return structuredClone(fixtures.task);
+      },
+    };
+    const configSource = {
+      async getConfig(): Promise<AppConfig> {
+        if (!fixtures.config) throw new Error('config fixture is not initialized');
+        return structuredClone(fixtures.config);
+      },
+    };
+    const worktreeService = new WorktreeService({
+      worktreesDir: path.join(root, 'worktrees'),
+      taskService: taskStore,
+      configService: configSource,
+      manifestRepository: new FileWorktreeManifestRepository({
+        manifestsDir: path.join(root, 'worktree-manifests'),
+      }),
+    });
+    return { taskStore, configSource, worktreeService };
+  }
+
+  async function prepareManagedBranch(
+    remoteBehind = false
+  ): Promise<ReturnType<typeof managedServices>> {
+    fixtures.task = {
+      ...fixtures.task!,
+      git: {
+        repo: 'veritas',
+        branch: 'feature/repository-publication',
+        baseBranch: 'main',
+      },
+    };
+    const services = managedServices();
+    const info = await services.worktreeService.createWorktree('task_publication');
+    if (remoteBehind) {
+      await git(info.path, 'push', '-u', 'origin', 'feature/repository-publication');
+    }
+    await fs.writeFile(path.join(info.path, 'change.txt'), 'managed change\n');
+    await git(info.path, 'add', 'change.txt');
+    await git(info.path, 'commit', '-m', 'managed change');
+    return services;
+  }
+
+  async function installFakeGh(): Promise<string> {
+    const binDir = path.join(root, 'bin');
+    const argsFile = path.join(root, 'gh-args.txt');
+    const ghPath = path.join(binDir, 'gh');
+    await fs.mkdir(binDir, { recursive: true });
+    await fs.writeFile(
+      ghPath,
+      '#!/bin/sh\nif [ "$1" = "repo" ] && [ "$2" = "view" ]; then\n  printf \'%s\\n\' \'{"nameWithOwner":"BradGroux/veritas-kanban"}\'\n  exit 0\nfi\nif [ "$1" = "pr" ] && [ "$2" = "list" ]; then\n  printf \'%s\\n\' "$GH_LIST_JSON"\n  exit 0\nfi\nprintf \'%s\\n\' "$@" > "$GH_ARGS_FILE"\nprintf \'https://github.com/example/repo/pull/17\\n\'\n'
+    );
+    await fs.chmod(ghPath, 0o755);
+    process.env.PATH = `${binDir}:${originalPath ?? ''}`;
+    process.env.GH_ARGS_FILE = argsFile;
+    return argsFile;
+  }
+
+  it('rejects a refspec-shaped task branch before it mutates the remote', async () => {
+    const service = new GitHubService();
+    vi.spyOn(service, 'checkGhCli').mockResolvedValue({
+      installed: true,
+      authenticated: true,
+      user: 'VeritasTest',
+    });
+    vi.spyOn(service, 'getPRForBranch').mockResolvedValue(null);
+
+    await service.createPR({ taskId: 'task_publication' }).catch(() => undefined);
+
+    await expect(git(remotePath, 'show-ref', '--verify', 'refs/heads/canary')).rejects.toThrow();
+  });
+
+  it('publishes only the exact managed branch to a throwaway bare remote', async () => {
+    const { taskStore, configSource, worktreeService } = await prepareManagedBranch(true);
+    const argsFile = await installFakeGh();
+    const service = new GitHubService({
+      taskService: taskStore,
+      configService: configSource,
+      worktreeService,
+    });
+    vi.spyOn(service, 'checkGhCli').mockResolvedValue({
+      installed: true,
+      authenticated: true,
+      user: 'VeritasTest',
+    });
+    vi.spyOn(service, 'getPRForBranch').mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+
+    const result = await service.createPR({ taskId: 'task_publication' });
+    const worktreePath = fixtures.task!.git!.worktreePath!;
+
+    expect(result.url).toBe('https://github.com/example/repo/pull/17');
+    expect(await git(remotePath, 'rev-parse', 'refs/heads/feature/repository-publication')).toBe(
+      await git(worktreePath, 'rev-parse', 'HEAD')
+    );
+    expect((await fs.readFile(argsFile, 'utf8')).split('\n')).toEqual(
+      expect.arrayContaining(['--base', 'main', '--head', 'feature/repository-publication'])
+    );
+  });
+
+  it('rejects a mismatched requested base before publication', async () => {
+    const { taskStore, configSource, worktreeService } = await prepareManagedBranch();
+    const service = new GitHubService({
+      taskService: taskStore,
+      configService: configSource,
+      worktreeService,
+    });
+
+    await expect(
+      service.createPR({ taskId: 'task_publication', targetBranch: 'release/other' })
+    ).rejects.toThrow(/does not match the managed worktree/i);
+    await expect(
+      git(remotePath, 'show-ref', '--verify', 'refs/heads/feature/repository-publication')
+    ).rejects.toThrow();
+  });
+
+  it('does not adopt a same-named PR from a fork repository', async () => {
+    const argsFile = await installFakeGh();
+    process.env.GH_LIST_JSON = JSON.stringify([
+      {
+        url: 'https://github.com/BradGroux/veritas-kanban/pull/99',
+        number: 99,
+        title: 'Fork branch',
+        state: 'OPEN',
+        isDraft: false,
+        headRefName: 'feature/repository-publication',
+        baseRefName: 'main',
+        headRepository: { nameWithOwner: 'someone-else/veritas-kanban' },
+      },
+    ]);
+    const service = new GitHubService();
+
+    await expect(
+      service.getPRForBranch(primaryPath, 'feature/repository-publication', 'main')
+    ).resolves.toBeNull();
+    await expect(fs.readFile(argsFile, 'utf8')).rejects.toThrow();
+  });
+
+  it('rejects task allocation and origin drift', async () => {
+    const { worktreeService } = await prepareManagedBranch();
+    const managedPath = fixtures.task!.git!.worktreePath!;
+    fixtures.task!.git!.worktreePath = primaryPath;
+    await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
+      /allocation does not match/i
+    );
+
+    fixtures.task!.git!.worktreePath = managedPath;
+    await git(primaryPath, 'remote', 'set-url', 'origin', path.join(root, 'other.git'));
+    await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
+      /durable worktree manifest/i
+    );
+  });
+
+  it('stops before PR creation when the explicit push fails', async () => {
+    const { taskStore, configSource, worktreeService } = await prepareManagedBranch();
+    const hookPath = path.join(remotePath, 'hooks', 'pre-receive');
+    await fs.writeFile(hookPath, '#!/bin/sh\nexit 1\n');
+    await fs.chmod(hookPath, 0o755);
+    const argsFile = await installFakeGh();
+    const service = new GitHubService({
+      taskService: taskStore,
+      configService: configSource,
+      worktreeService,
+    });
+    vi.spyOn(service, 'checkGhCli').mockResolvedValue({
+      installed: true,
+      authenticated: true,
+      user: 'VeritasTest',
+    });
+    vi.spyOn(service, 'getPRForBranch').mockResolvedValue(null);
+
+    await expect(service.createPR({ taskId: 'task_publication' })).rejects.toThrow();
+    await expect(fs.readFile(argsFile, 'utf8')).rejects.toThrow();
+  });
+});

@@ -3,10 +3,10 @@ import { promisify } from 'util';
 import { nanoid } from 'nanoid';
 import { ConfigService } from './config-service.js';
 import { TaskService } from './task-service.js';
+import { WorktreeService, type WorktreePublicationAuthority } from './worktree-service.js';
 import { getBreaker } from './circuit-registry.js';
 import type { AgentType, Task } from '@veritas-kanban/shared';
-import { createLogger } from '../lib/logger.js';
-const log = createLogger('github-service');
+import { ConflictError } from '../middleware/error-handler.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -27,6 +27,28 @@ export interface PRInfo {
   draft: boolean;
   headBranch: string;
   baseBranch: string;
+}
+
+interface GitHubTaskStore {
+  getTask(taskId: string): Promise<Task | null>;
+  updateTask(
+    taskId: string,
+    update: Parameters<TaskService['updateTask']>[1]
+  ): Promise<Task | null>;
+}
+
+interface GitHubConfigSource {
+  getConfig(): ReturnType<ConfigService['getConfig']>;
+}
+
+interface PublicationAuthoritySource {
+  resolvePublicationAuthority(taskId: string): Promise<WorktreePublicationAuthority>;
+}
+
+export interface GitHubServiceOptions {
+  taskService?: GitHubTaskStore;
+  configService?: GitHubConfigSource;
+  worktreeService?: PublicationAuthoritySource;
 }
 
 export type CodexCloudTarget = 'issue' | 'issue-comment' | 'pr-comment';
@@ -50,12 +72,19 @@ export interface CodexCloudDelegationResult {
 }
 
 export class GitHubService {
-  private configService: ConfigService;
-  private taskService: TaskService;
+  private readonly configService: GitHubConfigSource;
+  private readonly taskService: GitHubTaskStore;
+  private readonly worktreeService: PublicationAuthoritySource;
 
-  constructor() {
-    this.configService = new ConfigService();
-    this.taskService = new TaskService();
+  constructor(options: GitHubServiceOptions = {}) {
+    this.configService = options.configService ?? new ConfigService();
+    this.taskService = options.taskService ?? new TaskService();
+    this.worktreeService =
+      options.worktreeService ??
+      new WorktreeService({
+        taskService: this.taskService,
+        configService: this.configService,
+      });
   }
 
   private expandPath(p: string): string {
@@ -104,24 +133,53 @@ export class GitHubService {
   /**
    * Check if a PR already exists for the branch
    */
-  async getPRForBranch(repoPath: string, branch: string): Promise<PRInfo | null> {
+  async getPRForBranch(
+    repoPath: string,
+    branch: string,
+    baseBranch: string
+  ): Promise<PRInfo | null> {
     const ghBreaker = getBreaker('github');
     try {
+      const expectedHeadRepository = await this.getRepoNameWithOwner(repoPath);
       const { stdout } = await ghBreaker.execute(() =>
         execFileAsync(
           'gh',
           [
             'pr',
-            'view',
+            'list',
+            '--head',
             branch,
+            '--base',
+            baseBranch,
+            '--state',
+            'all',
+            '--limit',
+            '1',
             '--json',
-            'url,number,title,state,isDraft,headRefName,baseRefName',
+            'url,number,title,state,isDraft,headRefName,baseRefName,headRepository',
           ],
           { cwd: repoPath }
         )
       );
 
-      const data = JSON.parse(stdout);
+      const data = (
+        JSON.parse(stdout) as Array<{
+          url: string;
+          number: number;
+          title: string;
+          state: string;
+          isDraft: boolean;
+          headRefName: string;
+          baseRefName: string;
+          headRepository?: { nameWithOwner?: string };
+        }>
+      ).find(
+        (candidate) =>
+          candidate.headRefName === branch &&
+          candidate.baseRefName === baseBranch &&
+          candidate.headRepository?.nameWithOwner === expectedHeadRepository
+      );
+      if (!data) return null;
       return {
         url: data.url,
         number: data.number,
@@ -250,27 +308,16 @@ export class GitHubService {
    * Create a GitHub PR for a task
    */
   async createPR(input: CreatePRInput): Promise<PRInfo> {
-    const task = await this.taskService.getTask(input.taskId);
-    if (!task) {
-      throw new Error('Task not found');
+    let authority = await this.worktreeService.resolvePublicationAuthority(input.taskId);
+    let task = authority.task;
+    const requestedTarget = input.targetBranch ?? authority.baseBranch;
+    if (requestedTarget !== authority.baseBranch) {
+      throw new ConflictError('The requested PR base does not match the managed worktree.', {
+        taskId: input.taskId,
+        requestedBase: requestedTarget,
+        authorizedBase: authority.baseBranch,
+      });
     }
-
-    if (!task.git?.repo || !task.git?.branch) {
-      throw new Error('Task must have a repository and branch configured');
-    }
-
-    // Get repo config
-    const config = await this.configService.getConfig();
-    const repoConfig = config.repos.find(
-      (r: { name: string; path: string; defaultBranch: string; devServer?: any }) =>
-        r.name === task.git!.repo
-    );
-    if (!repoConfig) {
-      throw new Error(`Repository "${task.git.repo}" not found in config`);
-    }
-
-    const repoPath = this.expandPath(repoConfig.path);
-    const workingDir = task.git.worktreePath || repoPath;
 
     // Check if gh CLI is ready
     const ghStatus = await this.checkGhCli();
@@ -282,7 +329,11 @@ export class GitHubService {
     }
 
     // Check if PR already exists
-    const existingPR = await this.getPRForBranch(repoPath, task.git.branch);
+    const existingPR = await this.getPRForBranch(
+      authority.repoPath,
+      authority.branch,
+      authority.baseBranch
+    );
     if (existingPR) {
       // Update task with PR link
       await this.taskService.updateTask(input.taskId, {
@@ -295,20 +346,57 @@ export class GitHubService {
       return existingPR;
     }
 
-    // Push branch first to ensure it exists on remote
-    try {
-      await execFileAsync('git', ['push', '-u', 'origin', task.git.branch], { cwd: workingDir });
-    } catch (error: any) {
-      // Ignore if already pushed
-      if (!error.message?.includes('Everything up-to-date')) {
-        log.warn('Push warning:', error.message);
+    // Re-resolve immediately before publication so task or worktree drift fails closed.
+    authority = await this.worktreeService.resolvePublicationAuthority(input.taskId);
+    task = authority.task;
+    if (requestedTarget !== authority.baseBranch) {
+      throw new ConflictError('The managed PR base changed before publication.', {
+        taskId: input.taskId,
+        requestedBase: requestedTarget,
+        authorizedBase: authority.baseBranch,
+      });
+    }
+    const headRef = `refs/heads/${authority.branch}`;
+    const { stdout: existingRemoteOutput } = await execFileAsync(
+      'git',
+      ['ls-remote', '--heads', 'origin', headRef],
+      { cwd: authority.worktreePath }
+    );
+    const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
+    if (existingRemoteHead && existingRemoteHead !== authority.headCommit) {
+      try {
+        await execFileAsync(
+          'git',
+          ['merge-base', '--is-ancestor', existingRemoteHead, authority.headCommit],
+          { cwd: authority.worktreePath }
+        );
+      } catch {
+        throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
+          taskId: input.taskId,
+          manifestId: authority.manifestId,
+        });
       }
+    }
+    await execFileAsync('git', ['push', '-u', 'origin', `${headRef}:${headRef}`], {
+      cwd: authority.worktreePath,
+    });
+    const { stdout: remoteHeadOutput } = await execFileAsync(
+      'git',
+      ['ls-remote', '--exit-code', 'origin', headRef],
+      { cwd: authority.worktreePath }
+    );
+    const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
+    if (remoteHead !== authority.headCommit) {
+      throw new ConflictError('The published remote branch does not match the managed worktree.', {
+        taskId: input.taskId,
+        manifestId: authority.manifestId,
+      });
     }
 
     // Build PR title and body
     const prTitle = input.title || task.title;
     const prBody = input.body || this.buildPRBody(task);
-    const targetBranch = input.targetBranch || task.git.baseBranch || 'main';
+    const targetBranch = authority.baseBranch;
 
     // Create the PR using execFile (no shell — safe from injection)
     const ghArgs = [
@@ -321,7 +409,7 @@ export class GitHubService {
       '--base',
       targetBranch,
       '--head',
-      task.git.branch,
+      authority.branch,
     ];
 
     if (input.draft) {
@@ -331,7 +419,7 @@ export class GitHubService {
     const ghBreaker = getBreaker('github');
     try {
       const { stdout } = await ghBreaker.execute(() =>
-        execFileAsync('gh', ghArgs, { cwd: repoPath })
+        execFileAsync('gh', ghArgs, { cwd: authority.repoPath })
       );
       const prUrl = stdout.trim();
 
@@ -350,13 +438,13 @@ export class GitHubService {
 
       // Fetch full PR info
       return (
-        (await this.getPRForBranch(repoPath, task.git.branch)) || {
+        (await this.getPRForBranch(authority.repoPath, authority.branch, authority.baseBranch)) || {
           url: prUrl,
           number: prNumber,
           title: prTitle,
           state: 'OPEN',
           draft: input.draft || false,
-          headBranch: task.git.branch,
+          headBranch: authority.branch,
           baseBranch: targetBranch,
         }
       );

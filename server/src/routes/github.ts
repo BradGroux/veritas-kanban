@@ -4,6 +4,7 @@ import { GitHubService } from '../services/github-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { ValidationError } from '../middleware/error-handler.js';
+import { GitBranchNameSchema } from '../schemas/git-ref-schemas.js';
 
 const router: RouterType = Router();
 const githubService = new GitHubService();
@@ -14,7 +15,7 @@ const createPRSchema = z.object({
   taskId: z.string().min(1),
   title: z.string().optional(),
   body: z.string().optional(),
-  targetBranch: z.string().optional(),
+  targetBranch: GitBranchNameSchema.optional(),
   draft: z.boolean().optional(),
 });
 
