@@ -11,11 +11,13 @@
  */
 import { createLogger } from '../lib/logger.js';
 import { checkRuntimeDiskSpace, checkRuntimeStorageAccess } from '../storage/runtime-health.js';
+import { getMemoryPressure } from '../utils/memory-pressure.js';
 import { getAgentRegistryService } from './agent-registry-service.js';
 import { getMetricsService } from './metrics/index.js';
 import type {
   HealthLevel,
   HealthStatus,
+  MemoryPressureDiagnostics,
   SystemSignal,
   AgentSignal,
   OperationsSignal,
@@ -25,18 +27,18 @@ const log = createLogger('system-health-service');
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function checkMemory(): boolean {
-  const mem = process.memoryUsage();
-  return mem.heapUsed / mem.heapTotal <= 0.9;
-}
-
 // ─── Signal builders ──────────────────────────────────────────
 
-function buildSystemSignal(storage: boolean, disk: boolean, memory: boolean): SystemSignal {
+function buildSystemSignal(
+  storage: boolean,
+  disk: boolean,
+  memoryPressure: MemoryPressureDiagnostics
+): SystemSignal {
+  const memory = memoryPressure.status === 'ok';
   const anyFail = !storage || !disk;
   const anyWarn = !memory;
   const status: 'ok' | 'warn' | 'fail' = anyFail ? 'fail' : anyWarn ? 'warn' : 'ok';
-  return { status, storage, disk, memory };
+  return { status, storage, disk, memory, memoryPressure };
 }
 
 function buildAgentSignal(): AgentSignal {
@@ -133,9 +135,9 @@ export class SystemHealthService {
       checkRuntimeStorageAccess(),
       checkRuntimeDiskSpace(),
     ]);
-    const memory = checkMemory();
+    const memoryPressure = getMemoryPressure();
 
-    const system = buildSystemSignal(storage, disk, memory);
+    const system = buildSystemSignal(storage, disk, memoryPressure);
     const agents = buildAgentSignal();
     const operations = await buildOperationsSignal();
 

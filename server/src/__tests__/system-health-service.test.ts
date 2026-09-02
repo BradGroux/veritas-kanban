@@ -25,7 +25,7 @@ describe('SystemHealthService', () => {
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
     memSpy = vi
       .spyOn(process, 'memoryUsage')
-      .mockReturnValue({ heapUsed: 50, heapTotal: 100 } as any);
+      .mockReturnValue({ heapUsed: 50, heapTotal: 100, rss: 100, external: 0, arrayBuffers: 0 });
     mockList.mockReturnValue([]);
     mockGetRunMetrics.mockResolvedValue({ runs: 0, successRate: 1, failures: 0, errors: 0 });
     process.env.DATA_DIR = 'data';
@@ -53,14 +53,20 @@ describe('SystemHealthService', () => {
     expect(status.signals.agents).toMatchObject({ status: 'ok', total: 0, online: 0, offline: 0 });
   });
 
-  it('degrades level for warnings, offline agents, and low success rate', async () => {
-    memSpy.mockReturnValue({ heapUsed: 95, heapTotal: 100 } as any);
+  it('keeps allocated-heap utilization healthy while degrading for other warnings', async () => {
+    memSpy.mockReturnValue({
+      heapUsed: 95,
+      heapTotal: 100,
+      rss: 100,
+      external: 0,
+      arrayBuffers: 0,
+    });
     mockList.mockReturnValue([{ status: 'online' }, { status: 'offline' }]);
     mockGetRunMetrics.mockResolvedValue({ runs: 10, successRate: 0.75, failures: 2, errors: 0 });
 
     const mod = await import('../services/system-health-service.js');
     const status = await new mod.SystemHealthService().getStatus();
-    expect(status.signals.system.status).toBe('warn');
+    expect(status.signals.system.status).toBe('ok');
     expect(status.signals.agents.status).toBe('warn');
     expect(status.signals.operations.status).toBe('warn');
     expect(status.status).toBe('drifting');

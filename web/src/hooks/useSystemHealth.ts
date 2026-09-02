@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import type { MemoryPressureDiagnostics } from '@veritas-kanban/shared';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
 import { apiFetch } from '@/lib/api/helpers';
 
@@ -11,6 +12,7 @@ export interface SystemSignal {
   storage: boolean;
   disk: boolean;
   memory: boolean;
+  memoryPressure: MemoryPressureDiagnostics;
 }
 
 export interface AgentSignal {
