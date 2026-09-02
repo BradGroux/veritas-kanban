@@ -184,6 +184,7 @@ export interface WorktreePublicationAuthority {
   task: Task;
   repoPath: string;
   originUrl: string;
+  gitObjectDirectory: string;
   worktreePath: string;
   branch: string;
   baseBranch: string;
@@ -1597,6 +1598,7 @@ export class WorktreeService {
       task: structuredClone(task),
       repoPath: repo.rootPath,
       originUrl: repo.originUrl,
+      gitObjectDirectory: path.join(repo.identity.commonGitDir, 'objects'),
       worktreePath: canonicalPath,
       branch: manifest.branch,
       baseBranch: manifest.base.branch,

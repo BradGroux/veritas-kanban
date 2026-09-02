@@ -1,4 +1,6 @@
 import { exec, execFile } from 'child_process';
+import os from 'node:os';
+import path from 'node:path';
 import { URL } from 'node:url';
 import { promisify } from 'util';
 import { nanoid } from 'nanoid';
@@ -8,6 +10,7 @@ import { WorktreeService, type WorktreePublicationAuthority } from './worktree-s
 import { getBreaker } from './circuit-registry.js';
 import type { AgentType, Task } from '@veritas-kanban/shared';
 import { ConflictError } from '../middleware/error-handler.js';
+import { mkdtemp, rm } from '../storage/fs-helpers.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -367,61 +370,7 @@ export class GitHubService {
         });
       }
       const expectedRepository = this.repositoryResolver(currentAuthority.originUrl);
-
-      const publicationRemote = `veritas-publication-${nanoid(12)}`;
-      const publicationRemoteEnv = 'VERITAS_PUBLICATION_REMOTE_URL';
-      const publicationEnvironment = {
-        ...process.env,
-        [publicationRemoteEnv]: currentAuthority.originUrl,
-      };
-      const remoteConfig = [
-        `--config-env=remote.${publicationRemote}.url=${publicationRemoteEnv}`,
-        `--config-env=remote.${publicationRemote}.pushurl=${publicationRemoteEnv}`,
-      ];
-      const headRef = `refs/heads/${currentAuthority.branch}`;
-      const { stdout: existingRemoteOutput } = await execFileAsync(
-        'git',
-        [...remoteConfig, 'ls-remote', '--heads', publicationRemote, headRef],
-        { cwd: currentAuthority.worktreePath, env: publicationEnvironment }
-      );
-      const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
-      if (existingRemoteHead && existingRemoteHead !== currentAuthority.headCommit) {
-        try {
-          await execFileAsync(
-            'git',
-            ['merge-base', '--is-ancestor', existingRemoteHead, currentAuthority.headCommit],
-            { cwd: currentAuthority.worktreePath }
-          );
-        } catch {
-          throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
-            taskId: input.taskId,
-            manifestId: currentAuthority.manifestId,
-          });
-        }
-      }
-      await execFileAsync(
-        'git',
-        [...remoteConfig, 'push', publicationRemote, `${currentAuthority.headCommit}:${headRef}`],
-        {
-          cwd: currentAuthority.worktreePath,
-          env: publicationEnvironment,
-        }
-      );
-      const { stdout: remoteHeadOutput } = await execFileAsync(
-        'git',
-        [...remoteConfig, 'ls-remote', '--exit-code', publicationRemote, headRef],
-        { cwd: currentAuthority.worktreePath, env: publicationEnvironment }
-      );
-      const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
-      if (remoteHead !== currentAuthority.headCommit) {
-        throw new ConflictError(
-          'The published remote branch does not match the managed worktree.',
-          {
-            taskId: input.taskId,
-            manifestId: currentAuthority.manifestId,
-          }
-        );
-      }
+      await this.publishManagedCommit(input.taskId, currentAuthority);
       const match = await this.getPRForBranch(
         currentAuthority.repoPath,
         currentAuthority.branch,
@@ -486,6 +435,83 @@ export class GitHubService {
         }
       );
     });
+  }
+
+  private async publishManagedCommit(
+    taskId: string,
+    authority: WorktreePublicationAuthority
+  ): Promise<void> {
+    const isolatedGitDir = await mkdtemp(path.join(os.tmpdir(), 'veritas-publication-'));
+    const publicationRemote = `veritas-publication-${nanoid(12)}`;
+    const publicationRemoteEnv = 'VERITAS_PUBLICATION_REMOTE_URL';
+    const publicationEnvironment = { ...process.env };
+    for (const name of Object.keys(publicationEnvironment)) {
+      if (
+        name === 'GIT_CONFIG_PARAMETERS' ||
+        name === 'GIT_CONFIG_COUNT' ||
+        /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)
+      ) {
+        delete publicationEnvironment[name];
+      }
+    }
+    Object.assign(publicationEnvironment, {
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_SYSTEM: '/dev/null',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: authority.gitObjectDirectory,
+      [publicationRemoteEnv]: authority.originUrl,
+    });
+    const remoteConfig = [
+      `--config-env=remote.${publicationRemote}.url=${publicationRemoteEnv}`,
+      `--config-env=remote.${publicationRemote}.pushurl=${publicationRemoteEnv}`,
+    ];
+    const isolatedGitArgs = [`--git-dir=${isolatedGitDir}`, ...remoteConfig];
+    const headRef = `refs/heads/${authority.branch}`;
+
+    try {
+      await execFileAsync('git', ['init', '--bare', isolatedGitDir], {
+        env: publicationEnvironment,
+      });
+      const { stdout: existingRemoteOutput } = await execFileAsync(
+        'git',
+        [...isolatedGitArgs, 'ls-remote', '--heads', publicationRemote, headRef],
+        { env: publicationEnvironment }
+      );
+      const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
+      if (existingRemoteHead && existingRemoteHead !== authority.headCommit) {
+        try {
+          await execFileAsync(
+            'git',
+            ['merge-base', '--is-ancestor', existingRemoteHead, authority.headCommit],
+            { cwd: authority.worktreePath }
+          );
+        } catch {
+          throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
+            taskId,
+            manifestId: authority.manifestId,
+          });
+        }
+      }
+      await execFileAsync(
+        'git',
+        [...isolatedGitArgs, 'push', publicationRemote, `${authority.headCommit}:${headRef}`],
+        { env: publicationEnvironment }
+      );
+      const { stdout: remoteHeadOutput } = await execFileAsync(
+        'git',
+        [...isolatedGitArgs, 'ls-remote', '--exit-code', publicationRemote, headRef],
+        { env: publicationEnvironment }
+      );
+      const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
+      if (remoteHead !== authority.headCommit) {
+        throw new ConflictError(
+          'The published remote branch does not match the managed worktree.',
+          { taskId, manifestId: authority.manifestId }
+        );
+      }
+    } finally {
+      await rm(isolatedGitDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 
   private async associatePR(

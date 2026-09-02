@@ -73,6 +73,7 @@ describe('GitHubService repository publication boundary', () => {
     await git(primaryPath, 'add', 'README.md');
     await git(primaryPath, 'commit', '-m', 'baseline');
     await git(primaryPath, 'push', '-u', 'origin', 'main');
+    await git(primaryPath, 'remote', 'set-url', 'origin', `file://${remotePath}`);
 
     fixtures.config = {
       repos: [{ name: 'veritas', path: primaryPath, defaultBranch: 'main' }],
@@ -324,12 +325,6 @@ describe('GitHubService repository publication boundary', () => {
     const decoyRemotePath = path.join(root, 'decoy.git');
     await fs.mkdir(decoyRemotePath, { recursive: true });
     await git(decoyRemotePath, 'init', '--bare', '--initial-branch=main');
-    await git(
-      fixtures.task!.git!.worktreePath!,
-      'config',
-      'remote.veritas-publication-authority.pushurl',
-      decoyRemotePath
-    );
     let capturedHead = '';
     const authoritySource = {
       resolvePublicationAuthority: (taskId: string) =>
@@ -343,6 +338,18 @@ describe('GitHubService repository publication boundary', () => {
           await fs.writeFile(path.join(authority.worktreePath, 'later-change.txt'), 'later\n');
           await git(authority.worktreePath, 'add', 'later-change.txt');
           await git(authority.worktreePath, 'commit', '-m', 'later change');
+          await git(
+            authority.worktreePath,
+            'config',
+            'remote.veritas-publication-authority.pushurl',
+            decoyRemotePath
+          );
+          await git(
+            authority.worktreePath,
+            'config',
+            `url.file://${decoyRemotePath}.insteadOf`,
+            `file://${remotePath}`
+          );
           await git(authority.worktreePath, 'remote', 'set-url', 'origin', decoyRemotePath);
           return operation(authority);
         }),
