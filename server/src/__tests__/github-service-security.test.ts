@@ -52,6 +52,17 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   return result.stdout.trim();
 }
 
+function requireTask(): Task {
+  if (!fixtures.task) throw new Error('task fixture is not initialized');
+  return fixtures.task;
+}
+
+function requireTaskGit(): NonNullable<Task['git']> {
+  const taskGit = requireTask().git;
+  if (!taskGit) throw new Error('task Git fixture is not initialized');
+  return taskGit;
+}
+
 describe('GitHubService repository publication boundary', () => {
   let root: string;
   let remotePath: string;
@@ -163,7 +174,7 @@ describe('GitHubService repository publication boundary', () => {
     remoteBehind = false
   ): Promise<ReturnType<typeof managedServices>> {
     fixtures.task = {
-      ...fixtures.task!,
+      ...requireTask(),
       git: {
         repo: 'veritas',
         branch: 'feature/repository-publication',
@@ -225,7 +236,7 @@ describe('GitHubService repository publication boundary', () => {
 
   it('rejects legacy task paths until the existing adoption flow records authority', async () => {
     fixtures.task = {
-      ...fixtures.task!,
+      ...requireTask(),
       git: {
         repo: 'veritas',
         branch: 'feature/legacy-publication',
@@ -263,7 +274,8 @@ describe('GitHubService repository publication boundary', () => {
     vi.spyOn(service, 'getPRForBranch').mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
     const result = await service.createPR({ taskId: 'task_publication' });
-    const worktreePath = fixtures.task!.git!.worktreePath!;
+    const worktreePath = requireTaskGit().worktreePath;
+    if (!worktreePath) throw new Error('managed worktree path was not recorded');
 
     expect(result.url).toBe('https://github.com/example/repo/pull/17');
     expect(await git(remotePath, 'rev-parse', 'refs/heads/feature/repository-publication')).toBe(
@@ -370,9 +382,9 @@ describe('GitHubService repository publication boundary', () => {
     expect(await git(remotePath, 'rev-parse', 'refs/heads/feature/repository-publication')).toBe(
       capturedHead
     );
-    expect(await git(fixtures.task!.git!.worktreePath!, 'rev-parse', 'HEAD')).not.toBe(
-      capturedHead
-    );
+    const worktreePath = requireTaskGit().worktreePath;
+    if (!worktreePath) throw new Error('managed worktree path was not recorded');
+    expect(await git(worktreePath, 'rev-parse', 'HEAD')).not.toBe(capturedHead);
     await expect(
       git(decoyRemotePath, 'show-ref', '--verify', 'refs/heads/feature/repository-publication')
     ).rejects.toThrow();
@@ -419,13 +431,15 @@ describe('GitHubService repository publication boundary', () => {
 
   it('rejects task allocation and origin drift', async () => {
     const { worktreeService } = await prepareManagedBranch();
-    const managedPath = fixtures.task!.git!.worktreePath!;
-    fixtures.task!.git!.worktreePath = primaryPath;
+    const taskGit = requireTaskGit();
+    const managedPath = taskGit.worktreePath;
+    if (!managedPath) throw new Error('managed worktree path was not recorded');
+    taskGit.worktreePath = primaryPath;
     await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
       /allocation does not match/i
     );
 
-    fixtures.task!.git!.worktreePath = managedPath;
+    taskGit.worktreePath = managedPath;
     await git(primaryPath, 'remote', 'set-url', 'origin', path.join(root, 'other.git'));
     await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
       /durable worktree manifest/i
@@ -434,7 +448,8 @@ describe('GitHubService repository publication boundary', () => {
 
   it('rejects actual branch drift and invalid legacy manifest refs', async () => {
     const { worktreeService, manifestRepository } = await prepareManagedBranch();
-    const managedPath = fixtures.task!.git!.worktreePath!;
+    const managedPath = requireTaskGit().worktreePath;
+    if (!managedPath) throw new Error('managed worktree path was not recorded');
     await git(managedPath, 'checkout', '-b', 'feature/unexpected');
     await expect(worktreeService.resolvePublicationAuthority('task_publication')).rejects.toThrow(
       /branch does not match/i
