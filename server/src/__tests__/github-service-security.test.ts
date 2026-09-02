@@ -35,7 +35,10 @@ vi.mock('../services/task-service.js', () => ({
 }));
 
 import { GitHubService } from '../services/github-service.js';
-import { WorktreeService } from '../services/worktree-service.js';
+import {
+  WorktreeService,
+  type WorktreePublicationAuthority,
+} from '../services/worktree-service.js';
 import { FileWorktreeManifestRepository } from '../storage/worktree-manifest-repository.js';
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
@@ -251,6 +254,54 @@ describe('GitHubService repository publication boundary', () => {
     expect((await fs.readFile(argsFile, 'utf8')).split('\n')).toEqual(
       expect.arrayContaining(['--base', 'main', '--head', 'feature/repository-publication'])
     );
+  });
+
+  it('binds publication to the captured commit and remote when mutable Git state drifts', async () => {
+    const { taskStore, configSource, worktreeService } = await prepareManagedBranch(true);
+    await installFakeGh();
+    const decoyRemotePath = path.join(root, 'decoy.git');
+    await fs.mkdir(decoyRemotePath, { recursive: true });
+    await git(decoyRemotePath, 'init', '--bare', '--initial-branch=main');
+    let capturedHead = '';
+    const authoritySource = {
+      resolvePublicationAuthority: (taskId: string) =>
+        worktreeService.resolvePublicationAuthority(taskId),
+      withPublicationAuthority: <T>(
+        taskId: string,
+        operation: (authority: WorktreePublicationAuthority) => Promise<T>
+      ) =>
+        worktreeService.withPublicationAuthority(taskId, async (authority) => {
+          capturedHead = authority.headCommit;
+          await fs.writeFile(path.join(authority.worktreePath, 'later-change.txt'), 'later\n');
+          await git(authority.worktreePath, 'add', 'later-change.txt');
+          await git(authority.worktreePath, 'commit', '-m', 'later change');
+          await git(authority.worktreePath, 'remote', 'set-url', 'origin', decoyRemotePath);
+          return operation(authority);
+        }),
+    };
+    const service = new GitHubService({
+      taskService: taskStore,
+      configService: configSource,
+      worktreeService: authoritySource,
+    });
+    vi.spyOn(service, 'checkGhCli').mockResolvedValue({
+      installed: true,
+      authenticated: true,
+      user: 'VeritasTest',
+    });
+    vi.spyOn(service, 'getPRForBranch').mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+
+    await service.createPR({ taskId: 'task_publication' });
+
+    expect(await git(remotePath, 'rev-parse', 'refs/heads/feature/repository-publication')).toBe(
+      capturedHead
+    );
+    expect(await git(fixtures.task!.git!.worktreePath!, 'rev-parse', 'HEAD')).not.toBe(
+      capturedHead
+    );
+    await expect(
+      git(decoyRemotePath, 'show-ref', '--verify', 'refs/heads/feature/repository-publication')
+    ).rejects.toThrow();
   });
 
   it('rejects a mismatched requested base before publication', async () => {

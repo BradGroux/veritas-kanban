@@ -451,9 +451,10 @@ Branch and base names must pass Git's canonical branch validation. Pull-request
 creation is available only for an active manifest-backed worktree whose task,
 configured repository, origin, path, lease, branch, and base still match. A
 caller-supplied PR base may only repeat the manifest base. Veritas publishes the
-exact fully qualified task branch, requires a successful non-force push, and
-verifies the remote commit before creating or linking the pull request. Legacy
-worktrees must use the adoption endpoint first.
+captured managed commit to the exact fully qualified task branch on the verified
+origin, requires a successful non-force push, and verifies the remote commit
+before creating or linking the pull request in that repository. Legacy worktrees
+must use the adoption endpoint first.
 
 Merge creates a detached integration worktree from the latest exact remote
 base, merges the task branch there, and pushes `HEAD` to the base without

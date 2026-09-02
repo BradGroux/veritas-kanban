@@ -176,12 +176,14 @@ export class DefaultWorktreeGitRunner implements WorktreeGitRunner {
 
 interface RepoContext {
   rootPath: string;
+  originUrl: string;
   identity: WorktreeRepositoryIdentity;
 }
 
 export interface WorktreePublicationAuthority {
   task: Task;
   repoPath: string;
+  originUrl: string;
   worktreePath: string;
   branch: string;
   baseBranch: string;
@@ -1502,6 +1504,7 @@ export class WorktreeService {
       .catch(() => 'origin-unavailable');
     return {
       rootPath,
+      originUrl: origin,
       identity: {
         name: repoName,
         rootPath,
@@ -1593,6 +1596,7 @@ export class WorktreeService {
     return {
       task: structuredClone(task),
       repoPath: repo.rootPath,
+      originUrl: repo.originUrl,
       worktreePath: canonicalPath,
       branch: manifest.branch,
       baseBranch: manifest.base.branch,
@@ -1607,7 +1611,11 @@ export class WorktreeService {
     manifest: WorktreeManifest
   ): Promise<RepoContext> {
     if (!task?.git?.repo) {
-      return { rootPath: manifest.repository.rootPath, identity: manifest.repository };
+      return {
+        rootPath: manifest.repository.rootPath,
+        originUrl: 'origin-unavailable',
+        identity: manifest.repository,
+      };
     }
     const current = await this.getRepoContext(task.git.repo);
     if (

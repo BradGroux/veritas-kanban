@@ -114,9 +114,10 @@ boundaries and revalidated with Git before use. Pull-request publication and
 Git-backed diff/review operations resolve authority from the durable worktree
 manifest rather than mutable task paths. Publication holds the task manifest
 lock, rechecks repository, origin, path, branch, base, and lease ownership,
-pushes only the exact fully qualified task branch without force, and verifies
-the remote commit before creating or associating a pull request. Missing,
-legacy, removed, or mismatched worktree evidence fails closed.
+pushes the captured commit only to the exact fully qualified task branch on the
+verified origin without force, and binds pull-request lookup and creation to
+that same repository. Missing, legacy, removed, or mismatched worktree evidence
+fails closed.
 
 Repository-controlled execution is a separate trust boundary from worktree
 ownership. Before an executable provider launch, Veritas inventories recognized

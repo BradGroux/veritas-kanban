@@ -140,17 +140,20 @@ export class GitHubService {
   async getPRForBranch(
     repoPath: string,
     branch: string,
-    baseBranch: string
+    baseBranch: string,
+    expectedHeadRepository?: string
   ): Promise<PRInfo | null> {
     const ghBreaker = getBreaker('github');
     try {
-      const expectedHeadRepository = await this.getRepoNameWithOwner(repoPath);
+      const headRepository = expectedHeadRepository ?? (await this.getRepoNameWithOwner(repoPath));
+      const repoArgs = expectedHeadRepository ? ['--repo', expectedHeadRepository] : [];
       const { stdout } = await ghBreaker.execute(() =>
         execFileAsync(
           'gh',
           [
             'pr',
             'list',
+            ...repoArgs,
             '--head',
             branch,
             '--base',
@@ -181,7 +184,7 @@ export class GitHubService {
         (candidate) =>
           candidate.headRefName === branch &&
           candidate.baseRefName === baseBranch &&
-          candidate.headRepository?.nameWithOwner === expectedHeadRepository
+          candidate.headRepository?.nameWithOwner === headRepository
       );
       if (!matchingPR) return null;
       return {
@@ -312,8 +315,7 @@ export class GitHubService {
    * Create a GitHub PR for a task
    */
   async createPR(input: CreatePRInput): Promise<PRInfo> {
-    let authority = await this.worktreeService.resolvePublicationAuthority(input.taskId);
-    let task = authority.task;
+    const authority = await this.worktreeService.resolvePublicationAuthority(input.taskId);
     const requestedTarget = input.targetBranch ?? authority.baseBranch;
     if (requestedTarget !== authority.baseBranch) {
       throw new ConflictError('The requested PR base does not match the managed worktree.', {
@@ -332,136 +334,171 @@ export class GitHubService {
       throw new Error('GitHub CLI is not authenticated. Run: gh auth login');
     }
 
-    // Check if PR already exists
-    const existingPR = await this.getPRForBranch(
-      authority.repoPath,
-      authority.branch,
-      authority.baseBranch
-    );
-    if (existingPR) {
-      // Update task with PR link
-      await this.taskService.updateTask(input.taskId, {
-        git: {
-          ...task.git,
-          prUrl: existingPR.url,
-          prNumber: existingPR.number,
-        },
-      });
-      return existingPR;
-    }
+    // Hold the task's manifest lock through lookup, publication, PR creation, and association.
+    return this.worktreeService.withPublicationAuthority(input.taskId, async (currentAuthority) => {
+      if (requestedTarget !== currentAuthority.baseBranch) {
+        throw new ConflictError('The managed PR base changed before publication.', {
+          taskId: input.taskId,
+          requestedBase: requestedTarget,
+          authorizedBase: currentAuthority.baseBranch,
+        });
+      }
+      const expectedRepository = await this.getRepoNameWithOwnerForRemote(
+        currentAuthority.repoPath,
+        currentAuthority.originUrl
+      );
+      const match = await this.getPRForBranch(
+        currentAuthority.repoPath,
+        currentAuthority.branch,
+        currentAuthority.baseBranch,
+        expectedRepository
+      );
+      if (match) {
+        await this.associatePR(input.taskId, currentAuthority, match.url, match.number);
+        return match;
+      }
 
-    // Hold the task's manifest lock while re-resolving and publishing the exact authority.
-    authority = await this.worktreeService.withPublicationAuthority(
-      input.taskId,
-      async (currentAuthority) => {
-        if (requestedTarget !== currentAuthority.baseBranch) {
-          throw new ConflictError('The managed PR base changed before publication.', {
+      const publicationRemote = 'veritas-publication-authority';
+      const publicationRemoteEnv = 'VERITAS_PUBLICATION_REMOTE_URL';
+      const publicationEnvironment = {
+        ...process.env,
+        [publicationRemoteEnv]: currentAuthority.originUrl,
+      };
+      const remoteConfig = `--config-env=remote.${publicationRemote}.url=${publicationRemoteEnv}`;
+      const headRef = `refs/heads/${currentAuthority.branch}`;
+      const { stdout: existingRemoteOutput } = await execFileAsync(
+        'git',
+        [remoteConfig, 'ls-remote', '--heads', publicationRemote, headRef],
+        { cwd: currentAuthority.worktreePath, env: publicationEnvironment }
+      );
+      const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
+      if (existingRemoteHead && existingRemoteHead !== currentAuthority.headCommit) {
+        try {
+          await execFileAsync(
+            'git',
+            ['merge-base', '--is-ancestor', existingRemoteHead, currentAuthority.headCommit],
+            { cwd: currentAuthority.worktreePath }
+          );
+        } catch {
+          throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
             taskId: input.taskId,
-            requestedBase: requestedTarget,
-            authorizedBase: currentAuthority.baseBranch,
+            manifestId: currentAuthority.manifestId,
           });
         }
-        const headRef = `refs/heads/${currentAuthority.branch}`;
-        const { stdout: existingRemoteOutput } = await execFileAsync(
-          'git',
-          ['ls-remote', '--heads', 'origin', headRef],
-          { cwd: currentAuthority.worktreePath }
-        );
-        const existingRemoteHead = existingRemoteOutput.trim().split(/\s+/)[0];
-        if (existingRemoteHead && existingRemoteHead !== currentAuthority.headCommit) {
-          try {
-            await execFileAsync(
-              'git',
-              ['merge-base', '--is-ancestor', existingRemoteHead, currentAuthority.headCommit],
-              { cwd: currentAuthority.worktreePath }
-            );
-          } catch {
-            throw new ConflictError('The remote branch is not an ancestor of the managed HEAD.', {
-              taskId: input.taskId,
-              manifestId: currentAuthority.manifestId,
-            });
-          }
-        }
-        await execFileAsync('git', ['push', '-u', 'origin', `${headRef}:${headRef}`], {
-          cwd: currentAuthority.worktreePath,
-        });
-        const { stdout: remoteHeadOutput } = await execFileAsync(
-          'git',
-          ['ls-remote', '--exit-code', 'origin', headRef],
-          { cwd: currentAuthority.worktreePath }
-        );
-        const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
-        if (remoteHead !== currentAuthority.headCommit) {
-          throw new ConflictError(
-            'The published remote branch does not match the managed worktree.',
-            {
-              taskId: input.taskId,
-              manifestId: currentAuthority.manifestId,
-            }
-          );
-        }
-        return currentAuthority;
       }
-    );
-    task = authority.task;
-
-    // Build PR title and body
-    const prTitle = input.title || task.title;
-    const prBody = input.body || this.buildPRBody(task);
-    const targetBranch = authority.baseBranch;
-
-    // Create the PR using execFile (no shell — safe from injection)
-    const ghArgs = [
-      'pr',
-      'create',
-      '--title',
-      prTitle,
-      '--body',
-      prBody,
-      '--base',
-      targetBranch,
-      '--head',
-      authority.branch,
-    ];
-
-    if (input.draft) {
-      ghArgs.push('--draft');
-    }
-
-    const ghBreaker = getBreaker('github');
-    try {
-      const { stdout } = await ghBreaker.execute(() =>
-        execFileAsync('gh', ghArgs, { cwd: authority.repoPath })
+      await execFileAsync(
+        'git',
+        [remoteConfig, 'push', publicationRemote, `${currentAuthority.headCommit}:${headRef}`],
+        {
+          cwd: currentAuthority.worktreePath,
+          env: publicationEnvironment,
+        }
       );
-      const prUrl = stdout.trim();
+      const { stdout: remoteHeadOutput } = await execFileAsync(
+        'git',
+        [remoteConfig, 'ls-remote', '--exit-code', publicationRemote, headRef],
+        { cwd: currentAuthority.worktreePath, env: publicationEnvironment }
+      );
+      const remoteHead = remoteHeadOutput.trim().split(/\s+/)[0];
+      if (remoteHead !== currentAuthority.headCommit) {
+        throw new ConflictError(
+          'The published remote branch does not match the managed worktree.',
+          {
+            taskId: input.taskId,
+            manifestId: currentAuthority.manifestId,
+          }
+        );
+      }
+      const task = currentAuthority.task;
+      const prTitle = input.title || task.title;
+      const prBody = input.body || this.buildPRBody(task);
+      const ghArgs = [
+        'pr',
+        'create',
+        '--title',
+        prTitle,
+        '--body',
+        prBody,
+        '--base',
+        currentAuthority.baseBranch,
+        '--head',
+        currentAuthority.branch,
+        '--repo',
+        expectedRepository,
+      ];
 
-      // Extract PR number from URL
+      if (input.draft) {
+        ghArgs.push('--draft');
+      }
+
+      const ghBreaker = getBreaker('github');
+      let prUrl: string;
+      try {
+        const { stdout } = await ghBreaker.execute(() =>
+          execFileAsync('gh', ghArgs, { cwd: currentAuthority.repoPath })
+        );
+        prUrl = stdout.trim();
+      } catch (error: any) {
+        throw new Error(`Failed to create PR: ${error.message}`, { cause: error });
+      }
+
       const prNumberMatch = prUrl.match(/\/pull\/(\d+)/);
       const prNumber = prNumberMatch ? parseInt(prNumberMatch[1], 10) : 0;
+      await this.associatePR(input.taskId, currentAuthority, prUrl, prNumber);
 
-      // Update task with PR link
-      await this.taskService.updateTask(input.taskId, {
-        git: {
-          ...task.git,
-          prUrl,
-          prNumber,
-        },
-      });
-
-      // Fetch full PR info
       return (
-        (await this.getPRForBranch(authority.repoPath, authority.branch, authority.baseBranch)) || {
+        (await this.getPRForBranch(
+          currentAuthority.repoPath,
+          currentAuthority.branch,
+          currentAuthority.baseBranch,
+          expectedRepository
+        )) || {
           url: prUrl,
           number: prNumber,
           title: prTitle,
           state: 'OPEN',
           draft: input.draft || false,
-          headBranch: authority.branch,
-          baseBranch: targetBranch,
+          headBranch: currentAuthority.branch,
+          baseBranch: currentAuthority.baseBranch,
         }
       );
-    } catch (error: any) {
-      throw new Error(`Failed to create PR: ${error.message}`, { cause: error });
+    });
+  }
+
+  private async associatePR(
+    taskId: string,
+    authority: WorktreePublicationAuthority,
+    prUrl: string,
+    prNumber: number
+  ): Promise<void> {
+    const currentTask = await this.taskService.getTask(taskId);
+    const currentGit = currentTask?.git;
+    const authorizedGit = authority.task.git;
+    if (
+      !currentTask ||
+      !currentGit ||
+      !authorizedGit ||
+      currentGit.repo !== authorizedGit.repo ||
+      currentGit.branch !== authority.branch ||
+      currentGit.baseBranch !== authority.baseBranch ||
+      currentGit.worktreePath !== authorizedGit.worktreePath ||
+      currentGit.worktreeManifestId !== authority.manifestId ||
+      currentGit.worktreeLeaseId !== authorizedGit.worktreeLeaseId ||
+      (currentGit.prUrl !== undefined && currentGit.prUrl !== prUrl) ||
+      (currentGit.prNumber !== undefined && currentGit.prNumber !== prNumber)
+    ) {
+      throw new ConflictError('The task publication authority changed before PR association.', {
+        taskId,
+        manifestId: authority.manifestId,
+      });
+    }
+
+    const updated = await this.taskService.updateTask(taskId, {
+      expectedRevision: currentTask.revision ?? 1,
+      git: { prUrl, prNumber },
+    });
+    if (!updated) {
+      throw new ConflictError('The task disappeared before PR association.', { taskId });
     }
   }
 
@@ -543,6 +580,27 @@ export class GitHubService {
     const match = remote?.match(/github\.com[:/](.+?\/.+?)(?:\.git)?$/);
     if (match?.[1]) return match[1];
     throw new Error('Could not determine GitHub owner/repo for Codex Cloud delegation');
+  }
+
+  private async getRepoNameWithOwnerForRemote(
+    repoPath: string,
+    remoteUrl: string
+  ): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(
+        'gh',
+        ['repo', 'view', remoteUrl, '--json', 'nameWithOwner'],
+        { cwd: repoPath }
+      );
+      const parsed = JSON.parse(stdout) as { nameWithOwner?: string };
+      if (parsed.nameWithOwner) return parsed.nameWithOwner;
+    } catch {
+      // Fall back to parsing the already verified remote URL.
+    }
+
+    const match = remoteUrl.match(/github\.com[:/](.+?\/.+?)(?:\.git)?$/);
+    if (match?.[1]) return match[1];
+    throw new Error('Could not determine GitHub owner/repo from the managed repository remote');
   }
 
   private async getIssueInfo(
