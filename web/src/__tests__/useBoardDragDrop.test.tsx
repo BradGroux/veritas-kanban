@@ -2,14 +2,30 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { KeyboardSensor, PointerSensor } from '@dnd-kit/core';
 import type { DragCancelEvent, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { describe, expect, it, vi, type Mock } from 'vitest';
-import { DEFAULT_FEATURE_SETTINGS, type Task, type TaskStatus } from '@veritas-kanban/shared';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  type MoveTaskInput,
+  type MoveTaskResult,
+  type Task,
+} from '@veritas-kanban/shared';
 import { createBoardKeyboardCoordinates, useBoardDragDrop } from '@/hooks/useBoardDragDrop';
 import { createMockTask } from './test-utils';
 
 const columns = DEFAULT_FEATURE_SETTINGS.board.columns;
-type StatusChange = (taskId: string, status: TaskStatus) => Promise<void>;
-type Reorder = (taskIds: string[]) => Promise<void>;
+type Move = (
+  taskId: string,
+  input: Omit<MoveTaskInput, 'expectedRevision' | 'updatedBy'>
+) => Promise<MoveTaskResult>;
 type Announce = (message: string) => void;
+
+function moveResult(task: Task, orderedTaskIds: string[] = [task.id]): MoveTaskResult {
+  return {
+    task,
+    operationId: '00000000-0000-4000-8000-000000000099',
+    orderedTaskIds,
+    replayed: false,
+  };
+}
 
 function dragEvent(activeId: string, overId?: string) {
   return {
@@ -24,31 +40,44 @@ function renderDragHook({
     createMockTask({ id: 'todo-2', title: 'Second task', status: 'todo' }),
     createMockTask({ id: 'done-1', title: 'Done task', status: 'done' }),
   ],
-  onStatusChange = vi.fn<StatusChange>().mockResolvedValue(undefined),
-  onReorder = vi.fn<Reorder>().mockResolvedValue(undefined),
+  allTasks = tasks,
+  onMove = vi.fn<Move>().mockImplementation(async (taskId, input) => {
+    const moved = tasks.find((task) => task.id === taskId) as Task;
+    const orderedTaskIds = tasks
+      .filter((task) => task.id !== taskId && task.status === input.destinationStatus)
+      .map((task) => task.id);
+    orderedTaskIds.splice(input.destinationIndex, 0, taskId);
+    return moveResult(
+      { ...moved, status: input.destinationStatus, position: input.destinationIndex },
+      orderedTaskIds
+    );
+  }),
   announce = vi.fn<Announce>(),
 }: {
   tasks?: Task[];
-  onStatusChange?: Mock<StatusChange>;
-  onReorder?: Mock<Reorder>;
+  allTasks?: Task[];
+  onMove?: Mock<Move>;
   announce?: Mock<Announce>;
 } = {}) {
   const tasksByStatus = Object.fromEntries(
     columns.map((column) => [column.id, tasks.filter((task) => task.status === column.id)])
+  );
+  const allTasksByStatus = Object.fromEntries(
+    columns.map((column) => [column.id, allTasks.filter((task) => task.status === column.id)])
   );
 
   const hook = renderHook(() =>
     useBoardDragDrop({
       tasks,
       tasksByStatus,
+      allTasksByStatus,
       columns,
-      onStatusChange,
-      onReorder,
+      onMove,
       announce,
     })
   );
 
-  return { ...hook, announce, onReorder, onStatusChange };
+  return { ...hook, announce, onMove };
 }
 
 describe('useBoardDragDrop keyboard parity', () => {
@@ -128,7 +157,7 @@ describe('useBoardDragDrop keyboard parity', () => {
   });
 
   it('reorders within a column and announces the committed position', async () => {
-    const { result, onReorder, announce } = renderDragHook();
+    const { result, onMove, announce } = renderDragHook();
 
     act(() => result.current.handleDragStart(dragEvent('todo-2') as unknown as DragStartEvent));
     act(() => result.current.handleDragOver(dragEvent('todo-2', 'todo-1') as DragOverEvent));
@@ -136,8 +165,60 @@ describe('useBoardDragDrop keyboard parity', () => {
       result.current.handleDragEnd(dragEvent('todo-2', 'todo-1') as DragEndEvent)
     );
 
-    expect(onReorder).toHaveBeenCalledWith(['todo-2', 'todo-1']);
+    expect(onMove).toHaveBeenCalledWith(
+      'todo-2',
+      expect.objectContaining({
+        sourceStatus: 'todo',
+        sourcePosition: null,
+        destinationStatus: 'todo',
+        destinationIndex: 0,
+      })
+    );
     expect(announce).toHaveBeenCalledWith('Second task moved to To Do, position 1 of 2');
+  });
+
+  it('announces the authoritative order when the committed result differs from projection', async () => {
+    const tasks = [
+      createMockTask({ id: 'todo-1', title: 'First task', status: 'todo' }),
+      createMockTask({ id: 'todo-2', title: 'Second task', status: 'todo' }),
+    ];
+    const onMove = vi.fn<Move>().mockResolvedValue(moveResult(tasks[1], ['todo-1', 'todo-2']));
+    const { result, announce } = renderDragHook({ tasks, onMove });
+
+    act(() => result.current.handleDragStart(dragEvent('todo-2') as unknown as DragStartEvent));
+    act(() => result.current.handleDragOver(dragEvent('todo-2', 'todo-1') as DragOverEvent));
+    await act(async () =>
+      result.current.handleDragEnd(dragEvent('todo-2', 'todo-1') as DragEndEvent)
+    );
+
+    expect(announce).toHaveBeenCalledWith('Second task moved to To Do, position 2 of 2');
+  });
+
+  it('translates a filtered drop relative to the full destination column', async () => {
+    const moving = createMockTask({ id: 'todo-1', title: 'Moving task', status: 'todo' });
+    const hidden = createMockTask({ id: 'done-hidden', status: 'done', position: 0 });
+    const visible = createMockTask({ id: 'done-visible', status: 'done', position: 1 });
+    const onMove = vi
+      .fn<Move>()
+      .mockResolvedValue(
+        moveResult({ ...moving, status: 'done', position: 0.5 }, [hidden.id, moving.id, visible.id])
+      );
+    const { result } = renderDragHook({
+      tasks: [moving, visible],
+      allTasks: [moving, hidden, visible],
+      onMove,
+    });
+
+    act(() => result.current.handleDragStart(dragEvent(moving.id) as unknown as DragStartEvent));
+    act(() => result.current.handleDragOver(dragEvent(moving.id, visible.id) as DragOverEvent));
+    await act(async () =>
+      result.current.handleDragEnd(dragEvent(moving.id, visible.id) as DragEndEvent)
+    );
+
+    expect(onMove).toHaveBeenCalledWith(
+      moving.id,
+      expect.objectContaining({ destinationStatus: 'done', destinationIndex: 1 })
+    );
   });
 
   it('moves a task into an empty column and persists its destination order', async () => {
@@ -150,11 +231,12 @@ describe('useBoardDragDrop keyboard parity', () => {
     document.body.append(originalCard);
     const movedCard = document.createElement('button');
     movedCard.dataset.taskId = 'todo-1';
-    const onStatusChange = vi.fn<StatusChange>().mockImplementation(async () => {
+    const onMove = vi.fn<Move>().mockImplementation(async () => {
       originalCard.remove();
       document.body.append(movedCard);
+      return moveResult({ ...tasks[0], status: 'done', position: 0 });
     });
-    const { result, onReorder, announce } = renderDragHook({ tasks, onStatusChange });
+    const { result, announce } = renderDragHook({ tasks, onMove });
 
     act(() => result.current.handleDragStart(dragEvent('todo-1') as unknown as DragStartEvent));
     act(() => result.current.handleDragOver(dragEvent('todo-1', 'done') as DragOverEvent));
@@ -162,8 +244,14 @@ describe('useBoardDragDrop keyboard parity', () => {
       result.current.handleDragEnd(dragEvent('todo-1', 'done') as DragEndEvent)
     );
 
-    expect(onStatusChange).toHaveBeenCalledWith('todo-1', 'done');
-    expect(onReorder).toHaveBeenCalledWith(['todo-1']);
+    expect(onMove).toHaveBeenCalledWith(
+      'todo-1',
+      expect.objectContaining({
+        sourceStatus: 'todo',
+        destinationStatus: 'done',
+        destinationIndex: 0,
+      })
+    );
     expect(announce).toHaveBeenCalledWith('First task moved to Done, position 1 of 1');
     await waitFor(() => expect(document.activeElement).toBe(movedCard));
     movedCard.remove();
@@ -173,14 +261,13 @@ describe('useBoardDragDrop keyboard parity', () => {
     const card = document.createElement('button');
     card.dataset.taskId = 'todo-1';
     document.body.append(card);
-    const { result, onReorder, onStatusChange, announce } = renderDragHook();
+    const { result, onMove, announce } = renderDragHook();
 
     act(() => result.current.handleDragStart(dragEvent('todo-1') as unknown as DragStartEvent));
     act(() => result.current.handleDragCancel(dragEvent('todo-1') as DragCancelEvent));
 
     await waitFor(() => expect(document.activeElement).toBe(card));
-    expect(onStatusChange).not.toHaveBeenCalled();
-    expect(onReorder).not.toHaveBeenCalled();
+    expect(onMove).not.toHaveBeenCalled();
     expect(announce).toHaveBeenCalledWith(
       'Move canceled. First task returned to To Do, position 1 of 2'
     );
@@ -188,8 +275,8 @@ describe('useBoardDragDrop keyboard parity', () => {
   });
 
   it('announces a same-column rollback when reordering fails', async () => {
-    const onReorder = vi.fn<Reorder>().mockRejectedValue(new Error('network failed'));
-    const { result, announce } = renderDragHook({ onReorder });
+    const onMove = vi.fn<Move>().mockRejectedValue(new Error('network failed'));
+    const { result, announce } = renderDragHook({ onMove });
 
     act(() => result.current.handleDragStart(dragEvent('todo-2') as unknown as DragStartEvent));
     act(() => result.current.handleDragOver(dragEvent('todo-2', 'todo-1') as DragOverEvent));
@@ -202,42 +289,59 @@ describe('useBoardDragDrop keyboard parity', () => {
     );
   });
 
-  it('rolls status back when destination ordering fails', async () => {
-    const onStatusChange = vi.fn<StatusChange>().mockResolvedValue(undefined);
-    const onReorder = vi.fn<Reorder>().mockRejectedValue(new Error('network failed'));
-    const { result, announce } = renderDragHook({ onStatusChange, onReorder });
+  it('keeps the destination projection visible until the move command resolves', async () => {
+    let resolveMove!: (result: MoveTaskResult) => void;
+    const onMove = vi.fn<Move>().mockReturnValue(
+      new Promise((resolve) => {
+        resolveMove = resolve;
+      })
+    );
+    const { result } = renderDragHook({ onMove });
 
     act(() => result.current.handleDragStart(dragEvent('todo-1') as unknown as DragStartEvent));
     act(() => result.current.handleDragOver(dragEvent('todo-1', 'done') as DragOverEvent));
-    await act(async () =>
-      result.current.handleDragEnd(dragEvent('todo-1', 'done') as DragEndEvent)
-    );
+    let completion!: Promise<void>;
+    act(() => {
+      completion = result.current.handleDragEnd(dragEvent('todo-1', 'done') as DragEndEvent);
+    });
 
-    expect(onStatusChange.mock.calls).toEqual([
-      ['todo-1', 'done'],
-      ['todo-1', 'todo'],
-    ]);
-    expect(announce).toHaveBeenCalledWith(
-      'Move failed. First task returned to To Do, position 1 of 2'
-    );
+    expect(result.current.activeTask).toBeNull();
+    expect(result.current.isMovePending).toBe(true);
+    expect(result.current.liveTasksByStatus.done.map((task) => task.id)).toContain('todo-1');
+    expect(result.current.liveTasksByStatus.todo.map((task) => task.id)).not.toContain('todo-1');
+
+    act(() => resolveMove(moveResult({ ...result.current.liveTasksByStatus.done[0] })));
+    await act(async () => completion);
+    expect(result.current.isMovePending).toBe(false);
   });
 
-  it('announces a partial failure when automatic status rollback also fails', async () => {
-    const onStatusChange = vi
-      .fn<StatusChange>()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('rollback failed'));
-    const onReorder = vi.fn<Reorder>().mockRejectedValue(new Error('network failed'));
-    const { result, announce } = renderDragHook({ onStatusChange, onReorder });
+  it('rejects another drag while the current task move is pending', async () => {
+    let resolveMove!: (result: MoveTaskResult) => void;
+    const onMove = vi.fn<Move>().mockReturnValue(
+      new Promise((resolve) => {
+        resolveMove = resolve;
+      })
+    );
+    const { result, announce } = renderDragHook({ onMove });
 
     act(() => result.current.handleDragStart(dragEvent('todo-1') as unknown as DragStartEvent));
     act(() => result.current.handleDragOver(dragEvent('todo-1', 'done') as DragOverEvent));
+    let completion!: Promise<void>;
+    act(() => {
+      completion = result.current.handleDragEnd(dragEvent('todo-1', 'done') as DragEndEvent);
+    });
+    act(() => result.current.handleDragStart(dragEvent('todo-2') as unknown as DragStartEvent));
+    act(() => result.current.handleDragOver(dragEvent('todo-2', 'done-1') as DragOverEvent));
     await act(async () =>
-      result.current.handleDragEnd(dragEvent('todo-1', 'done') as DragEndEvent)
+      result.current.handleDragEnd(dragEvent('todo-2', 'done-1') as DragEndEvent)
     );
 
+    expect(onMove).toHaveBeenCalledOnce();
     expect(announce).toHaveBeenCalledWith(
-      'Move partially failed. First task may still be in Done because automatic rollback failed; refresh the board before trying again'
+      'Wait for the current task move to finish before starting another move.'
     );
+
+    act(() => resolveMove(moveResult(createMockTask({ id: 'todo-1', status: 'done' }))));
+    await act(async () => completion);
   });
 });

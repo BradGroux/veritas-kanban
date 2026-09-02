@@ -239,6 +239,34 @@ export interface TaskGitHub {
   url?: string;
 }
 
+/** Durable receipt for the most recently committed board-move command. */
+export interface TaskBoardMoveReceipt {
+  operationId: string;
+  sourceStatus: TaskStatus;
+  sourcePosition: number | null;
+  destinationStatus: TaskStatus;
+  destinationIndex: number;
+  completedAt: string;
+  auditCompletedAt?: string;
+}
+
+export interface MoveTaskInput {
+  operationId: string;
+  sourceStatus: TaskStatus;
+  sourcePosition: number | null;
+  destinationStatus: TaskStatus;
+  destinationIndex: number;
+  expectedRevision?: number;
+  updatedBy?: string;
+}
+
+export interface MoveTaskResult {
+  task: Task;
+  operationId: string;
+  orderedTaskIds: string[];
+  replayed: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -332,6 +360,12 @@ export interface Task {
 
   // Position within column (for drag-and-drop ordering)
   position?: number;
+
+  // Exact durable order key. New board moves use this when numeric positions converge.
+  boardRank?: string;
+
+  // Durable idempotency receipt for the latest board move
+  lastBoardMove?: TaskBoardMoveReceipt;
 
   // Cost prediction and tracking
   costPrediction?: {
@@ -499,6 +533,7 @@ export interface TaskSummary {
   blockedBy?: string[];
   blockedReason?: BlockedReason;
   position?: number;
+  boardRank?: string;
   attachmentCount?: number;
   deliverableCount?: number;
   github?: TaskGitHub;

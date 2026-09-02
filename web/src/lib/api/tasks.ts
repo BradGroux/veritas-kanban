@@ -1,7 +1,13 @@
 /**
  * Task API endpoints: CRUD, archive, subtasks, comments, blocking, reorder.
  */
-import type { Task, CreateTaskInput, UpdateTaskInput } from '@veritas-kanban/shared';
+import type {
+  Task,
+  CreateTaskInput,
+  MoveTaskInput,
+  MoveTaskResult,
+  UpdateTaskInput,
+} from '@veritas-kanban/shared';
 import { API_BASE, apiFetch } from './helpers';
 
 export const tasksApi = {
@@ -30,6 +36,23 @@ export const tasksApi = {
     const revision = expectedRevision ?? bodyExpectedRevision;
     return apiFetch<Task>(`${API_BASE}/tasks/${id}`, {
       method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof revision === 'number' ? { 'If-Match': `"task:${id}:${revision}"` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  },
+
+  move: async (
+    id: string,
+    input: Omit<MoveTaskInput, 'updatedBy'>,
+    expectedRevision?: number
+  ): Promise<MoveTaskResult> => {
+    const revision = expectedRevision ?? input.expectedRevision;
+    const { expectedRevision: _expectedRevision, ...body } = input;
+    return apiFetch<MoveTaskResult>(`${API_BASE}/tasks/${id}/move`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(typeof revision === 'number' ? { 'If-Match': `"task:${id}:${revision}"` } : {}),

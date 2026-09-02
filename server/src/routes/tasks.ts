@@ -11,28 +11,148 @@ import {
   BOARD_COLUMN_ID_PATTERN,
   type CreateTaskInput,
   type UpdateTaskInput,
+  type Task,
+  type TaskBoardMoveReceipt,
   type TaskSummary,
+  type MoveTaskInput,
 } from '@veritas-kanban/shared';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { InternalError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sendPaginated } from '../middleware/response-envelope.js';
 import { setLastModified } from '../middleware/cache-control.js';
 import { sanitizeTaskFields } from '../utils/sanitize.js';
 import { auditLog } from '../services/audit-service.js';
 import { authorizePermission, type AuthenticatedRequest } from '../middleware/auth.js';
-import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
+import {
+  actorFromRequest,
+  assertFreshRevision,
+  expectedRevisionFromRequest,
+  setRevisionHeaders,
+} from '../utils/concurrency.js';
 import type { TaskIdentityDiagnostics } from '../services/task-identity-diagnostics.js';
 import { TaskExecutionPolicySchema } from '../schemas/task-envelope-schemas.js';
-import { ReorderTasksBodySchema } from '../schemas/task-mutation-schemas.js';
+import { MoveTaskBodySchema, ReorderTasksBodySchema } from '../schemas/task-mutation-schemas.js';
 import { GitBranchNameSchema } from '../schemas/git-ref-schemas.js';
+import { createLogger } from '../lib/logger.js';
 
 const router: RouterType = Router();
+const log = createLogger('tasks-route');
 const taskService = getTaskService();
 const worktreeService = new WorktreeService();
 const blockingService = getBlockingService();
 const delegationService = getDelegationService();
 const progressService = getProgressService();
+const BOARD_MOVE_ACTIVITY_RETRY_DELAYS_MS = [0, 100, 1_000, 5_000] as const;
+const reconciledBoardMoveOperations = new Set<string>();
+const boardMoveAuditReconciliations = new Map<string, Promise<boolean>>();
+
+function writeBoardMoveActivity(task: Task, receipt: TaskBoardMoveReceipt) {
+  const actor = task.updatedBy ?? 'system:unknown';
+  return activityService.logActivityOnce(
+    receipt.operationId,
+    receipt.sourceStatus === task.status ? 'task_updated' : 'status_changed',
+    task.id,
+    task.title,
+    {
+      from: receipt.sourceStatus,
+      status: task.status,
+      position: task.position,
+      actor,
+    },
+    task.agent,
+    actor
+  );
+}
+
+function waitForBoardMoveActivityRetry(delayMs: number): Promise<void> {
+  if (delayMs === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, delayMs);
+    timer.unref();
+  });
+}
+
+async function retryBoardMoveActivity(
+  task: Task,
+  writeActivity: () => ReturnType<typeof activityService.logActivityOnce>
+): Promise<void> {
+  const operationId = task.lastBoardMove?.operationId;
+  if (!operationId) return;
+  for (const delayMs of BOARD_MOVE_ACTIVITY_RETRY_DELAYS_MS) {
+    await waitForBoardMoveActivityRetry(delayMs);
+    try {
+      const repaired = await writeActivity();
+      if (await finalizeBoardMoveAudit(task)) {
+        if (repaired.created) {
+          broadcastTaskChange('updated', task.id, undefined, { operationId });
+        }
+        return;
+      }
+    } catch {
+      // Continue through the bounded retry schedule.
+    }
+  }
+  log.error({ taskId: task.id, operationId }, 'Board move activity retry schedule exhausted');
+}
+
+async function finalizeBoardMoveAudit(task: Task): Promise<boolean> {
+  const receipt = task.lastBoardMove;
+  if (!receipt) return true;
+  if (receipt.auditCompletedAt) return true;
+  if (!(await taskService.reconcileBoardMoveTelemetry(task))) return false;
+  const completed = await taskService.markBoardMoveAuditComplete(task.id, receipt.operationId);
+  return (
+    completed?.lastBoardMove?.operationId === receipt.operationId &&
+    typeof completed.lastBoardMove.auditCompletedAt === 'string'
+  );
+}
+
+async function reconcileBoardMoveAudit(task: Task): Promise<boolean> {
+  if (!task.lastBoardMove) return true;
+  const receipt = task.lastBoardMove;
+  const operationId = receipt.operationId;
+  const reconciliationKey = `${task.id}:${operationId}`;
+  if (receipt.auditCompletedAt) {
+    reconciledBoardMoveOperations.add(reconciliationKey);
+    return true;
+  }
+  if (reconciledBoardMoveOperations.has(reconciliationKey)) return true;
+  const pending = boardMoveAuditReconciliations.get(reconciliationKey);
+  if (pending) return pending;
+
+  const reconciliation = (async () => {
+    try {
+      const [activity, telemetryReady] = await Promise.all([
+        writeBoardMoveActivity(task, receipt),
+        taskService.reconcileBoardMoveTelemetry(task),
+      ]);
+      if (!telemetryReady) return false;
+      const completed = await taskService.markBoardMoveAuditComplete(task.id, operationId);
+      if (
+        completed?.lastBoardMove?.operationId !== operationId ||
+        !completed.lastBoardMove.auditCompletedAt
+      ) {
+        return false;
+      }
+      reconciledBoardMoveOperations.add(reconciliationKey);
+      if (activity.created) {
+        broadcastTaskChange('updated', task.id, undefined, { operationId });
+      }
+      return true;
+    } catch (error) {
+      log.warn(
+        { taskId: task.id, operationId, err: error },
+        'Board move audit reconciliation remains pending'
+      );
+      return false;
+    } finally {
+      boardMoveAuditReconciliations.delete(reconciliationKey);
+    }
+  })();
+  boardMoveAuditReconciliations.set(reconciliationKey, reconciliation);
+  return reconciliation;
+}
 
 function requireAdminForCleanupOverride(
   req: AuthenticatedRequest,
@@ -324,6 +444,9 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     let tasks = await taskService.listTasks();
+    for (const task of tasks) {
+      if (task.lastBoardMove) void reconcileBoardMoveAudit(task);
+    }
     attachTaskIdentityDiagnostics(res, await getRouteTaskIdentityDiagnostics());
 
     // --- Filtering ---
@@ -416,6 +539,7 @@ router.get(
         blockedBy: task.blockedBy,
         blockedReason: task.blockedReason,
         position: task.position,
+        boardRank: task.boardRank,
         attachmentCount: task.attachments?.length ?? 0,
         deliverableCount: task.deliverables?.length ?? 0,
         github: task.github,
@@ -560,6 +684,139 @@ router.post(
     const updated = await taskService.reorderTasks(orderedIds);
     broadcastTaskChange('reordered');
     res.json({ updated: updated.length });
+  })
+);
+
+/**
+ * @openapi
+ * /api/tasks/{id}/move:
+ *   post:
+ *     summary: Atomically move a task on the board
+ *     tags: [Tasks]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *       - in: header
+ *         name: If-Match
+ *         required: true
+ *         schema: { type: string }
+ *         description: ETag containing the task revision loaded by the client
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [operationId, sourceStatus, sourcePosition, destinationStatus, destinationIndex]
+ *             properties:
+ *               operationId: { type: string, format: uuid }
+ *               sourceStatus: { type: string }
+ *               sourcePosition: { type: number, nullable: true }
+ *               destinationStatus: { type: string }
+ *               destinationIndex: { type: integer, minimum: 0 }
+ *     responses:
+ *       200:
+ *         description: Committed or idempotently replayed board move
+ *       409:
+ *         description: Stale task state or reused operation ID
+ */
+router.post(
+  '/:id/move',
+  asyncHandler(async (req, res) => {
+    let parsed: Omit<MoveTaskInput, 'updatedBy'>;
+    try {
+      parsed = MoveTaskBodySchema.parse(req.body) as Omit<MoveTaskInput, 'updatedBy'>;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Validation failed', error.issues);
+      }
+      throw error;
+    }
+
+    const taskId = req.params.id as string;
+    const oldTask = await taskService.getTask(taskId);
+    if (!oldTask) throw new NotFoundError('Task not found');
+    if (
+      oldTask.lastBoardMove &&
+      oldTask.lastBoardMove.operationId !== parsed.operationId &&
+      !(await reconcileBoardMoveAudit(oldTask))
+    ) {
+      throw new InternalError(
+        'The previous board move is committed but its audit record is still pending. Retry shortly.'
+      );
+    }
+    const expectedRevision = expectedRevisionFromRequest(req);
+    if (expectedRevision === undefined) {
+      throw new ValidationError('A task revision is required for board moves', [
+        {
+          code: 'EXPECTED_REVISION_REQUIRED',
+          message: 'Send the current task revision with If-Match',
+          path: ['expectedRevision'],
+        },
+      ]);
+    }
+
+    if (
+      parsed.destinationStatus === 'in-progress' &&
+      oldTask.status !== 'in-progress' &&
+      (oldTask.blockedBy?.length || oldTask.dependencies?.depends_on?.length)
+    ) {
+      const allTasks = await taskService.listTasks();
+      const { allowed, blockers } = blockingService.canMoveToInProgress(oldTask, allTasks);
+      if (!allowed) throw new ValidationError('Task is blocked', { blockedBy: blockers });
+    }
+
+    const actor = actorFromRequest(req as AuthenticatedRequest);
+    const result = await taskService.moveTask(taskId, {
+      ...parsed,
+      expectedRevision,
+      updatedBy: actor,
+    });
+    if (!result) throw new NotFoundError('Task not found');
+
+    const moveSourceStatus = result.task.lastBoardMove?.sourceStatus ?? oldTask.status;
+    let activityCreated = false;
+    const writeMoveActivity = () =>
+      writeBoardMoveActivity(result.task, {
+        ...(result.task.lastBoardMove ?? parsed),
+        operationId: result.operationId,
+        sourceStatus: moveSourceStatus,
+        completedAt: result.task.lastBoardMove?.completedAt ?? result.task.updated,
+      });
+    try {
+      const moveActivity = await writeMoveActivity();
+      activityCreated = moveActivity.created;
+      await finalizeBoardMoveAudit(result.task);
+    } catch (error) {
+      log.warn(
+        { taskId: result.task.id, operationId: result.operationId, err: error },
+        'Board move activity will be retried in the background'
+      );
+      void retryBoardMoveActivity(result.task, writeMoveActivity);
+    }
+
+    if (!result.replayed) {
+      broadcastTaskChange('moved', result.task.id, undefined, {
+        operationId: result.operationId,
+      });
+    } else if (activityCreated) {
+      broadcastTaskChange('updated', result.task.id, undefined, {
+        operationId: result.operationId,
+      });
+    }
+
+    if (moveSourceStatus !== result.task.status && result.task.github) {
+      getGitHubSyncService()
+        .syncTaskStatusToGitHub(result.task)
+        .catch(() => {
+          /* intentionally silent - don't fail the API call */
+        });
+    }
+
+    setRevisionHeaders(res, 'task', result.task.id, result.task);
+    res.json(result);
   })
 );
 

@@ -130,6 +130,47 @@ describe('tasksApi', () => {
     });
   });
 
+  it('move() sends one revisioned board command with an operation ID', async () => {
+    const moved = createMockTask({ id: 'u1', status: 'blocked', position: 0.5, revision: 8 });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () =>
+        envelope({
+          task: moved,
+          operationId: '00000000-0000-4000-8000-000000000011',
+          orderedTaskIds: ['b1', 'u1'],
+          replayed: false,
+        }),
+    } as Response);
+
+    await tasksApi.move(
+      'u1',
+      {
+        operationId: '00000000-0000-4000-8000-000000000011',
+        expectedRevision: 7,
+        sourceStatus: 'todo',
+        sourcePosition: 0,
+        destinationStatus: 'blocked',
+        destinationIndex: 1,
+      },
+      7
+    );
+
+    expect(fetch).toHaveBeenCalledWith('http://test-api/tasks/u1/move', {
+      credentials: 'include',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'If-Match': '"task:u1:7"' },
+      body: JSON.stringify({
+        operationId: '00000000-0000-4000-8000-000000000011',
+        sourceStatus: 'todo',
+        sourcePosition: 0,
+        destinationStatus: 'blocked',
+        destinationIndex: 1,
+      }),
+    });
+  });
+
   it('addComment() sends the parent task revision when provided', async () => {
     const updated = createMockTask({ id: 'task-1' });
     vi.mocked(fetch).mockResolvedValueOnce({

@@ -339,6 +339,49 @@ POST /api/tasks/reorder
 
 **Body**: `{ "taskIds": ["TASK-003", "TASK-001", "TASK-002"] }`
 
+### Move Task on the Board
+
+```
+POST /api/tasks/:id/move
+```
+
+Atomically changes a task's column and destination order. Send the revision from
+the loaded task with `If-Match` and a UUID `operationId`; retrying the same
+operation is idempotent and returns `replayed: true` without another task write.
+
+**Headers**:
+
+```http
+If-Match: "task:TASK-001:4"
+```
+
+**Body**:
+
+```json
+{
+  "operationId": "c570c646-2982-4f74-82fb-6b7da81ab58b",
+  "sourceStatus": "todo",
+  "sourcePosition": 0,
+  "destinationStatus": "blocked",
+  "destinationIndex": 1
+}
+```
+
+**Response** `200`:
+
+```json
+{
+  "task": { "id": "TASK-001", "status": "blocked", "revision": 5 },
+  "operationId": "c570c646-2982-4f74-82fb-6b7da81ab58b",
+  "orderedTaskIds": ["TASK-004", "TASK-001", "TASK-007"],
+  "replayed": false
+}
+```
+
+A stale revision or source state returns `409 CONFLICT` with the current task in
+`details.current`. Reusing an operation ID with different move input also
+returns `409 CONFLICT`.
+
 ### Bulk Update
 
 ```

@@ -57,6 +57,11 @@ export interface ActivityPage {
   total: number;
 }
 
+export interface ActivityLogOnceResult {
+  activity: Activity;
+  created: boolean;
+}
+
 export interface ActivityServiceOptions {
   activityFile?: string;
   activityDir?: string;
@@ -73,6 +78,7 @@ export class ActivityService {
   private appendRepository: AppendActivityRepository | null = null;
   private sqliteDatabase: SqliteDatabase | null = null;
   private ownsSqliteDatabase = false;
+  private activityMutationQueue: Promise<unknown> = Promise.resolve();
 
   constructor(options: ActivityServiceOptions = {}) {
     this.activityFile = options.activityFile || join(getDataDir(), 'activity.json');
@@ -231,6 +237,46 @@ export class ActivityService {
 
     // Fallback (should not reach here)
     throw new Error('No activity repository configured');
+  }
+
+  /**
+   * Persist one activity for an idempotent operation. Retries after a task
+   * commit can safely repair a failed activity write without duplicating it.
+   */
+  async logActivityOnce(
+    operationId: string,
+    type: ActivityType,
+    taskId: string,
+    taskTitle: string,
+    details?: Record<string, unknown>,
+    agent?: string,
+    actor?: string
+  ): Promise<ActivityLogOnceResult> {
+    const run = this.activityMutationQueue.then(async () => {
+      const existing = (
+        await this.getActivities(this.MAX_ACTIVITIES, {
+          taskId,
+        })
+      ).find((activity) => activity.details?.operationId === operationId);
+      if (existing) return { activity: existing, created: false };
+
+      return {
+        activity: await this.logActivity(
+          type,
+          taskId,
+          taskTitle,
+          { ...details, operationId },
+          agent,
+          actor
+        ),
+        created: true,
+      };
+    });
+    this.activityMutationQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
   }
 
   async clearActivities(): Promise<void> {

@@ -89,6 +89,21 @@ describe('ActivityService', () => {
       expect(activities[0].taskTitle).toBe('Second');
       expect(activities[1].taskTitle).toBe('First');
     });
+
+    it('logs an idempotent operation once under concurrent retries', async () => {
+      const operationId = '00000000-0000-4000-8000-000000000111';
+      const results = await Promise.all([
+        service.logActivityOnce(operationId, 'status_changed', 'task_1', 'Task', {
+          status: 'blocked',
+        }),
+        service.logActivityOnce(operationId, 'status_changed', 'task_1', 'Task', {
+          status: 'blocked',
+        }),
+      ]);
+
+      expect(results.map((result) => result.created).sort()).toEqual([false, true]);
+      expect(await service.getActivities(10, { taskId: 'task_1' })).toHaveLength(1);
+    });
   });
 
   describe('getActivities', () => {

@@ -7,9 +7,11 @@ import {
   DEFAULT_FEATURE_SETTINGS,
   normalizeBoardColumns,
   normalizeBoardDefaultStatus,
+  sortTasksByBoardPosition,
   type BoardColumnConfig,
   type Task,
   type CreateTaskInput,
+  type MoveTaskInput,
   type UpdateTaskInput,
 } from '@veritas-kanban/shared';
 
@@ -227,8 +229,7 @@ export function useUpdateTask() {
 
       // Extract enforcement gate error details
       const details = error.details as
-        | Array<{ code: string; message: string; path: string[] }>
-        | undefined;
+        Array<{ code: string; message: string; path: string[] }> | undefined;
 
       // If this is an enforcement gate error, show a detailed toast
       if (details && details.length > 0) {
@@ -282,6 +283,69 @@ export function useUpdateTask() {
     // the mutation start and the refetch completing. The WebSocket
     // task:changed events and polling handle eventual consistency.
     // Status-specific metrics invalidation is handled above (GH-87).
+  });
+}
+
+export function useMoveTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: Omit<MoveTaskInput, 'expectedRevision' | 'updatedBy'>;
+    }) => api.tasks.move(id, input, cachedTaskRevision(queryClient, id) ?? 1),
+    retry: (failureCount, error) => {
+      const apiCode =
+        error && typeof error === 'object' && 'code' in error
+          ? (error as { code?: unknown }).code
+          : undefined;
+      const terminalCodes = new Set([
+        'CONFLICT',
+        'VALIDATION_ERROR',
+        'BAD_REQUEST',
+        'NOT_FOUND',
+        'AUTH_REQUIRED',
+        'FORBIDDEN',
+        'WRITE_FORBIDDEN',
+      ]);
+      return failureCount < 1 && (typeof apiCode !== 'string' || !terminalCodes.has(apiCode));
+    },
+    retryDelay: 100,
+    onSuccess: ({ task }) => {
+      patchTaskInCaches(queryClient, task);
+      queryClient.invalidateQueries({ queryKey: ['metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['task-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
+    },
+    onError: (error: unknown, { id }) => {
+      if (isRevisionConflict(error)) {
+        const current = conflictCurrentTask(error);
+        if (current) patchTaskInCaches(queryClient, current);
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['tasks', id] });
+        toast({
+          title: 'Move not saved',
+          description: current
+            ? `${current.title} changed before the move was committed. The latest task is loaded.`
+            : 'The task changed before the move was committed. Reload and try again.',
+          variant: 'destructive',
+          duration: 10000,
+        });
+        return;
+      }
+
+      toast({
+        title: 'Move failed',
+        description:
+          error instanceof Error ? error.message : 'The task stayed in its original position.',
+        variant: 'destructive',
+      });
+    },
   });
 }
 
@@ -649,16 +713,6 @@ export function useReorderTasks() {
   });
 }
 
-function sortByPosition(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
-    const posA = a.position ?? Number.MAX_SAFE_INTEGER;
-    const posB = b.position ?? Number.MAX_SAFE_INTEGER;
-    if (posA !== posB) return posA - posB;
-    // Fallback: newer tasks first (preserve existing behavior for un-positioned tasks)
-    return new Date(b.updated).getTime() - new Date(a.updated).getTime();
-  });
-}
-
 export function useTasksByStatus(
   tasks: Task[] | undefined,
   columns?: BoardColumnConfig[]
@@ -679,7 +733,7 @@ export function useTasksByStatus(
   }
 
   for (const status of Object.keys(grouped)) {
-    grouped[status] = sortByPosition(grouped[status]);
+    grouped[status] = sortTasksByBoardPosition(grouped[status]);
   }
 
   return grouped;

@@ -1,4 +1,4 @@
-import { useTasks, useTasksByStatus, useUpdateTask, useReorderTasks } from '@/hooks/useTasks';
+import { useMoveTask, useTasks, useTasksByStatus } from '@/hooks/useTasks';
 import { useBoardDragDrop } from '@/hooks/useBoardDragDrop';
 import { KanbanColumn } from './KanbanColumn';
 import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
@@ -130,6 +130,7 @@ export function KanbanBoard() {
   const [detailNavigationTarget, setDetailNavigationTarget] =
     useState<TaskDetailNavigationTarget | null>(null);
   const defaultSavedViewAppliedRef = useRef(false);
+  const pendingMoveTaskIdsRef = useRef(new Set<string>());
 
   // Initialize filters from URL
   const [filters, setFilters] = useState<FilterState>(() => {
@@ -348,6 +349,7 @@ export function KanbanBoard() {
 
   // Group filtered tasks by status
   const tasksByStatus = useTasksByStatus(filteredTasks, columns);
+  const allTasksByStatus = useTasksByStatus(tasks ?? [], columns);
   const boardColumnGridStyle = isMobileLayout
     ? undefined
     : {
@@ -434,8 +436,26 @@ export function KanbanBoard() {
     return () => window.removeEventListener('open-task', handler);
   }, [tasks]);
 
-  const updateTask = useUpdateTask();
-  const reorderTasks = useReorderTasks();
+  const moveTask = useMoveTask();
+
+  const commitBoardMove = useCallback(
+    async (
+      taskId: string,
+      input: Parameters<ReturnType<typeof useMoveTask>['mutateAsync']>[0]['input']
+    ) => {
+      if (!canWriteTasks || !isOnline) throw new Error('Task movement is unavailable');
+      if (pendingMoveTaskIdsRef.current.has(taskId)) {
+        throw new Error('This task already has a move in progress');
+      }
+      pendingMoveTaskIdsRef.current.add(taskId);
+      try {
+        return await moveTask.mutateAsync({ id: taskId, input });
+      } finally {
+        pendingMoveTaskIdsRef.current.delete(taskId);
+      }
+    },
+    [canWriteTasks, isOnline, moveTask]
+  );
 
   // Handler for moving a task (with screen reader announcement)
   const handleMoveTask = useCallback(
@@ -450,10 +470,29 @@ export function KanbanBoard() {
         announce(`Task ${task?.title || taskId} cannot be moved while this client is offline`);
         return;
       }
-      updateTask.mutate({ id: taskId, input: { status } });
-      announce(`Task ${task?.title || taskId} moved to ${columnName}`);
+      if (!task || task.status === status) return;
+      const destinationIndex = (allTasksByStatus[status] ?? []).filter(
+        (destinationTask) => destinationTask.id !== taskId
+      ).length;
+      void commitBoardMove(taskId, {
+        operationId: crypto.randomUUID(),
+        sourceStatus: task.status,
+        sourcePosition:
+          typeof task.position === 'number' && Number.isFinite(task.position)
+            ? task.position
+            : null,
+        destinationStatus: status,
+        destinationIndex,
+      })
+        .then((result) => {
+          const committedIndex = result.orderedTaskIds.indexOf(result.task.id);
+          announce(
+            `Task ${result.task.title} moved to ${columnName}, position ${committedIndex + 1} of ${result.orderedTaskIds.length}`
+          );
+        })
+        .catch(() => announce(`Move failed. ${task.title} stayed in its current column`));
     },
-    [announce, canWriteTasks, columns, filteredTasks, isOnline, updateTask]
+    [allTasksByStatus, announce, canWriteTasks, columns, commitBoardMove, filteredTasks, isOnline]
   );
 
   // Register callbacks with keyboard context (refs, so no need for useEffect)
@@ -464,6 +503,7 @@ export function KanbanBoard() {
   const {
     activeTask,
     isDragActive,
+    isMovePending,
     liveTasksByStatus,
     sensors,
     collisionDetection,
@@ -476,15 +516,9 @@ export function KanbanBoard() {
   } = useBoardDragDrop({
     tasks: filteredTasks,
     tasksByStatus,
+    allTasksByStatus,
     columns,
-    onStatusChange: async (taskId, status) => {
-      if (!canWriteTasks || !isOnline) throw new Error('Task movement is unavailable');
-      await updateTask.mutateAsync({ id: taskId, input: { status } });
-    },
-    onReorder: async (taskIds) => {
-      if (!canWriteTasks || !isOnline) throw new Error('Task movement is unavailable');
-      await reorderTasks.mutateAsync(taskIds);
-    },
+    onMove: commitBoardMove,
     announce,
   });
 
@@ -587,7 +621,7 @@ export function KanbanBoard() {
       <FeatureErrorBoundary fallbackTitle="Board failed to render">
         <div
           className={cn(
-            'grid grid-cols-1 gap-4',
+            'grid grid-cols-1 items-start gap-4',
             !isDesktopClient && 'xl:grid-cols-5',
             isDesktopClient && rightRailOpen && 'desktop-board-with-right-rail'
           )}
@@ -624,15 +658,23 @@ export function KanbanBoard() {
                       onTaskStatusChange={handleMoveTask}
                       selectedTaskId={selectedTaskId}
                       canChangeStatus={canWriteTasks && isOnline}
-                      dragEnabled={canDragTasks}
+                      dragEnabled={canDragTasks && !isMovePending}
                       isDragActive={isDragActive}
                       statusOptions={statusOptions}
                     />
                   ))}
                 </div>
 
-                <DragOverlay>
-                  {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+                <DragOverlay dropAnimation={null}>
+                  {activeTask ? (
+                    <div
+                      data-board-drag-overlay
+                      className="pointer-events-none h-full w-full rounded-md bg-card text-card-foreground shadow-2xl ring-1 ring-border"
+                      style={{ contain: 'layout paint' }}
+                    >
+                      <TaskCard task={activeTask} dragEnabled={false} isDragActive />
+                    </div>
+                  ) : null}
                 </DragOverlay>
               </DndContext>
             ) : (
@@ -680,20 +722,22 @@ export function KanbanBoard() {
         </div>
 
         {boardSettings.showDashboard && (
-          <LazyOnVisible
-            className="mt-6 border-t pt-4"
-            fallback={<DashboardLoadingFallback />}
-            minHeight={192}
-            rootMargin="0px 0px"
-          >
-            <Suspense fallback={<DashboardLoadingFallback />}>
-              <Dashboard
-                onTaskClick={(taskId, target) => {
-                  void handleTaskIdClick(taskId, target);
-                }}
-              />
-            </Suspense>
-          </LazyOnVisible>
+          <section aria-label="Board dashboard">
+            <LazyOnVisible
+              className="mt-6 border-t pt-4"
+              fallback={<DashboardLoadingFallback />}
+              minHeight={192}
+              rootMargin="0px 0px"
+            >
+              <Suspense fallback={<DashboardLoadingFallback />}>
+                <Dashboard
+                  onTaskClick={(taskId, target) => {
+                    void handleTaskIdClick(taskId, target);
+                  }}
+                />
+              </Suspense>
+            </LazyOnVisible>
+          </section>
         )}
       </FeatureErrorBoundary>
 

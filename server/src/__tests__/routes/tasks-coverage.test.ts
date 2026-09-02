@@ -13,6 +13,8 @@ const {
   mockBlockingService,
   mockActivityService,
   mockBacklogService,
+  mockBroadcastTaskChange,
+  mockSyncTaskStatusToGitHub,
 } = vi.hoisted(() => ({
   mockTaskService: {
     listTasks: vi.fn(),
@@ -22,6 +24,17 @@ const {
     deleteTask: vi.fn(),
     archiveTask: vi.fn(),
     reorderTasks: vi.fn(),
+    moveTask: vi.fn(),
+    reconcileBoardMoveTelemetry: vi.fn().mockResolvedValue(true),
+    markBoardMoveAuditComplete: vi.fn().mockImplementation((id: string, operationId: string) =>
+      Promise.resolve({
+        id,
+        lastBoardMove: {
+          operationId,
+          auditCompletedAt: '2026-08-01T10:00:01.000Z',
+        },
+      })
+    ),
     getIdentityScanSources: vi.fn().mockReturnValue([]),
   },
   mockWorktreeService: {
@@ -41,6 +54,7 @@ const {
   },
   mockActivityService: {
     logActivity: vi.fn().mockResolvedValue(undefined),
+    logActivityOnce: vi.fn().mockResolvedValue({ activity: {}, created: true }),
   },
   mockBacklogService: {
     getTaskIdentityDiagnostics: vi
@@ -49,6 +63,8 @@ const {
     getBacklogCount: vi.fn().mockResolvedValue(0),
     demoteToBacklog: vi.fn(),
   },
+  mockBroadcastTaskChange: vi.fn(),
+  mockSyncTaskStatusToGitHub: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../services/task-service.js', () => ({
@@ -77,7 +93,11 @@ vi.mock('../../services/backlog-service.js', () => ({
 }));
 
 vi.mock('../../services/broadcast-service.js', () => ({
-  broadcastTaskChange: vi.fn(),
+  broadcastTaskChange: mockBroadcastTaskChange,
+}));
+
+vi.mock('../../services/github-sync-service.js', () => ({
+  getGitHubSyncService: () => ({ syncTaskStatusToGitHub: mockSyncTaskStatusToGitHub }),
 }));
 
 vi.mock('../../services/attachment-service.js', () => ({
@@ -138,6 +158,41 @@ describe('Tasks Routes (actual module)', () => {
       expect(res.body).toEqual([]);
     });
 
+    it('repairs the durable audit receipt when a board is loaded after restart', async () => {
+      const task = {
+        id: 't1',
+        title: 'Moved task',
+        status: 'blocked',
+        position: 0,
+        created: '2025-01-01',
+        updated: '2025-01-02',
+        updatedBy: 'user:test',
+        lastBoardMove: {
+          operationId: '00000000-0000-4000-8000-000000000013',
+          sourceStatus: 'todo',
+          sourcePosition: null,
+          destinationStatus: 'blocked',
+          destinationIndex: 0,
+          completedAt: '2025-01-02',
+        },
+      };
+      const secondTask = {
+        ...task,
+        id: 't2',
+        title: 'Second moved task',
+      };
+      mockTaskService.listTasks.mockResolvedValue([task, secondTask]);
+
+      const res = await request(app).get('/api/tasks');
+
+      expect(res.status).toBe(200);
+      await vi.waitFor(() => {
+        expect(mockTaskService.reconcileBoardMoveTelemetry).toHaveBeenCalledWith(task);
+        expect(mockTaskService.reconcileBoardMoveTelemetry).toHaveBeenCalledWith(secondTask);
+        expect(mockActivityService.logActivityOnce).toHaveBeenCalledTimes(2);
+      });
+    });
+
     it('should expose duplicate identity diagnostics as a response header', async () => {
       mockTaskService.listTasks.mockResolvedValue([]);
       mockBacklogService.getTaskIdentityDiagnostics.mockResolvedValueOnce({
@@ -192,6 +247,190 @@ describe('Tasks Routes (actual module)', () => {
     it('should reject missing orderedIds', async () => {
       const res = await request(app).post('/api/tasks/reorder').send({});
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/tasks/:id/move', () => {
+    it('does not overwrite a prior durable receipt while audit repair is unavailable', async () => {
+      mockTaskService.getTask.mockResolvedValue({
+        id: 't1',
+        title: 'Task',
+        status: 'blocked',
+        position: 0,
+        revision: 2,
+        lastBoardMove: {
+          operationId: '00000000-0000-4000-8000-000000000010',
+          sourceStatus: 'todo',
+          sourcePosition: null,
+          destinationStatus: 'blocked',
+          destinationIndex: 0,
+          completedAt: '2026-08-01T10:00:00.000Z',
+        },
+      });
+      mockActivityService.logActivityOnce.mockRejectedValueOnce(new Error('activity unavailable'));
+
+      const res = await request(app)
+        .post('/api/tasks/t1/move')
+        .set('If-Match', '"task:t1:2"')
+        .send({
+          operationId: '00000000-0000-4000-8000-000000000011',
+          sourceStatus: 'blocked',
+          sourcePosition: 0,
+          destinationStatus: 'done',
+          destinationIndex: 0,
+        });
+
+      expect(res.status).toBe(500);
+      expect(mockTaskService.moveTask).not.toHaveBeenCalled();
+    });
+
+    it('passes revision and operation identity to one move command', async () => {
+      const task = {
+        id: 't1',
+        title: 'Task',
+        status: 'todo',
+        position: 0,
+        revision: 4,
+      };
+      mockTaskService.getTask.mockResolvedValue(task);
+      mockTaskService.moveTask.mockResolvedValue({
+        task: { ...task, status: 'blocked', position: 0.5, revision: 5 },
+        operationId: '00000000-0000-4000-8000-000000000010',
+        orderedTaskIds: ['b1', 't1', 'b2'],
+        replayed: false,
+      });
+
+      const res = await request(app)
+        .post('/api/tasks/t1/move')
+        .set('If-Match', '"task:t1:4"')
+        .send({
+          operationId: '00000000-0000-4000-8000-000000000010',
+          sourceStatus: 'todo',
+          sourcePosition: 0,
+          destinationStatus: 'blocked',
+          destinationIndex: 1,
+        });
+
+      expect(res.status).toBe(200);
+      expect(mockTaskService.moveTask).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          operationId: '00000000-0000-4000-8000-000000000010',
+          expectedRevision: 4,
+          updatedBy: 'system:unknown',
+        })
+      );
+      expect(mockActivityService.logActivityOnce).toHaveBeenCalledOnce();
+      expect(mockActivityService.logActivityOnce.mock.invocationCallOrder[0]).toBeLessThan(
+        mockBroadcastTaskChange.mock.invocationCallOrder[0]
+      );
+      expect(res.body).toMatchObject({ replayed: false, task: { revision: 5 } });
+    });
+
+    it('allows an already committed operation to replay with its original revision', async () => {
+      const task = {
+        id: 't1',
+        title: 'Task',
+        status: 'blocked',
+        position: 0.5,
+        revision: 5,
+        github: { owner: 'BradGroux', repo: 'veritas-kanban', issue: 1302 },
+        lastBoardMove: {
+          operationId: '00000000-0000-4000-8000-000000000010',
+          sourceStatus: 'todo',
+          sourcePosition: 0,
+          destinationStatus: 'blocked',
+          destinationIndex: 1,
+          completedAt: '2026-08-01T10:00:00.000Z',
+        },
+      };
+      mockTaskService.getTask.mockResolvedValue(task);
+      mockTaskService.moveTask.mockResolvedValue({
+        task,
+        operationId: '00000000-0000-4000-8000-000000000010',
+        orderedTaskIds: ['b1', 't1', 'b2'],
+        replayed: true,
+      });
+      mockActivityService.logActivityOnce.mockResolvedValueOnce({ activity: {}, created: false });
+
+      const res = await request(app)
+        .post('/api/tasks/t1/move')
+        .set('If-Match', '"task:t1:4"')
+        .send({
+          operationId: '00000000-0000-4000-8000-000000000010',
+          sourceStatus: 'todo',
+          sourcePosition: 0,
+          destinationStatus: 'blocked',
+          destinationIndex: 1,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.replayed).toBe(true);
+      expect(mockActivityService.logActivityOnce).toHaveBeenCalledOnce();
+      expect(mockActivityService.logActivityOnce).toHaveBeenCalledWith(
+        '00000000-0000-4000-8000-000000000010',
+        'status_changed',
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ from: 'todo', status: 'blocked' }),
+        undefined,
+        'system:unknown'
+      );
+      expect(mockBroadcastTaskChange).not.toHaveBeenCalled();
+      expect(mockSyncTaskStatusToGitHub).toHaveBeenCalledWith(task);
+    });
+
+    it('returns the committed move when activity persistence is temporarily unavailable', async () => {
+      const task = { id: 't1', title: 'Task', status: 'todo', revision: 1 };
+      const moved = {
+        ...task,
+        status: 'blocked',
+        position: 0,
+        boardRank: 'v1:0/1',
+        revision: 2,
+        lastBoardMove: {
+          operationId: '00000000-0000-4000-8000-000000000011',
+          sourceStatus: 'todo',
+          sourcePosition: null,
+          destinationStatus: 'blocked',
+          destinationIndex: 0,
+          completedAt: '2026-08-01T10:00:00.000Z',
+        },
+      };
+      mockTaskService.getTask.mockResolvedValue(task);
+      mockTaskService.moveTask.mockResolvedValue({
+        task: moved,
+        operationId: '00000000-0000-4000-8000-000000000011',
+        orderedTaskIds: ['t1'],
+        replayed: false,
+      });
+      mockActivityService.logActivityOnce.mockRejectedValueOnce(new Error('activity unavailable'));
+
+      const res = await request(app)
+        .post('/api/tasks/t1/move')
+        .set('If-Match', '"task:t1:1"')
+        .send({
+          operationId: '00000000-0000-4000-8000-000000000011',
+          sourceStatus: 'todo',
+          sourcePosition: null,
+          destinationStatus: 'blocked',
+          destinationIndex: 0,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ task: moved, replayed: false });
+      await vi.waitFor(() => {
+        expect(mockActivityService.logActivityOnce).toHaveBeenCalledTimes(2);
+      });
+      expect(mockBroadcastTaskChange).toHaveBeenCalledWith('moved', 't1', undefined, {
+        operationId: '00000000-0000-4000-8000-000000000011',
+      });
+      expect(mockBroadcastTaskChange).toHaveBeenCalledWith('updated', 't1', undefined, {
+        operationId: '00000000-0000-4000-8000-000000000011',
+      });
+      expect(
+        mockBroadcastTaskChange.mock.calls.filter(([changeType]) => changeType === 'moved')
+      ).toHaveLength(1);
     });
   });
 
