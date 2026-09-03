@@ -607,7 +607,13 @@ describe('Agents settings Mantine migration', () => {
   it('renders installed agents, health, and routing controls through direct Mantine primitives', () => {
     const { baseElement } = renderWithProviders(<AgentsTab />);
 
-    expect(screen.getByText('Installed Agents')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Agents' })).toBeDefined();
+    expect(screen.getByRole('navigation', { name: 'Agent settings sections' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Providers' }).getAttribute('href')).toBe(
+      '#agents-providers'
+    );
+    expect(baseElement.querySelectorAll('[data-settings-section]')).toHaveLength(5);
+    expect(baseElement.querySelector('#agents-policies')?.className).toContain('scroll-mt-16');
     expect(screen.getAllByText('Codex CLI').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('gpt-5').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Codex Health')).toBeDefined();

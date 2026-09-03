@@ -87,7 +87,15 @@ import type {
 import { api } from '@/lib/api';
 import { DEFAULT_FEATURE_SETTINGS, DEFAULT_ROUTING_CONFIG } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
-import { ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
+import {
+  ToggleRow,
+  NumberRow,
+  SectionHeader,
+  SaveIndicator,
+  SettingsLocalNav,
+  SettingsPage,
+  SettingsSection,
+} from '../shared';
 
 type AgentFeatureSettings = typeof DEFAULT_FEATURE_SETTINGS.agents;
 
@@ -171,12 +179,27 @@ export function AgentsTab() {
   const isDefault = (type: string) => config?.defaultAgent === type;
 
   return (
-    <div className="space-y-6">
-      {/* Agent List */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Installed Agents</h3>
-          {!showAddForm && (
+    <SettingsPage
+      title="Agents"
+      description="Configure execution providers, review compatibility and health, and manage the policies that govern agent work."
+    >
+      <SettingsLocalNav
+        label="Agent settings sections"
+        items={[
+          { id: 'agents-providers', label: 'Providers' },
+          { id: 'agents-compatibility', label: 'Compatibility' },
+          { id: 'agents-profiles', label: 'Profiles' },
+          { id: 'agents-health', label: 'Health' },
+          { id: 'agents-policies', label: 'Policies' },
+        ]}
+      />
+
+      <SettingsSection
+        id="agents-providers"
+        title="Providers"
+        description="Installed agent runtimes and their launch configuration."
+        actions={
+          !showAddForm ? (
             <Button
               variant="outline"
               size="xs"
@@ -185,139 +208,178 @@ export function AgentsTab() {
             >
               Add Agent
             </Button>
+          ) : undefined
+        }
+      >
+        <div className="space-y-3">
+          <Text size="xs" c="dimmed">
+            {isLoading
+              ? 'Loading installed agents'
+              : `${config?.agents.length ?? 0} installed agent${(config?.agents.length ?? 0) === 1 ? '' : 's'}`}
+          </Text>
+
+          {showAddForm && (
+            <AgentForm
+              existingTypes={config?.agents.map((a) => a.type) || []}
+              sandboxPresets={sandboxPresets}
+              defaultSandboxPresetId={config?.defaultSandboxPresetId}
+              onSubmit={handleAddAgent}
+              onCancel={() => setShowAddForm(false)}
+            />
+          )}
+
+          {isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : config?.agents.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
+              No agents configured. Add one to get started.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {config?.agents.map((agent) =>
+                editingAgent === agent.type ? (
+                  <AgentForm
+                    key={agent.type}
+                    agent={agent}
+                    existingTypes={config.agents
+                      .filter((a) => a.type !== agent.type)
+                      .map((a) => a.type)}
+                    sandboxPresets={sandboxPresets}
+                    defaultSandboxPresetId={config.defaultSandboxPresetId}
+                    onSubmit={(updated) => handleEditAgent(agent.type, updated)}
+                    onCancel={() => setEditingAgent(null)}
+                  />
+                ) : (
+                  <AgentItem
+                    key={agent.type}
+                    agent={agent}
+                    supportStatus={harnessSupport.find((status) => status.agentType === agent.type)}
+                    sandboxPresets={sandboxPresets}
+                    isDefault={isDefault(agent.type)}
+                    onToggle={() => handleToggleAgent(agent.type)}
+                    onEdit={() => setEditingAgent(agent.type)}
+                    onRemove={() => handleRemoveAgent(agent.type)}
+                  />
+                )
+              )}
+            </div>
           )}
         </div>
+      </SettingsSection>
 
-        {showAddForm && (
-          <AgentForm
-            existingTypes={config?.agents.map((a) => a.type) || []}
-            sandboxPresets={sandboxPresets}
-            defaultSandboxPresetId={config?.defaultSandboxPresetId}
-            onSubmit={handleAddAgent}
-            onCancel={() => setShowAddForm(false)}
+      <SettingsSection
+        id="agents-compatibility"
+        title="Compatibility"
+        description="Reviewed harness support, tested versions, and current limitations."
+      >
+        <HarnessCompatibilityPanel matrix={harnessCompatibility} />
+      </SettingsSection>
+
+      <SettingsSection
+        id="agents-profiles"
+        title="Profiles"
+        description="Reusable agent packages and imported Buzz persona or team definitions."
+      >
+        <div className="space-y-4">
+          <AgentProfilePackagesSection
+            profiles={agentProfiles}
+            agents={config?.agents || []}
+            isLoading={isAgentProfilesLoading}
           />
-        )}
 
-        {isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading...</div>
-        ) : config?.agents.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
-            No agents configured. Add one to get started.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {config?.agents.map((agent) =>
-              editingAgent === agent.type ? (
-                <AgentForm
-                  key={agent.type}
-                  agent={agent}
-                  existingTypes={config.agents
-                    .filter((a) => a.type !== agent.type)
-                    .map((a) => a.type)}
-                  sandboxPresets={sandboxPresets}
-                  defaultSandboxPresetId={config.defaultSandboxPresetId}
-                  onSubmit={(updated) => handleEditAgent(agent.type, updated)}
-                  onCancel={() => setEditingAgent(null)}
-                />
-              ) : (
-                <AgentItem
-                  key={agent.type}
-                  agent={agent}
-                  supportStatus={harnessSupport.find((status) => status.agentType === agent.type)}
-                  sandboxPresets={sandboxPresets}
-                  isDefault={isDefault(agent.type)}
-                  onToggle={() => handleToggleAgent(agent.type)}
-                  onEdit={() => setEditingAgent(agent.type)}
-                  onRemove={() => handleRemoveAgent(agent.type)}
-                />
-              )
-            )}
-          </div>
-        )}
-      </div>
-
-      <HarnessCompatibilityPanel matrix={harnessCompatibility} />
-
-      <AgentProfilePackagesSection
-        profiles={agentProfiles}
-        agents={config?.agents || []}
-        isLoading={isAgentProfilesLoading}
-      />
-
-      <BuzzDefinitionImportSection />
-
-      <CodexHealthPanel
-        health={codexHealth}
-        isFetching={isCodexHealthFetching}
-        onRefresh={() => refetchCodexHealth()}
-      />
-
-      <ProviderHealthPanel
-        health={providerHealth}
-        isFetching={isProviderHealthFetching}
-        onRefresh={() => refetchProviderHealth()}
-      />
-
-      <AgentHostHealthPanel agents={config?.agents || []} />
-
-      <SandboxPoliciesSection
-        agents={config?.agents || []}
-        presets={sandboxPresets}
-        isLoading={isSandboxPoliciesLoading}
-      />
-
-      {/* Agent Behavior */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <SectionHeader title="Agent Behavior" onReset={resetAgents} />
-          <SaveIndicator isPending={isPending} />
+          <BuzzDefinitionImportSection />
         </div>
-        <div className="divide-y">
-          <NumberRow
-            label="Timeout"
-            description="Kill agent process after N minutes (5-480)"
-            value={
-              settings.agents?.timeoutMinutes ?? DEFAULT_FEATURE_SETTINGS.agents.timeoutMinutes
-            }
-            onChange={(v) => update('timeoutMinutes', v)}
-            min={5}
-            max={480}
-            unit="min"
-            hideSpinners
-            maxLength={3}
-          />
-          <ToggleRow
-            label="Auto-Commit on Complete"
-            description="Automatically commit changes when agent finishes successfully"
-            checked={
-              settings.agents?.autoCommitOnComplete ??
-              DEFAULT_FEATURE_SETTINGS.agents.autoCommitOnComplete
-            }
-            onCheckedChange={(v) => update('autoCommitOnComplete', v)}
-          />
-          <ToggleRow
-            label="Auto-Cleanup Worktrees"
-            description="Remove worktree when task is archived"
-            checked={
-              settings.agents?.autoCleanupWorktrees ??
-              DEFAULT_FEATURE_SETTINGS.agents.autoCleanupWorktrees
-            }
-            onCheckedChange={(v) => update('autoCleanupWorktrees', v)}
-          />
-          <ToggleRow
-            label="Preview Panel"
-            description="Show preview panel in task detail view"
-            checked={
-              settings.agents?.enablePreview ?? DEFAULT_FEATURE_SETTINGS.agents.enablePreview
-            }
-            onCheckedChange={(v) => update('enablePreview', v)}
-          />
-        </div>
-      </div>
+      </SettingsSection>
 
-      {/* Agent Routing Rules */}
-      <RoutingRulesSection agents={config?.agents || []} />
-    </div>
+      <SettingsSection
+        id="agents-health"
+        title="Health"
+        description="Authentication, provider posture, and host supervisor readiness."
+      >
+        <div className="space-y-4">
+          <CodexHealthPanel
+            health={codexHealth}
+            isFetching={isCodexHealthFetching}
+            onRefresh={() => refetchCodexHealth()}
+          />
+
+          <ProviderHealthPanel
+            health={providerHealth}
+            isFetching={isProviderHealthFetching}
+            onRefresh={() => refetchProviderHealth()}
+          />
+
+          <AgentHostHealthPanel agents={config?.agents || []} />
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        id="agents-policies"
+        title="Policies"
+        description="Advanced sandbox, completion, worktree, preview, and routing controls."
+        tone="advanced"
+      >
+        <div className="space-y-5">
+          <SandboxPoliciesSection
+            agents={config?.agents || []}
+            presets={sandboxPresets}
+            isLoading={isSandboxPoliciesLoading}
+          />
+
+          <div className="space-y-4 rounded-md border bg-card p-3">
+            <SectionHeader
+              title="Agent Behavior"
+              actions={<SaveIndicator isPending={isPending} />}
+              onReset={resetAgents}
+              contained
+            />
+            <div className="divide-y">
+              <NumberRow
+                label="Timeout"
+                description="Kill agent process after N minutes (5-480)"
+                value={
+                  settings.agents?.timeoutMinutes ?? DEFAULT_FEATURE_SETTINGS.agents.timeoutMinutes
+                }
+                onChange={(v) => update('timeoutMinutes', v)}
+                min={5}
+                max={480}
+                unit="min"
+                hideSpinners
+                maxLength={3}
+              />
+              <ToggleRow
+                label="Auto-Commit on Complete"
+                description="Automatically commit changes when agent finishes successfully"
+                checked={
+                  settings.agents?.autoCommitOnComplete ??
+                  DEFAULT_FEATURE_SETTINGS.agents.autoCommitOnComplete
+                }
+                onCheckedChange={(v) => update('autoCommitOnComplete', v)}
+              />
+              <ToggleRow
+                label="Auto-Cleanup Worktrees"
+                description="Remove worktree when task is archived"
+                checked={
+                  settings.agents?.autoCleanupWorktrees ??
+                  DEFAULT_FEATURE_SETTINGS.agents.autoCleanupWorktrees
+                }
+                onCheckedChange={(v) => update('autoCleanupWorktrees', v)}
+              />
+              <ToggleRow
+                label="Preview Panel"
+                description="Show preview panel in task detail view"
+                checked={
+                  settings.agents?.enablePreview ?? DEFAULT_FEATURE_SETTINGS.agents.enablePreview
+                }
+                onCheckedChange={(v) => update('enablePreview', v)}
+              />
+            </div>
+          </div>
+
+          <RoutingRulesSection agents={config?.agents || []} />
+        </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
 
