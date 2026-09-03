@@ -1107,6 +1107,7 @@
 
       const modeContent = {
         plan: {
+          label: 'Plan',
           description:
             'Prepare the objective, work breakdown, supporting context, and acceptance path.',
           sections: ['Details', 'Progress', 'Observations', 'Dependencies', 'Attachments'],
@@ -1118,6 +1119,7 @@
           action: 'Apply template',
         },
         run: {
+          label: 'Run',
           description:
             'Start, monitor, and recover execution without mixing task state with transport state.',
           sections: ['Session', 'Workflow', 'Run access', 'Source', 'Live activity'],
@@ -1132,6 +1134,7 @@
           action: 'Open workflow',
         },
         results: {
+          label: 'Results',
           description:
             'Inspect output, changes, review decisions, verification, and durable evidence.',
           sections: ['Work Products', 'Changes', 'Review', 'Verification', 'Evidence'],
@@ -1143,6 +1146,7 @@
           action: 'Review changes',
         },
         history: {
+          label: 'History',
           description:
             'Trace attempts and events over time without displacing the current execution summary.',
           sections: ['Timeline', 'Attempts', 'Events', 'Metrics'],
@@ -1196,10 +1200,26 @@
       }
 
       function renderMode(mode) {
-        const data = modeContent[mode];
+        let data;
+        switch (mode) {
+          case 'plan':
+            data = modeContent.plan;
+            break;
+          case 'run':
+            data = modeContent.run;
+            break;
+          case 'results':
+            data = modeContent.results;
+            break;
+          case 'history':
+            data = modeContent.history;
+            break;
+          default:
+            return;
+        }
         content.innerHTML = `
-          <div class="mode-header"><div><div class="eyebrow">${mode}</div><h2>${mode[0].toUpperCase() + mode.slice(1)}</h2><p class="description">${data.description}</p></div><button class="button" type="button">${data.action}</button></div>
-          <nav class="local-nav" aria-label="${mode} sections">${data.sections
+          <div class="mode-header"><div><div class="eyebrow">${data.label}</div><h2>${data.label}</h2><p class="description">${data.description}</p></div><button class="button" type="button">${data.action}</button></div>
+          <nav class="local-nav" aria-label="${data.label} sections">${data.sections
             .map(
               (section, index) =>
                 `<button type="button" aria-current="${index === 0 ? 'page' : 'false'}">${section}</button>`
