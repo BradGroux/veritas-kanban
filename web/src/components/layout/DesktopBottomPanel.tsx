@@ -8,8 +8,8 @@ import {
   type PointerEvent,
   type WheelEvent,
 } from 'react';
-import { ActionIcon, Group, SegmentedControl, Text } from '@mantine/core';
-import { GripVertical, MessageSquare, Users, X } from 'lucide-react';
+import { SegmentedControl } from '@mantine/core';
+import { GripVertical } from 'lucide-react';
 
 import {
   MAX_RIGHT_PANEL_WIDTH,
@@ -124,40 +124,13 @@ export function DesktopBottomPanel() {
       >
         <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
-      <div className="desktop-no-drag shrink-0 space-y-2 border-b border-border px-3 py-2">
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="xs" wrap="nowrap">
-            {bottomPanel === 'board-chat' ? (
-              <MessageSquare className="h-4 w-4 text-primary" aria-hidden="true" />
-            ) : (
-              <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-            )}
-            <Text size="sm" fw={600}>
-              Workbench
-            </Text>
-          </Group>
-          <Group gap={4} wrap="nowrap">
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size={30}
-              onClick={closeBottomPanel}
-              aria-label="Close right dock"
-              title="Close right dock"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </ActionIcon>
-          </Group>
-        </Group>
-        <Group wrap="nowrap">
-          <SegmentedControl
-            size="xs"
-            value={bottomPanel ?? 'board-chat'}
-            onChange={(value) => openBottomPanel(value as DesktopBottomPanelId)}
-            data={PANEL_OPTIONS}
-            aria-label="Chat channel"
-          />
-        </Group>
+      <div className="desktop-no-drag vk-chat-toolbar">
+        <SegmentedControl
+          value={bottomPanel ?? 'board-chat'}
+          onChange={(value) => openBottomPanel(value as DesktopBottomPanelId)}
+          data={PANEL_OPTIONS}
+          aria-label="Chat channel"
+        />
       </div>
       <div className="workbench-chat-dock-content min-h-0 flex-1 overflow-hidden">
         <Suspense

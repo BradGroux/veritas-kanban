@@ -181,6 +181,7 @@ describe('layout chrome Mantine migration', () => {
     window.history.replaceState({}, '', '/');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1360 });
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollTo = vi.fn();
   });
 
   afterEach(() => {
@@ -369,7 +370,7 @@ describe('layout chrome Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
     const dock = screen.getByRole('region', { name: 'Workbench right dock' });
     expect(within(dock).queryByRole('radiogroup', { name: 'Dock position' })).toBeNull();
-    await user.click(within(dock).getByRole('button', { name: 'Close right dock' }));
+    await user.click(within(dock).getByRole('button', { name: 'Close Board Chat panel' }));
     expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
   });
 });

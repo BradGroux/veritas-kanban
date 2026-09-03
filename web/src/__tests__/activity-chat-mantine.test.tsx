@@ -84,12 +84,14 @@ vi.mock('@/hooks/useTasks', () => ({
 
 describe('activity and chat Mantine migration', () => {
   const originalScrollIntoView = Element.prototype.scrollIntoView;
+  const originalScrollTo = Element.prototype.scrollTo;
   const originalHasPointerCapture = Element.prototype.hasPointerCapture;
   const originalSetPointerCapture = Element.prototype.setPointerCapture;
   const originalReleasePointerCapture = Element.prototype.releasePointerCapture;
 
   beforeAll(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollTo = vi.fn();
     Element.prototype.hasPointerCapture = vi.fn(() => false);
     Element.prototype.setPointerCapture = vi.fn();
     Element.prototype.releasePointerCapture = vi.fn();
@@ -97,6 +99,7 @@ describe('activity and chat Mantine migration', () => {
 
   afterAll(() => {
     Element.prototype.scrollIntoView = originalScrollIntoView;
+    Element.prototype.scrollTo = originalScrollTo;
     Element.prototype.hasPointerCapture = originalHasPointerCapture;
     Element.prototype.setPointerCapture = originalSetPointerCapture;
     Element.prototype.releasePointerCapture = originalReleasePointerCapture;
@@ -259,25 +262,22 @@ describe('activity and chat Mantine migration', () => {
 
   it('renders chat overlays with direct Mantine primitives', async () => {
     const user = userEvent.setup();
-    const { baseElement } = renderWithProviders(
+    const { baseElement, unmount } = renderWithProviders(
       <>
         <ChatPanel open={true} onOpenChange={vi.fn()} />
-        <SquadChatPanel open={true} onOpenChange={vi.fn()} />
         <FloatingChat />
       </>
     );
 
     expect(await screen.findByText('Board Chat')).toBeDefined();
     expect(screen.getByText('Ready to help with the board.')).toBeDefined();
-    expect(screen.getByText('Squad Chat')).toBeDefined();
-    expect(screen.getByText('Code review ready.')).toBeDefined();
     const chatTrigger = screen.getByLabelText('Open chat');
     expect(chatTrigger.style.position).toBe('fixed');
     expect(chatTrigger.className).toContain('floating-chat-trigger');
-    expect(baseElement.querySelectorAll('.mantine-Drawer-root').length).toBeGreaterThanOrEqual(2);
+    expect(baseElement.querySelector('[data-overlay-variant="chat"]')).not.toBeNull();
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
-    expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
+    expect(baseElement.querySelector('.vk-chat-transcript')).not.toBeNull();
     expect(baseElement.querySelector('.mantine-ActionIcon-root')).toBeDefined();
 
     await user.click(await screen.findByLabelText('Clear chat'));
@@ -287,6 +287,10 @@ describe('activity and chat Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="sheet-content"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
+    unmount();
+    renderWithProviders(<SquadChatPanel open onOpenChange={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: 'Squad Chat' })).toBeDefined();
+    expect(screen.getByText('Code review ready.')).toBeDefined();
   });
 
   it('renders chat panels inline for the desktop bottom panel', () => {
@@ -299,8 +303,8 @@ describe('activity and chat Mantine migration', () => {
 
     expect(screen.getByLabelText('Board Chat')).toBeDefined();
     expect(screen.getByLabelText('Squad Chat')).toBeDefined();
-    expect(screen.getByLabelText('Close chat panel')).toBeDefined();
-    expect(screen.getByLabelText('Close squad chat panel')).toBeDefined();
+    expect(screen.getByLabelText('Close Board Chat panel')).toBeDefined();
+    expect(screen.getByLabelText('Close Squad Chat panel')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Drawer-root')).toBeNull();
   });
 

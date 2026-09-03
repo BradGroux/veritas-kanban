@@ -98,6 +98,10 @@ export function TaskDetailPanel({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [taskChatOpen, setTaskChatOpen] = useState(false);
+  const [chatModalOpen, setChatModalOpen] = useState(false);
+  const chatTriggerRef = useRef<HTMLButtonElement>(null);
+  const chatInvokerRef = useRef<HTMLElement | null>(null);
+  const wasChatOpen = useRef(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [timelineAttemptId, setTimelineAttemptId] = useState<string | null>(null);
@@ -108,6 +112,25 @@ export function TaskDetailPanel({
   const deleteObservation = useDeleteObservation();
   const nestedOverlayOpen = previewOpen || applyTemplateOpen || taskChatOpen || workflowOpen;
   const activeTaskId = localTask?.id;
+
+  useEffect(() => {
+    const closed = wasChatOpen.current && !taskChatOpen;
+    wasChatOpen.current = taskChatOpen;
+    if (closed && open) {
+      const frame = requestAnimationFrame(() => {
+        const invoker = chatInvokerRef.current;
+        if (invoker?.isConnected) invoker.focus();
+        if (document.activeElement !== invoker) chatTriggerRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [taskChatOpen, open]);
+
+  const openTaskChat = (invoker?: HTMLElement) => {
+    chatInvokerRef.current =
+      invoker ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setTaskChatOpen(true);
+  };
 
   useEffect(() => {
     if (!open || !activeTaskId) return;
@@ -251,7 +274,7 @@ export function TaskDetailPanel({
     onClose: () => onOpenChange(false),
     onRestore,
     setActiveTab,
-    openTaskChat: () => setTaskChatOpen(true),
+    openTaskChat,
     openWorkflow: () => setWorkflowOpen(true),
     setTimelineAttemptId: setTimelineAttemptTarget,
     addObservation: addObservationForTask,
@@ -267,14 +290,19 @@ export function TaskDetailPanel({
         opened={open}
         position="right"
         returnFocus
-        size={expanded ? '100vw' : `min(100vw, ${OVERLAY_VARIANTS.task.width})`}
-        trapFocus
+        size={
+          expanded
+            ? '100vw'
+            : `min(100vw, calc(${OVERLAY_VARIANTS.task.width} + ${taskChatOpen ? OVERLAY_VARIANTS.chat.width : '0rem'}))`
+        }
+        trapFocus={!previewOpen && !applyTemplateOpen && !workflowOpen && !chatModalOpen}
       >
         <Drawer.Overlay className="veritas-overlay fixed inset-0 z-50" />
         <Drawer.Content
           aria-label={`Task workspace: ${localTask.title}`}
           data-presentation={expanded ? 'expanded' : 'drawer'}
           data-testid="task-detail-panel"
+          data-chat-open={taskChatOpen || undefined}
           classNames={{
             content:
               'veritas-overlay-surface vk-task-workspace flex h-full min-h-0 max-h-[100dvh] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg',
@@ -303,8 +331,9 @@ export function TaskDetailPanel({
                       </Text>
                     )}
                     <UiAction
+                      ref={chatTriggerRef}
                       variant="quiet"
-                      onClick={() => setTaskChatOpen(true)}
+                      onClick={(event) => openTaskChat(event.currentTarget)}
                       leftSection={<MessageSquare className="h-3.5 w-3.5" />}
                     >
                       Chat
@@ -363,188 +392,204 @@ export function TaskDetailPanel({
                 />
               )}
 
-              <div className="flex min-h-0 flex-1 overflow-hidden">
-                <nav
-                  aria-label="Task workspace modes"
-                  data-testid="task-workspace-mode-navigation"
-                  className="veritas-overlay-scroll vk-task-workspace-navigation flex-shrink-0 flex-col gap-1 overflow-y-auto border-r"
-                >
-                  <Text size="sm" c="dimmed" className="mb-1 px-2">
-                    Workspace
-                  </Text>
-                  {workspaceModes.map((mode) => {
-                    const Icon = WORKSPACE_MODE_ICONS[mode.id];
-                    const active = mode.id === activeMode;
-                    return (
-                      <UiAction
-                        variant="quiet"
-                        key={mode.id}
-                        type="button"
-                        disabled={mode.disabled}
-                        aria-current={active ? 'page' : undefined}
-                        onClick={() => selectWorkspaceMode(mode.id)}
-                        className="vk-ui-nav-action w-full text-left"
-                      >
-                        <Icon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                        <span>{mode.label}</span>
-                      </UiAction>
-                    );
-                  })}
-                </nav>
-
-                <Tabs
-                  value={activeTab}
-                  onChange={(value) => {
-                    if (isTaskDetailTabId(value)) setActiveTab(value);
-                  }}
-                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-                >
-                  <div className="vk-task-workspace-section-header flex-shrink-0 border-b">
-                    <Select
-                      label="Task workspace mode"
-                      value={activeMode}
-                      data={workspaceModes.map((mode) => ({
-                        value: mode.id,
-                        label: mode.label,
-                        disabled: mode.disabled,
-                      }))}
-                      onChange={(value) => {
-                        if (isTaskWorkspaceModeId(value)) selectWorkspaceMode(value);
-                      }}
-                      allowDeselect={false}
-                      className="vk-task-workspace-selector mb-3"
-                    />
-
-                    <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
-                      <div className="min-w-0">
-                        <UiHeading id="task-workspace-mode-heading">
-                          {activeModeMetadata?.label ?? 'Workspace'}
-                        </UiHeading>
-                        <Text size="sm" c="dimmed" className="mt-0.5 max-w-xl">
-                          {activeModeMetadata?.description}
-                        </Text>
-                      </div>
-                      <Group gap="xs" wrap="wrap">
-                        {activeMode === 'run' && (
-                          <UiPill>Task: {localTask.status.replaceAll('-', ' ')}</UiPill>
-                        )}
-                        {activeMode === 'results' && resultsReviewStatus && (
-                          <>
-                            <UiPill
-                              kind="status"
-                              tone={semanticToneForLegacyColor(resultsReviewStatus.color)}
-                            >
-                              Review: {resultsReviewStatus.label}
-                            </UiPill>
-                            {openFindingCount > 0 && (
-                              <UiPill kind="status" tone="warning">
-                                {openFindingCount} open finding{openFindingCount === 1 ? '' : 's'}
-                              </UiPill>
-                            )}
-                          </>
-                        )}
-                        {!readOnly && activeMode === 'plan' && (
-                          <UiAction
-                            variant="secondary"
-                            onClick={() => setApplyTemplateOpen(true)}
-                            leftSection={<FileCode className="h-3 w-3" />}
-                          >
-                            Template
-                          </UiAction>
-                        )}
-                        {!readOnly &&
-                          activeMode === 'run' &&
-                          activeTab === 'git' &&
-                          isCodeTask &&
-                          localTask.git?.repo &&
-                          agentSettings.enablePreview &&
-                          canUseLocalAgentControls && (
-                            <UiAction
-                              variant="secondary"
-                              onClick={() => setPreviewOpen(true)}
-                              leftSection={<Monitor className="h-3 w-3" />}
-                            >
-                              Preview
-                            </UiAction>
-                          )}
-                      </Group>
-                    </Group>
-
-                    {activeModeTabs.length > 1 && (
-                      <>
-                        <Tabs.List
-                          aria-label={`${activeModeMetadata?.label ?? 'Workspace'} sections`}
-                          className="vk-task-workspace-sections mt-3 w-full justify-start"
-                        >
-                          {activeModeTabs.map((tab) => {
-                            const Icon = tab.Icon;
-                            return (
-                              <Tabs.Tab
-                                key={tab.id}
-                                value={tab.id}
-                                disabled={tab.disabled}
-                                className="flex-none px-3"
-                                leftSection={Icon ? <Icon className="h-3 w-3" /> : undefined}
-                              >
-                                {tab.label}
-                              </Tabs.Tab>
-                            );
-                          })}
-                        </Tabs.List>
-                        <Select
-                          label={`${activeModeMetadata?.label ?? 'Workspace'} section`}
-                          value={activeTab}
-                          data={activeModeTabs.map((tab) => ({
-                            value: tab.id,
-                            label: tab.label,
-                            disabled: tab.disabled,
-                          }))}
-                          onChange={(value) => {
-                            if (isTaskDetailTabId(value)) setActiveTab(value);
-                          }}
-                          allowDeselect={false}
-                          className="vk-task-workspace-selector mt-3"
-                        />
-                      </>
-                    )}
-                  </div>
-
-                  <div
-                    className="veritas-overlay-scroll vk-task-workspace-body min-h-0 flex-1 overflow-y-scroll overscroll-contain"
-                    data-testid="task-detail-scroll-region"
-                    aria-labelledby="task-workspace-mode-heading task-workspace-section-heading"
-                    tabIndex={0}
+              <div className="vk-task-workspace-layout flex min-h-0 flex-1 overflow-hidden">
+                <div className="vk-task-workspace-main flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                  <nav
+                    aria-label="Task workspace modes"
+                    data-testid="task-workspace-mode-navigation"
+                    className="veritas-overlay-scroll vk-task-workspace-navigation flex-shrink-0 flex-col gap-1 overflow-y-auto border-r"
                   >
-                    <Text id="task-workspace-section-heading" component="h3" className="sr-only">
-                      {activeTabMetadata?.label ?? 'Task details'}
+                    <Text size="sm" c="dimmed" className="mb-1 px-2">
+                      Workspace
                     </Text>
-                    {visibleTabs.map((tab) => {
-                      const tabContent = (
-                        <Suspense
-                          fallback={
-                            <Text size="sm" c="dimmed">
-                              Loading {tab.label}...
-                            </Text>
-                          }
-                        >
-                          {tab.render(tabRenderContext)}
-                        </Suspense>
-                      );
-
+                    {workspaceModes.map((mode) => {
+                      const Icon = WORKSPACE_MODE_ICONS[mode.id];
+                      const active = mode.id === activeMode;
                       return (
-                        <Tabs.Panel key={tab.id} value={tab.id} className="mt-0 min-h-full">
-                          {tab.fallbackTitle ? (
-                            <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
-                              {tabContent}
-                            </FeatureErrorBoundary>
-                          ) : (
-                            tabContent
-                          )}
-                        </Tabs.Panel>
+                        <UiAction
+                          variant="quiet"
+                          key={mode.id}
+                          type="button"
+                          disabled={mode.disabled}
+                          aria-current={active ? 'page' : undefined}
+                          onClick={() => selectWorkspaceMode(mode.id)}
+                          className="vk-ui-nav-action w-full text-left"
+                        >
+                          <Icon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                          <span>{mode.label}</span>
+                        </UiAction>
                       );
                     })}
-                  </div>
-                </Tabs>
+                  </nav>
+
+                  <Tabs
+                    value={activeTab}
+                    onChange={(value) => {
+                      if (isTaskDetailTabId(value)) setActiveTab(value);
+                    }}
+                    className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+                  >
+                    <div className="vk-task-workspace-section-header flex-shrink-0 border-b">
+                      <Select
+                        label="Task workspace mode"
+                        value={activeMode}
+                        data={workspaceModes.map((mode) => ({
+                          value: mode.id,
+                          label: mode.label,
+                          disabled: mode.disabled,
+                        }))}
+                        onChange={(value) => {
+                          if (isTaskWorkspaceModeId(value)) selectWorkspaceMode(value);
+                        }}
+                        allowDeselect={false}
+                        className="vk-task-workspace-selector mb-3"
+                      />
+
+                      <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
+                        <div className="min-w-0">
+                          <UiHeading id="task-workspace-mode-heading">
+                            {activeModeMetadata?.label ?? 'Workspace'}
+                          </UiHeading>
+                          <Text size="sm" c="dimmed" className="mt-0.5 max-w-xl">
+                            {activeModeMetadata?.description}
+                          </Text>
+                        </div>
+                        <Group gap="xs" wrap="wrap">
+                          {activeMode === 'run' && (
+                            <UiPill>Task: {localTask.status.replaceAll('-', ' ')}</UiPill>
+                          )}
+                          {activeMode === 'results' && resultsReviewStatus && (
+                            <>
+                              <UiPill
+                                kind="status"
+                                tone={semanticToneForLegacyColor(resultsReviewStatus.color)}
+                              >
+                                Review: {resultsReviewStatus.label}
+                              </UiPill>
+                              {openFindingCount > 0 && (
+                                <UiPill kind="status" tone="warning">
+                                  {openFindingCount} open finding{openFindingCount === 1 ? '' : 's'}
+                                </UiPill>
+                              )}
+                            </>
+                          )}
+                          {!readOnly && activeMode === 'plan' && (
+                            <UiAction
+                              variant="secondary"
+                              onClick={() => setApplyTemplateOpen(true)}
+                              leftSection={<FileCode className="h-3 w-3" />}
+                            >
+                              Template
+                            </UiAction>
+                          )}
+                          {!readOnly &&
+                            activeMode === 'run' &&
+                            activeTab === 'git' &&
+                            isCodeTask &&
+                            localTask.git?.repo &&
+                            agentSettings.enablePreview &&
+                            canUseLocalAgentControls && (
+                              <UiAction
+                                variant="secondary"
+                                onClick={() => setPreviewOpen(true)}
+                                leftSection={<Monitor className="h-3 w-3" />}
+                              >
+                                Preview
+                              </UiAction>
+                            )}
+                        </Group>
+                      </Group>
+
+                      {activeModeTabs.length > 1 && (
+                        <>
+                          <Tabs.List
+                            aria-label={`${activeModeMetadata?.label ?? 'Workspace'} sections`}
+                            className="vk-task-workspace-sections mt-3 w-full justify-start"
+                          >
+                            {activeModeTabs.map((tab) => {
+                              const Icon = tab.Icon;
+                              return (
+                                <Tabs.Tab
+                                  key={tab.id}
+                                  value={tab.id}
+                                  disabled={tab.disabled}
+                                  className="flex-none px-3"
+                                  leftSection={Icon ? <Icon className="h-3 w-3" /> : undefined}
+                                >
+                                  {tab.label}
+                                </Tabs.Tab>
+                              );
+                            })}
+                          </Tabs.List>
+                          <Select
+                            label={`${activeModeMetadata?.label ?? 'Workspace'} section`}
+                            value={activeTab}
+                            data={activeModeTabs.map((tab) => ({
+                              value: tab.id,
+                              label: tab.label,
+                              disabled: tab.disabled,
+                            }))}
+                            onChange={(value) => {
+                              if (isTaskDetailTabId(value)) setActiveTab(value);
+                            }}
+                            allowDeselect={false}
+                            className="vk-task-workspace-selector mt-3"
+                          />
+                        </>
+                      )}
+                    </div>
+
+                    <div
+                      className="veritas-overlay-scroll vk-task-workspace-body min-h-0 flex-1 overflow-y-scroll overscroll-contain"
+                      data-testid="task-detail-scroll-region"
+                      aria-labelledby="task-workspace-mode-heading task-workspace-section-heading"
+                      tabIndex={0}
+                    >
+                      <Text id="task-workspace-section-heading" component="h3" className="sr-only">
+                        {activeTabMetadata?.label ?? 'Task details'}
+                      </Text>
+                      {visibleTabs.map((tab) => {
+                        const tabContent = (
+                          <Suspense
+                            fallback={
+                              <Text size="sm" c="dimmed">
+                                Loading {tab.label}...
+                              </Text>
+                            }
+                          >
+                            {tab.render(tabRenderContext)}
+                          </Suspense>
+                        );
+
+                        return (
+                          <Tabs.Panel key={tab.id} value={tab.id} className="mt-0 min-h-full">
+                            {tab.fallbackTitle ? (
+                              <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
+                                {tabContent}
+                              </FeatureErrorBoundary>
+                            ) : (
+                              tabContent
+                            )}
+                          </Tabs.Panel>
+                        );
+                      })}
+                    </div>
+                  </Tabs>
+                </div>
+                <aside
+                  className="vk-task-chat-dock"
+                  hidden={!taskChatOpen}
+                  aria-label="Task conversation dock"
+                >
+                  <ChatPanel
+                    key={localTask.id}
+                    open={taskChatOpen}
+                    onOpenChange={setTaskChatOpen}
+                    onModalOpenChange={setChatModalOpen}
+                    taskId={localTask.id}
+                    variant="inline"
+                  />
+                </aside>
               </div>
             </Stack>
           </Drawer.Body>
@@ -563,11 +608,6 @@ export function TaskDetailPanel({
           open={applyTemplateOpen}
           onOpenChange={setApplyTemplateOpen}
         />
-      )}
-
-      {/* Task-Scoped Chat Panel */}
-      {localTask && (
-        <ChatPanel open={taskChatOpen} onOpenChange={setTaskChatOpen} taskId={localTask.id} />
       )}
 
       {/* Workflow Section */}

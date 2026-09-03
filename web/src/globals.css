@@ -206,8 +206,30 @@
 /* The drawer, not the window behind it, owns task navigation breakpoints.
    rem units also collapse the rail when the user increases text size. */
 .vk-task-workspace {
-  container: task-workspace / inline-size;
+  container: task-shell / inline-size;
   max-width: 100vw;
+}
+.vk-task-workspace-main {
+  container: task-workspace / inline-size;
+}
+.vk-task-chat-dock:not([hidden]) {
+  display: flex;
+  width: 31rem;
+  max-width: 50%;
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+}
+@container task-shell (max-width: 64rem) {
+  [data-chat-open] .vk-task-workspace-main {
+    display: none;
+  }
+  .vk-task-chat-dock:not([hidden]) {
+    width: 100%;
+    max-width: 100%;
+    border-left: 0;
+  }
 }
 .vk-task-workspace-header,
 .vk-task-workspace-section-header,
@@ -454,6 +476,93 @@ html[data-client='desktop'] .desktop-main-content {
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: contain;
+}
+
+.vk-chat-surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  background: var(--background);
+}
+.vk-chat-header,
+.vk-chat-composer,
+.vk-chat-toolbar {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+}
+.vk-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.vk-chat-metadata {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.vk-chat-transcript {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  min-width: 0;
+  padding: 1rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.vk-chat-transcript > * {
+  flex-shrink: 0;
+}
+.vk-chat-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+.vk-chat-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding-block: 0.5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.vk-chat-empty svg {
+  width: 2rem;
+  height: 2rem;
+}
+.vk-chat-message {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.vk-chat-message [aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.vk-chat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
 }
 
 html[data-client='desktop'] .workbench-chat-dock--right {
