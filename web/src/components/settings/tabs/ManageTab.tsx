@@ -22,6 +22,7 @@ import type {
 import { checkDuplicateName, exportAllTemplates, parseTemplateFile } from '@/lib/template-io';
 import { ManagedListManager } from '../ManagedListManager';
 import { AddTemplateForm, TemplateItem } from './TemplateComponents';
+import { SettingsPage, SettingsSection } from '../shared';
 
 export function ManageTab() {
   const { data: _config } = useConfig();
@@ -108,9 +109,14 @@ export function ManageTab() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h3 className="text-sm font-medium">Task Types</h3>
+    <SettingsPage
+      title="Manage"
+      description="Maintain task types, projects, sprints, and reusable task templates."
+    >
+      <SettingsSection
+        title="Task Types"
+        description="Configure the labels, icons, colors, and ordering available to tasks."
+      >
         <div className="border rounded-md p-3">
           <ManagedListManager<TaskTypeConfig>
             title=""
@@ -122,7 +128,7 @@ export function ManageTab() {
             onReorder={taskTypesManager.reorder}
             canDeleteCheck={taskTypesManager.canDelete}
             renderExtraFields={(item, onChange) => (
-              <div className="flex items-center gap-4 mt-2">
+              <div className="grid gap-3 mt-2 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
                   <Text size="xs" c="dimmed" className="whitespace-nowrap">
                     Icon
@@ -179,10 +185,12 @@ export function ManageTab() {
             newItemDefaults={{ icon: 'Code', colorToken: 'neutral' }}
           />
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="space-y-2">
-        <h3 className="text-sm font-medium">Projects</h3>
+      <SettingsSection
+        title="Projects"
+        description="Configure project metadata, colors, and ordering."
+      >
         <div className="border rounded-md p-3">
           <ManagedListManager<ProjectConfig>
             title=""
@@ -194,7 +202,7 @@ export function ManageTab() {
             onReorder={projectsManager.reorder}
             canDeleteCheck={projectsManager.canDelete}
             renderExtraFields={(item, onChange) => (
-              <div className="flex items-center gap-4 mt-2">
+              <div className="grid gap-3 mt-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="flex items-center gap-2 flex-1">
                   <Text size="xs" c="dimmed" className="whitespace-nowrap">
                     Desc
@@ -236,10 +244,12 @@ export function ManageTab() {
             newItemDefaults={{ description: '', color: 'bg-blue-500/20' }}
           />
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="space-y-2">
-        <h3 className="text-sm font-medium">Sprints</h3>
+      <SettingsSection
+        title="Sprints"
+        description="Configure sprint labels, descriptions, and ordering."
+      >
         <div className="border rounded-md p-3">
           <ManagedListManager<SprintConfig>
             title=""
@@ -269,115 +279,119 @@ export function ManageTab() {
             newItemDefaults={{ description: '' }}
           />
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-medium">Task Templates</h3>
-            <ActionIcon
-              type="button"
-              variant="subtle"
-              color="gray"
-              size="sm"
-              radius="md"
-              aria-label="Toggle template guide"
-              onClick={() => setShowTemplateHelp(!showTemplateHelp)}
-            >
-              <HelpCircle className="h-4 w-4" />
-            </ActionIcon>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              radius="md"
-              leftSection={<Upload className="h-4 w-4" />}
-              onClick={handleImportClick}
-            >
-              Import
-            </Button>
-            {templates && templates.length > 0 && (
+      <SettingsSection
+        title="Task Templates"
+        description="Create, import, and export reusable task and blueprint definitions."
+      >
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <ActionIcon
+                type="button"
+                variant="subtle"
+                color="gray"
+                size="sm"
+                radius="md"
+                aria-label="Toggle template guide"
+                onClick={() => setShowTemplateHelp(!showTemplateHelp)}
+              >
+                <HelpCircle className="h-4 w-4" />
+              </ActionIcon>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="xs"
                 radius="md"
-                leftSection={<Download className="h-4 w-4" />}
-                onClick={handleExportTemplates}
+                leftSection={<Upload className="h-4 w-4" />}
+                onClick={handleImportClick}
               >
-                Export
+                Import
               </Button>
-            )}
-            {!showAddTemplateForm && (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                radius="md"
-                leftSection={<Plus className="h-4 w-4" />}
-                aria-label="Add template"
-                onClick={() => setShowAddTemplateForm(true)}
-              >
-                Add
-              </Button>
-            )}
+              {templates && templates.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  radius="md"
+                  leftSection={<Download className="h-4 w-4" />}
+                  onClick={handleExportTemplates}
+                >
+                  Export
+                </Button>
+              )}
+              {!showAddTemplateForm && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  radius="md"
+                  leftSection={<Plus className="h-4 w-4" />}
+                  aria-label="Add template"
+                  onClick={() => setShowAddTemplateForm(true)}
+                >
+                  Add
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
 
-        {showTemplateHelp && (
-          <div className="p-3 rounded-md bg-muted/50 border border-muted-foreground/20 text-sm space-y-3">
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="space-y-2">
-                <p className="font-medium text-sm">Template Guide</p>
-                <div className="text-xs text-muted-foreground space-y-1.5">
-                  <div>
-                    <strong className="text-foreground">Simple:</strong> Pre-fill fields + subtask
-                    lists
-                  </div>
-                  <div>
-                    <strong className="text-foreground">Categories:</strong> Bug, Feature, Sprint
-                  </div>
-                  <div>
-                    <strong className="text-foreground">Variables:</strong> {'{{date}}'},{' '}
-                    {'{{project}}'}, {'{{custom}}'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">Blueprints:</strong> Multi-task with
-                    dependencies
+          {showTemplateHelp && (
+            <div className="p-3 rounded-md bg-muted/50 border border-muted-foreground/20 text-sm space-y-3">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-2">
+                  <p className="font-medium text-sm">Template Guide</p>
+                  <div className="text-xs text-muted-foreground space-y-1.5">
+                    <div>
+                      <strong className="text-foreground">Simple:</strong> Pre-fill fields + subtask
+                      lists
+                    </div>
+                    <div>
+                      <strong className="text-foreground">Categories:</strong> Bug, Feature, Sprint
+                    </div>
+                    <div>
+                      <strong className="text-foreground">Variables:</strong> {'{{date}}'},{' '}
+                      {'{{project}}'}, {'{{custom}}'}
+                    </div>
+                    <div>
+                      <strong className="text-foreground">Blueprints:</strong> Multi-task with
+                      dependencies
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
 
-        {showAddTemplateForm && <AddTemplateForm onClose={() => setShowAddTemplateForm(false)} />}
+          {showAddTemplateForm && <AddTemplateForm onClose={() => setShowAddTemplateForm(false)} />}
 
-        {templatesLoading ? (
-          <div className="text-sm text-muted-foreground">Loading...</div>
-        ) : !templates || templates.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
-            No templates created.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {templates.map((template) => (
-              <TemplateItem key={template.id} template={template} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+          {templatesLoading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : !templates || templates.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
+              No templates created.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {templates.map((template) => (
+                <TemplateItem key={template.id} template={template} />
+              ))}
+            </div>
+          )}
+        </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

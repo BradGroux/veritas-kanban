@@ -542,6 +542,8 @@ describe('Settings tab Mantine controls', () => {
   it('renders Enforcement ceremony and agent selection through direct Mantine Select', async () => {
     const { container } = renderWithProviders(<EnforcementTab />);
 
+    expect(screen.getByRole('heading', { name: 'Enforcement' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(3);
     expect(
       screen.getByRole('combobox', { name: 'Design Review Ceremony Enforcement' })
     ).toBeDefined();

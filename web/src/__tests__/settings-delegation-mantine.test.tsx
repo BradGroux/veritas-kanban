@@ -49,6 +49,8 @@ describe('Delegation settings Mantine migration', () => {
   it('renders setup controls through direct Mantine primitives and submits delegation', async () => {
     const { container } = renderWithProviders(<DelegationTab />);
 
+    expect(await screen.findByRole('heading', { name: 'Delegation' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(await screen.findByText('Set Up Delegation')).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Delegate Agent' })).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Duration' })).toBeDefined();

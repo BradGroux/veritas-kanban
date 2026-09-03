@@ -1,7 +1,7 @@
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { Checkbox, NumberInput } from '@mantine/core';
 import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings } from '@veritas-kanban/shared';
-import { ToggleRow, SectionHeader, SaveIndicator, SettingRow } from '../shared';
+import { ToggleRow, SaveIndicator, SettingRow, SettingsPage, SettingsSection } from '../shared';
 import { SkillCapabilityProfilesPanel } from './SkillCapabilityProfilesPanel';
 import { SkillRiskDashboardPanel } from './SkillRiskDashboardPanel';
 
@@ -43,16 +43,17 @@ export function SharedResourcesTab() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Shared Resources" onReset={resetSharedResources} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <p className="text-sm text-muted-foreground -mt-2">
-        Define reusable prompts, guidelines, skills, and templates across projects.
-      </p>
-
-      <div className="divide-y">
+    <SettingsPage
+      title="Shared Resources"
+      description="Define reusable prompts, guidelines, skills, and templates across projects."
+    >
+      <SettingsSection
+        title="Resource Sharing"
+        description="Choose which resource types can be mounted across projects."
+        actions={<SaveIndicator isPending={isPending} />}
+        onReset={resetSharedResources}
+        divided
+      >
         <ToggleRow
           label="Enable Shared Resources"
           description="Allow shared resources to be mounted across projects"
@@ -81,7 +82,7 @@ export function SharedResourcesTab() {
             />
           </SettingRow>
         )}
-      </div>
+      </SettingsSection>
 
       {sharedResources.enabled && (
         <div className="space-y-3">
@@ -107,6 +108,6 @@ export function SharedResourcesTab() {
       {sharedResources.enabled && allowedTypes.includes('skill') && (
         <SkillCapabilityProfilesPanel />
       )}
-    </div>
+    </SettingsPage>
   );
 }

@@ -8,7 +8,7 @@ import {
 } from '@veritas-kanban/shared';
 import { Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { ToggleRow, SettingRow, SectionHeader, SaveIndicator } from '../shared';
+import { ToggleRow, SettingRow, SaveIndicator, SettingsPage, SettingsSection } from '../shared';
 import { Shield, ShieldCheck, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -61,107 +61,110 @@ export function EnforcementTab() {
   const delegationActive = enforcement.orchestratorDelegation && !!orchestratorAgent;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Enforcement Gates" onReset={resetEnforcement} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <p className="text-sm text-muted-foreground -mt-2">
-        Structural process enforcement — all gates are opt-in
-      </p>
-
-      <div className="space-y-4 mt-6">
-        <div className="space-y-3">
-          <div>
-            <ToggleRow
-              label="Review Gate"
-              description="Require 4x10 review scores before task completion"
-              checked={enforcement.reviewGate ?? false}
-              onCheckedChange={(v) => updateEnforcement('reviewGate', v)}
-            />
-            {enforcement.reviewGate && (
-              <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 mt-2 ml-1">
-                ℹ️ Applies to code task types only (code, bug, feature, automation, system).
-                Non-code tasks can be completed without review scores.
-              </div>
-            )}
-          </div>
-          <div className="border-t pt-3">
-            <ToggleRow
-              label="Closing Comments"
-              description="Require deliverable summary before task completion"
-              checked={enforcement.closingComments ?? false}
-              onCheckedChange={(v) => updateEnforcement('closingComments', v)}
-            />
-          </div>
-          <div className="border-t pt-3 space-y-3">
-            <SettingRow
-              label="Design Review Ceremony"
-              description="Require review artifacts before completing high-risk or multi-agent tasks"
-            >
-              <Select
-                value={enforcement.ceremonyDesignReview ?? 'off'}
-                onChange={(value) =>
-                  updateEnforcement(
-                    'ceremonyDesignReview',
-                    (value ?? 'off') as CeremonyEnforcementMode
-                  )
-                }
-                data={ceremonyModeOptions}
-                aria-label="Design Review Ceremony Enforcement"
-                allowDeselect={false}
-                size="xs"
-                w={140}
+    <SettingsPage
+      title="Enforcement"
+      description="Configure opt-in process gates, automation, and orchestrator delegation."
+    >
+      <SettingsSection
+        title="Completion Gates"
+        description="Require review and ceremony evidence before eligible work can complete."
+        actions={<SaveIndicator isPending={isPending} />}
+        onReset={resetEnforcement}
+      >
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <div>
+              <ToggleRow
+                label="Review Gate"
+                description="Require 4x10 review scores before task completion"
+                checked={enforcement.reviewGate ?? false}
+                onCheckedChange={(v) => updateEnforcement('reviewGate', v)}
               />
-            </SettingRow>
-            <SettingRow
-              label="Failure Retrospective Ceremony"
-              description="Require retrospective artifacts after blocked work or failed attempts"
-            >
-              <Select
-                value={enforcement.ceremonyFailureRetrospective ?? 'off'}
-                onChange={(value) =>
-                  updateEnforcement(
-                    'ceremonyFailureRetrospective',
-                    (value ?? 'off') as CeremonyEnforcementMode
-                  )
-                }
-                data={ceremonyModeOptions}
-                aria-label="Failure Retrospective Ceremony Enforcement"
-                allowDeselect={false}
-                size="xs"
-                w={140}
-              />
-            </SettingRow>
-            <div className="rounded-md bg-muted/50 px-3 py-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-foreground">Pending ceremonies</span>
-                <span className="text-xs text-muted-foreground">{pendingCeremonies.length}</span>
-              </div>
-              {pendingCeremonies.length > 0 ? (
-                <div className="mt-2 space-y-2">
-                  {pendingCeremonies.map((requirement) => (
-                    <div key={requirement.id} className="text-xs">
-                      <div className="font-medium text-foreground">{requirement.title}</div>
-                      <div className="text-muted-foreground">
-                        {formatCeremonyKind(requirement.kind)} - {formatCeremonyTarget(requirement)}
-                      </div>
-                    </div>
-                  ))}
+              {enforcement.reviewGate && (
+                <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 mt-2 ml-1">
+                  ℹ️ Applies to code task types only (code, bug, feature, automation, system).
+                  Non-code tasks can be completed without review scores.
                 </div>
-              ) : (
-                <div className="mt-1 text-xs text-muted-foreground">No pending ceremonies</div>
               )}
+            </div>
+            <div className="border-t pt-3">
+              <ToggleRow
+                label="Closing Comments"
+                description="Require deliverable summary before task completion"
+                checked={enforcement.closingComments ?? false}
+                onCheckedChange={(v) => updateEnforcement('closingComments', v)}
+              />
+            </div>
+            <div className="border-t pt-3 space-y-3">
+              <SettingRow
+                label="Design Review Ceremony"
+                description="Require review artifacts before completing high-risk or multi-agent tasks"
+              >
+                <Select
+                  value={enforcement.ceremonyDesignReview ?? 'off'}
+                  onChange={(value) =>
+                    updateEnforcement(
+                      'ceremonyDesignReview',
+                      (value ?? 'off') as CeremonyEnforcementMode
+                    )
+                  }
+                  data={ceremonyModeOptions}
+                  aria-label="Design Review Ceremony Enforcement"
+                  allowDeselect={false}
+                  size="xs"
+                  className="w-full sm:w-36"
+                />
+              </SettingRow>
+              <SettingRow
+                label="Failure Retrospective Ceremony"
+                description="Require retrospective artifacts after blocked work or failed attempts"
+              >
+                <Select
+                  value={enforcement.ceremonyFailureRetrospective ?? 'off'}
+                  onChange={(value) =>
+                    updateEnforcement(
+                      'ceremonyFailureRetrospective',
+                      (value ?? 'off') as CeremonyEnforcementMode
+                    )
+                  }
+                  data={ceremonyModeOptions}
+                  aria-label="Failure Retrospective Ceremony Enforcement"
+                  allowDeselect={false}
+                  size="xs"
+                  className="w-full sm:w-36"
+                />
+              </SettingRow>
+              <div className="rounded-md bg-muted/50 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-foreground">Pending ceremonies</span>
+                  <span className="text-xs text-muted-foreground">{pendingCeremonies.length}</span>
+                </div>
+                {pendingCeremonies.length > 0 ? (
+                  <div className="mt-2 space-y-2">
+                    {pendingCeremonies.map((requirement) => (
+                      <div key={requirement.id} className="text-xs">
+                        <div className="font-medium text-foreground">{requirement.title}</div>
+                        <div className="text-muted-foreground">
+                          {formatCeremonyKind(requirement.kind)} -{' '}
+                          {formatCeremonyTarget(requirement)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs text-muted-foreground">No pending ceremonies</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="border-t my-6" />
-
-      {/* Automation Gates */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium text-foreground">Automation</h3>
+      <SettingsSection
+        title="Automation"
+        description="Emit collaboration, telemetry, and time-tracking events automatically."
+        divided
+      >
         <div className="divide-y">
           <ToggleRow
             label="Squad Chat"
@@ -182,15 +185,14 @@ export function EnforcementTab() {
             onCheckedChange={(v) => updateEnforcement('autoTimeTracking', v)}
           />
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="border-t my-6" />
-
-      {/* Orchestrator Delegation Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-foreground">Orchestrator Delegation</h3>
-          {delegationActive ? (
+      <SettingsSection
+        title="Orchestrator Delegation"
+        description="Warn when the designated orchestrator performs implementation instead of coordinating delegates."
+        tone="advanced"
+        status={
+          delegationActive ? (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
               <ShieldCheck className="h-3 w-3" />
               <span className="text-xs font-medium">Active</span>
@@ -200,68 +202,72 @@ export function EnforcementTab() {
               <Shield className="h-3 w-3" />
               <span className="text-xs font-medium">Inactive</span>
             </div>
+          )
+        }
+      >
+        <div className="space-y-4">
+          <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+            <p>
+              <strong>What is orchestrator delegation?</strong> When enabled, the designated
+              orchestrator agent is expected to coordinate work by delegating tasks to sub-agents
+              rather than doing implementation work directly. VK will warn when the orchestrator
+              starts doing hands-on work instead of delegating.
+            </p>
+          </div>
+
+          <div className="divide-y">
+            <ToggleRow
+              label="Enable Delegation Enforcement"
+              description="Warn when orchestrator does work instead of delegating"
+              checked={enforcement.orchestratorDelegation ?? false}
+              onCheckedChange={(v) => updateEnforcement('orchestratorDelegation', v)}
+            />
+
+            <div
+              className={cn(
+                !enforcement.orchestratorDelegation && 'opacity-50 pointer-events-none'
+              )}
+            >
+              <SettingRow
+                label="Orchestrator Agent"
+                description="The agent designated as the orchestrator / coordinator"
+              >
+                <div className="flex items-center gap-2">
+                  {orchestratorAgent && <Bot className="h-4 w-4 text-primary" />}
+                  <Select
+                    value={orchestratorAgent || '__none__'}
+                    onChange={(value) =>
+                      updateEnforcement(
+                        'orchestratorAgent',
+                        value === '__none__' ? '' : (value ?? '')
+                      )
+                    }
+                    data={[
+                      { value: '__none__', label: 'None selected' },
+                      ...enabledAgents.map((agent) => ({
+                        value: agent.type,
+                        label: agent.name,
+                      })),
+                    ]}
+                    aria-label="Orchestrator Agent"
+                    placeholder="Select agent..."
+                    allowDeselect={false}
+                    size="xs"
+                    className="w-full sm:w-44"
+                  />
+                </div>
+              </SettingRow>
+            </div>
+          </div>
+
+          {enforcement.orchestratorDelegation && !orchestratorAgent && (
+            <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-3 py-2">
+              ⚠️ Delegation enforcement is enabled but no orchestrator agent is selected. Select an
+              agent above for enforcement to take effect.
+            </div>
           )}
         </div>
-
-        <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-          <p>
-            <strong>What is orchestrator delegation?</strong> When enabled, the designated
-            orchestrator agent is expected to coordinate work by delegating tasks to sub-agents
-            rather than doing implementation work directly. VK will warn when the orchestrator
-            starts doing hands-on work instead of delegating.
-          </p>
-        </div>
-
-        <div className="divide-y">
-          <ToggleRow
-            label="Enable Delegation Enforcement"
-            description="Warn when orchestrator does work instead of delegating"
-            checked={enforcement.orchestratorDelegation ?? false}
-            onCheckedChange={(v) => updateEnforcement('orchestratorDelegation', v)}
-          />
-
-          <div
-            className={cn(!enforcement.orchestratorDelegation && 'opacity-50 pointer-events-none')}
-          >
-            <SettingRow
-              label="Orchestrator Agent"
-              description="The agent designated as the orchestrator / coordinator"
-            >
-              <div className="flex items-center gap-2">
-                {orchestratorAgent && <Bot className="h-4 w-4 text-primary" />}
-                <Select
-                  value={orchestratorAgent || '__none__'}
-                  onChange={(value) =>
-                    updateEnforcement(
-                      'orchestratorAgent',
-                      value === '__none__' ? '' : (value ?? '')
-                    )
-                  }
-                  data={[
-                    { value: '__none__', label: 'None selected' },
-                    ...enabledAgents.map((agent) => ({
-                      value: agent.type,
-                      label: agent.name,
-                    })),
-                  ]}
-                  aria-label="Orchestrator Agent"
-                  placeholder="Select agent..."
-                  allowDeselect={false}
-                  size="xs"
-                  w={180}
-                />
-              </div>
-            </SettingRow>
-          </div>
-        </div>
-
-        {enforcement.orchestratorDelegation && !orchestratorAgent && (
-          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-3 py-2">
-            ⚠️ Delegation enforcement is enabled but no orchestrator agent is selected. Select an
-            agent above for enforcement to take effect.
-          </div>
-        )}
-      </div>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

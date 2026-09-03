@@ -181,6 +181,8 @@ describe('Manage settings Mantine migration', () => {
   it('renders managed-list extra fields and template actions through direct Mantine primitives', () => {
     const { container } = renderWithProviders(<ManageTab />);
 
+    expect(screen.getByRole('heading', { name: 'Manage' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(4);
     expect(screen.getByRole('combobox', { name: 'Bug icon' })).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Bug color' })).toBeDefined();
     expect(screen.getByRole('textbox', { name: 'Rubicon description' })).toBeDefined();

@@ -20,7 +20,8 @@ import {
 } from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { useToast } from '@/hooks/useToast';
-import { Edit, Info, Plus, Shield, Trash2 } from 'lucide-react';
+import { Edit, Info, Plus, Trash2 } from 'lucide-react';
+import { SettingsPage, SettingsSection } from '../shared';
 
 interface ToolPolicy {
   role: string;
@@ -158,149 +159,146 @@ export function ToolPoliciesTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          Tool Policies
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Define which tools each agent role can access. Tool policies are applied when workflow
-          steps specify an agent role.
-        </p>
-      </div>
-
-      <Alert
-        color="blue"
-        variant="light"
-        radius="md"
-        icon={<Info className="h-5 w-5" />}
-        className="border border-blue-200 dark:border-blue-800"
+    <SettingsPage
+      title="Tool Policies"
+      description="Define which tools each agent role can access when workflow steps run."
+    >
+      <SettingsSection
+        title="Role Policies"
+        description="Review default and custom role allowlists and denylists."
+        tone="advanced"
+        actions={
+          <Button
+            type="button"
+            onClick={() => openEditDialog(null)}
+            size="xs"
+            radius="md"
+            leftSection={<Plus className="h-4 w-4" />}
+          >
+            New Policy
+          </Button>
+        }
       >
-        <Text size="sm">
-          <strong>Default roles:</strong> planner, developer, reviewer, tester, deployer.
-          <br />
-          Default policies can be edited but not deleted. Custom roles can be created for
-          specialized workflows.
-        </Text>
-      </Alert>
-
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={() => openEditDialog(null)}
-          size="sm"
+        <Alert
+          color="blue"
+          variant="light"
           radius="md"
-          leftSection={<Plus className="h-4 w-4" />}
+          icon={<Info className="h-5 w-5" />}
+          className="border border-blue-200 dark:border-blue-800"
         >
-          New Policy
-        </Button>
-      </div>
+          <Text size="sm">
+            <strong>Default roles:</strong> planner, developer, reviewer, tester, deployer.
+            <br />
+            Default policies can be edited but not deleted. Custom roles can be created for
+            specialized workflows.
+          </Text>
+        </Alert>
 
-      <div className="space-y-3">
-        {policies.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8 border rounded-lg">
-            No policies defined
-          </div>
-        ) : (
-          policies.map((policy) => (
-            <div
-              key={policy.role}
-              className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold">{policy.role}</h4>
-                    {DEFAULT_ROLES.has(policy.role) && (
-                      <Badge variant="light" color="gray" size="xs">
-                        default
-                      </Badge>
-                    )}
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">{policy.description}</p>
-
-                  <div className="flex flex-col gap-2 text-sm">
-                    <div className="flex items-start gap-2">
-                      <span className="font-medium text-muted-foreground min-w-[100px]">
-                        Allowed:
-                      </span>
-                      {policy.allowed.length === 0 ? (
-                        <span className="text-muted-foreground">none</span>
-                      ) : policy.allowed.includes('*') ? (
-                        <Badge variant="outline" color="gray">
-                          all tools
+        <div className="mt-4 space-y-3">
+          {policies.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8 border rounded-lg">
+              No policies defined
+            </div>
+          ) : (
+            policies.map((policy) => (
+              <div
+                key={policy.role}
+                className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold">{policy.role}</h4>
+                      {DEFAULT_ROLES.has(policy.role) && (
+                        <Badge variant="light" color="gray" size="xs">
+                          default
                         </Badge>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {policy.allowed.slice(0, 5).map((tool) => (
-                            <Badge key={tool} variant="outline" color="gray" size="xs">
-                              {tool}
-                            </Badge>
-                          ))}
-                          {policy.allowed.length > 5 && (
-                            <Badge variant="outline" color="gray" size="xs">
-                              +{policy.allowed.length - 5} more
-                            </Badge>
-                          )}
-                        </div>
                       )}
                     </div>
 
-                    {policy.denied.length > 0 && (
+                    <p className="text-sm text-muted-foreground">{policy.description}</p>
+
+                    <div className="flex flex-col gap-2 text-sm">
                       <div className="flex items-start gap-2">
                         <span className="font-medium text-muted-foreground min-w-[100px]">
-                          Denied:
+                          Allowed:
                         </span>
-                        <div className="flex flex-wrap gap-1">
-                          {policy.denied.slice(0, 5).map((tool) => (
-                            <Badge key={tool} variant="light" color="red" size="xs">
-                              {tool}
-                            </Badge>
-                          ))}
-                          {policy.denied.length > 5 && (
-                            <Badge variant="light" color="red" size="xs">
-                              +{policy.denied.length - 5} more
-                            </Badge>
-                          )}
-                        </div>
+                        {policy.allowed.length === 0 ? (
+                          <span className="text-muted-foreground">none</span>
+                        ) : policy.allowed.includes('*') ? (
+                          <Badge variant="outline" color="gray">
+                            all tools
+                          </Badge>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {policy.allowed.slice(0, 5).map((tool) => (
+                              <Badge key={tool} variant="outline" color="gray" size="xs">
+                                {tool}
+                              </Badge>
+                            ))}
+                            {policy.allowed.length > 5 && (
+                              <Badge variant="outline" color="gray" size="xs">
+                                +{policy.allowed.length - 5} more
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <ActionIcon
-                    type="button"
-                    variant="subtle"
-                    color="gray"
-                    size="sm"
-                    radius="md"
-                    aria-label={`Edit ${policy.role}`}
-                    onClick={() => openEditDialog(policy)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </ActionIcon>
-                  {!DEFAULT_ROLES.has(policy.role) && (
+                      {policy.denied.length > 0 && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-medium text-muted-foreground min-w-[100px]">
+                            Denied:
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {policy.denied.slice(0, 5).map((tool) => (
+                              <Badge key={tool} variant="light" color="red" size="xs">
+                                {tool}
+                              </Badge>
+                            ))}
+                            {policy.denied.length > 5 && (
+                              <Badge variant="light" color="red" size="xs">
+                                +{policy.denied.length - 5} more
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <ActionIcon
                       type="button"
                       variant="subtle"
-                      color="red"
+                      color="gray"
                       size="sm"
                       radius="md"
-                      aria-label={`Delete ${policy.role}`}
-                      onClick={() => handleDeletePolicy(policy.role)}
+                      aria-label={`Edit ${policy.role}`}
+                      onClick={() => openEditDialog(policy)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Edit className="h-4 w-4" />
                     </ActionIcon>
-                  )}
+                    {!DEFAULT_ROLES.has(policy.role) && (
+                      <ActionIcon
+                        type="button"
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        radius="md"
+                        aria-label={`Delete ${policy.role}`}
+                        onClick={() => handleDeletePolicy(policy.role)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </ActionIcon>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      </SettingsSection>
 
       <Modal
         opened={editDialogOpen}
@@ -372,6 +370,6 @@ export function ToolPoliciesTab() {
           </Group>
         </Stack>
       </Modal>
-    </div>
+    </SettingsPage>
   );
 }

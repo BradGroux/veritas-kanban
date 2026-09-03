@@ -87,8 +87,10 @@ describe('Reflection settings tab', () => {
   });
 
   it('renders reflection candidates with evidence and review actions', async () => {
-    renderWithProviders(<ReflectionTab />);
+    const { container } = renderWithProviders(<ReflectionTab />);
 
+    expect(await screen.findByRole('heading', { name: 'Reflections' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(await screen.findByText('Reflection Promotion Queue')).toBeDefined();
     expect(screen.getByText('Inspect live schema before changing route code.')).toBeDefined();
     expect(screen.getByText(/Correction: The route field was corrected/)).toBeDefined();

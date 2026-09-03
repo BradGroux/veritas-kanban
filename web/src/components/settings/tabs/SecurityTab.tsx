@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button, Group, Modal, PasswordInput, Stack, Text } from '@mantine/core';
-import { Eye, EyeOff, Check, AlertTriangle, Key } from 'lucide-react';
+import { Eye, EyeOff, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { authApi } from '@/lib/api/auth';
+import { SettingsPage, SettingsSection } from '../shared';
 
 // Password strength calculation (same as SetupScreen)
 function getPasswordStrength(password: string): { score: number; label: string; color: string } {
@@ -66,19 +67,11 @@ export function SecurityTab() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h3 className="text-lg font-semibold mb-1">Security</h3>
-        <p className="text-sm text-muted-foreground">Manage your password and security settings.</p>
-      </div>
-
-      {/* Change Password Section */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Key className="h-5 w-5 text-muted-foreground" />
-          <h4 className="font-medium">Change Password</h4>
-        </div>
-
+    <SettingsPage title="Security" description="Manage your password and security settings.">
+      <SettingsSection
+        title="Change Password"
+        description="Choose a strong password and confirm it before saving."
+      >
         <div className="space-y-4 max-w-md">
           <div className="space-y-2">
             <PasswordInput
@@ -154,15 +147,13 @@ export function SecurityTab() {
             {isChanging ? 'Changing...' : changeSuccess ? 'Password Changed' : 'Change Password'}
           </Button>
         </div>
-      </section>
+      </SettingsSection>
 
-      {/* Danger Zone */}
-      <section className="space-y-4 pt-4 border-t border-destructive/20">
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertTriangle className="h-5 w-5" />
-          <h4 className="font-medium">Danger Zone</h4>
-        </div>
-
+      <SettingsSection
+        title="Reset Security Settings"
+        description="Clear the password and recovery key, then require first-run setup again."
+        tone="danger"
+      >
         <div className="p-4 border border-destructive/20 rounded-lg bg-destructive/5 space-y-3">
           <div>
             <p className="font-medium text-sm">Reset Security Settings</p>
@@ -216,7 +207,7 @@ export function SecurityTab() {
             </Stack>
           </Modal>
         </div>
-      </section>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

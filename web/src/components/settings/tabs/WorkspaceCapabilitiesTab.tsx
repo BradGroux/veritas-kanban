@@ -13,7 +13,7 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
-import { Network, RefreshCw, SendHorizonal } from 'lucide-react';
+import { RefreshCw, SendHorizonal } from 'lucide-react';
 import type { TaskPriority } from '@veritas-kanban/shared';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
@@ -22,6 +22,7 @@ import {
   useWorkspaceDelegatedIntake,
   useWorkspaceDelegations,
 } from '@/hooks/useWorkspaceCapabilities';
+import { SettingsPage, SettingsSection } from '../shared';
 
 const EMPTY_CAPABILITIES: NonNullable<
   NonNullable<ReturnType<typeof useWorkspaceCapabilityDiscovery>['data']>['local']
@@ -151,14 +152,10 @@ export function WorkspaceCapabilitiesTab() {
   }
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="center">
-        <Group gap="xs">
-          <Network className="h-4 w-4 text-muted-foreground" />
-          <Text size="sm" fw={600}>
-            Workspace Capabilities
-          </Text>
-        </Group>
+    <SettingsPage
+      title="Workspaces"
+      description="Discover trusted workspace capabilities and delegate governed work across them."
+      actions={
         <Button
           size="xs"
           variant="subtle"
@@ -168,206 +165,213 @@ export function WorkspaceCapabilitiesTab() {
         >
           Refresh
         </Button>
-      </Group>
-
-      {!discovery?.local && (
-        <Alert color="yellow" variant="light">
-          No local workspace capability manifest is configured.
-        </Alert>
-      )}
-
-      {discovery?.local && (
-        <Paper className="border bg-card p-4" radius="md">
-          <Stack gap="sm">
-            <Group justify="space-between" align="flex-start">
-              <Stack gap={2}>
-                <Text size="sm" fw={600}>
-                  {discovery.local.name}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  {discovery.local.workspaceId}
-                </Text>
-              </Stack>
-              <Badge color={discovery.local.enabled ? 'green' : 'gray'} variant="light">
-                {discovery.local.enabled ? 'Enabled' : 'Disabled'}
-              </Badge>
-            </Group>
-            <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-              {discovery.local.capabilities.map((capability) => (
-                <CapabilityCard key={capability.id} capability={capability} />
-              ))}
-            </SimpleGrid>
-          </Stack>
-        </Paper>
-      )}
-
-      <Stack gap="sm">
-        <Text size="sm" fw={600}>
-          Trusted Workspaces
-        </Text>
-        {trusted.length === 0 ? (
-          <Paper className="border border-dashed p-4 text-center" radius="md">
-            <Text size="sm" c="dimmed">
-              No trusted workspace manifests registered.
-            </Text>
-          </Paper>
-        ) : (
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-            {trusted.map((workspace) => (
-              <Paper key={workspace.workspaceId} className="border bg-card p-4" radius="md">
-                <Stack gap="xs">
-                  <Group justify="space-between" align="flex-start">
-                    <Stack gap={2}>
-                      <Text size="sm" fw={600}>
-                        {workspace.name}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {workspace.workspaceId}
-                      </Text>
-                    </Stack>
-                    <Badge color={workspace.enabled ? 'green' : 'gray'} variant="light">
-                      {workspace.enabled ? 'Trusted' : 'Disabled'}
-                    </Badge>
-                  </Group>
-                  {workspace.capabilities.map((capability) => (
-                    <CapabilityCard key={capability.id} capability={capability} compact />
-                  ))}
-                </Stack>
-              </Paper>
-            ))}
-          </SimpleGrid>
-        )}
-      </Stack>
-
-      <Paper className="border bg-card p-4" radius="md">
-        <Stack gap="md">
-          <Group gap="xs">
-            <SendHorizonal className="h-4 w-4 text-muted-foreground" />
-            <Text size="sm" fw={600}>
-              Delegated Intake
-            </Text>
-          </Group>
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-            <Select
-              label="Source workspace"
-              value={sourceWorkspaceId}
-              onChange={setSourceWorkspaceId}
-              data={trusted.map((workspace) => ({
-                value: workspace.workspaceId,
-                label: workspace.name,
-              }))}
-              disabled={trusted.length === 0}
-            />
-            <Select
-              label="Capability"
-              value={capabilityId}
-              onChange={setCapabilityId}
-              data={localCapabilities.map((capability) => ({
-                value: capability.id,
-                label: capability.name,
-              }))}
-              disabled={localCapabilities.length === 0}
-            />
-            <TextInput
-              label="Title"
-              value={title}
-              onChange={(event) => setTitle(event.currentTarget.value)}
-            />
-            <Select
-              label="Priority"
-              value={priority}
-              onChange={(value) => setPriority((value as TaskPriority | null) ?? null)}
-              data={PRIORITY_OPTIONS}
-              allowDeselect={false}
-            />
-            <Select
-              label="Type"
-              value={type}
-              onChange={setType}
-              data={taskTypeOptions}
-              disabled={taskTypeOptions.length === 0}
-            />
-            <TextInput
-              label="Project"
-              value={project}
-              onChange={(event) => setProject(event.currentTarget.value)}
-            />
-          </SimpleGrid>
-          <Textarea
-            label="Context"
-            value={context}
-            onChange={(event) => setContext(event.currentTarget.value)}
-            minRows={4}
-          />
-          {requiredFields.length > 0 && (
-            <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-              {requiredFields.map((field) => (
-                <TextInput
-                  key={field}
-                  label={field}
-                  value={contextFields[field] ?? ''}
-                  onChange={(event) => {
-                    const value = event.currentTarget.value;
-                    setContextFields((existing) => ({
-                      ...existing,
-                      [field]: value,
-                    }));
-                  }}
-                />
-              ))}
-            </SimpleGrid>
+      }
+    >
+      <SettingsSection
+        title="Workspace Capabilities"
+        description="Inspect local and trusted capabilities, then submit delegated intake."
+      >
+        <Stack gap="lg">
+          {!discovery?.local && (
+            <Alert color="yellow" variant="light">
+              No local workspace capability manifest is configured.
+            </Alert>
           )}
-          <Group justify="flex-end">
-            <Button
-              onClick={handleSubmit}
-              disabled={!canSubmit || intake.isPending}
-              leftSection={<SendHorizonal className="h-4 w-4" />}
-            >
-              Create Intake
-            </Button>
-          </Group>
-        </Stack>
-      </Paper>
 
-      <Stack gap="sm">
-        <Text size="sm" fw={600}>
-          Recent Delegations
-        </Text>
-        {delegationsQuery.isLoading ? (
-          <Text size="sm" c="dimmed">
-            Loading delegations...
-          </Text>
-        ) : (delegationsQuery.data ?? []).length === 0 ? (
-          <Paper className="border border-dashed p-4 text-center" radius="md">
-            <Text size="sm" c="dimmed">
-              No delegated work recorded.
-            </Text>
-          </Paper>
-        ) : (
-          <Stack gap="xs">
-            {(delegationsQuery.data ?? []).slice(0, 5).map((record) => (
-              <Paper key={record.id} className="border bg-card p-3" radius="md">
-                <Group justify="space-between" align="flex-start" wrap="nowrap">
-                  <Stack gap={2} className="min-w-0">
-                    <Text size="sm" fw={500} className="truncate">
-                      {record.title}
+          {discovery?.local && (
+            <Paper className="border bg-card p-4" radius="md">
+              <Stack gap="sm">
+                <Group justify="space-between" align="flex-start">
+                  <Stack gap={2}>
+                    <Text size="sm" fw={600}>
+                      {discovery.local.name}
                     </Text>
                     <Text size="xs" c="dimmed">
-                      {record.source.workspaceId}
-                      {' -> '}
-                      {record.target.workspaceId}
+                      {discovery.local.workspaceId}
                     </Text>
                   </Stack>
-                  <Badge variant="light" color={record.status === 'blocked' ? 'red' : 'blue'}>
-                    {record.latestState ?? record.status}
+                  <Badge color={discovery.local.enabled ? 'green' : 'gray'} variant="light">
+                    {discovery.local.enabled ? 'Enabled' : 'Disabled'}
                   </Badge>
                 </Group>
+                <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                  {discovery.local.capabilities.map((capability) => (
+                    <CapabilityCard key={capability.id} capability={capability} />
+                  ))}
+                </SimpleGrid>
+              </Stack>
+            </Paper>
+          )}
+
+          <Stack gap="sm">
+            <Text size="sm" fw={600}>
+              Trusted Workspaces
+            </Text>
+            {trusted.length === 0 ? (
+              <Paper className="border border-dashed p-4 text-center" radius="md">
+                <Text size="sm" c="dimmed">
+                  No trusted workspace manifests registered.
+                </Text>
               </Paper>
-            ))}
+            ) : (
+              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                {trusted.map((workspace) => (
+                  <Paper key={workspace.workspaceId} className="border bg-card p-4" radius="md">
+                    <Stack gap="xs">
+                      <Group justify="space-between" align="flex-start">
+                        <Stack gap={2}>
+                          <Text size="sm" fw={600}>
+                            {workspace.name}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {workspace.workspaceId}
+                          </Text>
+                        </Stack>
+                        <Badge color={workspace.enabled ? 'green' : 'gray'} variant="light">
+                          {workspace.enabled ? 'Trusted' : 'Disabled'}
+                        </Badge>
+                      </Group>
+                      {workspace.capabilities.map((capability) => (
+                        <CapabilityCard key={capability.id} capability={capability} compact />
+                      ))}
+                    </Stack>
+                  </Paper>
+                ))}
+              </SimpleGrid>
+            )}
           </Stack>
-        )}
-      </Stack>
-    </Stack>
+
+          <Paper className="border bg-card p-4" radius="md">
+            <Stack gap="md">
+              <Group gap="xs">
+                <SendHorizonal className="h-4 w-4 text-muted-foreground" />
+                <Text size="sm" fw={600}>
+                  Delegated Intake
+                </Text>
+              </Group>
+              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                <Select
+                  label="Source workspace"
+                  value={sourceWorkspaceId}
+                  onChange={setSourceWorkspaceId}
+                  data={trusted.map((workspace) => ({
+                    value: workspace.workspaceId,
+                    label: workspace.name,
+                  }))}
+                  disabled={trusted.length === 0}
+                />
+                <Select
+                  label="Capability"
+                  value={capabilityId}
+                  onChange={setCapabilityId}
+                  data={localCapabilities.map((capability) => ({
+                    value: capability.id,
+                    label: capability.name,
+                  }))}
+                  disabled={localCapabilities.length === 0}
+                />
+                <TextInput
+                  label="Title"
+                  value={title}
+                  onChange={(event) => setTitle(event.currentTarget.value)}
+                />
+                <Select
+                  label="Priority"
+                  value={priority}
+                  onChange={(value) => setPriority((value as TaskPriority | null) ?? null)}
+                  data={PRIORITY_OPTIONS}
+                  allowDeselect={false}
+                />
+                <Select
+                  label="Type"
+                  value={type}
+                  onChange={setType}
+                  data={taskTypeOptions}
+                  disabled={taskTypeOptions.length === 0}
+                />
+                <TextInput
+                  label="Project"
+                  value={project}
+                  onChange={(event) => setProject(event.currentTarget.value)}
+                />
+              </SimpleGrid>
+              <Textarea
+                label="Context"
+                value={context}
+                onChange={(event) => setContext(event.currentTarget.value)}
+                minRows={4}
+              />
+              {requiredFields.length > 0 && (
+                <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                  {requiredFields.map((field) => (
+                    <TextInput
+                      key={field}
+                      label={field}
+                      value={contextFields[field] ?? ''}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        setContextFields((existing) => ({
+                          ...existing,
+                          [field]: value,
+                        }));
+                      }}
+                    />
+                  ))}
+                </SimpleGrid>
+              )}
+              <Group justify="flex-end">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || intake.isPending}
+                  leftSection={<SendHorizonal className="h-4 w-4" />}
+                >
+                  Create Intake
+                </Button>
+              </Group>
+            </Stack>
+          </Paper>
+
+          <Stack gap="sm">
+            <Text size="sm" fw={600}>
+              Recent Delegations
+            </Text>
+            {delegationsQuery.isLoading ? (
+              <Text size="sm" c="dimmed">
+                Loading delegations...
+              </Text>
+            ) : (delegationsQuery.data ?? []).length === 0 ? (
+              <Paper className="border border-dashed p-4 text-center" radius="md">
+                <Text size="sm" c="dimmed">
+                  No delegated work recorded.
+                </Text>
+              </Paper>
+            ) : (
+              <Stack gap="xs">
+                {(delegationsQuery.data ?? []).slice(0, 5).map((record) => (
+                  <Paper key={record.id} className="border bg-card p-3" radius="md">
+                    <Group justify="space-between" align="flex-start" wrap="nowrap">
+                      <Stack gap={2} className="min-w-0">
+                        <Text size="sm" fw={500} className="truncate">
+                          {record.title}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {record.source.workspaceId}
+                          {' -> '}
+                          {record.target.workspaceId}
+                        </Text>
+                      </Stack>
+                      <Badge variant="light" color={record.status === 'blocked' ? 'red' : 'blue'}>
+                        {record.latestState ?? record.status}
+                      </Badge>
+                    </Group>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        </Stack>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
 

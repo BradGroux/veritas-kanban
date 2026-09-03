@@ -156,6 +156,8 @@ describe('Settings governance Mantine controls', () => {
   it('renders Shared Resources checkbox, number, and skill capability controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<SharedResourcesTab />);
 
+    expect(screen.getByRole('heading', { name: 'Shared Resources' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(screen.getByRole('textbox', { name: 'Max Resources' })).toBeDefined();
     expect(screen.getByRole('checkbox', { name: 'Prompt' })).toBeDefined();
     expect(screen.getByRole('checkbox', { name: 'Skill' })).toBeDefined();
@@ -184,6 +186,8 @@ describe('Settings governance Mantine controls', () => {
   it('renders Tool Policies list and editor through direct Mantine primitives', async () => {
     const { baseElement } = renderWithProviders(<ToolPoliciesTab />);
 
+    expect(await screen.findByRole('heading', { name: 'Tool Policies' })).toBeDefined();
+    expect(baseElement.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(await screen.findByText('planner')).toBeDefined();
     expect(screen.getByText('all tools')).toBeDefined();
     expect(screen.getByText('+1 more')).toBeDefined();
