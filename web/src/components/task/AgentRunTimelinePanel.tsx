@@ -899,12 +899,17 @@ function getRunOptions(
     attempts.set(id, label);
   };
 
+  const latestAttemptLabel =
+    task.attempt?.status === 'running' || task.attempt?.status === 'pending' ? 'Current' : 'Latest';
+  addAttempt(
+    task.attempt?.id,
+    `${latestAttemptLabel} | ${task.attempt?.id} | ${task.attempt?.status ?? 'unknown'}`
+  );
   for (const trace of traces) {
-    addAttempt(trace.traceId, `${trace.traceId} (${trace.status})`);
+    addAttempt(trace.traceId, `Historical | ${trace.traceId} | ${trace.status}`);
   }
-  addAttempt(task.attempt?.id, `${task.attempt?.id} (${task.attempt?.status ?? 'current'})`);
   for (const attempt of task.attempts ?? []) {
-    addAttempt(attempt.id, `${attempt.id} (${attempt.status})`);
+    addAttempt(attempt.id, `Historical | ${attempt.id} | ${attempt.status}`);
   }
   for (const event of telemetryEvents) {
     addAttempt(getEventAttemptId(event), `${getEventAttemptId(event)} (telemetry)`);
@@ -1222,6 +1227,17 @@ export function AgentRunTimelinePanel({
     (product) => !selectedAttemptId || product.sourceRunId === selectedAttemptId
   );
   const pendingTaskApprovals = approvals.filter((approval) => approval.taskId === task.id);
+  const selectedIsLatestAttempt = Boolean(
+    selectedAttemptId && selectedAttemptId === task.attempt?.id
+  );
+  const selectedIsLiveAttempt = hasLiveAttempt && selectedIsLatestAttempt;
+  const selectedAttemptScope = selectedIsLiveAttempt
+    ? 'Current attempt'
+    : selectedIsLatestAttempt
+      ? 'Latest attempt'
+      : selectedAttemptId
+        ? 'Historical attempt'
+        : 'Derived history';
 
   useEffect(() => {
     setVisibleCount(TIMELINE_PAGE_SIZE);
@@ -1436,7 +1452,8 @@ export function AgentRunTimelinePanel({
                 <ThemeIcon size="sm" radius="xl" variant="light">
                   <History className="h-4 w-4" />
                 </ThemeIcon>
-                <Text fw={700}>Run Timeline</Text>
+                <Text fw={700}>Attempt Timeline</Text>
+                <Badge variant="outline">{selectedAttemptScope}</Badge>
                 <Badge color={SOURCE_COLORS[source]} variant="light">
                   {source === 'live' ? 'Live' : source === 'stored' ? 'Stored replay' : 'Derived'}
                 </Badge>
@@ -1451,7 +1468,7 @@ export function AgentRunTimelinePanel({
               </Group>
               <Text size="sm" c="dimmed" mt={6}>
                 {selectedAttemptId || 'No attempt selected'} | {events.length} events
-                {hasLiveAttempt ? ' | live polling' : ''}
+                {selectedIsLiveAttempt ? ' | live polling' : ''}
               </Text>
             </div>
             {isLoading && (
@@ -1466,8 +1483,8 @@ export function AgentRunTimelinePanel({
 
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <Select
-              label="Run"
-              aria-label="Run"
+              label="Attempt"
+              aria-label="Attempt"
               value={selectedAttemptId}
               onChange={setSelectedAttemptId}
               data={runOptions}

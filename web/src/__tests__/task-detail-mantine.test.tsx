@@ -116,7 +116,19 @@ vi.mock('@/components/task/AgentPanel', () => ({
 }));
 
 vi.mock('@/components/task/AgentRunTimelinePanel', () => ({
-  AgentRunTimelinePanel: () => <div>Run timeline panel</div>,
+  AgentRunTimelinePanel: ({
+    initialAttemptId,
+    initialEventId,
+  }: {
+    initialAttemptId?: string | null;
+    initialEventId?: string | null;
+  }) => (
+    <div>
+      Run timeline panel
+      <span>Attempt target: {initialAttemptId ?? 'none'}</span>
+      <span>Event target: {initialEventId ?? 'none'}</span>
+    </div>
+  ),
 }));
 
 vi.mock('@/components/task/DiffViewer', () => ({
@@ -537,7 +549,11 @@ describe('task detail Mantine migration', () => {
         task={codeTask}
         open
         onOpenChange={mocks.onOpenChange}
-        navigationTarget={{ tab: 'timeline', timelineAttemptId: 'attempt-1' }}
+        navigationTarget={{
+          tab: 'timeline',
+          timelineAttemptId: 'attempt-1',
+          timelineEventId: 'event-1',
+        }}
       />
     );
 
@@ -549,6 +565,8 @@ describe('task detail Mantine migration', () => {
     expect(screen.getByRole('tab', { name: 'Timeline' }).getAttribute('aria-selected')).toBe(
       'true'
     );
+    expect(screen.getByText('Attempt target: attempt-1')).toBeDefined();
+    expect(screen.getByText('Event target: event-1')).toBeDefined();
 
     rerender(
       <TaskDetailPanel

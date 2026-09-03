@@ -83,6 +83,15 @@ describe('task workspace navigation', () => {
         resolveTaskDetailNavigationTab({ workspace: { version: 1, mode: 'run', section } }, tabs)
       ).toBe(section);
     }
+    for (const section of ['timeline', 'metrics'] as const) {
+      expect(resolveTaskDetailNavigationTab({ tab: section }, tabs)).toBe(section);
+      expect(
+        resolveTaskDetailNavigationTab(
+          { workspace: { version: 1, mode: 'history', section } },
+          tabs
+        )
+      ).toBe(section);
+    }
     const tabsWithWorktree = getAvailableTaskDetailTabMetadata({
       isCodeTask: true,
       hasWorktree: true,
