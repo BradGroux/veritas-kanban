@@ -243,6 +243,9 @@ html[data-client='desktop'] .desktop-app-shell {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+  /* Keep tall board and drag descendants inside the app's internal scrollers.
+     Without layout containment Chromium exposes their overflow on the document. */
+  contain: layout;
 }
 
 html[data-client='desktop'] .desktop-app-header {
