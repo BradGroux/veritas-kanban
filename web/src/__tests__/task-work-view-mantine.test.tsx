@@ -193,6 +193,9 @@ describe('task work view Mantine surface', () => {
     const { baseElement, container } = renderWorkView(task);
 
     expect(screen.getByTestId('task-overview-primary').getAttribute('data-state')).toBe('blocked');
+    expect(screen.getByLabelText('Task lifecycle Blocked').getAttribute('data-ui-tone')).toBe(
+      'blocked'
+    );
     expect(screen.getByRole('button', { name: 'Resolve blocker' })).toBeDefined();
     expect(screen.getAllByText('Waiting on security review').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('What is blocking this task')).toBeDefined();

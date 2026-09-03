@@ -1,6 +1,7 @@
+import { UiSurface, UiPill, semanticToneForLegacyColor } from '@/components/ui/UiVocabulary';
 import { useEffect, useMemo, useState } from 'react';
 import { Search, ShieldAlert, BrainCircuit, Route, ShieldCheck } from 'lucide-react';
-import { Badge, SegmentedControl, Select, TextInput } from '@mantine/core';
+import { SegmentedControl, Select, TextInput } from '@mantine/core';
 import { useDecisions } from '@/hooks/useDecisions';
 import { useGovernanceTraces } from '@/hooks/useGovernanceTraces';
 import type {
@@ -204,9 +205,9 @@ export function DecisionExplorer({ onBack }: DecisionExplorerProps) {
       onBack={onBack}
       width="wide"
       status={
-        <Badge variant="light" tt="none">
+        <UiPill>
           {activeCount} {activeLabel}
-        </Badge>
+        </UiPill>
       }
     >
       <div className="space-y-6">
@@ -302,7 +303,7 @@ export function DecisionExplorer({ onBack }: DecisionExplorerProps) {
         </div>
 
         {mode === 'decisions' ? (
-          <div className="overflow-hidden rounded-lg border bg-card">
+          <UiSurface level="card" className="overflow-hidden">
             <div className="grid grid-cols-[1.5fr_1.1fr_120px_120px_150px_180px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <span>Action</span>
               <span>Agent / Task</span>
@@ -329,9 +330,9 @@ export function DecisionExplorer({ onBack }: DecisionExplorerProps) {
                 />
               ))
             )}
-          </div>
+          </UiSurface>
         ) : (
-          <div className="overflow-hidden rounded-lg border bg-card">
+          <UiSurface level="card" className="overflow-hidden">
             <div className="grid grid-cols-[1.5fr_150px_150px_170px_180px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <span>Trace</span>
               <span>Type</span>
@@ -357,7 +358,7 @@ export function DecisionExplorer({ onBack }: DecisionExplorerProps) {
                 />
               ))
             )}
-          </div>
+          </UiSurface>
         )}
       </div>
     </PrimaryPageShell>
@@ -396,14 +397,13 @@ function GovernanceTraceRow({
         <span>{trace.kind}</span>
       </div>
       <div>
-        <Badge
-          color={traceOutcomeColor(trace.outcome)}
-          variant="light"
-          tt="none"
+        <UiPill
+          kind="status"
+          tone={semanticToneForLegacyColor(traceOutcomeColor(trace.outcome))}
           leftSection={<ShieldCheck className="h-3 w-3" />}
         >
           {trace.outcome}
-        </Badge>
+        </UiPill>
       </div>
       <div className="space-y-1 text-sm">
         <div className="font-medium">{subject}</div>
@@ -438,14 +438,13 @@ function DecisionRow({ decision, onOpen }: { decision: DecisionRecord; onOpen: (
         <span>{decision.confidenceLevel}%</span>
       </div>
       <div>
-        <Badge
-          color={riskColor(decision.riskScore)}
-          variant="light"
-          tt="none"
+        <UiPill
+          kind="status"
+          tone={semanticToneForLegacyColor(riskColor(decision.riskScore))}
           leftSection={<ShieldAlert className="h-3 w-3" />}
         >
           {decision.riskScore}
-        </Badge>
+        </UiPill>
       </div>
       <div className="text-sm text-muted-foreground">{decision.assumptions.length}</div>
       <div className="text-sm text-muted-foreground">

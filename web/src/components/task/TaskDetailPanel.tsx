@@ -1,16 +1,11 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActionIcon,
-  Badge,
-  Button,
-  Drawer,
-  Group,
-  Select,
-  Stack,
-  Tabs,
-  Text,
-  TextInput,
-} from '@mantine/core';
+  UiPill,
+  UiAction,
+  UiIconAction,
+  semanticToneForLegacyColor,
+} from '@/components/ui/UiVocabulary';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Drawer, Group, Select, Stack, Tabs, Text, TextInput } from '@mantine/core';
 import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
@@ -311,36 +306,27 @@ export function TaskDetailPanel({
                   </Group>
                   <Group gap="xs" wrap="nowrap">
                     {readOnly && (
-                      <Badge
-                        color="gray"
-                        variant="light"
-                        leftSection={<Archive className="h-3 w-3" />}
-                      >
-                        Archived
-                      </Badge>
+                      <UiPill leftSection={<Archive className="h-3 w-3" />}>Archived</UiPill>
                     )}
                     {!readOnly && isDirty && (
                       <Text size="xs" c="yellow.5">
                         {isSaving ? 'Saving...' : 'Unsaved changes'}
                       </Text>
                     )}
-                    <Button
-                      variant="subtle"
-                      color="gray"
-                      size="compact-sm"
+                    <UiAction
+                      variant="quiet"
                       onClick={() => setTaskChatOpen(true)}
                       leftSection={<MessageSquare className="h-3.5 w-3.5" />}
                     >
                       Chat
-                    </Button>
-                    <ActionIcon
+                    </UiAction>
+                    <UiIconAction
+                      variant="quiet"
                       aria-label={
                         expanded ? 'Exit expanded task workspace' : 'Expand task workspace'
                       }
                       aria-pressed={expanded}
                       title={expanded ? 'Exit expanded workspace' : 'Expand workspace'}
-                      variant="subtle"
-                      color="gray"
                       onClick={() => setExpanded((current) => !current)}
                     >
                       {expanded ? (
@@ -348,15 +334,14 @@ export function TaskDetailPanel({
                       ) : (
                         <Maximize2 className="h-4 w-4" />
                       )}
-                    </ActionIcon>
-                    <ActionIcon
+                    </UiIconAction>
+                    <UiIconAction
+                      variant="quiet"
                       aria-label="Close task workspace"
-                      variant="subtle"
-                      color="gray"
                       onClick={() => onOpenChange(false)}
                     >
                       <X className="h-4 w-4" />
-                    </ActionIcon>
+                    </UiIconAction>
                   </Group>
                 </Group>
                 <Drawer.Title className="mt-1 pr-8 text-lg font-semibold text-foreground sm:text-xl">
@@ -393,7 +378,7 @@ export function TaskDetailPanel({
                 <nav
                   aria-label="Task workspace modes"
                   data-testid="task-workspace-mode-navigation"
-                  className="veritas-overlay-scroll hidden w-40 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r px-3 py-4 sm:flex"
+                  className="veritas-overlay-scroll hidden w-48 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r px-3 py-4 sm:flex"
                 >
                   <Text size="xs" tt="uppercase" c="dimmed" className="mb-1 px-2 tracking-wide">
                     Workspace
@@ -402,24 +387,21 @@ export function TaskDetailPanel({
                     const Icon = WORKSPACE_MODE_ICONS[mode.id];
                     const active = mode.id === activeMode;
                     return (
-                      <button
+                      <UiAction
+                        variant="quiet"
                         key={mode.id}
                         type="button"
                         disabled={mode.disabled}
                         aria-current={active ? 'page' : undefined}
                         onClick={() => selectWorkspaceMode(mode.id)}
-                        className={`flex min-h-10 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-40 ${
-                          active
-                            ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        }`}
+                        className="vk-ui-nav-action w-full text-left"
                       >
                         <span aria-hidden="true" className="w-4 font-mono text-[10px] opacity-70">
                           {String(index + 1).padStart(2, '0')}
                         </span>
                         <Icon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                         <span>{mode.label}</span>
-                      </button>
+                      </UiAction>
                     );
                   })}
                 </nav>
@@ -458,31 +440,31 @@ export function TaskDetailPanel({
                       </div>
                       <Group gap="xs" wrap="wrap">
                         {activeMode === 'run' && (
-                          <Badge variant="light" color="gray" tt="capitalize">
-                            Task: {localTask.status.replaceAll('-', ' ')}
-                          </Badge>
+                          <UiPill>Task: {localTask.status.replaceAll('-', ' ')}</UiPill>
                         )}
                         {activeMode === 'results' && resultsReviewStatus && (
                           <>
-                            <Badge variant="light" color={resultsReviewStatus.color}>
+                            <UiPill
+                              kind="status"
+                              tone={semanticToneForLegacyColor(resultsReviewStatus.color)}
+                            >
                               Review: {resultsReviewStatus.label}
-                            </Badge>
+                            </UiPill>
                             {openFindingCount > 0 && (
-                              <Badge variant="outline" color="yellow">
+                              <UiPill kind="status" tone="warning">
                                 {openFindingCount} open finding{openFindingCount === 1 ? '' : 's'}
-                              </Badge>
+                              </UiPill>
                             )}
                           </>
                         )}
                         {!readOnly && activeMode === 'plan' && (
-                          <Button
-                            variant="outline"
-                            size="compact-sm"
+                          <UiAction
+                            variant="secondary"
                             onClick={() => setApplyTemplateOpen(true)}
                             leftSection={<FileCode className="h-3 w-3" />}
                           >
                             Template
-                          </Button>
+                          </UiAction>
                         )}
                         {!readOnly &&
                           activeMode === 'run' &&
@@ -491,14 +473,13 @@ export function TaskDetailPanel({
                           localTask.git?.repo &&
                           agentSettings.enablePreview &&
                           canUseLocalAgentControls && (
-                            <Button
-                              variant="outline"
-                              size="compact-sm"
+                            <UiAction
+                              variant="secondary"
                               onClick={() => setPreviewOpen(true)}
                               leftSection={<Monitor className="h-3 w-3" />}
                             >
                               Preview
-                            </Button>
+                            </UiAction>
                           )}
                       </Group>
                     </Group>

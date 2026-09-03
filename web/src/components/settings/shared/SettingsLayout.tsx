@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Alert, Group, Paper, Stack, Text } from '@mantine/core';
+import { Alert, Group, Stack, Text } from '@mantine/core';
+import { UiSurface, UiHeading } from '@/components/ui/UiVocabulary';
 import { Info, TriangleAlert } from 'lucide-react';
 import { SectionHeader } from './SectionHeader';
 
@@ -18,9 +19,7 @@ export function SettingsPage({
     <Stack gap="lg" data-settings-page={title.toLowerCase().replace(/\s+/g, '-')}>
       <Group justify="space-between" align="flex-start" gap="md" wrap="wrap">
         <div className="min-w-0 max-w-2xl">
-          <Text component="h2" size="lg" fw={700} lh={1.25}>
-            {title}
-          </Text>
+          <UiHeading>{title}</UiHeading>
           <Text size="sm" c="dimmed" mt={4}>
             {description}
           </Text>
@@ -56,21 +55,14 @@ export function SettingsSection({
   const headingId = id ? `${id}-heading` : undefined;
 
   return (
-    <Paper
+    <UiSurface
       component="section"
       id={id}
       aria-labelledby={headingId}
-      withBorder
-      radius="md"
       p={{ base: 'sm', sm: 'md' }}
       data-settings-section={tone}
-      className={
-        tone === 'danger'
-          ? 'scroll-mt-16 border-red-500/35 bg-red-500/[0.035]'
-          : tone === 'advanced'
-            ? 'scroll-mt-16 bg-muted/20'
-            : 'scroll-mt-16 bg-card'
-      }
+      accent={tone === 'danger' ? 'error' : undefined}
+      className="scroll-mt-16"
     >
       <SectionHeader
         id={headingId}
@@ -82,7 +74,7 @@ export function SettingsSection({
         contained
       />
       <div className={divided ? 'divide-y' : undefined}>{children}</div>
-    </Paper>
+    </UiSurface>
   );
 }
 

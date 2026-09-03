@@ -1,29 +1,29 @@
+import { UiSurface, UiPill } from '@/components/ui/UiVocabulary';
 import { useMemo } from 'react';
 import { Activity as ActivityIcon, ArrowRight, ArrowRightLeft, Zap, Coffee } from 'lucide-react';
-import { Badge, Group, Paper, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
-import {
-  useDailySummary,
-  useStatusHistory,
-  formatDurationMs,
-  getStatusColor,
-} from '@/hooks/useStatusHistory';
+import { Group, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
+import { useDailySummary, useStatusHistory, formatDurationMs } from '@/hooks/useStatusHistory';
 import { useActivityFeed, type Activity } from '@/hooks/useActivity';
 import { cn } from '@/lib/utils';
 import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
-// Kanban column colors
-function getColumnColor(status: string): string {
+function getStatusTone(status: string) {
   switch (status) {
     case 'todo':
-      return 'bg-slate-500';
+      return 'neutral';
     case 'in-progress':
-      return 'bg-amber-500';
+    case 'working':
+    case 'thinking':
+      return 'info';
     case 'blocked':
-      return 'bg-red-500';
+      return 'blocked';
     case 'done':
-      return 'bg-blue-500';
+      return 'success';
+    case 'error':
+    case 'failed':
+      return 'error';
     default:
-      return 'bg-gray-500';
+      return 'neutral';
   }
 }
 
@@ -56,7 +56,7 @@ function DailySummaryPanel() {
     <Stack gap="lg">
       {/* Summary Cards */}
       <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-        <Paper withBorder p="md" radius="md">
+        <UiSurface p="md">
           <Group gap="xs" mb="xs">
             <ThemeIcon variant="transparent" color="green">
               <Zap className="h-5 w-5" />
@@ -68,8 +68,8 @@ function DailySummaryPanel() {
           <Text size="xl" fw={700} c="green">
             {formatDurationMs(summary.activeMs)}
           </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
+        </UiSurface>
+        <UiSurface p="md">
           <Group gap="xs" mb="xs">
             <ThemeIcon variant="transparent" color="gray">
               <Coffee className="h-5 w-5" />
@@ -81,8 +81,8 @@ function DailySummaryPanel() {
           <Text size="xl" fw={700} c="dimmed">
             {formatDurationMs(summary.idleMs)}
           </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
+        </UiSurface>
+        <UiSurface p="md">
           <Group gap="xs" mb="xs">
             <ThemeIcon variant="transparent" color="violet">
               <ActivityIcon className="h-5 w-5" />
@@ -94,7 +94,7 @@ function DailySummaryPanel() {
           <Text size="xl" fw={700}>
             {activePercent}%
           </Text>
-        </Paper>
+        </UiSurface>
       </SimpleGrid>
 
       {/* Progress bar */}
@@ -114,18 +114,12 @@ function DailySummaryPanel() {
 // ─── Status History ──────────────────────────────────────────────────────────
 
 function StatusBadge({ status, isTaskStatus }: { status: string; isTaskStatus?: boolean }) {
-  const colorClass = isTaskStatus ? getColumnColor(status) : getStatusColor(status);
   // Format task status for display
   const displayStatus = isTaskStatus ? (status === 'in-progress' ? 'in-progress' : status) : status;
   return (
-    <Badge
-      size="sm"
-      radius="sm"
-      tt="none"
-      className={cn('w-[5.5rem] justify-center text-white', colorClass)}
-    >
+    <UiPill kind="status" tone={getStatusTone(status)}>
       {displayStatus}
-    </Badge>
+    </UiPill>
   );
 }
 
@@ -249,22 +243,8 @@ function StatusHistoryPanel({ onTaskClick }: StatusHistoryPanelProps) {
             <div className="space-y-1">
               {grouped[day].map((entry) => {
                 const isTaskStatus = entry.type === 'task';
-                // Color for task title based on entry type and status
-                const titleColor = isTaskStatus
-                  ? entry.newStatus === 'done'
-                    ? 'text-blue-500'
-                    : entry.newStatus === 'in-progress'
-                      ? 'text-amber-500'
-                      : entry.newStatus === 'blocked'
-                        ? 'text-red-500'
-                        : 'text-slate-500'
-                  : entry.newStatus === 'working' || entry.newStatus === 'thinking'
-                    ? 'text-green-500'
-                    : entry.newStatus === 'sub-agent'
-                      ? 'text-purple-500'
-                      : entry.newStatus === 'error'
-                        ? 'text-red-500'
-                        : 'text-gray-500';
+                // Status belongs in the semantic pill, not a second colored title.
+                const titleColor = 'text-foreground';
 
                 return (
                   <div

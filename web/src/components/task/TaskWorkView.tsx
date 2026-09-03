@@ -1,14 +1,18 @@
+import {
+  UiSurface,
+  UiHeading,
+  UiPill,
+  semanticToneForLegacyColor,
+  UiAction,
+  UiIconAction,
+} from '@/components/ui/UiVocabulary';
 import { useMemo, useState } from 'react';
 import {
-  ActionIcon,
   Alert,
-  Badge,
-  Button,
   Code,
   Group,
   Loader,
   Modal,
-  Paper,
   Progress,
   ScrollArea,
   SimpleGrid,
@@ -530,14 +534,10 @@ export function TaskWorkView({
   return (
     <>
       <Stack gap="md">
-        <Paper
-          withBorder
+        <UiSurface
           p={{ base: 'md', sm: 'lg' }}
-          radius="md"
           data-testid="task-overview-primary"
           data-state={overview.state}
-          className="border-l-4"
-          style={{ borderLeftColor: `var(--mantine-color-${overview.color}-6)` }}
         >
           <Group justify="space-between" align="flex-start" gap="lg" wrap="wrap">
             <Stack gap={6} className="min-w-0 flex-1">
@@ -545,28 +545,34 @@ export function TaskWorkView({
                 <Text size="xs" fw={700} tt="uppercase" c="dimmed">
                   Task state
                 </Text>
-                <Badge
-                  color={TASK_STATUS_COLORS[task.status] ?? 'gray'}
-                  variant="outline"
+                <UiPill
+                  kind="status"
+                  tone={
+                    task.status === 'blocked'
+                      ? 'blocked'
+                      : semanticToneForLegacyColor(TASK_STATUS_COLORS[task.status] ?? 'gray')
+                  }
                   aria-label={`Task lifecycle ${TASK_STATUS_LABELS[task.status] ?? task.status}`}
                 >
                   {TASK_STATUS_LABELS[task.status] ?? task.status}
-                </Badge>
+                </UiPill>
               </Group>
-              <Text component="h2" size="xl" fw={750} lh={1.2}>
-                {overview.title}
-              </Text>
+              <UiHeading>{overview.title}</UiHeading>
               <Text size="sm" c="dimmed" maw={680}>
                 {overview.detail}
               </Text>
             </Stack>
             {!readOnly && (
-              <Button onClick={openNextAction} data-testid="task-overview-primary-action">
+              <UiAction
+                variant="primary"
+                onClick={openNextAction}
+                data-testid="task-overview-primary-action"
+              >
                 {effectiveAction.label}
-              </Button>
+              </UiAction>
             )}
           </Group>
-        </Paper>
+        </UiSurface>
 
         {!canControlAgents && (
           <Alert color="blue" icon={<Smartphone className="h-4 w-4" />}>
@@ -596,16 +602,19 @@ export function TaskWorkView({
         )}
 
         {(task.attempt || activeRun) && (
-          <Paper withBorder p="md" radius="md" aria-label="Current execution">
+          <UiSurface p="md" aria-label="Current execution">
             <Stack gap="sm">
               <Group justify="space-between" align="flex-start" gap="sm" wrap="wrap">
                 <Stack gap={4} className="min-w-0">
                   <Group gap="xs" wrap="wrap">
                     <Terminal className="h-4 w-4 text-muted-foreground" />
                     <Text fw={650}>Current execution</Text>
-                    <Badge color={getAttemptColor(effectiveAttemptStatus)} variant="light">
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(getAttemptColor(effectiveAttemptStatus))}
+                    >
                       Latest attempt: {formatAttemptStatus(effectiveAttemptStatus)}
-                    </Badge>
+                    </UiPill>
                   </Group>
                   <Text size="sm" fw={600}>
                     Current step: {currentStep}
@@ -626,10 +635,8 @@ export function TaskWorkView({
                 </Stack>
                 <Group gap="xs" wrap="wrap">
                   {activeRun && !readOnly && canControlAgents && (
-                    <Button
-                      size="compact-xs"
-                      color="red"
-                      variant="light"
+                    <UiAction
+                      variant="destructive"
                       leftSection={<Square className="h-3 w-3" />}
                       loading={stopAgent.isPending}
                       onClick={() => setStopConfirmOpen(true)}
@@ -640,36 +647,33 @@ export function TaskWorkView({
                       title={canStop ? 'Stop active run' : stopReason}
                     >
                       Stop
-                    </Button>
+                    </UiAction>
                   )}
                   {retryableRun && !activeRun && !readOnly && canControlAgents && (
-                    <Button
-                      size="compact-xs"
-                      variant="light"
+                    <UiAction
+                      variant="secondary"
                       leftSection={<RotateCcw className="h-3 w-3" />}
                       onClick={() => onOpenTab('agent')}
                     >
                       Retry in Agent
-                    </Button>
+                    </UiAction>
                   )}
                   {task.attempt?.id && (
-                    <Button
-                      size="compact-xs"
-                      variant="subtle"
+                    <UiAction
+                      variant="quiet"
                       leftSection={<History className="h-3 w-3" />}
                       onClick={() => onOpenTab('timeline')}
                     >
                       Timeline
-                    </Button>
+                    </UiAction>
                   )}
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
+                  <UiAction
+                    variant="quiet"
                     leftSection={<MessageSquare className="h-3 w-3" />}
                     onClick={onOpenChat}
                   >
                     Chat
-                  </Button>
+                  </UiAction>
                 </Group>
               </Group>
 
@@ -734,37 +738,38 @@ export function TaskWorkView({
                 </details>
               )}
             </Stack>
-          </Paper>
+          </UiSurface>
         )}
 
         {workflowRun && (
-          <Paper withBorder p="md" radius="md" aria-label="Workflow execution">
+          <UiSurface p="md" aria-label="Workflow execution">
             <Stack gap="sm">
               <Group justify="space-between" align="flex-start" gap="sm" wrap="wrap">
                 <Stack gap={4}>
                   <Group gap="xs" wrap="wrap">
                     <Workflow className="h-4 w-4 text-muted-foreground" />
                     <Text fw={650}>Workflow execution</Text>
-                    <Badge color={getWorkflowStatusColor(workflowRun.status)} variant="light">
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(getWorkflowStatusColor(workflowRun.status))}
+                    >
                       {getWorkflowStatusLabel(workflowRun.status)}
-                    </Badge>
+                    </UiPill>
                   </Group>
                   <Text size="xs" c="dimmed">
                     Workflow {workflowRun.workflowId} v{workflowRun.workflowVersion}
                   </Text>
                 </Stack>
-                <Button size="compact-xs" variant="light" onClick={onOpenWorkflow}>
+                <UiAction variant="secondary" onClick={onOpenWorkflow}>
                   Open Workflow
-                </Button>
+                </UiAction>
               </Group>
               <Group gap="xs" wrap="wrap">
-                <Badge variant="outline" className="font-mono">
-                  {workflowRun.id}
-                </Badge>
+                <UiPill className="font-mono">{workflowRun.id}</UiPill>
                 {workflowRun.currentStep && (
-                  <Badge variant="light" color="blue">
+                  <UiPill kind="status" tone="info">
                     {workflowRun.currentStep}
-                  </Badge>
+                  </UiPill>
                 )}
                 <Text size="xs" c="dimmed">
                   Steps {workflowProgress.complete}/{workflowProgress.total}
@@ -780,20 +785,23 @@ export function TaskWorkView({
                 </Alert>
               )}
             </Stack>
-          </Paper>
+          </UiSurface>
         )}
 
         {showReadiness && (
-          <Paper withBorder p="md" radius="md" aria-label="Readiness">
+          <UiSurface p="md" aria-label="Readiness">
             <Stack gap="sm">
               <Group justify="space-between" align="center" wrap="nowrap">
                 <Group gap="xs">
                   <ShieldCheck className="h-4 w-4 text-muted-foreground" />
                   <Text fw={650}>Readiness</Text>
                 </Group>
-                <Badge color={readinessSummary.ready ? 'green' : 'yellow'} variant="light">
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(readinessSummary.ready ? 'green' : 'yellow')}
+                >
                   {readinessSummary.passed}/{readinessSummary.total} checks
-                </Badge>
+                </UiPill>
               </Group>
               <Progress
                 value={readinessSummary.percent}
@@ -821,38 +829,36 @@ export function TaskWorkView({
                 ))}
               </SimpleGrid>
             </Stack>
-          </Paper>
+          </UiSurface>
         )}
 
         {showReviewHandoff && (
-          <Paper withBorder p="md" radius="md" aria-label="Review and handoff">
+          <UiSurface p="md" aria-label="Review and handoff">
             <Stack gap="sm">
               <Group justify="space-between" align="flex-start" gap="sm" wrap="wrap">
                 <Group gap="xs" wrap="wrap">
                   <PackageCheck className="h-4 w-4 text-muted-foreground" />
                   <Text fw={650}>Review and handoff</Text>
                   {task.review?.decision && (
-                    <Badge
-                      color={task.review.decision === 'approved' ? 'green' : 'yellow'}
-                      variant="light"
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(
+                        task.review.decision === 'approved' ? 'green' : 'yellow'
+                      )}
                     >
                       Review: {getReviewLabel(task)}
-                    </Badge>
+                    </UiPill>
                   )}
                 </Group>
                 <Group gap="xs">
                   {isCodeTask && (
-                    <Button size="compact-xs" variant="light" onClick={() => onOpenTab('review')}>
+                    <UiAction variant="secondary" onClick={() => onOpenTab('review')}>
                       Review
-                    </Button>
+                    </UiAction>
                   )}
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    onClick={() => onOpenTab('work-products')}
-                  >
+                  <UiAction variant="quiet" onClick={() => onOpenTab('work-products')}>
                     Work Products
-                  </Button>
+                  </UiAction>
                 </Group>
               </Group>
 
@@ -935,42 +941,39 @@ export function TaskWorkView({
                         </div>
                         {product.artifact && (
                           <Tooltip label={`Preview ${product.artifact.safeName}`}>
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
+                            <UiIconAction
+                              variant="quiet"
                               aria-label={`Preview ${product.title}`}
                               onClick={() => setPreviewProduct(product)}
                             >
                               <Eye className="h-3 w-3" />
-                            </ActionIcon>
+                            </UiIconAction>
                           </Tooltip>
                         )}
                         {artifactHref && (
                           <Tooltip label={`Download ${product.artifact?.safeName}`}>
-                            <ActionIcon
+                            <UiIconAction
+                              variant="quiet"
                               component="a"
                               href={artifactHref}
-                              size="sm"
-                              variant="subtle"
                               aria-label={`Download ${product.title}`}
                             >
                               <Download className="h-3 w-3" />
-                            </ActionIcon>
+                            </UiIconAction>
                           </Tooltip>
                         )}
                         {sourceLink && href && (
                           <Tooltip label={`Open ${sourceLink.label}`}>
-                            <ActionIcon
+                            <UiIconAction
+                              variant="quiet"
                               component="a"
                               href={href}
                               target={external ? '_blank' : undefined}
                               rel={external ? 'noopener noreferrer' : undefined}
-                              size="sm"
-                              variant="subtle"
                               aria-label={`Open origin for ${product.title}`}
                             >
                               <ExternalLink className="h-3 w-3" />
-                            </ActionIcon>
+                            </UiIconAction>
                           </Tooltip>
                         )}
                       </Group>
@@ -979,7 +982,7 @@ export function TaskWorkView({
                 </Stack>
               ) : null}
             </Stack>
-          </Paper>
+          </UiSurface>
         )}
 
         {task.attempt?.id && (
@@ -998,7 +1001,7 @@ export function TaskWorkView({
         )}
 
         {isCodeTask && overview.state === 'ready' && (
-          <Paper withBorder p="md" radius="md">
+          <UiSurface p="md">
             <Group justify="space-between" gap="sm" wrap="wrap">
               <Group gap="xs">
                 <GitBranch className="h-4 w-4 text-muted-foreground" />
@@ -1012,15 +1015,15 @@ export function TaskWorkView({
                   </Text>
                 </div>
               </Group>
-              <Button size="compact-xs" variant="subtle" onClick={() => onOpenTab('git')}>
+              <UiAction variant="quiet" onClick={() => onOpenTab('git')}>
                 Open Git
-              </Button>
+              </UiAction>
             </Group>
-          </Paper>
+          </UiSurface>
         )}
 
         {!isCodeTask && !workflowRun && overview.state === 'ready' && (
-          <Paper withBorder p="md" radius="md">
+          <UiSurface p="md">
             <Group justify="space-between" gap="sm" wrap="wrap">
               <Group gap="xs">
                 <Workflow className="h-4 w-4 text-muted-foreground" />
@@ -1033,11 +1036,11 @@ export function TaskWorkView({
                   </Text>
                 </div>
               </Group>
-              <Button size="compact-xs" variant="subtle" onClick={onOpenWorkflow}>
+              <UiAction variant="quiet" onClick={onOpenWorkflow}>
                 Open Workflow
-              </Button>
+              </UiAction>
             </Group>
-          </Paper>
+          </UiSurface>
         )}
       </Stack>
 
@@ -1061,18 +1064,18 @@ export function TaskWorkView({
             retried from the Agent tab.
           </Text>
           <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setStopConfirmOpen(false)}>
+            <UiAction variant="secondary" onClick={() => setStopConfirmOpen(false)}>
               Cancel
-            </Button>
-            <Button
-              color="red"
+            </UiAction>
+            <UiAction
+              variant="destructive"
               loading={stopAgent.isPending}
               onClick={handleStopAgent}
               disabled={!canStop}
               title={canStop ? 'Stop agent' : stopReason}
             >
               Stop Agent
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>

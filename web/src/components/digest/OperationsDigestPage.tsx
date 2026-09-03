@@ -1,15 +1,12 @@
-import { useMemo, useState } from 'react';
 import {
-  Alert,
-  Badge,
-  Button,
-  Code,
-  Group,
-  Select,
-  Text,
-  TextInput,
-  Textarea,
-} from '@mantine/core';
+  UiHeading,
+  UiSurface,
+  UiPill,
+  semanticToneForLegacyColor,
+  UiAction,
+} from '@/components/ui/UiVocabulary';
+import { useMemo, useState } from 'react';
+import { Alert, Code, Group, Select, Text, TextInput, Textarea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   AlertTriangle,
@@ -199,56 +196,47 @@ export function OperationsDigestPage({
       onBack={onBack}
       width="wide"
       status={
-        <Badge
-          variant="light"
-          color={digest?.hasActivity ? 'green' : 'gray'}
-          tt="none"
+        <UiPill
+          kind="status"
+          tone={semanticToneForLegacyColor(digest?.hasActivity ? 'green' : 'gray')}
           leftSection={<ClipboardList className="h-3 w-3" />}
         >
           {digest?.hasActivity ? `${digest.totals.groups} active groups` : 'No activity'}
-        </Badge>
+        </UiPill>
       }
       actions={
         <Group gap="xs" wrap="wrap">
-          <Button
-            variant="filled"
-            color="veritas"
-            size="sm"
+          <UiAction
+            variant="primary"
             onClick={() => void refresh()}
             leftSection={<RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />}
           >
             Refresh
-          </Button>
-          <Button
-            variant="light"
-            color="veritas"
-            size="sm"
+          </UiAction>
+          <UiAction
+            variant="secondary"
             onClick={() => void copyMarkdown()}
             disabled={!markdown}
             leftSection={<Copy className="h-4 w-4" />}
           >
             Copy
-          </Button>
-          <Button
-            variant="light"
-            color="veritas"
-            size="sm"
+          </UiAction>
+          <UiAction
+            variant="secondary"
             onClick={exportMarkdown}
             disabled={!markdown}
             leftSection={<Download className="h-4 w-4" />}
           >
             Markdown
-          </Button>
-          <Button
-            variant="light"
-            color="veritas"
-            size="sm"
+          </UiAction>
+          <UiAction
+            variant="secondary"
             onClick={exportJson}
             disabled={!digest}
             leftSection={<Download className="h-4 w-4" />}
           >
             JSON
-          </Button>
+          </UiAction>
         </Group>
       }
     >
@@ -352,44 +340,53 @@ export function OperationsDigestPage({
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">Source Groups</h2>
+                <UiHeading order={2} className="text-lg font-semibold">
+                  Source Groups
+                </UiHeading>
                 <p className="text-sm text-muted-foreground">
                   Counts use the same filtered source bundle as the briefing output.
                 </p>
               </div>
-              <Badge variant="light" color="gray" tt="none">
-                {isLoading ? 'Loading' : `${digest?.groups.length ?? 0} groups`}
-              </Badge>
+              <UiPill>{isLoading ? 'Loading' : `${digest?.groups.length ?? 0} groups`}</UiPill>
             </div>
 
             {isLoading ? (
-              <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              <UiSurface
+                level="empty"
+                className="px-4 py-10 text-center text-sm text-muted-foreground"
+              >
                 Loading operations digest...
-              </div>
+              </UiSurface>
             ) : digest?.groups.length ? (
               digest.groups.map((group) => (
                 <DigestGroupCard key={group.key} group={group} onOpenSources={openSources} />
               ))
             ) : (
-              <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              <UiSurface
+                level="empty"
+                className="px-4 py-10 text-center text-sm text-muted-foreground"
+              >
                 No operations activity matches the current filters.
-              </div>
+              </UiSurface>
             )}
           </div>
 
           <aside className="space-y-4">
-            <div className="rounded-lg border bg-card p-4">
+            <UiSurface level="card" className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold">Daily Delivery</h2>
+                  <UiHeading order={2} className="text-base font-semibold">
+                    Daily Delivery
+                  </UiHeading>
                   <p className="text-sm text-muted-foreground">
                     Uses scheduled deliverables for recurring digest records.
                   </p>
                 </div>
-                <Badge
-                  variant="light"
-                  color={scheduledDeliverable?.enabled ? 'green' : 'gray'}
-                  tt="none"
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(
+                    scheduledDeliverable?.enabled ? 'green' : 'gray'
+                  )}
                   leftSection={
                     scheduledDeliverable ? (
                       <CheckCircle2 className="h-3 w-3" />
@@ -399,7 +396,7 @@ export function OperationsDigestPage({
                   }
                 >
                   {scheduledDeliverable ? 'Configured' : 'Not scheduled'}
-                </Badge>
+                </UiPill>
               </div>
 
               <div className="mt-4 space-y-2 text-sm">
@@ -428,40 +425,40 @@ export function OperationsDigestPage({
               </div>
 
               <Group mt="md" gap="xs" wrap="wrap">
-                <Button
-                  size="sm"
-                  variant="light"
+                <UiAction
+                  variant="secondary"
                   onClick={() => void ensureDailySchedule()}
                   loading={createSchedule.isPending}
                   disabled={Boolean(scheduledDeliverable)}
                   leftSection={<CalendarClock className="h-4 w-4" />}
                 >
                   Enable Daily
-                </Button>
-                <Button
-                  size="sm"
-                  variant="light"
+                </UiAction>
+                <UiAction
+                  variant="secondary"
                   onClick={() => void recordScheduledSnapshot()}
                   loading={recordSnapshot.isPending}
                   disabled={!scheduledDeliverable || !digest}
                   leftSection={<FileText className="h-4 w-4" />}
                 >
                   Record Snapshot
-                </Button>
+                </UiAction>
               </Group>
-            </div>
+            </UiSurface>
 
-            <div className="rounded-lg border bg-card p-4">
+            <UiSurface level="card" className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold">Briefing Markdown</h2>
+                  <UiHeading order={2} className="text-base font-semibold">
+                    Briefing Markdown
+                  </UiHeading>
                   <p className="text-sm text-muted-foreground">
                     Deterministic output for standups and handoff notes.
                   </p>
                 </div>
-                <Badge variant="light" color="gray" tt="none">
+                <UiPill>
                   {digest?.refresh.narrative === 'deterministic-only' ? 'No LLM' : 'Narrative'}
-                </Badge>
+                </UiPill>
               </div>
 
               <Textarea
@@ -474,20 +471,20 @@ export function OperationsDigestPage({
                   input: 'font-mono text-xs',
                 }}
               />
-            </div>
+            </UiSurface>
           </aside>
         </section>
 
         {markdown ? (
-          <section className="rounded-lg border bg-card p-4">
+          <UiSurface component="section" level="card" className="p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Rendered Briefing</h2>
-              <Badge variant="light" color="gray" tt="none">
-                {formatDateTime(digest?.generatedAt)}
-              </Badge>
+              <UiHeading order={2} className="text-base font-semibold">
+                Rendered Briefing
+              </UiHeading>
+              <UiPill>{formatDateTime(digest?.generatedAt)}</UiPill>
             </div>
             <MarkdownRenderer content={markdown} className="text-sm" />
-          </section>
+          </UiSurface>
         ) : null}
       </div>
     </PrimaryPageShell>
@@ -506,11 +503,11 @@ function Metric({
   description?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4" title={description}>
+    <UiSurface level="card" className="p-4" title={description}>
       <div className="text-sm text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tabular-nums">{formatNumber(value ?? 0)}</div>
       <div className={cn('mt-3 h-1 rounded-full', toneClass(tone))} />
-    </div>
+    </UiSurface>
   );
 }
 
@@ -523,12 +520,12 @@ function InventoryReconciliation({
 }) {
   const inventory = digest.inventory;
   return (
-    <section className="rounded-lg border bg-card p-4" aria-labelledby="inventory-heading">
+    <UiSurface component="section" level="card" className="p-4" aria-labelledby="inventory-heading">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 id="inventory-heading" className="text-lg font-semibold">
+          <UiHeading order={2} id="inventory-heading" className="text-lg font-semibold">
             Board Inventory Reconciliation
-          </h2>
+          </UiHeading>
           <p className="text-sm text-muted-foreground">
             {formatNumber(inventory.totalBoardTasks)} total board tasks,{' '}
             {formatNumber(inventory.matchingFilters)} match the selected source filters,{' '}
@@ -591,7 +588,7 @@ function InventoryReconciliation({
           </Group>
         </Alert>
       ) : null}
-    </section>
+    </UiSurface>
   );
 }
 
@@ -609,7 +606,9 @@ function DigestGroupCard({
     <article className="rounded-lg border bg-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold">{heading}</h3>
+          <UiHeading order={3} className="truncate text-base font-semibold">
+            {heading}
+          </UiHeading>
           <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span>{formatNumber(totals.runs)} windowed runs</span>
             <span>{formatDuration(totals.activeTimeMs)} run time</span>
@@ -686,16 +685,14 @@ function SourceButton({
 }) {
   const canOpen = items.length > 0;
   return (
-    <Button
-      variant="subtle"
-      color="gray"
-      size="compact-sm"
+    <UiAction
+      variant="quiet"
       onClick={() => onOpenSources(items)}
       disabled={!canOpen}
       rightSection={canOpen ? <ExternalLink className="h-3 w-3" /> : undefined}
     >
       {label}: {formatNumber(count)}
-    </Button>
+    </UiAction>
   );
 }
 

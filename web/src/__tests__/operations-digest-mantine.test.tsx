@@ -336,7 +336,9 @@ describe('OperationsDigestPage', () => {
     expect(screen.getByRole('button', { name: 'Refresh' }).getAttribute('data-variant')).toBe(
       'filled'
     );
-    expect(screen.getByRole('button', { name: 'Copy' }).getAttribute('data-variant')).toBe('light');
+    expect(screen.getByRole('button', { name: 'Copy' }).getAttribute('data-ui-action')).toBe(
+      'secondary'
+    );
 
     await user.click(screen.getByRole('button', { name: /Active: 1/i }));
 

@@ -1,3 +1,4 @@
+import { UiHeading, UiSurface, UiAction, UiPill, UiIconAction } from '@/components/ui/UiVocabulary';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CreateScoringProfileInput,
@@ -7,7 +8,7 @@ import type {
   ScoringProfile,
 } from '@veritas-kanban/shared';
 import { ArrowLeft, Copy, Plus, Save, Trash2 } from 'lucide-react';
-import { ActionIcon, Badge, Button, Select, Tabs, Textarea, TextInput } from '@mantine/core';
+import { Select, Tabs, Textarea, TextInput } from '@mantine/core';
 import { useToast } from '@/hooks/useToast';
 import {
   useCreateScoringProfile,
@@ -349,15 +350,16 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
       contentClassName="min-h-0"
       actions={
         <div className="flex w-full gap-2 sm:w-auto">
-          <Button className="flex-1 sm:flex-none" variant="outline" onClick={handleCreateNew}>
+          <UiAction variant="secondary" className="flex-1 sm:flex-none" onClick={handleCreateNew}>
             <Plus className="mr-2 h-4 w-4" />
             New Profile
-          </Button>
+          </UiAction>
           <div
             data-testid="scoring-save-action"
             className={mobileView === 'list' ? 'hidden md:block' : 'contents'}
           >
-            <Button
+            <UiAction
+              variant="primary"
               className="w-full flex-1 sm:w-auto sm:flex-none"
               onClick={handleSave}
               disabled={
@@ -369,7 +371,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
             >
               <Save className="mr-2 h-4 w-4" />
               Save Profile
-            </Button>
+            </UiAction>
           </div>
         </div>
       }
@@ -382,12 +384,8 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
           className="flex flex-col gap-4"
         >
           <Tabs.List className="w-full sm:w-fit">
-            <Tabs.Tab h={48} value="profiles">
-              Profiles
-            </Tabs.Tab>
-            <Tabs.Tab h={48} value="explorer">
-              Score Explorer
-            </Tabs.Tab>
+            <Tabs.Tab value="profiles">Profiles</Tabs.Tab>
+            <Tabs.Tab value="explorer">Score Explorer</Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel value="profiles" className="m-0 flex min-w-0 items-start gap-4">
@@ -423,14 +421,8 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-medium">{profile.name}</div>
                           <div className="flex gap-2">
-                            {profile.builtIn && (
-                              <Badge variant="light" tt="none">
-                                Built-in
-                              </Badge>
-                            )}
-                            <Badge variant="outline" tt="none">
-                              {profile.compositeMethod}
-                            </Badge>
+                            {profile.builtIn && <UiPill>Built-in</UiPill>}
+                            <UiPill>{profile.compositeMethod}</UiPill>
                           </div>
                         </div>
                         {profile.description && (
@@ -453,16 +445,17 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
               } w-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden`}
             >
               <div data-testid="scoring-mobile-back" className="md:hidden">
-                <Button h={48} variant="subtle" onClick={handleBackToProfiles}>
+                <UiAction variant="quiet" onClick={handleBackToProfiles}>
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to profiles
-                </Button>
+                </UiAction>
               </div>
               <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-                <div className="space-y-4 rounded-lg border bg-card p-4">
+                <UiSurface level="card" className="space-y-4 p-4">
                   <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
                     <div className="min-w-0">
-                      <h2
+                      <UiHeading
+                        order={2}
                         ref={detailHeadingRef}
                         tabIndex={-1}
                         className="text-lg font-semibold focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
@@ -470,39 +463,35 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                         {draftMode === 'create'
                           ? 'New scoring profile'
                           : selectedProfile?.name || 'Scoring profile'}
-                      </h2>
+                      </UiHeading>
                       <p className="text-sm text-muted-foreground">
                         Define weighted scorers and a composite strategy.
                       </p>
                     </div>
                     {draftMode === 'create' ? (
-                      <Button h={48} variant="outline" size="sm" onClick={handleCancelCreate}>
+                      <UiAction variant="secondary" onClick={handleCancelCreate}>
                         Cancel
-                      </Button>
+                      </UiAction>
                     ) : (
                       selectedProfile && (
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            h={48}
+                          <UiAction
+                            variant="secondary"
                             className="flex-1 sm:flex-none"
-                            variant="outline"
-                            size="sm"
                             onClick={() => handleDuplicate(selectedProfile)}
                           >
                             <Copy className="mr-2 h-4 w-4" />
                             Duplicate
-                          </Button>
+                          </UiAction>
                           {!selectedProfile.builtIn && (
-                            <Button
-                              h={48}
+                            <UiAction
+                              variant="destructive"
                               className="flex-1 sm:flex-none"
-                              variant="outline"
-                              size="sm"
                               onClick={() => handleDelete(selectedProfile)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
-                            </Button>
+                            </UiAction>
                           )}
                         </div>
                       )
@@ -558,11 +547,11 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="font-semibold">Scorers</h3>
-                      <Button
-                        h={48}
-                        variant="outline"
-                        size="sm"
+                      <UiHeading order={3} className="font-semibold">
+                        Scorers
+                      </UiHeading>
+                      <UiAction
+                        variant="secondary"
                         onClick={() =>
                           setDraft((current) => ({
                             ...current,
@@ -573,16 +562,13 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                       >
                         <Plus className="mr-2 h-4 w-4" />
                         Add Scorer
-                      </Button>
+                      </UiAction>
                     </div>
 
-                    <div data-testid="scoring-scorer-list" className="rounded-md border">
+                    <UiSurface level="inset" data-testid="scoring-scorer-list" className="">
                       <div className="space-y-3 p-3">
                         {draft.scorers.map((scorer, index) => (
-                          <div
-                            key={scorer.id}
-                            className="space-y-3 rounded-lg border bg-muted/10 p-3"
-                          >
+                          <UiSurface level="section" key={scorer.id} className="space-y-3 p-3">
                             <div className="flex items-center justify-between gap-3">
                               <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_180px_120px]">
                                 <TextInput
@@ -627,10 +613,8 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                   disabled={draftReadOnly}
                                 />
                               </div>
-                              <ActionIcon
-                                size={48}
-                                miw={48}
-                                variant="subtle"
+                              <UiIconAction
+                                variant="destructive"
                                 onClick={() =>
                                   setDraft((current) => ({
                                     ...current,
@@ -643,7 +627,7 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                 aria-label="Remove scorer"
                               >
                                 <Trash2 className="h-4 w-4" />
-                              </ActionIcon>
+                              </UiIconAction>
                             </div>
 
                             <div className="grid gap-3 lg:grid-cols-2">
@@ -834,16 +818,18 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </UiSurface>
                         ))}
                       </div>
-                    </div>
+                    </UiSurface>
                   </div>
-                </div>
+                </UiSurface>
 
-                <div className="space-y-4 rounded-lg border bg-card p-4">
+                <UiSurface level="card" className="space-y-4 p-4">
                   <div>
-                    <h2 className="text-lg font-semibold">Run Evaluation</h2>
+                    <UiHeading order={2} className="text-lg font-semibold">
+                      Run Evaluation
+                    </UiHeading>
                     <p className="text-sm text-muted-foreground">
                       Score an action/output pair against the selected profile.
                     </p>
@@ -897,18 +883,20 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                       }
                     />
 
-                    <Button h={48} onClick={handleEvaluate} disabled={runEvaluation.isPending}>
+                    <UiAction
+                      variant="primary"
+                      onClick={handleEvaluate}
+                      disabled={runEvaluation.isPending}
+                    >
                       Score Output
-                    </Button>
+                    </UiAction>
                   </div>
 
                   {runEvaluation.data && (
-                    <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                    <UiSurface level="inset" className="space-y-3 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-medium">Latest Evaluation</div>
-                        <Badge tt="none">
-                          {Math.round(runEvaluation.data.compositeScore * 100)}%
-                        </Badge>
+                        <UiPill>{Math.round(runEvaluation.data.compositeScore * 100)}%</UiPill>
                       </div>
                       {runEvaluation.data.scores.map((score) => (
                         <div key={score.scorerId} className="space-y-1">
@@ -927,9 +915,9 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
                           <div className="text-xs text-muted-foreground">{score.explanation}</div>
                         </div>
                       ))}
-                    </div>
+                    </UiSurface>
                   )}
-                </div>
+                </UiSurface>
               </div>
             </div>
           </Tabs.Panel>
@@ -937,9 +925,9 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
           <Tabs.Panel value="explorer" className="m-0">
             <Suspense
               fallback={
-                <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+                <UiSurface level="inset" className="p-4 text-sm text-muted-foreground">
                   Loading score explorer...
-                </div>
+                </UiSurface>
               }
             >
               <ScoreExplorer profiles={profiles} />

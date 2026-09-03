@@ -37,6 +37,12 @@ const KanbanBoard = lazy(() =>
   }))
 );
 
+const UiVocabularyGallery = lazy(() =>
+  import('./components/ui/UiVocabularyGallery').then((mod) => ({
+    default: mod.UiVocabularyGallery,
+  }))
+);
+
 const FloatingChat = lazy(() =>
   import('./components/chat/FloatingChat').then((mod) => ({
     default: mod.FloatingChat,
@@ -88,6 +94,16 @@ function MainContent() {
   const runSessionShareId = runSessionShareIdFromLocation();
 
   if (runSessionShareId) return <RunSessionShareView shareId={runSessionShareId} />;
+
+  if (new URLSearchParams(window.location.search).get('ui-gallery') === '1') {
+    return (
+      <Suspense fallback={<ViewLoading view="board" />}>
+        <div className="h-full overflow-auto p-6">
+          <UiVocabularyGallery />
+        </div>
+      </Suspense>
+    );
+  }
 
   if (view === 'board') {
     return (
