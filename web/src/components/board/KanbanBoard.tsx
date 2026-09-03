@@ -131,6 +131,9 @@ export function KanbanBoard() {
     useState<TaskDetailNavigationTarget | null>(null);
   const defaultSavedViewAppliedRef = useRef(false);
   const pendingMoveTaskIdsRef = useRef(new Set<string>());
+  const detailFocusReturnRef = useRef<HTMLElement | null>(null);
+  const detailFocusTaskIdRef = useRef<string | null>(null);
+  const wasDetailOpenRef = useRef(false);
 
   // Initialize filters from URL
   const [filters, setFilters] = useState<FilterState>(() => {
@@ -369,12 +372,38 @@ export function KanbanBoard() {
 
   // Handler for opening a task
   const handleTaskClick = useCallback((task: Task, target?: TaskDetailNavigationTarget) => {
+    const activeElement = document.activeElement;
+    detailFocusReturnRef.current =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    detailFocusTaskIdRef.current = task.id;
     markTaskInHistory(task.id);
     setDetailPanelMounted(true);
     setDetailNavigationTarget(target ?? null);
     setSelectedTask(task);
     setDetailOpen(true);
   }, []);
+
+  useEffect(() => {
+    const wasOpen = wasDetailOpenRef.current;
+    wasDetailOpenRef.current = detailOpen;
+    if (!wasOpen || detailOpen) return;
+
+    const returnTarget = detailFocusReturnRef.current;
+    const taskId = detailFocusTaskIdRef.current;
+    const timer = window.setTimeout(() => {
+      const fallbackTarget = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-task-id]')
+      ).find((element) => element.dataset.taskId === taskId);
+      const focusTarget = returnTarget?.isConnected ? returnTarget : fallbackTarget;
+      focusTarget?.focus({ preventScroll: true });
+      detailFocusReturnRef.current = null;
+      detailFocusTaskIdRef.current = null;
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [detailOpen]);
 
   const handleTaskIdClick = useCallback(
     async (taskId: string, target?: TaskDetailNavigationTarget) => {

@@ -136,3 +136,14 @@ Only stable user preferences, such as the last selected mode or collapsed diagno
 5. Remove legacy duplication only after focused deep-link, mutation, permission, and lifecycle verification proves the replacement paths.
 
 The integrated release gate owns the full workspace suite. Each child issue runs only the focused tests and rendered checks for its feature boundary.
+
+## Implemented replacement and retirement map
+
+The drawer and expanded presentation now render the same workspace component tree. Expanding changes only the presentation width, so task edits, the active mode and section, selected attempt and event targets, scroll position, and nested workflow or chat context remain owned by one surface.
+
+- The header retains Chat, Expand or Exit expanded, and Close as workspace-wide actions.
+- Template is owned by Plan. Workflow and Preview are owned by their Run sections.
+- Verification and deliverables no longer compete inside Details; Results owns their reviewed replacement paths.
+- Overview recommendations link to the exact Plan, Run, Results, or History destination instead of duplicating those controls.
+- Legacy `TaskDetailNavigationTarget.tab` links remain a compatibility input, but the mode and local-section translator is the only navigation authority.
+- The board records the invoking control and restores focus there after the workspace closes, with the task card as a stable fallback.
