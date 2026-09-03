@@ -79,7 +79,7 @@ describe('TemplateEditorDialog', () => {
 
     expect(modal.className).toContain('h-[min(780px,calc(100dvh-2rem))]');
     expect(modal.className).toContain('max-h-[calc(100dvh-2rem)]');
-    expect(scrollRegion.className).toContain('overflow-y-auto');
+    expect(scrollRegion.className).toContain('vk-overlay-scroll');
     expect(scrollRegion.getAttribute('tabindex')).toBe('0');
     expect(scrollRegion.contains(actions)).toBe(false);
 

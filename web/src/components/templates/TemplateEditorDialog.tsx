@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  Group,
-  Modal,
-  Select,
-  Stack,
-  Tabs,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { Button, Group, Select, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { useCreateTemplate, useUpdateTemplate, type TaskTemplate } from '@/hooks/useTemplates';
 import { useTaskTypesManager, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useToast } from '@/hooks/useToast';
@@ -196,10 +187,11 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
 
   return (
     <Modal
+      variant="authoring"
+      compound
       opened={open}
       onClose={requestClose}
       title={template ? 'Edit Template' : 'Create New Template'}
-      size="min(960px, calc(100vw - 2rem))"
       centered
       classNames={{
         content:
@@ -209,11 +201,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
       }}
     >
       <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
-        <div
-          data-testid="template-editor-scroll-region"
-          className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6"
-          tabIndex={0}
-        >
+        <div data-testid="template-editor-scroll-region" className="vk-overlay-scroll" tabIndex={0}>
           <Stack gap="lg">
             <Tabs defaultValue="basic" className="w-full">
               <Tabs.List className="w-fit max-w-full">
@@ -340,11 +328,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
           </Stack>
         </div>
 
-        <Group
-          data-testid="template-editor-actions"
-          justify="flex-end"
-          className="shrink-0 border-t bg-card px-4 py-4 sm:px-6"
-        >
+        <OverlayFooter data-testid="template-editor-actions">
           <Button type="button" variant="outline" onClick={requestClose}>
             Cancel
           </Button>
@@ -352,7 +336,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {template ? 'Update Template' : 'Create Template'}
           </Button>
-        </Group>
+        </OverlayFooter>
       </form>
     </Modal>
   );
