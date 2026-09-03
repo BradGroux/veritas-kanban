@@ -3,7 +3,8 @@
 export type TaskType = string;
 export type BuiltInTaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
 export type TaskStatus = BuiltInTaskStatus | (string & {});
-export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 /** Run mode controls the review/QA strategy for a task. */
 export type RunMode = 'strategy' | 'eng-review' | 'paranoid-review' | 'qa';
