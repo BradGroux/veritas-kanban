@@ -15,6 +15,7 @@ import {
   VERITAS_COLOR_SCHEME_STORAGE_KEY,
 } from './color-scheme';
 import { getDocumentCspNonce } from './csp-nonce';
+import { UiOverlayProvider } from '@/components/ui/UiOverlay';
 
 export const veritasColorSchemeManager = localStorageColorSchemeManager({
   key: VERITAS_COLOR_SCHEME_STORAGE_KEY,
@@ -74,7 +75,7 @@ export function MantineRoot({ children, env = 'default' }: MantineRootProps) {
     >
       {env === 'test' ? <VeritasTestColorSchemeSync /> : <VeritasColorSchemeSync />}
       <ModalsProvider>
-        {children}
+        <UiOverlayProvider>{children}</UiOverlayProvider>
         <Notifications
           className="veritas-notifications"
           position="bottom-right"

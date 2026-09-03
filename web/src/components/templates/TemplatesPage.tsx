@@ -11,7 +11,8 @@ import { UiHeading, UiSurface, UiAction, UiPill, UiIconAction } from '@/componen
  */
 
 import { useState, useMemo } from 'react';
-import { Group, Modal, ScrollArea, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Group, ScrollArea, Select, Stack, Text, TextInput } from '@mantine/core';
+import { UiModal as Modal } from '@/components/ui/UiOverlay';
 import { useTemplates, useDeleteTemplate } from '@/hooks/useTemplates';
 import { Plus, Trash2, Eye, Edit2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
@@ -271,6 +272,7 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
 
       {/* Delete Confirmation */}
       <Modal
+        variant="confirm"
         opened={!!templateToDelete}
         onClose={() => setTemplateToDelete(null)}
         title="Delete Template?"
@@ -294,10 +296,10 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
 
       {/* Preview Dialog */}
       <Modal
+        variant="form"
         opened={showPreview && !!selectedTemplate}
         onClose={() => setShowPreview(false)}
         title="Template Preview"
-        size="lg"
         centered
       >
         {selectedTemplate && (
