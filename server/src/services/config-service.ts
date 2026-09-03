@@ -15,6 +15,7 @@ import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/
 import { SqliteSettingsRepository } from '../storage/sqlite/settings-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
+import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 
 /** How long cached config stays valid before re-reading from disk */
 const CACHE_TTL_MS = 60_000; // 60 seconds
@@ -153,7 +154,16 @@ export function createDefaultConfig(): AppConfig {
 
 export function normalizeAppConfig(config: AppConfig): AppConfig {
   const normalized = cloneJson(config);
+  const runBudget = normalized.features?.budget?.defaultRunBudget;
   normalized.features = deepMergeDefaults(normalized.features || {}, DEFAULT_FEATURE_SETTINGS);
+  if (runBudget !== undefined) {
+    // Limits are optional schema keys, not default values. Merging against the
+    // empty default limits object must not erase configured enforcement bounds.
+    normalized.features.budget.defaultRunBudget = {
+      ...DEFAULT_FEATURE_SETTINGS.budget.defaultRunBudget,
+      ...AgentBudgetPolicySchema.parse(runBudget),
+    };
+  }
   normalized.agents = mergeDefaultAgents(normalized.agents || []).map(normalizeAgentConfig);
   normalized.agentProfiles = normalized.agentProfiles || [];
   return normalized;
