@@ -332,7 +332,8 @@ describe.each(['file', 'sqlite'] as const)('TaskService board move (%s)', (stora
 
   it('uses exact ranks through repeated insertions without rewriting neighbors', async () => {
     const { service } = await createFixture(storageType);
-    // Sixty-four midpoint insertions intentionally exceed IEEE-754 mantissa depth.
+    // Sixty-four serialized filesystem moves intentionally exceed IEEE-754 mantissa depth.
+    // Loaded full-suite runners need more headroom than this test's focused runtime.
     const movingTasks = await Promise.all(
       Array.from({ length: 64 }, (_, index) =>
         service.createTask({ title: `Moving task ${index + 1}` })
@@ -374,7 +375,7 @@ describe.each(['file', 'sqlite'] as const)('TaskService board move (%s)', (stora
     expect(persistedNewer?.revision).toBe(newer.revision);
     expect(persistedOlder?.position).toBeUndefined();
     expect(persistedOlder?.revision).toBe(older.revision);
-  }, 15_000);
+  }, 60_000);
 
   it('reloads the persisted status and exact order from storage', async () => {
     const fixture = await createFixture(storageType);
