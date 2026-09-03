@@ -185,9 +185,14 @@ describe('Maintenance settings tab', () => {
   });
 
   it('renders health, storage, cleanup preview, logs, lifecycle, and backup controls', async () => {
-    renderWithProviders(<MaintenanceTab />);
+    const { container } = renderWithProviders(<MaintenanceTab />);
 
-    expect(await screen.findByText('Maintenance Center')).toBeDefined();
+    expect(await screen.findByRole('heading', { name: 'Maintenance' })).toBeDefined();
+    expect(screen.getByRole('navigation', { name: 'Maintenance settings sections' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Backup/Restore' }).getAttribute('href')).toBe(
+      '#maintenance-backup'
+    );
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(5);
     expect(screen.getByText('Runtime storage is readable and writable.')).toBeDefined();
     expect(screen.getByText('Archived report')).toBeDefined();
     expect(
@@ -232,7 +237,7 @@ describe('Maintenance settings tab', () => {
   it('submits backup export with optional workspace scope', async () => {
     renderWithProviders(<MaintenanceTab />);
 
-    await screen.findByText('Maintenance Center');
+    await screen.findByRole('heading', { name: 'Maintenance' });
     fireEvent.change(screen.getByRole('textbox', { name: 'SQLite path' }), {
       target: { value: '/tmp/veritas.db' },
     });
