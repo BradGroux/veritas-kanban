@@ -5,7 +5,7 @@ This checklist contains the active stable-release gate for Veritas Kanban
 Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.6 release candidate.
+Documentation freshness: 2026-09-03 for the completed Veritas Kanban 6.1.6 release.
 
 ## 6.1.6 Release Gate
 
@@ -13,10 +13,10 @@ Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.6 release candida
 - [x] Production and complete dependency audits report no known vulnerabilities, and the default branch has zero open Dependabot alerts.
 - [x] The integrated release builds all seven workspaces, passes the full unit and browser suites, packages a launchable macOS arm64 app, and exercises the corrected UI in the compiled app.
 - [x] Current desktop and mobile screenshots, GIFs, social previews, and demo video were regenerated from an isolated public-safe 6.1.6 workspace with `pnpm docs:capture-media`.
-- [ ] Release PR passes the authoritative `ci:full` matrix and merges with all maintained package metadata at 6.1.6.
-- [ ] Annotated tag `v6.1.6` peels to the release merge, and the live GitHub release body exactly matches `docs/releases/v6.1.6.md`.
-- [ ] Desktop Release publishes independently verified signed/notarized 6.1.6 DMG and ZIP assets, blockmaps, checksum sidecars, and updater metadata.
-- [ ] The Homebrew tap publishes cask version 6.1.6 with the verified ZIP checksum and passes strict online audit, fetch, livecheck, and installed-app acceptance.
+- [x] Release PR [#1375](https://github.com/BradGroux/veritas-kanban/pull/1375) passed the authoritative `ci:full` matrix and merged as `655df233d5b0ed0e8ebf1e54076b692c8cae893c` with all maintained package metadata at 6.1.6.
+- [x] Annotated tag `v6.1.6` (`044ca19ab5df56df0e28b60d08ab87adbd046830`) peels to the release merge, and the live GitHub release body exactly matches `docs/releases/v6.1.6.md`.
+- [x] Desktop Release run [33735685114](https://github.com/BradGroux/veritas-kanban/actions/runs/33735685114) published independently verified signed/notarized 6.1.6 DMG and ZIP assets, blockmaps, checksum sidecars, and updater metadata.
+- [x] Homebrew tap [PR #61](https://github.com/BradGroux/homebrew-tap/pull/61) publishes cask version 6.1.6 with verified ZIP SHA-256 `d92a8b7449152434032301d4e9b7602085a73868f964aee54d81960444c7b70a`; strict online audit, fetch, livecheck, upgrade, installed-app signature, notarization, and exact-version readiness pass.
 
 ## Historical 6.1.5 Completed Release Gate
 
@@ -148,7 +148,7 @@ Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.6 release candida
 Apply `ci:full` to the release pull request and keep it applied through the
 final candidate synchronization. That single milestone runs the complete
 workspace suite, critical-path coverage, unsigned desktop artifacts, and
-Docker image contract. Run the following commands once from the clean 6.1.3
+Docker image contract. Run the following commands once from the clean 6.1.6
 release candidate at the supported Node floor and current supported Node:
 
 ```bash
@@ -178,8 +178,8 @@ pnpm desktop:dev:fresh
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
 pnpm test:release-format
-pnpm validate:release -- --version 6.1.3 --skip-build-output
-pnpm validate:release -- --version 6.1.3 --docker-build
+pnpm validate:release -- --version 6.1.6 --skip-build-output
+pnpm validate:release -- --version 6.1.6 --docker-build
 ```
 
 Mount and inspect the unsigned DMG and ZIP, exercise the visible native
@@ -191,12 +191,12 @@ gates at Node 22.22.1 and the current supported Node runtime.
 
 ## Distribution And Post-Publication
 
-The 6.1.3 release is published and verified. Release PR #1293 merged as
-`32ced60ebb1709f4a839dd80cc7bf067be1c5d9a`; annotated `v6.1.3`, the exact live
+The 6.1.6 release is published and verified. Release PR #1375 merged as
+`655df233d5b0ed0e8ebf1e54076b692c8cae893c`; annotated `v6.1.6`, the exact live
 release body, signed/notarized assets, updater metadata, isolated downloaded-app
-readiness, post-publication validation, and Homebrew PR #53 passed. The existing
-Homebrew-installed 6.1.2 app was preserved during validation. Exact evidence is
-recorded in the release candidate evidence packet.
+readiness, post-publication validation, and Homebrew PR #61 passed. Homebrew
+upgraded the installed 6.1.5 app to 6.1.6 while retaining its existing user
+profile. Exact evidence is recorded in the release candidate evidence packet.
 
 ## Historical 6.0.2 Source And Scope
 

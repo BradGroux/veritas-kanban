@@ -1,34 +1,43 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the Veritas Kanban 6.1.6 desktop reliability release candidate and
+This packet records the completed Veritas Kanban 6.1.6 desktop reliability release and
 retains historical evidence for the completed 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.6 is the active release candidate. Do not use 6.0.0 for installation or upgrade validation.
+Veritas Kanban 6.1.6 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.6 release candidate.
+Documentation freshness: 2026-09-03 for the completed Veritas Kanban 6.1.6 release.
 
-## 6.1.6 Desktop Reliability Release Candidate
+## 6.1.6 Desktop Reliability Release
 
-| Field                     | Value                                                                                                                                              |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Release version           | 6.1.6                                                                                                                                              |
-| Release tracker           | [#1374](https://github.com/BradGroux/veritas-kanban/issues/1374)                                                                                   |
-| Source base               | `e3f258420e42874a88eaf42a46e7f8db0a2496a6`, containing focused merged fixes #1367-#1373                                                            |
-| Included issues           | #1360-#1366: dependencies, app-shell containment, Settings, Command+K, desktop wordmark, consecutive drag, and action/navigation consistency       |
-| Version and compatibility | All maintained packages are 6.1.6; REST API remains `v1`; no database migration; valid 6.1.5 workspaces remain compatible; macOS 13 arm64 minimum  |
-| Local candidate evidence  | Full workspace integration, browser coverage, public-safe media, unsigned arm64 packaging, compiled app launch, and exact-version readiness passed |
-| Publication status        | Pending release PR, annotated tag, signed/notarized assets, independent launch, and Homebrew verification                                          |
+| Field                      | Value                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version            | 6.1.6                                                                                                                                                      |
+| Release tracker            | [#1374](https://github.com/BradGroux/veritas-kanban/issues/1374)                                                                                           |
+| Source release             | `655df233d5b0ed0e8ebf1e54076b692c8cae893c`, containing focused merged fixes #1367-#1373 and the 6.1.6 release integration                                  |
+| Included issues            | #1360-#1366: dependencies, app-shell containment, Settings, Command+K, desktop wordmark, consecutive drag, and action/navigation consistency               |
+| Version and compatibility  | All maintained packages are 6.1.6; REST API remains `v1`; no database migration; valid 6.1.5 workspaces remain compatible; macOS 13 arm64 minimum          |
+| Local integration evidence | Full workspace integration, browser coverage, public-safe media, unsigned arm64 packaging, compiled app launch, and exact-version readiness passed         |
+| Publication status         | Complete: authoritative full CI, annotated tag, GitHub release, signed/notarized assets, independent launch, Homebrew cask, and installed-app verification |
 
-Focused feature-level verification passed in the implementation pull requests. The release candidate retains zero open Dependabot alerts and both production and complete dependency audits report no known vulnerabilities.
+Focused feature-level verification passed in the implementation pull requests. The release retains zero open Dependabot alerts and both production and complete dependency audits report no known vulnerabilities.
 
 The isolated documentation-media capture produced twelve 1440x1000 or 390x844 PNGs, a 75-frame 1200x833 desktop GIF, a 54-frame 390x844 mobile GIF, and identical 1280x720 H.264 demo-video copies with SHA-256 `677c1e90ca8d85807811b2b0e3887bcfb32f82ad65557277670918b67f414818`. Visual inspection confirmed the brighter selected state, redesigned Command+K surface, aligned Settings header, and bounded Workbench dock.
 
 The release integration passed both dependency audits, public-doc and security-artifact checks, delivery-cadence and gitleaks checks, lint with 448 warnings under the 458-warning budget, typecheck, all seven workspace builds, and 4,574 unit tests with 24 intentional skips. Browser acceptance passed 46 applicable tests with one explicit media-capture skip after installing the matching Playwright WebKit runtime; the one Chromium test initially limited by the test server's 60-write default passed after the isolated configuration set the documented `RATE_LIMIT_WRITE_MAX` override. Desktop coverage passed 72 tests, Electron artifact checks, unsigned DMG and ZIP packaging, and staging-isolation smoke.
 
-The unpacked arm64 app reported version 6.1.6 and macOS 13.0 minimum. It launched with a disposable profile on isolated ports, completed first-run security setup, served `/api/health.version` as 6.1.6 from its bundled server, loaded the empty board, and exposed the icon-only desktop header, aligned Settings header, and redesigned Command+K surface. The candidate stopped cleanly, its disposable profile was moved to Trash, and the existing installed 6.1.5 app was restored with its health response verified.
+The independently downloaded arm64 app reported version 6.1.6 and macOS 13.0 minimum. Its DMG and app passed deep strict signature verification, Gatekeeper acceptance as a notarized Developer ID app, and staple validation. It launched with a disposable profile on isolated ports, completed first-run security setup, served `/api/health.version` as 6.1.6 from its bundled server, loaded the empty board, and exposed the icon-only desktop header, aligned Settings header, redesigned Command+K surface, bounded Workbench dock, and MIT About panel. The candidate stopped cleanly and its disposable profile was moved to Trash.
+
+### 6.1.6 Publication Evidence
+
+| Gate                       | Verified result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source and CI              | Release [PR #1375](https://github.com/BradGroux/veritas-kanban/pull/1375) passed the labeled full matrix and merged as `655df233d5b0ed0e8ebf1e54076b692c8cae893c`. CI run [33734916724](https://github.com/BradGroux/veritas-kanban/actions/runs/33734916724), Scheduled QA [33734916592](https://github.com/BradGroux/veritas-kanban/actions/runs/33734916592), Docker contract [33734916755](https://github.com/BradGroux/veritas-kanban/actions/runs/33734916755), desktop artifacts [33734916763](https://github.com/BradGroux/veritas-kanban/actions/runs/33734916763), and Security Gates [33734903559](https://github.com/BradGroux/veritas-kanban/actions/runs/33734903559) passed. |
+| Tag and release            | Annotated tag object `044ca19ab5df56df0e28b60d08ab87adbd046830` peels to the exact release merge. The [v6.1.6 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.6) is published, and post-publication validation proves its body matches `docs/releases/v6.1.6.md`.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Signed desktop artifacts   | Desktop Release run [33735685114](https://github.com/BradGroux/veritas-kanban/actions/runs/33735685114) passed. DMG: 280,134,108 bytes, SHA-256 `c0ce9f19de967c983bdd94bfe15449c3f1099c524d7aa90cd72be6cda81e747e`. ZIP: 284,569,539 bytes, SHA-256 `d92a8b7449152434032301d4e9b7602085a73868f964aee54d81960444c7b70a`. Both checksum sidecars and updater SHA-512 values match the downloaded assets.                                                                                                                                                                                                                                                                                      |
+| Homebrew and installed app | Homebrew [issue #60](https://github.com/BradGroux/homebrew-tap/issues/60) and [PR #61](https://github.com/BradGroux/homebrew-tap/pull/61), merged as `ed807bc0b7b3849a82131f30d1d45a0bfa402864`, publish 6.1.6 with the verified ZIP digest. The registered cask passed strict online audit, fetch, livecheck, dry-run upgrade, and actual 6.1.5 to 6.1.6 upgrade. `/Applications/Veritas Kanban.app` passes deep strict signature, Gatekeeper notarization, staple, exact-version readiness, and native About-panel verification while retaining the existing user profile.                                                                                                                |
 
 ## Historical 6.1.5 Integrated Backlog Release
 
