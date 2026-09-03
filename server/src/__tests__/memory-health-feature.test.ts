@@ -26,7 +26,7 @@ vi.mock('../services/metrics/index.js', () => ({
 }));
 
 import { classifyMemoryPressure } from '../utils/memory-pressure.js';
-import { healthRouter } from '../routes/health.js';
+import { checkStorage, healthRouter } from '../routes/health.js';
 import { systemHealthRouter } from '../routes/system-health.js';
 import { errorHandler } from '../middleware/error-handler.js';
 
@@ -133,6 +133,16 @@ describe('memory health feature', () => {
       checks: { memory: 'ok' },
       memoryPressure: healthyPressure,
     });
+  });
+
+  it('keeps simultaneous storage probes independent when timestamps match', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_788_409_000_000);
+
+    const statuses = await Promise.all(Array.from({ length: 25 }, () => checkStorage())).finally(
+      () => nowSpy.mockRestore()
+    );
+
+    expect(statuses).toEqual(Array.from({ length: 25 }, () => 'ok'));
   });
 
   it('reports real pressure consistently without weakening one-warning severity', async () => {

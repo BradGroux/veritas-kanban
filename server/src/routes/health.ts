@@ -7,6 +7,7 @@
  *   GET /health/deep  — Full diagnostics (admin only)
  */
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
@@ -61,12 +62,12 @@ export function setHealthWss(wss: WebSocketServer): void {
 /**
  * Check that the data directory exists and is writable.
  */
-async function checkStorage(): Promise<'ok' | 'fail'> {
+export async function checkStorage(): Promise<'ok' | 'fail'> {
   const dataDir = getRuntimeDir();
   try {
     await fs.access(dataDir, fs.constants.R_OK | fs.constants.W_OK);
     // Write and remove a temp file to verify actual write access
-    const tmpFile = path.join(dataDir, `.health-check-${Date.now()}.tmp`);
+    const tmpFile = path.join(dataDir, `.health-check-${process.pid}-${randomUUID()}.tmp`);
     await fs.writeFile(tmpFile, 'ok');
     await fs.unlink(tmpFile);
     return 'ok';
