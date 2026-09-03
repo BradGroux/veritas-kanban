@@ -15,7 +15,14 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
-import { SettingRow, ToggleRow, SectionHeader, SaveIndicator } from '../shared';
+import {
+  SettingRow,
+  ToggleRow,
+  SaveIndicator,
+  SettingsLocalNav,
+  SettingsPage,
+  SettingsSection,
+} from '../shared';
 import {
   api,
   type CommunicationAdapterInput,
@@ -304,9 +311,26 @@ export function NotificationsTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-3">
-        <SectionHeader title="Communication Health" />
+    <SettingsPage
+      title="Notifications"
+      description="Review communication health, connect reply adapters, and control outbound delivery."
+    >
+      <SettingsLocalNav
+        label="Notification settings sections"
+        items={[
+          { id: 'notifications-health', label: 'Health' },
+          { id: 'notifications-buzz', label: 'Buzz' },
+          { id: 'notifications-replies', label: 'Reply Adapters' },
+          { id: 'notifications-delivery', label: 'Delivery' },
+          { id: 'notifications-preferences', label: 'Preferences' },
+        ]}
+      />
+
+      <SettingsSection
+        id="notifications-health"
+        title="Communication Health"
+        description="Current local, outbound, reply, and signing posture."
+      >
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
           <HealthCard
             title="Local Squad Chat"
@@ -386,19 +410,21 @@ export function NotificationsTab() {
             </Stack>
           </Paper>
         </SimpleGrid>
-      </div>
+      </SettingsSection>
 
-      <div className="border-t my-6" />
+      <SettingsSection
+        id="notifications-buzz"
+        title="Buzz"
+        description="Signed relay identity, membership, read capability, and Squad Chat mapping."
+      >
+        <BuzzConnectionPanel />
+      </SettingsSection>
 
-      <BuzzConnectionPanel />
-
-      <div className="border-t my-6" />
-
-      <div className="space-y-4">
-        <SectionHeader title="Human Reply Adapter" />
-        <p className="text-sm text-muted-foreground -mt-2">
-          Route approved external replies back into Squad Chat threads with attribution and audit
-        </p>
+      <SettingsSection
+        id="notifications-replies"
+        title="Reply adapters"
+        description="Route approved external replies back into Squad Chat threads with attribution and audit."
+      >
         <Paper withBorder radius="md" p="sm">
           <Stack gap="sm">
             <Group justify="space-between" gap="sm">
@@ -562,15 +588,135 @@ export function NotificationsTab() {
             )}
           </Stack>
         </Paper>
-      </div>
+      </SettingsSection>
 
-      <div className="border-t my-6" />
+      <SettingsSection
+        id="notifications-delivery"
+        title="Delivery"
+        description="Fire HTTP webhooks or OpenClaw wake calls when Squad Chat messages are posted."
+        tone="advanced"
+        divided
+      >
+        <ToggleRow
+          label="Enable Webhook"
+          description="Fire webhooks for squad chat messages"
+          checked={settings.squadWebhook?.enabled ?? DEFAULT_FEATURE_SETTINGS.squadWebhook.enabled}
+          onCheckedChange={(v) => updateSquadWebhook('enabled', v)}
+        />
+        {(settings.squadWebhook?.enabled ?? DEFAULT_FEATURE_SETTINGS.squadWebhook.enabled) && (
+          <>
+            <SettingRow label="Mode" description="Choose webhook destination type">
+              <Select
+                value={webhookMode}
+                onChange={(value) => value && updateSquadWebhook('mode', value)}
+                data={[
+                  { value: 'webhook', label: 'Generic Webhook' },
+                  { value: 'openclaw', label: 'OpenClaw Direct' },
+                ]}
+                aria-label="Mode"
+                placeholder="Select mode"
+                allowDeselect={false}
+                size="xs"
+                className="w-full"
+              />
+            </SettingRow>
 
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Notifications" onReset={resetNotifications} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <div className="divide-y">
+            {webhookMode === 'webhook' && (
+              <>
+                <SettingRow
+                  label="Webhook URL"
+                  description="Where to POST squad message notifications"
+                >
+                  <TextInput
+                    value={settings.squadWebhook?.url ?? ''}
+                    onChange={(e) => updateSquadWebhook('url', e.target.value)}
+                    placeholder="https://example.com/webhook"
+                    aria-label="Webhook URL"
+                    size="xs"
+                    className="w-full"
+                    type="url"
+                  />
+                </SettingRow>
+                <SettingRow
+                  label="Secret (Optional)"
+                  description="HMAC signing secret for webhook verification (min 16 chars)"
+                >
+                  <TextInput
+                    value={settings.squadWebhook?.secret ?? ''}
+                    onChange={(e) => updateSquadWebhook('secret', e.target.value || undefined)}
+                    placeholder="your-secret-key"
+                    aria-label="Secret (Optional)"
+                    size="xs"
+                    className="w-full"
+                    type="password"
+                  />
+                </SettingRow>
+              </>
+            )}
+
+            {webhookMode === 'openclaw' && (
+              <>
+                <SettingRow
+                  label="Gateway URL"
+                  description="OpenClaw gateway endpoint (e.g., http://127.0.0.1:18789)"
+                >
+                  <TextInput
+                    value={settings.squadWebhook?.openclawGatewayUrl ?? ''}
+                    onChange={(e) => updateSquadWebhook('openclawGatewayUrl', e.target.value)}
+                    placeholder="http://127.0.0.1:18789"
+                    aria-label="Gateway URL"
+                    size="xs"
+                    className="w-full"
+                    type="url"
+                  />
+                </SettingRow>
+                <SettingRow
+                  label="Gateway Token"
+                  description="OpenClaw gateway authorization token"
+                >
+                  <TextInput
+                    value={settings.squadWebhook?.openclawGatewayToken ?? ''}
+                    onChange={(e) => updateSquadWebhook('openclawGatewayToken', e.target.value)}
+                    placeholder="your-gateway-token"
+                    aria-label="Gateway Token"
+                    size="xs"
+                    className="w-full"
+                    type="password"
+                  />
+                </SettingRow>
+              </>
+            )}
+
+            <ToggleRow
+              label="Notify on Human Messages"
+              description="Fire webhook when a human posts in squad chat"
+              checked={
+                settings.squadWebhook?.notifyOnHuman ??
+                DEFAULT_FEATURE_SETTINGS.squadWebhook.notifyOnHuman
+              }
+              onCheckedChange={(v) => updateSquadWebhook('notifyOnHuman', v)}
+            />
+            <ToggleRow
+              label="Notify on Agent Messages"
+              description="Fire webhook when an agent posts in squad chat"
+              checked={
+                settings.squadWebhook?.notifyOnAgent ??
+                DEFAULT_FEATURE_SETTINGS.squadWebhook.notifyOnAgent
+              }
+              onCheckedChange={(v) => updateSquadWebhook('notifyOnAgent', v)}
+            />
+          </>
+        )}
+      </SettingsSection>
+
+      <SettingsSection
+        id="notifications-preferences"
+        title="Preferences"
+        description="Choose the events and broad destination used for routine notifications."
+        actions={<SaveIndicator isPending={isPending} />}
+        onReset={resetNotifications}
+        divided
+      >
         <ToggleRow
           label="Enable Notifications"
           description="Master toggle for all notification sends"
@@ -617,7 +763,7 @@ export function NotificationsTab() {
                 placeholder="19:abc...@thread.tacv2"
                 aria-label="Channel"
                 size="xs"
-                w={192}
+                className="w-full"
               />
             </SettingRow>
             <SettingRow
@@ -630,136 +776,13 @@ export function NotificationsTab() {
                 placeholder="https://example.com/webhook"
                 aria-label="Failure Webhook URL"
                 size="xs"
-                w={384}
+                className="w-full"
                 type="url"
               />
             </SettingRow>
           </>
         )}
-      </div>
-
-      <div className="border-t my-6" />
-
-      <div className="space-y-4">
-        <SectionHeader title="Squad Chat Webhook" />
-        <p className="text-sm text-muted-foreground -mt-2">
-          Fire HTTP webhooks or OpenClaw wake calls when squad messages are posted
-        </p>
-        <div className="divide-y">
-          <ToggleRow
-            label="Enable Webhook"
-            description="Fire webhooks for squad chat messages"
-            checked={
-              settings.squadWebhook?.enabled ?? DEFAULT_FEATURE_SETTINGS.squadWebhook.enabled
-            }
-            onCheckedChange={(v) => updateSquadWebhook('enabled', v)}
-          />
-          {(settings.squadWebhook?.enabled ?? DEFAULT_FEATURE_SETTINGS.squadWebhook.enabled) && (
-            <>
-              <SettingRow label="Mode" description="Choose webhook destination type">
-                <Select
-                  value={webhookMode}
-                  onChange={(value) => value && updateSquadWebhook('mode', value)}
-                  data={[
-                    { value: 'webhook', label: 'Generic Webhook' },
-                    { value: 'openclaw', label: 'OpenClaw Direct' },
-                  ]}
-                  aria-label="Mode"
-                  placeholder="Select mode"
-                  allowDeselect={false}
-                  size="xs"
-                  w={192}
-                />
-              </SettingRow>
-
-              {webhookMode === 'webhook' && (
-                <>
-                  <SettingRow
-                    label="Webhook URL"
-                    description="Where to POST squad message notifications"
-                  >
-                    <TextInput
-                      value={settings.squadWebhook?.url ?? ''}
-                      onChange={(e) => updateSquadWebhook('url', e.target.value)}
-                      placeholder="https://example.com/webhook"
-                      aria-label="Webhook URL"
-                      size="xs"
-                      w={384}
-                      type="url"
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Secret (Optional)"
-                    description="HMAC signing secret for webhook verification (min 16 chars)"
-                  >
-                    <TextInput
-                      value={settings.squadWebhook?.secret ?? ''}
-                      onChange={(e) => updateSquadWebhook('secret', e.target.value || undefined)}
-                      placeholder="your-secret-key"
-                      aria-label="Secret (Optional)"
-                      size="xs"
-                      w={256}
-                      type="password"
-                    />
-                  </SettingRow>
-                </>
-              )}
-
-              {webhookMode === 'openclaw' && (
-                <>
-                  <SettingRow
-                    label="Gateway URL"
-                    description="OpenClaw gateway endpoint (e.g., http://127.0.0.1:18789)"
-                  >
-                    <TextInput
-                      value={settings.squadWebhook?.openclawGatewayUrl ?? ''}
-                      onChange={(e) => updateSquadWebhook('openclawGatewayUrl', e.target.value)}
-                      placeholder="http://127.0.0.1:18789"
-                      aria-label="Gateway URL"
-                      size="xs"
-                      w={384}
-                      type="url"
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="Gateway Token"
-                    description="OpenClaw gateway authorization token"
-                  >
-                    <TextInput
-                      value={settings.squadWebhook?.openclawGatewayToken ?? ''}
-                      onChange={(e) => updateSquadWebhook('openclawGatewayToken', e.target.value)}
-                      placeholder="your-gateway-token"
-                      aria-label="Gateway Token"
-                      size="xs"
-                      w={384}
-                      type="password"
-                    />
-                  </SettingRow>
-                </>
-              )}
-
-              <ToggleRow
-                label="Notify on Human Messages"
-                description="Fire webhook when a human posts in squad chat"
-                checked={
-                  settings.squadWebhook?.notifyOnHuman ??
-                  DEFAULT_FEATURE_SETTINGS.squadWebhook.notifyOnHuman
-                }
-                onCheckedChange={(v) => updateSquadWebhook('notifyOnHuman', v)}
-              />
-              <ToggleRow
-                label="Notify on Agent Messages"
-                description="Fire webhook when an agent posts in squad chat"
-                checked={
-                  settings.squadWebhook?.notifyOnAgent ??
-                  DEFAULT_FEATURE_SETTINGS.squadWebhook.notifyOnAgent
-                }
-                onCheckedChange={(v) => updateSquadWebhook('notifyOnAgent', v)}
-              />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
