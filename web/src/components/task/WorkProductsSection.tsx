@@ -310,16 +310,19 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
         </Group>
 
         {sortedProducts.length === 0 ? (
-          <Paper withBorder p="lg" radius="md" className="text-center">
-            <ThemeIcon size="lg" radius="xl" variant="light" className="mx-auto">
-              <FileText className="h-5 w-5" />
-            </ThemeIcon>
-            <Text fw={600} mt="sm">
-              No work products yet
-            </Text>
-            <Text size="sm" c="dimmed" mt={4}>
-              Generated reports, checklists, handoff notes, and evidence summaries will appear here.
-            </Text>
+          <Paper withBorder p="md" radius="md">
+            <Group gap="sm" wrap="nowrap">
+              <ThemeIcon size="md" radius="xl" variant="light" className="flex-shrink-0">
+                <FileText className="h-5 w-5" />
+              </ThemeIcon>
+              <div className="min-w-0">
+                <Text fw={600}>No work products yet</Text>
+                <Text size="sm" c="dimmed" mt={2}>
+                  Generated reports, checklists, handoff notes, and evidence summaries will appear
+                  here.
+                </Text>
+              </div>
+            </Group>
           </Paper>
         ) : (
           <Stack gap="sm">

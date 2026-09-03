@@ -92,7 +92,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
             </ThemeIcon>
             <Stack gap={2} className="min-w-0 flex-1">
               <Text size="sm" fw={500}>
-                {decisionStyles[currentReview.decision].label}
+                Review: {decisionStyles[currentReview.decision].label}
               </Text>
               {currentReview.decidedAt && (
                 <Text size="xs" c="dimmed">

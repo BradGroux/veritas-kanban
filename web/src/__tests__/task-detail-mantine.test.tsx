@@ -285,6 +285,53 @@ describe('task detail Mantine migration', () => {
     expect(screen.getByTestId('task-detail-scroll-region')).toBe(scrollRegion);
   });
 
+  it('groups outcomes under Results with review readiness before evidence', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-results-navigation',
+      title: 'Review completed work',
+      type: 'code',
+      status: 'in-progress',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'task-workspace-results',
+        baseBranch: 'main',
+        worktreePath: '/tmp/task-workspace-results',
+      },
+      reviewComments: [
+        {
+          id: 'finding-1',
+          file: 'web/src/App.tsx',
+          line: 12,
+          content: 'Clarify the result action.',
+          created: '2026-09-02T20:00:00.000Z',
+        },
+      ],
+    });
+    renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
+
+    await user.click(screen.getByRole('button', { name: 'Results' }));
+
+    const resultSections = screen.getByRole('tablist', { name: 'Results sections' });
+    expect(
+      within(resultSections)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent)
+    ).toEqual(['Work Products', 'Changes', 'Review', 'Verification', 'Evidence']);
+    expect(screen.getByText('Review: Decision needed')).toBeDefined();
+    expect(screen.getByText('1 open finding')).toBeDefined();
+
+    await user.click(within(resultSections).getByRole('tab', { name: 'Verification' }));
+    expect(
+      await within(screen.getByRole('tabpanel')).findByText('Verification section')
+    ).toBeDefined();
+
+    await user.click(within(resultSections).getByRole('tab', { name: 'Work Products' }));
+    const activePanel = screen.getByRole('tabpanel');
+    expect(await within(activePanel).findByText('No work products yet')).toBeDefined();
+    expect(within(activePanel).getByText('Deliverables section')).toBeDefined();
+  });
+
   it('remembers the selected local section when moving between modes', async () => {
     const user = userEvent.setup();
     renderTaskDetail();

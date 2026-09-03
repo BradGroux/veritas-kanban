@@ -5,10 +5,8 @@ import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { TaskMetadataSection } from './TaskMetadataSection';
 import { SubtasksSection } from '../SubtasksSection';
-import { VerificationSection } from '../VerificationSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
-import { DeliverablesSection } from '../DeliverablesSection';
 import { BlockedReasonSection } from '../BlockedReasonSection';
 import { LessonsLearnedSection } from '../LessonsLearnedSection';
 import { useDeleteTask, useArchiveTask } from '@/hooks/useTasks';
@@ -194,22 +192,12 @@ export function TaskDetailsTab({
         />
       </Box>
 
-      {/* Verification / Done Criteria */}
-      <Box className="border-t pt-4">
-        <VerificationSection task={task} />
-      </Box>
-
       {/* Time Tracking */}
       {taskSettings.enableTimeTracking && (
         <Box className="border-t pt-4">
           <TimeTrackingSection task={task} />
         </Box>
       )}
-
-      {/* Deliverables */}
-      <Box className="border-t pt-4">
-        <DeliverablesSection task={task} />
-      </Box>
 
       {/* Comments */}
       {taskSettings.enableComments && (

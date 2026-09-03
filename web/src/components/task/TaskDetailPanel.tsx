@@ -218,6 +218,21 @@ export function TaskDetailPanel({
 
   if (!localTask) return null;
 
+  const resultsReviewStatus = !isCodeTask
+    ? null
+    : localTask.review?.decision === 'approved'
+      ? { label: 'Approved', color: 'green' }
+      : localTask.review?.decision === 'changes-requested'
+        ? { label: 'Changes required', color: 'yellow' }
+        : localTask.review?.decision === 'rejected'
+          ? { label: 'Rejected', color: 'red' }
+          : localTask.status === 'done'
+            ? { label: 'Complete', color: 'green' }
+            : !hasWorktree
+              ? { label: 'Worktree required', color: 'gray' }
+              : { label: 'Decision needed', color: 'yellow' };
+  const openFindingCount = localTask.reviewComments?.length ?? 0;
+
   const selectWorkspaceMode = (mode: TaskWorkspaceModeId) => {
     const nextTab = getTaskWorkspaceModeTabId(visibleTabs, mode, lastTabByModeRef.current[mode]);
     if (nextTab) setActiveTab(nextTab);
@@ -418,6 +433,18 @@ export function TaskDetailPanel({
                           <Badge variant="light" color="gray" tt="capitalize">
                             Task: {localTask.status.replaceAll('-', ' ')}
                           </Badge>
+                        )}
+                        {activeMode === 'results' && resultsReviewStatus && (
+                          <>
+                            <Badge variant="light" color={resultsReviewStatus.color}>
+                              Review: {resultsReviewStatus.label}
+                            </Badge>
+                            {openFindingCount > 0 && (
+                              <Badge variant="outline" color="yellow">
+                                {openFindingCount} open finding{openFindingCount === 1 ? '' : 's'}
+                              </Badge>
+                            )}
+                          </>
                         )}
                         {!readOnly && activeMode === 'plan' && (
                           <Button

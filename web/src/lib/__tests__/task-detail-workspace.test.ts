@@ -24,6 +24,7 @@ describe('task workspace navigation', () => {
       access: 'run',
       git: 'run',
       agent: 'run',
+      verification: 'results',
       timeline: 'history',
       evidence: 'results',
       changes: 'results',
@@ -80,6 +81,27 @@ describe('task workspace navigation', () => {
       expect(resolveTaskDetailNavigationTab({ tab: section }, tabs)).toBe(section);
       expect(
         resolveTaskDetailNavigationTab({ workspace: { version: 1, mode: 'run', section } }, tabs)
+      ).toBe(section);
+    }
+    const tabsWithWorktree = getAvailableTaskDetailTabMetadata({
+      isCodeTask: true,
+      hasWorktree: true,
+      attachmentsEnabled: true,
+      dependenciesEnabled: true,
+    });
+    for (const section of [
+      'work-products',
+      'changes',
+      'review',
+      'verification',
+      'evidence',
+    ] as const) {
+      expect(resolveTaskDetailNavigationTab({ tab: section }, tabsWithWorktree)).toBe(section);
+      expect(
+        resolveTaskDetailNavigationTab(
+          { workspace: { version: 1, mode: 'results', section } },
+          tabsWithWorktree
+        )
       ).toBe(section);
     }
     for (const section of [
