@@ -16,6 +16,7 @@ describe('task workspace navigation', () => {
       work: 'overview',
       details: 'plan',
       progress: 'plan',
+      dependencies: 'plan',
       'work-products': 'results',
       observations: 'plan',
       attachments: 'plan',
@@ -49,9 +50,12 @@ describe('task workspace navigation', () => {
       isCodeTask: false,
       hasWorktree: false,
       attachmentsEnabled: false,
+      dependenciesEnabled: false,
     });
     const modes = getAvailableTaskWorkspaceModeMetadata(tabs);
 
+    expect(tabs.some((tab) => tab.id === 'dependencies')).toBe(false);
+    expect(tabs.some((tab) => tab.id === 'attachments')).toBe(false);
     expect(modes.find((mode) => mode.id === 'run')?.disabled).toBe(true);
     expect(modes.filter((mode) => !mode.disabled).map((mode) => mode.id)).toEqual([
       'overview',
@@ -66,9 +70,22 @@ describe('task workspace navigation', () => {
       isCodeTask: true,
       hasWorktree: false,
       attachmentsEnabled: true,
+      dependenciesEnabled: true,
     });
 
     expect(resolveTaskDetailNavigationTab({ tab: 'timeline' }, tabs)).toBe('timeline');
+    for (const section of [
+      'details',
+      'progress',
+      'observations',
+      'dependencies',
+      'attachments',
+    ] as const) {
+      expect(resolveTaskDetailNavigationTab({ tab: section }, tabs)).toBe(section);
+      expect(
+        resolveTaskDetailNavigationTab({ workspace: { version: 1, mode: 'plan', section } }, tabs)
+      ).toBe(section);
+    }
     expect(
       resolveTaskDetailNavigationTab(
         { workspace: { version: 1, mode: 'results', section: 'evidence' } },

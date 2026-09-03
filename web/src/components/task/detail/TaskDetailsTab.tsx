@@ -6,7 +6,6 @@ import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { TaskMetadataSection } from './TaskMetadataSection';
 import { SubtasksSection } from '../SubtasksSection';
 import { VerificationSection } from '../VerificationSection';
-import { DependenciesSection } from '../DependenciesSection';
 import { TimeTrackingSection } from '../TimeTrackingSection';
 import { CommentsSection } from '../CommentsSection';
 import { DeliverablesSection } from '../DeliverablesSection';
@@ -199,16 +198,6 @@ export function TaskDetailsTab({
       <Box className="border-t pt-4">
         <VerificationSection task={task} />
       </Box>
-
-      {/* Dependencies */}
-      {taskSettings.enableDependencies && (
-        <Box className="border-t pt-4">
-          <DependenciesSection
-            task={task}
-            onBlockedByChange={(blockedBy) => onUpdate('blockedBy', blockedBy)}
-          />
-        </Box>
-      )}
 
       {/* Time Tracking */}
       {taskSettings.enableTimeTracking && (

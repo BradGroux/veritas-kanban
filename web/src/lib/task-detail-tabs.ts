@@ -2,6 +2,7 @@ export type TaskDetailTabId =
   | 'work'
   | 'details'
   | 'progress'
+  | 'dependencies'
   | 'work-products'
   | 'observations'
   | 'attachments'
@@ -32,6 +33,7 @@ export interface TaskDetailAvailabilityContext {
   isCodeTask: boolean;
   hasWorktree: boolean;
   attachmentsEnabled: boolean;
+  dependenciesEnabled: boolean;
 }
 
 export type TaskDetailTabIcon =
@@ -44,6 +46,7 @@ export type TaskDetailTabIcon =
   | 'Files'
   | 'GitBranch'
   | 'History'
+  | 'Network'
   | 'NotebookPen'
   | 'Paperclip';
 
@@ -84,8 +87,8 @@ export const TASK_WORKSPACE_MODE_METADATA: readonly TaskWorkspaceModeMetadata[] 
   {
     id: 'plan',
     label: 'Plan',
-    description: 'Task details, progress, observations, and supporting context.',
-    sections: ['details', 'progress', 'observations', 'attachments'],
+    description: 'Task details, progress, observations, dependencies, and supporting context.',
+    sections: ['details', 'progress', 'observations', 'dependencies', 'attachments'],
   },
   {
     id: 'run',
@@ -142,6 +145,13 @@ export const TASK_DETAIL_TAB_METADATA: readonly TaskDetailTabMetadata[] = [
     label: 'Observations',
     icon: 'Eye',
     fallbackTitle: 'Observations section failed to load',
+  },
+  {
+    id: 'dependencies',
+    label: 'Dependencies',
+    icon: 'Network',
+    fallbackTitle: 'Dependencies section failed to load',
+    isVisible: ({ dependenciesEnabled }) => dependenciesEnabled,
   },
   {
     id: 'attachments',

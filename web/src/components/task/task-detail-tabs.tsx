@@ -9,6 +9,7 @@ import {
   Files,
   GitBranch,
   History,
+  Network,
   NotebookPen,
   Paperclip,
   type LucideIcon,
@@ -41,6 +42,9 @@ const AgentRunTimelinePanel = lazy(() =>
 );
 const AttachmentsSection = lazy(() =>
   import('./AttachmentsSection').then((mod) => ({ default: mod.AttachmentsSection }))
+);
+const DependenciesSection = lazy(() =>
+  import('./DependenciesSection').then((mod) => ({ default: mod.DependenciesSection }))
 );
 const DiffViewer = lazy(() => import('./DiffViewer').then((mod) => ({ default: mod.DiffViewer })));
 const EvidenceTimelinePanel = lazy(() =>
@@ -124,6 +128,7 @@ const TAB_ICONS: Record<TaskDetailTabIcon, LucideIcon> = {
   Files,
   GitBranch,
   History,
+  Network,
   NotebookPen,
   Paperclip,
 };
@@ -155,6 +160,12 @@ const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) 
       task={task}
       onAddObservation={addObservation}
       onDeleteObservation={deleteObservation}
+    />
+  ),
+  dependencies: ({ task, updateField }) => (
+    <DependenciesSection
+      task={task}
+      onBlockedByChange={(blockedBy) => updateField('blockedBy', blockedBy)}
     />
   ),
   attachments: ({ task }) => <AttachmentsSection task={task} />,
