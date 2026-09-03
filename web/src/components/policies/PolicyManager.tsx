@@ -462,18 +462,19 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
     {
       key: 'actions',
       header: 'Actions',
-      className: 'w-[190px]',
+      className: 'w-[16rem] min-w-[16rem]',
       cell: (policy) => (
-        <div className="flex gap-2">
-          <UiAction variant="secondary" onClick={() => openEditDialog(policy)}>
+        <div className="flex flex-wrap items-start gap-2">
+          <UiAction className="shrink-0" variant="secondary" onClick={() => openEditDialog(policy)}>
             <Edit className="mr-1 h-3.5 w-3.5" />
             Edit
           </UiAction>
-          <UiAction variant="secondary" onClick={() => openPreview(policy)}>
+          <UiAction className="shrink-0" variant="secondary" onClick={() => openPreview(policy)}>
             <FlaskConical className="mr-1 h-3.5 w-3.5" />
             Test
           </UiAction>
           <UiIconAction
+            className="shrink-0"
             variant="destructive"
             onClick={() => void handleDelete(policy)}
             aria-label={`Delete ${policy.name}`}
