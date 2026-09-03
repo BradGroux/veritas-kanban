@@ -128,8 +128,10 @@ describe('Trackers settings tab', () => {
   });
 
   it('renders schema, saves the mapping profile, and runs a dry-run create', async () => {
-    renderWithProviders(<TrackersTab />);
+    const { container } = renderWithProviders(<TrackersTab />);
 
+    expect(await screen.findByRole('heading', { name: 'Trackers' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(await screen.findByText('External Trackers')).toBeDefined();
     expect(screen.getByText('Mock Tracker')).toBeDefined();
     expect(screen.getByText('6 fields')).toBeDefined();

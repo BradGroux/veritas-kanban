@@ -12,7 +12,7 @@ import {
   Textarea,
   Tooltip,
 } from '@mantine/core';
-import { CalendarClock, CheckCircle2, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
+import { CheckCircle2, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
 import type {
   AutomationDraft,
   AutomationDraftHints,
@@ -22,6 +22,7 @@ import type {
   SchedulerRunStatus,
 } from '@veritas-kanban/shared';
 import { useIdentity } from '@/hooks/useIdentity';
+import { SettingsPage, SettingsSection } from '../shared';
 import {
   useAutomationDraftPreview,
   useAutomationDraftSave,
@@ -161,15 +162,11 @@ export function SchedulerTab() {
   }
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="center">
-        <Group gap="xs">
-          <CalendarClock className="h-4 w-4 text-muted-foreground" />
-          <Text size="sm" fw={600}>
-            Recurring Work Scheduler
-          </Text>
-        </Group>
-        <Group gap="xs">
+    <SettingsPage
+      title="Scheduler"
+      description="Draft, activate, and monitor recurring work schedules."
+      actions={
+        <Group gap="xs" wrap="wrap">
           <Tooltip label="Run due schedules">
             <Button
               size="xs"
@@ -194,261 +191,277 @@ export function SchedulerTab() {
             </Button>
           </Tooltip>
         </Group>
-      </Group>
-
-      <Paper className="border bg-card p-4" radius="md">
-        <Stack gap="sm">
-          <Stack gap={2}>
-            <Text size="sm" fw={600}>
-              Automation Draft
-            </Text>
-            <Text size="xs" c="dimmed">
-              Compile recurring intent into an inactive, reviewable draft. Previewing and saving
-              never activates a schedule.
-            </Text>
-          </Stack>
-          <Textarea
-            label="Recurring objective"
-            placeholder="Every weekday at 9 AM, review the support queue and produce a triage report."
-            value={intent}
-            onChange={(event) => setIntent(event.currentTarget.value)}
-            minRows={2}
-          />
-          <Textarea
-            label="Structured hints (JSON)"
-            description="Consequential values are never silently defaulted. Include timezone, workflow or task template, provider, expiry, scope, budgets, outputs, retries, and stop conditions."
-            value={hintsJson}
-            onChange={(event) => setHintsJson(event.currentTarget.value)}
-            minRows={4}
-            className="font-mono"
-          />
-          <Group gap="xs">
-            <Button
-              size="xs"
-              variant="light"
-              disabled={!intent.trim() || previewDraft.isPending || saveDraft.isPending}
-              onClick={() => void compileDraft(false)}
-            >
-              Preview
-            </Button>
-            <Button
-              size="xs"
-              disabled={
-                !canWrite || !intent.trim() || previewDraft.isPending || saveDraft.isPending
-              }
-              onClick={() => void compileDraft(true)}
-            >
-              Save Inactive Draft
-            </Button>
-          </Group>
-          {draftPreview && <AutomationDraftReview draft={draftPreview} />}
-        </Stack>
-      </Paper>
-
-      {(drafts.data?.drafts.length ?? 0) > 0 && (
-        <Stack gap="xs">
-          <Text size="sm" fw={600}>
-            Saved Inactive Drafts
-          </Text>
-          {drafts.data?.drafts.map((draft) => (
-            <AutomationDraftReview
-              key={draft.id}
-              draft={draft}
-              compact
-              onReviewActivation={canWrite ? () => void reviewActivation(draft) : undefined}
-            />
-          ))}
-        </Stack>
-      )}
-
-      {activationPreview && (
-        <Alert
-          color={activationPreview.evidence.enforceable ? 'blue' : 'red'}
-          title={`Activation review · ${activationPreview.draftId}`}
-        >
-          <Stack gap="xs">
-            <Text size="xs">
-              {activationPreview.evidence.workflowId}@{activationPreview.evidence.workflowVersion} ·{' '}
-              {activationPreview.evidence.provider} · expires{' '}
-              {formatDate(activationPreview.schedule.expiresAt)}
-            </Text>
-            <Text size="xs">
-              Run Access ceiling: {activationPreview.effectiveRunAccess.tools.length} tools,{' '}
-              {activationPreview.effectiveRunAccess.integrations.length} integrations,{' '}
-              {activationPreview.effectiveRunAccess.externalTargets.length} external targets
-            </Text>
-            <Text size="xs" className="font-mono">
-              {activationPreview.requestRevision}
-            </Text>
-            {activationPreview.evidence.blockers.map((blocker) => (
-              <Text key={blocker} size="xs" c="red">
-                {blocker}
-              </Text>
-            ))}
-            <Group gap="xs">
-              <Button
-                size="xs"
-                disabled={!activationPreview.evidence.enforceable || applyActivation.isPending}
-                onClick={() => void requestOrApplyActivation()}
-              >
-                {activationApprovalId ? 'Activate Approved Version' : 'Request Exact Approval'}
-              </Button>
-              {activationApprovalId && (
-                <Text size="xs" c="dimmed">
-                  Approve {activationApprovalId} in Run Approvals, then activate this exact version.
+      }
+    >
+      <SettingsSection
+        title="Recurring Work Scheduler"
+        description="Compile reviewable drafts, manage schedules, and inspect recent runs."
+      >
+        <Stack gap="lg">
+          <Paper className="border bg-card p-4" radius="md">
+            <Stack gap="sm">
+              <Stack gap={2}>
+                <Text size="sm" fw={600}>
+                  Automation Draft
                 </Text>
-              )}
-            </Group>
-          </Stack>
-        </Alert>
-      )}
-
-      {scheduler.data && (
-        <SimpleGrid cols={{ base: 2, md: 5 }} spacing="sm">
-          <SummaryStat label="Total" value={scheduler.data.summary.total} />
-          <SummaryStat label="Enabled" value={scheduler.data.summary.enabled} />
-          <SummaryStat label="Due" value={scheduler.data.summary.due} />
-          <SummaryStat label="Failed" value={scheduler.data.summary.failed} />
-          <SummaryStat label="Blocked" value={scheduler.data.summary.blocked} />
-        </SimpleGrid>
-      )}
-
-      <Stack gap="sm">
-        {items.length === 0 ? (
-          <Paper className="border border-dashed p-4 text-center" radius="md">
-            <Text size="sm" c="dimmed">
-              No recurring work is configured.
-            </Text>
-          </Paper>
-        ) : (
-          items.map((item) => (
-            <Paper key={item.id} className="border bg-card p-4" radius="md">
-              <Stack gap="sm">
-                <Group justify="space-between" align="flex-start">
-                  <Stack gap={2}>
-                    <Group gap="xs">
-                      <Text size="sm" fw={600}>
-                        {item.name}
-                      </Text>
-                      <Badge
-                        size="xs"
-                        color={
-                          item.kind === 'workflow'
-                            ? 'blue'
-                            : item.kind === 'queue-monitor'
-                              ? 'teal'
-                              : 'grape'
-                        }
-                        variant="light"
-                      >
-                        {item.kind === 'workflow'
-                          ? 'Workflow'
-                          : item.kind === 'queue-monitor'
-                            ? 'Queue'
-                            : item.kind === 'automation'
-                              ? 'Automation'
-                              : 'Deliverable'}
-                      </Badge>
-                      <HealthBadge item={item} />
-                    </Group>
-                    <Text size="xs" c="dimmed" lineClamp={2}>
-                      {item.description}
-                    </Text>
-                  </Stack>
-                  <Group gap="xs">
-                    <Button
-                      size="xs"
-                      variant="subtle"
-                      color="gray"
-                      disabled={validate.isPending}
-                      leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
-                      onClick={() =>
-                        mutate(() => validate.mutateAsync(item.id), 'Scheduler item validated')
-                      }
-                    >
-                      Validate
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="light"
-                      color="gray"
-                      disabled={!canExecute || runItem.isPending || !item.actions.canRun}
-                      leftSection={<Play className="h-3.5 w-3.5" />}
-                      onClick={() =>
-                        mutate(() => runItem.mutateAsync(item.id), 'Scheduler item run started')
-                      }
-                    >
-                      Run
-                    </Button>
-                    {item.enabled ? (
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color="gray"
-                        disabled={!canWrite || pause.isPending || !item.actions.canPause}
-                        leftSection={<Pause className="h-3.5 w-3.5" />}
-                        onClick={() =>
-                          mutate(() => pause.mutateAsync(item.id), 'Scheduler item paused')
-                        }
-                      >
-                        Pause
-                      </Button>
-                    ) : (
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color="gray"
-                        disabled={!canWrite || resume.isPending || !item.actions.canResume}
-                        leftSection={<RotateCw className="h-3.5 w-3.5" />}
-                        onClick={() =>
-                          mutate(() => resume.mutateAsync(item.id), 'Scheduler item resumed')
-                        }
-                      >
-                        Resume
-                      </Button>
-                    )}
-                  </Group>
-                </Group>
-                <SimpleGrid cols={{ base: 1, md: 4 }} spacing="xs">
-                  <Meta label="Schedule" value={item.trigger.description} />
-                  <Meta label="Next" value={formatDate(item.nextRunAt)} />
-                  <Meta label="Last" value={formatDate(item.lastRunAt)} />
-                  <Meta label="Retry" value={`${item.retry.attempts}/${item.retry.maxAttempts}`} />
-                </SimpleGrid>
-                {item.lastSummary && (
-                  <Text size="xs" c={item.lastStatus === 'failed' ? 'red' : 'dimmed'}>
-                    {item.lastSummary}
-                  </Text>
-                )}
+                <Text size="xs" c="dimmed">
+                  Compile recurring intent into an inactive, reviewable draft. Previewing and saving
+                  never activates a schedule.
+                </Text>
               </Stack>
-            </Paper>
-          ))
-        )}
-      </Stack>
-
-      {events.length > 0 && (
-        <Stack gap="sm">
-          <Text size="sm" fw={600}>
-            Recent Events
-          </Text>
-          <Stack gap="xs">
-            {events.slice(0, 6).map((event) => (
-              <Group key={event.id} justify="space-between" className="rounded border px-3 py-2">
-                <Stack gap={0}>
-                  <Text size="xs" fw={600}>
-                    {event.summary}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {event.itemId} · {formatDate(event.runAt)}
-                  </Text>
-                </Stack>
-                <StatusBadge status={event.status} />
+              <Textarea
+                label="Recurring objective"
+                placeholder="Every weekday at 9 AM, review the support queue and produce a triage report."
+                value={intent}
+                onChange={(event) => setIntent(event.currentTarget.value)}
+                minRows={2}
+              />
+              <Textarea
+                label="Structured hints (JSON)"
+                description="Consequential values are never silently defaulted. Include timezone, workflow or task template, provider, expiry, scope, budgets, outputs, retries, and stop conditions."
+                value={hintsJson}
+                onChange={(event) => setHintsJson(event.currentTarget.value)}
+                minRows={4}
+                className="font-mono"
+              />
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  variant="light"
+                  disabled={!intent.trim() || previewDraft.isPending || saveDraft.isPending}
+                  onClick={() => void compileDraft(false)}
+                >
+                  Preview
+                </Button>
+                <Button
+                  size="xs"
+                  disabled={
+                    !canWrite || !intent.trim() || previewDraft.isPending || saveDraft.isPending
+                  }
+                  onClick={() => void compileDraft(true)}
+                >
+                  Save Inactive Draft
+                </Button>
               </Group>
-            ))}
+              {draftPreview && <AutomationDraftReview draft={draftPreview} />}
+            </Stack>
+          </Paper>
+
+          {(drafts.data?.drafts.length ?? 0) > 0 && (
+            <Stack gap="xs">
+              <Text size="sm" fw={600}>
+                Saved Inactive Drafts
+              </Text>
+              {drafts.data?.drafts.map((draft) => (
+                <AutomationDraftReview
+                  key={draft.id}
+                  draft={draft}
+                  compact
+                  onReviewActivation={canWrite ? () => void reviewActivation(draft) : undefined}
+                />
+              ))}
+            </Stack>
+          )}
+
+          {activationPreview && (
+            <Alert
+              color={activationPreview.evidence.enforceable ? 'blue' : 'red'}
+              title={`Activation review · ${activationPreview.draftId}`}
+            >
+              <Stack gap="xs">
+                <Text size="xs">
+                  {activationPreview.evidence.workflowId}@
+                  {activationPreview.evidence.workflowVersion} ·{' '}
+                  {activationPreview.evidence.provider} · expires{' '}
+                  {formatDate(activationPreview.schedule.expiresAt)}
+                </Text>
+                <Text size="xs">
+                  Run Access ceiling: {activationPreview.effectiveRunAccess.tools.length} tools,{' '}
+                  {activationPreview.effectiveRunAccess.integrations.length} integrations,{' '}
+                  {activationPreview.effectiveRunAccess.externalTargets.length} external targets
+                </Text>
+                <Text size="xs" className="font-mono">
+                  {activationPreview.requestRevision}
+                </Text>
+                {activationPreview.evidence.blockers.map((blocker) => (
+                  <Text key={blocker} size="xs" c="red">
+                    {blocker}
+                  </Text>
+                ))}
+                <Group gap="xs">
+                  <Button
+                    size="xs"
+                    disabled={!activationPreview.evidence.enforceable || applyActivation.isPending}
+                    onClick={() => void requestOrApplyActivation()}
+                  >
+                    {activationApprovalId ? 'Activate Approved Version' : 'Request Exact Approval'}
+                  </Button>
+                  {activationApprovalId && (
+                    <Text size="xs" c="dimmed">
+                      Approve {activationApprovalId} in Run Approvals, then activate this exact
+                      version.
+                    </Text>
+                  )}
+                </Group>
+              </Stack>
+            </Alert>
+          )}
+
+          {scheduler.data && (
+            <SimpleGrid cols={{ base: 2, md: 5 }} spacing="sm">
+              <SummaryStat label="Total" value={scheduler.data.summary.total} />
+              <SummaryStat label="Enabled" value={scheduler.data.summary.enabled} />
+              <SummaryStat label="Due" value={scheduler.data.summary.due} />
+              <SummaryStat label="Failed" value={scheduler.data.summary.failed} />
+              <SummaryStat label="Blocked" value={scheduler.data.summary.blocked} />
+            </SimpleGrid>
+          )}
+
+          <Stack gap="sm">
+            {items.length === 0 ? (
+              <Paper className="border border-dashed p-4 text-center" radius="md">
+                <Text size="sm" c="dimmed">
+                  No recurring work is configured.
+                </Text>
+              </Paper>
+            ) : (
+              items.map((item) => (
+                <Paper key={item.id} className="border bg-card p-4" radius="md">
+                  <Stack gap="sm">
+                    <Group justify="space-between" align="flex-start">
+                      <Stack gap={2}>
+                        <Group gap="xs">
+                          <Text size="sm" fw={600}>
+                            {item.name}
+                          </Text>
+                          <Badge
+                            size="xs"
+                            color={
+                              item.kind === 'workflow'
+                                ? 'blue'
+                                : item.kind === 'queue-monitor'
+                                  ? 'teal'
+                                  : 'grape'
+                            }
+                            variant="light"
+                          >
+                            {item.kind === 'workflow'
+                              ? 'Workflow'
+                              : item.kind === 'queue-monitor'
+                                ? 'Queue'
+                                : item.kind === 'automation'
+                                  ? 'Automation'
+                                  : 'Deliverable'}
+                          </Badge>
+                          <HealthBadge item={item} />
+                        </Group>
+                        <Text size="xs" c="dimmed" lineClamp={2}>
+                          {item.description}
+                        </Text>
+                      </Stack>
+                      <Group gap="xs">
+                        <Button
+                          size="xs"
+                          variant="subtle"
+                          color="gray"
+                          disabled={validate.isPending}
+                          leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
+                          onClick={() =>
+                            mutate(() => validate.mutateAsync(item.id), 'Scheduler item validated')
+                          }
+                        >
+                          Validate
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="light"
+                          color="gray"
+                          disabled={!canExecute || runItem.isPending || !item.actions.canRun}
+                          leftSection={<Play className="h-3.5 w-3.5" />}
+                          onClick={() =>
+                            mutate(() => runItem.mutateAsync(item.id), 'Scheduler item run started')
+                          }
+                        >
+                          Run
+                        </Button>
+                        {item.enabled ? (
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            color="gray"
+                            disabled={!canWrite || pause.isPending || !item.actions.canPause}
+                            leftSection={<Pause className="h-3.5 w-3.5" />}
+                            onClick={() =>
+                              mutate(() => pause.mutateAsync(item.id), 'Scheduler item paused')
+                            }
+                          >
+                            Pause
+                          </Button>
+                        ) : (
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            color="gray"
+                            disabled={!canWrite || resume.isPending || !item.actions.canResume}
+                            leftSection={<RotateCw className="h-3.5 w-3.5" />}
+                            onClick={() =>
+                              mutate(() => resume.mutateAsync(item.id), 'Scheduler item resumed')
+                            }
+                          >
+                            Resume
+                          </Button>
+                        )}
+                      </Group>
+                    </Group>
+                    <SimpleGrid cols={{ base: 1, md: 4 }} spacing="xs">
+                      <Meta label="Schedule" value={item.trigger.description} />
+                      <Meta label="Next" value={formatDate(item.nextRunAt)} />
+                      <Meta label="Last" value={formatDate(item.lastRunAt)} />
+                      <Meta
+                        label="Retry"
+                        value={`${item.retry.attempts}/${item.retry.maxAttempts}`}
+                      />
+                    </SimpleGrid>
+                    {item.lastSummary && (
+                      <Text size="xs" c={item.lastStatus === 'failed' ? 'red' : 'dimmed'}>
+                        {item.lastSummary}
+                      </Text>
+                    )}
+                  </Stack>
+                </Paper>
+              ))
+            )}
           </Stack>
+
+          {events.length > 0 && (
+            <Stack gap="sm">
+              <Text size="sm" fw={600}>
+                Recent Events
+              </Text>
+              <Stack gap="xs">
+                {events.slice(0, 6).map((event) => (
+                  <Group
+                    key={event.id}
+                    justify="space-between"
+                    className="rounded border px-3 py-2"
+                  >
+                    <Stack gap={0}>
+                      <Text size="xs" fw={600}>
+                        {event.summary}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {event.itemId} · {formatDate(event.runAt)}
+                      </Text>
+                    </Stack>
+                    <StatusBadge status={event.status} />
+                  </Group>
+                ))}
+              </Stack>
+            </Stack>
+          )}
         </Stack>
-      )}
-    </Stack>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
 

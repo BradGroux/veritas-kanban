@@ -14,6 +14,7 @@ import type {
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
 import { api } from '@/lib/api';
+import { SettingsPage, SettingsSection } from '../shared';
 
 const TRACKERS_QUERY_KEY = ['settings', 'external-trackers'] as const;
 
@@ -248,13 +249,28 @@ export function TrackersTab() {
   }
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="center">
-        <Stack gap={2}>
-          <Text size="sm" fw={600}>
-            External Trackers
-          </Text>
-          <Group gap="xs">
+    <SettingsPage
+      title="Trackers"
+      description="Configure validated mappings between Veritas tasks and external work trackers."
+      actions={
+        <Button
+          size="xs"
+          variant="subtle"
+          color="gray"
+          leftSection={<SearchCode className="h-3.5 w-3.5" />}
+          onClick={() => introspect.mutate()}
+          loading={introspect.isPending}
+          disabled={!canWrite}
+        >
+          Introspect
+        </Button>
+      }
+    >
+      <SettingsSection
+        title="External Trackers"
+        description="Inspect connection posture and maintain the active mapping profile."
+        status={
+          <Group gap="xs" wrap="wrap">
             <Badge variant="light" color="blue">
               {schema?.providerLabel ?? 'Mock Tracker'}
             </Badge>
@@ -271,190 +287,181 @@ export function TrackersTab() {
               {schema?.workItemTypes.length ?? 0} types
             </Badge>
           </Group>
-        </Stack>
-        <Button
-          size="xs"
-          variant="subtle"
-          color="gray"
-          leftSection={<SearchCode className="h-3.5 w-3.5" />}
-          onClick={() => introspect.mutate()}
-          loading={introspect.isPending}
-          disabled={!canWrite}
-        >
-          Introspect
-        </Button>
-      </Group>
-
-      <Paper className="border bg-card p-4" radius="md">
-        <Stack gap="md">
-          <Group justify="space-between" align="center">
-            <Text size="sm" fw={600}>
-              Mapping Profile
-            </Text>
-            <Badge variant="light" color={validationColor(validation ?? undefined)}>
-              {validation
-                ? validation.valid
-                  ? 'valid'
-                  : `${validation.errors.length} errors`
-                : 'not checked'}
-            </Badge>
-          </Group>
-
-          <TextInput
-            label="Profile"
-            value={draft.name}
-            onChange={(event) => updateDraft({ name: event.currentTarget.value })}
-            disabled={!canWrite}
-          />
-
-          <Group grow align="flex-start">
-            <Select
-              label="Type"
-              data={workItemTypeOptions}
-              value={draft.defaultWorkItemType}
-              onChange={(value) => value && updateDraft({ defaultWorkItemType: value })}
-              disabled={!canWrite}
-            />
-            <Select
-              label="Project"
-              data={projectOptions}
-              value={draft.defaultProjectPath ?? null}
-              onChange={(value) => updateDraft({ defaultProjectPath: value ?? undefined })}
-              disabled={!canWrite}
-            />
-          </Group>
-
-          <Group grow align="flex-start">
-            <Select
-              label="Area"
-              data={areaOptions}
-              value={draft.defaultAreaPath ?? null}
-              onChange={(value) => updateDraft({ defaultAreaPath: value ?? undefined })}
-              disabled={!canWrite}
-            />
-            <Select
-              label="Iteration"
-              data={iterationOptions}
-              value={draft.defaultIterationPath ?? null}
-              onChange={(value) => updateDraft({ defaultIterationPath: value ?? undefined })}
-              disabled={!canWrite}
-            />
-            <Select
-              label="Team"
-              data={teamOptions}
-              value={draft.defaultTeamPath ?? null}
-              onChange={(value) => updateDraft({ defaultTeamPath: value ?? undefined })}
-              disabled={!canWrite}
-            />
-          </Group>
-        </Stack>
-      </Paper>
-
-      <Paper className="border bg-card p-4" radius="md">
-        <Stack gap="sm">
-          <Text size="sm" fw={600}>
-            Fields
-          </Text>
-          {draft.fieldMappings.map((mapping, index) => (
-            <Group key={`${mapping.trackerFieldId}-${index}`} grow align="flex-end">
-              <Select
-                label={index === 0 ? 'Tracker field' : undefined}
-                data={fieldOptions}
-                value={mapping.trackerFieldId}
-                onChange={(value) => value && updateMapping(index, { trackerFieldId: value })}
-                disabled={!canWrite}
-              />
-              <Select
-                label={index === 0 ? 'Veritas field' : undefined}
-                data={SOURCE_OPTIONS}
-                value={mapping.source}
-                onChange={(value) =>
-                  value && updateMapping(index, { source: value as VeritasTaskMappingField })
-                }
-                disabled={!canWrite}
-              />
-              <TextInput
-                label={index === 0 ? 'Literal' : undefined}
-                value={mapping.literalValue ?? ''}
-                onChange={(event) =>
-                  updateMapping(index, { literalValue: event.currentTarget.value })
-                }
-                disabled={!canWrite || mapping.source !== 'literal'}
-              />
-            </Group>
-          ))}
-        </Stack>
-      </Paper>
-
-      <Paper className="border bg-card p-4" radius="md">
-        <Stack gap="sm">
-          <Group justify="space-between" align="center">
-            <Text size="sm" fw={600}>
-              Dry Run
-            </Text>
-            {validation ? (
-              validation.valid ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-              ) : (
-                <XCircle className="h-4 w-4 text-red-600" />
-              )
-            ) : null}
-          </Group>
-          <TextInput
-            label="Task ID"
-            placeholder="optional"
-            value={taskId}
-            onChange={(event) => setTaskId(event.currentTarget.value)}
-          />
-          {validation && !validation.valid ? (
-            <Stack gap={4}>
-              {validation.errors.slice(0, 3).map((item) => (
-                <Text key={`${item.code}-${item.fieldId ?? item.message}`} size="xs" c="red">
-                  {item.message}
+        }
+      >
+        <Stack gap="lg">
+          <Paper className="border bg-card p-4" radius="md">
+            <Stack gap="md">
+              <Group justify="space-between" align="center">
+                <Text size="sm" fw={600}>
+                  Mapping Profile
                 </Text>
+                <Badge variant="light" color={validationColor(validation ?? undefined)}>
+                  {validation
+                    ? validation.valid
+                      ? 'valid'
+                      : `${validation.errors.length} errors`
+                    : 'not checked'}
+                </Badge>
+              </Group>
+
+              <TextInput
+                label="Profile"
+                value={draft.name}
+                onChange={(event) => updateDraft({ name: event.currentTarget.value })}
+                disabled={!canWrite}
+              />
+
+              <Group grow align="flex-start">
+                <Select
+                  label="Type"
+                  data={workItemTypeOptions}
+                  value={draft.defaultWorkItemType}
+                  onChange={(value) => value && updateDraft({ defaultWorkItemType: value })}
+                  disabled={!canWrite}
+                />
+                <Select
+                  label="Project"
+                  data={projectOptions}
+                  value={draft.defaultProjectPath ?? null}
+                  onChange={(value) => updateDraft({ defaultProjectPath: value ?? undefined })}
+                  disabled={!canWrite}
+                />
+              </Group>
+
+              <Group grow align="flex-start">
+                <Select
+                  label="Area"
+                  data={areaOptions}
+                  value={draft.defaultAreaPath ?? null}
+                  onChange={(value) => updateDraft({ defaultAreaPath: value ?? undefined })}
+                  disabled={!canWrite}
+                />
+                <Select
+                  label="Iteration"
+                  data={iterationOptions}
+                  value={draft.defaultIterationPath ?? null}
+                  onChange={(value) => updateDraft({ defaultIterationPath: value ?? undefined })}
+                  disabled={!canWrite}
+                />
+                <Select
+                  label="Team"
+                  data={teamOptions}
+                  value={draft.defaultTeamPath ?? null}
+                  onChange={(value) => updateDraft({ defaultTeamPath: value ?? undefined })}
+                  disabled={!canWrite}
+                />
+              </Group>
+            </Stack>
+          </Paper>
+
+          <Paper className="border bg-card p-4" radius="md">
+            <Stack gap="sm">
+              <Text size="sm" fw={600}>
+                Fields
+              </Text>
+              {draft.fieldMappings.map((mapping, index) => (
+                <Group key={`${mapping.trackerFieldId}-${index}`} grow align="flex-end">
+                  <Select
+                    label={index === 0 ? 'Tracker field' : undefined}
+                    data={fieldOptions}
+                    value={mapping.trackerFieldId}
+                    onChange={(value) => value && updateMapping(index, { trackerFieldId: value })}
+                    disabled={!canWrite}
+                  />
+                  <Select
+                    label={index === 0 ? 'Veritas field' : undefined}
+                    data={SOURCE_OPTIONS}
+                    value={mapping.source}
+                    onChange={(value) =>
+                      value && updateMapping(index, { source: value as VeritasTaskMappingField })
+                    }
+                    disabled={!canWrite}
+                  />
+                  <TextInput
+                    label={index === 0 ? 'Literal' : undefined}
+                    value={mapping.literalValue ?? ''}
+                    onChange={(event) =>
+                      updateMapping(index, { literalValue: event.currentTarget.value })
+                    }
+                    disabled={!canWrite || mapping.source !== 'literal'}
+                  />
+                </Group>
               ))}
             </Stack>
-          ) : dryRunFields.length > 0 ? (
-            <Text size="xs" c="dimmed">
-              Payload: {dryRunFields.join(', ')}
-            </Text>
-          ) : null}
-        </Stack>
-      </Paper>
+          </Paper>
 
-      <Group justify="flex-end">
-        <Button
-          size="xs"
-          variant="subtle"
-          color="gray"
-          leftSection={<RefreshCw className="h-3.5 w-3.5" />}
-          onClick={() => validateProfile.mutate()}
-          loading={validateProfile.isPending}
-          disabled={!draft.id}
-        >
-          Validate
-        </Button>
-        <Button
-          size="xs"
-          variant="subtle"
-          color="gray"
-          leftSection={<Play className="h-3.5 w-3.5" />}
-          onClick={() => dryRun.mutate()}
-          loading={dryRun.isPending}
-          disabled={!draft.id}
-        >
-          Dry Run
-        </Button>
-        <Button
-          size="xs"
-          leftSection={<Save className="h-3.5 w-3.5" />}
-          onClick={() => saveProfile.mutate(draft)}
-          loading={saveProfile.isPending}
-          disabled={!canWrite}
-        >
-          Save
-        </Button>
-      </Group>
-    </Stack>
+          <Paper className="border bg-card p-4" radius="md">
+            <Stack gap="sm">
+              <Group justify="space-between" align="center">
+                <Text size="sm" fw={600}>
+                  Dry Run
+                </Text>
+                {validation ? (
+                  validation.valid ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )
+                ) : null}
+              </Group>
+              <TextInput
+                label="Task ID"
+                placeholder="optional"
+                value={taskId}
+                onChange={(event) => setTaskId(event.currentTarget.value)}
+              />
+              {validation && !validation.valid ? (
+                <Stack gap={4}>
+                  {validation.errors.slice(0, 3).map((item) => (
+                    <Text key={`${item.code}-${item.fieldId ?? item.message}`} size="xs" c="red">
+                      {item.message}
+                    </Text>
+                  ))}
+                </Stack>
+              ) : dryRunFields.length > 0 ? (
+                <Text size="xs" c="dimmed">
+                  Payload: {dryRunFields.join(', ')}
+                </Text>
+              ) : null}
+            </Stack>
+          </Paper>
+
+          <Group justify="flex-end">
+            <Button
+              size="xs"
+              variant="subtle"
+              color="gray"
+              leftSection={<RefreshCw className="h-3.5 w-3.5" />}
+              onClick={() => validateProfile.mutate()}
+              loading={validateProfile.isPending}
+              disabled={!draft.id}
+            >
+              Validate
+            </Button>
+            <Button
+              size="xs"
+              variant="subtle"
+              color="gray"
+              leftSection={<Play className="h-3.5 w-3.5" />}
+              onClick={() => dryRun.mutate()}
+              loading={dryRun.isPending}
+              disabled={!draft.id}
+            >
+              Dry Run
+            </Button>
+            <Button
+              size="xs"
+              leftSection={<Save className="h-3.5 w-3.5" />}
+              onClick={() => saveProfile.mutate(draft)}
+              loading={saveProfile.isPending}
+              disabled={!canWrite}
+            >
+              Save
+            </Button>
+          </Group>
+        </Stack>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

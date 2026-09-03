@@ -77,8 +77,10 @@ describe('WorkspaceCapabilitiesTab', () => {
   });
 
   it('renders discovery data and submits delegated intake with required context', async () => {
-    renderWithProviders(<WorkspaceCapabilitiesTab />);
+    const { container } = renderWithProviders(<WorkspaceCapabilitiesTab />);
 
+    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(screen.getByText('Local Board')).toBeTruthy();
     expect(screen.getAllByText('Source Board')[0]).toBeTruthy();
     expect(screen.getAllByText('Documentation')[0]).toBeTruthy();

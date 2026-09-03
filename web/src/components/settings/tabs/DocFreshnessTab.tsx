@@ -1,6 +1,13 @@
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
-import { ToggleRow, NumberRow, SectionHeader, SaveIndicator, SettingRow } from '../shared';
+import {
+  ToggleRow,
+  NumberRow,
+  SaveIndicator,
+  SettingRow,
+  SettingsPage,
+  SettingsSection,
+} from '../shared';
 
 export function DocFreshnessTab() {
   const { settings } = useFeatureSettings();
@@ -17,16 +24,17 @@ export function DocFreshnessTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Documentation Freshness" onReset={resetDocFreshness} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <p className="text-sm text-muted-foreground -mt-2">
-        Track and alert on documentation staleness across projects.
-      </p>
-
-      <div className="divide-y">
+    <SettingsPage
+      title="Doc Freshness"
+      description="Track and alert on documentation staleness across projects."
+    >
+      <SettingsSection
+        title="Freshness Policy"
+        description="Set the scan cadence and response when documents become stale."
+        actions={<SaveIndicator isPending={isPending} />}
+        onReset={resetDocFreshness}
+        divided
+      >
         <ToggleRow
           label="Enable Doc Freshness"
           description="Turn on documentation freshness tracking"
@@ -72,7 +80,7 @@ export function DocFreshnessTab() {
             </span>
           </div>
         </SettingRow>
-      </div>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

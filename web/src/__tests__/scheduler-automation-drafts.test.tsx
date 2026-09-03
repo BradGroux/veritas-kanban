@@ -67,8 +67,10 @@ describe('Scheduler automation draft authoring', () => {
 
   it('shows exact preview blockers without activating scheduler work', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<SchedulerTab />);
+    const { container } = renderWithProviders(<SchedulerTab />);
 
+    expect(screen.getByRole('heading', { name: 'Scheduler' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     await user.type(
       screen.getByRole('textbox', { name: 'Recurring objective' }),
       'Every weekday at 9 AM create a report'

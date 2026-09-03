@@ -35,6 +35,8 @@ describe('Security settings Mantine migration', () => {
   it('renders password controls through direct Mantine primitives and changes passwords', async () => {
     const { container } = renderWithProviders(<SecurityTab />);
 
+    expect(screen.getByRole('heading', { name: 'Security' })).toBeDefined();
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(2);
     expect(screen.getByLabelText('Current Password')).toBeDefined();
     expect(screen.getByLabelText('New Password')).toBeDefined();
     expect(screen.getByLabelText('Confirm New Password')).toBeDefined();

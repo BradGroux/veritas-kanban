@@ -5,6 +5,7 @@ import type { ReflectionCandidate, ReflectionPromotionTarget } from '@veritas-ka
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
 import { api } from '@/lib/api';
+import { SettingsPage, SettingsSection } from '../shared';
 
 const REFLECTIONS_QUERY_KEY = ['reflections', 'settings'] as const;
 const REVIEWER = 'operator';
@@ -125,16 +126,10 @@ export function ReflectionTab() {
   }
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="center">
-        <Stack gap={2}>
-          <Text size="sm" fw={600}>
-            Reflection Promotion Queue
-          </Text>
-          <Text size="xs" c="dimmed">
-            Review corrections before they become durable lessons, policies, profiles, or templates.
-          </Text>
-        </Stack>
+    <SettingsPage
+      title="Reflections"
+      description="Review corrections before they become durable lessons, policies, profiles, or templates."
+      actions={
         <Tooltip label="Refresh reflections">
           <Button
             size="xs"
@@ -146,43 +141,56 @@ export function ReflectionTab() {
             Refresh
           </Button>
         </Tooltip>
-      </Group>
+      }
+    >
+      <SettingsSection
+        title="Reflection Promotion Queue"
+        description="Approve, merge, reject, or delete captured reflection candidates."
+      >
+        <Stack gap="lg">
+          <Group gap="xs">
+            <Badge variant="light" color="yellow">
+              {pendingCount} pending
+            </Badge>
+            <Badge variant="light" color={duplicateGroups.length > 0 ? 'orange' : 'gray'}>
+              {duplicateGroups.length} duplicate groups
+            </Badge>
+            <Badge variant="light" color="blue">
+              {candidates.length} loaded
+            </Badge>
+          </Group>
 
-      <Group gap="xs">
-        <Badge variant="light" color="yellow">
-          {pendingCount} pending
-        </Badge>
-        <Badge variant="light" color={duplicateGroups.length > 0 ? 'orange' : 'gray'}>
-          {duplicateGroups.length} duplicate groups
-        </Badge>
-        <Badge variant="light" color="blue">
-          {candidates.length} loaded
-        </Badge>
-      </Group>
-
-      <Stack gap="sm">
-        {candidates.length === 0 ? (
-          <Paper className="border border-dashed p-4 text-center" radius="md">
-            <Text size="sm" c="dimmed">
-              No reflection candidates are waiting for review.
-            </Text>
-          </Paper>
-        ) : (
-          candidates.map((candidate) => (
-            <ReflectionCandidateItem
-              key={candidate.id}
-              candidate={candidate}
-              canWrite={canWrite}
-              onAccept={() => runAction(() => accept.mutateAsync(candidate), 'Reflection accepted')}
-              onReject={() => runAction(() => reject.mutateAsync(candidate), 'Reflection rejected')}
-              onMerge={() => runAction(() => merge.mutateAsync(candidate), 'Duplicate merged')}
-              onDelete={() => runAction(() => remove.mutateAsync(candidate), 'Reflection deleted')}
-              busy={accept.isPending || reject.isPending || merge.isPending || remove.isPending}
-            />
-          ))
-        )}
-      </Stack>
-    </Stack>
+          <Stack gap="sm">
+            {candidates.length === 0 ? (
+              <Paper className="border border-dashed p-4 text-center" radius="md">
+                <Text size="sm" c="dimmed">
+                  No reflection candidates are waiting for review.
+                </Text>
+              </Paper>
+            ) : (
+              candidates.map((candidate) => (
+                <ReflectionCandidateItem
+                  key={candidate.id}
+                  candidate={candidate}
+                  canWrite={canWrite}
+                  onAccept={() =>
+                    runAction(() => accept.mutateAsync(candidate), 'Reflection accepted')
+                  }
+                  onReject={() =>
+                    runAction(() => reject.mutateAsync(candidate), 'Reflection rejected')
+                  }
+                  onMerge={() => runAction(() => merge.mutateAsync(candidate), 'Duplicate merged')}
+                  onDelete={() =>
+                    runAction(() => remove.mutateAsync(candidate), 'Reflection deleted')
+                  }
+                  busy={accept.isPending || reject.isPending || merge.isPending || remove.isPending}
+                />
+              ))
+            )}
+          </Stack>
+        </Stack>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
 
