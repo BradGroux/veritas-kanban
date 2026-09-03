@@ -43,7 +43,7 @@ test.describe('Desktop board shell containment', () => {
     });
     taskIds.push(destination.id as string);
 
-    await page.setViewportSize({ width: 1224, height: 768 });
+    await page.setViewportSize({ width: 1360, height: 768 });
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-client', 'desktop');
     await expect(page.getByLabel('Board right sidebar')).toBeVisible();
@@ -124,8 +124,23 @@ test.describe('Desktop board shell containment', () => {
     await expect(page.getByRole('region', { name: 'Squad Chat' })).toBeVisible();
     expect(await readViewport()).toEqual(expectedViewport);
 
-    await page.getByRole('button', { name: 'Close right dock' }).click();
+    await page.setViewportSize({ width: 1180, height: 760 });
+    await expect(page.getByRole('button', { name: 'Expand left sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    await expect(page.getByRole('button', { name: 'Expand right sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
     await expect(page.getByRole('region', { name: 'Workbench right dock' })).toHaveCount(0);
+    expect(await readViewport()).toEqual({
+      innerHeight: 760,
+      documentHeight: 760,
+      scrollY: 0,
+      shellHeight: 760,
+    });
+    await page.setViewportSize({ width: 1360, height: 768 });
 
     await page.getByRole('button', { name: 'Activity', exact: true }).click();
     await expect(page).toHaveURL(/\/activity$/);
@@ -136,7 +151,7 @@ test.describe('Desktop board shell containment', () => {
 
     await page.getByRole('button', { name: 'Board', exact: true }).click();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('button', { name: 'Collapse right sidebar' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Expand right sidebar' })).toBeVisible();
 
     const movingId = taskIds[5];
     const destinationId = destination.id as string;

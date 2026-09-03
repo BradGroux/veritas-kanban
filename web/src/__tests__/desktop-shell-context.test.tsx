@@ -23,6 +23,9 @@ function ShellProbe() {
       <button type="button" onClick={() => shell.setLeftRailOpen(false)}>
         Close left rail
       </button>
+      <button type="button" onClick={() => shell.setLeftRailOpen(true)}>
+        Open left rail
+      </button>
       <button type="button" onClick={() => shell.setRightRailOpen(true)}>
         Open right rail
       </button>
@@ -51,7 +54,7 @@ describe('desktop shell recovery', () => {
     window.localStorage.clear();
     window.history.replaceState({}, '', '/');
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1360 });
     Object.defineProperty(window, 'veritasDesktop', {
       configurable: true,
       value: {
@@ -126,6 +129,48 @@ describe('desktop shell recovery', () => {
     await user.click(screen.getByRole('button', { name: 'Open board chat' }));
     act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: {} })));
     expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
+  });
+
+  it('collapses sidebars and Workbench when the desktop crosses into compact width', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open right rail' }));
+    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+    expect(screen.getByLabelText('left rail').textContent).toBe('true');
+    expect(screen.getByLabelText('right rail').textContent).toBe('true');
+    expect(screen.getByLabelText('bottom panel').textContent).toBe('board-chat');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    expect(screen.getByLabelText('left rail').textContent).toBe('false');
+    expect(screen.getByLabelText('right rail').textContent).toBe('false');
+    expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
+    expect(window.localStorage.getItem('veritas.desktop.leftRailOpen')).toBe('false');
+    expect(window.localStorage.getItem('veritas.desktop.rightRailOpen')).toBe('false');
+  });
+
+  it('minimizes both sidebars before opening Workbench at compact width', async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open left rail' }));
+    await user.click(screen.getByRole('button', { name: 'Open right rail' }));
+    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+
+    expect(screen.getByLabelText('left rail').textContent).toBe('false');
+    expect(screen.getByLabelText('right rail').textContent).toBe('false');
+    expect(screen.getByLabelText('bottom panel').textContent).toBe('board-chat');
   });
 
   it('resets the complete desktop layout from the native recovery command', async () => {

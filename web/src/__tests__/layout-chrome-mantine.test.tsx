@@ -179,6 +179,7 @@ describe('layout chrome Mantine migration', () => {
     vi.clearAllMocks();
     window.localStorage.clear();
     window.history.replaceState({}, '', '/');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1360 });
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 

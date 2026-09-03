@@ -34,6 +34,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'veritas.workbench.rightPanelWidth';
 const BOTTOM_PANEL_HISTORY_STATE_KEY = 'veritasBottomPanel';
 const RIGHT_PANEL_VIEWPORT_RESERVE = 520;
 const COMPACT_RIGHT_PANEL_WIDTH = 280;
+export const COMPACT_DESKTOP_LAYOUT_WIDTH = 1280;
 export const DEFAULT_RIGHT_PANEL_WIDTH = 420;
 export const MIN_RIGHT_PANEL_WIDTH = 320;
 export const MAX_RIGHT_PANEL_WIDTH = 640;
@@ -121,9 +122,14 @@ function isBottomPanel(value: unknown): value is DesktopBottomPanel {
   return value === 'board-chat' || value === 'squad-chat';
 }
 
+function isCompactDesktopLayout(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth < COMPACT_DESKTOP_LAYOUT_WIDTH;
+}
+
 export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const desktopClient = isDesktopClient();
   const panelTriggerRef = useRef<HTMLElement | null>(null);
+  const compactLayoutRef = useRef(isCompactDesktopLayout());
   const [leftRailOpen, setLeftRailOpenState] = useState(() =>
     readStoredBoolean(LEFT_RAIL_STORAGE_KEY, true)
   );
@@ -175,6 +181,12 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
 
   const openBottomPanel = useCallback(
     (panel: DesktopBottomPanel) => {
+      if (desktopClient && isCompactDesktopLayout()) {
+        setLeftRailOpenState(false);
+        setRightRailOpenState(false);
+        writeStoredValue(LEFT_RAIL_STORAGE_KEY, 'false');
+        writeStoredValue(RIGHT_RAIL_STORAGE_KEY, 'false');
+      }
       if (!bottomPanel && document.activeElement instanceof HTMLElement) {
         panelTriggerRef.current = document.activeElement;
       }
@@ -194,7 +206,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
         window.history.pushState(state, '', window.location.href);
       }
     },
-    [bottomPanel]
+    [bottomPanel, desktopClient]
   );
 
   const toggleBottomPanel = useCallback(
@@ -242,6 +254,14 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!desktopClient || !compactLayoutRef.current) return;
+    setLeftRailOpenState(false);
+    setRightRailOpenState(false);
+    writeStoredValue(LEFT_RAIL_STORAGE_KEY, 'false');
+    writeStoredValue(RIGHT_RAIL_STORAGE_KEY, 'false');
+  }, [desktopClient]);
+
+  useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || !bottomPanel) return;
       event.preventDefault();
@@ -260,6 +280,17 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
         }
         return next;
       });
+
+      const compact = isCompactDesktopLayout();
+      const becameCompact = compact && !compactLayoutRef.current;
+      compactLayoutRef.current = compact;
+      if (!desktopClient || !becameCompact) return;
+
+      setLeftRailOpenState(false);
+      setRightRailOpenState(false);
+      writeStoredValue(LEFT_RAIL_STORAGE_KEY, 'false');
+      writeStoredValue(RIGHT_RAIL_STORAGE_KEY, 'false');
+      if (bottomPanel) closeBottomPanel();
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -272,7 +303,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleResize);
     };
-  }, [bottomPanel, closeBottomPanel, restorePanelFocus]);
+  }, [bottomPanel, closeBottomPanel, desktopClient, restorePanelFocus]);
 
   useEffect(() => {
     const desktop = (
