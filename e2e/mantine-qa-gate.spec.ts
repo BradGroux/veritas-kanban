@@ -373,7 +373,12 @@ async function assertKeyboardFocusLandsOnVisibleControl(page: Page) {
   const focused = await page.evaluate(() => {
     const element = document.activeElement;
     if (!element || element === document.body) return null;
-    const rect = element.getBoundingClientRect();
+    const labelledControl =
+      element instanceof HTMLInputElement && element.id
+        ? document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(element.id)}"]`)
+        : null;
+    const hitTarget = labelledControl ?? element;
+    const rect = hitTarget.getBoundingClientRect();
     return {
       height: rect.height,
       tagName: element.tagName,
