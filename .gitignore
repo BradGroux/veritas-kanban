@@ -112,5 +112,11 @@ tasks/
 !tasks/examples/*.md
 /.veritas-kanban/
 
+# Internal working documents belong in .veritas-kanban/internal/, not public docs
+/.learnings/
+/docs/archive/
+/docs/*-GOAL-PROMPT.md
+/docs/*-AUDIT-????-??-??.md
+
 # Local security middleware (not shared)
 server/src/middleware/external-api-key.ts

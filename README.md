@@ -100,8 +100,7 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [Phase Transition Journal](docs/architecture/PHASE-TRANSITION-JOURNAL.md) — durable compare-and-set transitions, approval and override controls, restart recovery, REST, and CLI operations.
 - [Run Access Summary v1](docs/architecture/RUN-ACCESS-SUMMARY-V1.md) — one redacted, digest-bound view of a run's filesystem, network, tools, integrations, budgets, support, and historical authority.
 - [Knowledge Collections v1](docs/architecture/KNOWLEDGE-COLLECTIONS-V1.md) — immutable sources, cited pages, stable identity, bidirectional links, and reversible reviewed ingestion with file/SQLite parity.
-- [OpenAI Codex Integration Roadmap](docs/CODEX-INTEGRATION.md) — optional local execution, SDK sessions, cloud delegation, MCP setup, workflows, telemetry, and release QA.
-- [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) — authority model, HermesAgent roster, QA evidence gate, and GitHub-backed task templates.
+- [OpenAI Codex Integration](docs/CODEX-INTEGRATION.md) — local execution, SDK and app-server sessions, cloud delegation, MCP setup, workflows, and telemetry.
 - [Codex Integration SOP](docs/SOP-codex-integration.md) & [Codex Workflow Examples](docs/EXAMPLES-codex-workflows.md) — operational playbooks for using Codex as a first-class Veritas agent.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
 - [Identity and RBAC Model](docs/IDENTITY-RBAC.md) — users, workspaces, memberships, roles, agent tokens, permission matrix, migration, and UX flows.
@@ -111,7 +110,6 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 - [v6 Compatibility And Release Policy](docs/V6-COMPATIBILITY-AND-RELEASE-POLICY.md) — provider support tiers, tested builds, platform combinations, update channels, and rollback limits.
 - [v6 Release Notes](docs/V6-RELEASE-NOTES.md) — user-facing highlights, stabilization fixes, install/upgrade steps, behavior changes, and known limits.
 - [Desktop Architecture ADR](docs/architecture/ADR-0001-v5-desktop-architecture.md) — shell decision, native/server boundaries, connection modes, lifecycle, packaging, and security model.
-- [Post-GA Desktop Agent Workbench Spec](docs/DESKTOP-AGENT-WORKBENCH.md) — desktop workbench UX, run controls, approvals, evidence, native affordances, and safety coverage.
 - [Post-GA Native Mobile Offline ADR](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md) — native mobile authority model, offline queue semantics, conflict handling, and security review.
 - [Post-GA Cloud Sync And Hosted SaaS ADR](docs/architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md) — optional hosted model, tenant isolation, lifecycle, support, cost, and migration boundaries.
 - [Self-Hosting Guide](docs/guides/SELF_HOST.md) — production deployment, reverse proxy, auth hardening, Docker, and backups.
@@ -757,9 +755,8 @@ vk agents:pending
 - Configure unmanaged client access with the
   [MCP Server Guide](docs/mcp/README.md). Managed runs receive only their
   selected run-scoped catalog and do not need a separate global VK MCP config.
-- Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) or
-  [Veritas Cutover Operating Guide](docs/VERITAS-CUTOVER.md) only when those
-  specialized workflows apply.
+- Follow the [Codex Integration SOP](docs/SOP-codex-integration.md) when that
+  specialized workflow applies.
 
 ---
 
@@ -916,7 +913,6 @@ Longer-lived product and architecture direction is recorded separately:
 - [v6 agent runtime control plane](docs/architecture/V6-AGENT-RUNTIME-CONTROL-PLANE.md)
 - [phase capability profiles](docs/architecture/PHASE-CAPABILITY-PROFILES.md)
 - [tool control plane v1](docs/architecture/TOOL-CONTROL-PLANE-V1.md)
-- [post-GA desktop agent workbench](docs/DESKTOP-AGENT-WORKBENCH.md)
 - [post-GA native mobile offline decision](docs/architecture/ADR-0003-post-ga-native-mobile-offline.md)
 - [post-GA cloud sync and hosted SaaS decision](docs/architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md)
 

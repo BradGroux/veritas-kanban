@@ -1,8 +1,6 @@
 # Jekyll configuration for GitHub Pages
 # Exclude docs containing {{ template syntax that conflicts with Liquid
 exclude:
-  - internal/ # All review/implementation notes (moved here in v3.0)
   - FEATURES.md # Contains workflow YAML examples with {{ }}
   - WORKFLOW-GUIDE.md # Contains workflow YAML examples with {{ }}
-  - WORKFLOW_ENGINE_ARCHITECTURE.md
   - DEPLOYMENT.md

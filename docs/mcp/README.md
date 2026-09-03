@@ -224,7 +224,7 @@ Recommended companion for OpenAI-related development work:
 codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp
 ```
 
-Pair this with the Codex-specific instructions in [AGENTS-TEMPLATE.md](../AGENTS-TEMPLATE.md), the v4.3 [Codex Integration SOP](../SOP-codex-integration.md), and the [Veritas Cutover Operating Guide](../VERITAS-CUTOVER.md) when Codex is coordinating with HermesAgent/Hermes Gateway.
+Pair this with the Codex-specific instructions in [AGENTS-TEMPLATE.md](../AGENTS-TEMPLATE.md) and the [Codex Integration SOP](../SOP-codex-integration.md) when Codex is coordinating managed work.
 
 ### Production
 

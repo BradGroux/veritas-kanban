@@ -1,8 +1,6 @@
-# OpenAI Codex Integration Roadmap
+# OpenAI Codex Integration
 
-Release target: **Veritas Kanban v4.3**
-
-This roadmap tracks the first-class OpenAI Codex integration work for Veritas Kanban. v4.3 now includes local `codex exec` execution, SDK-backed local Codex sessions, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, Codex review actions, richer Settings health checks, provider adapters, Codex event mapping, and mocked runner coverage.
+Veritas Kanban includes local `codex exec` execution, SDK-backed local Codex sessions, a supervised Codex app-server adapter, GitHub-native Codex Cloud delegation, Codex-backed workflow-engine steps, review actions, Settings health checks, provider adapters, event mapping, and mocked runner coverage.
 
 Companion docs:
 
@@ -11,9 +9,9 @@ Companion docs:
 - [Optional Independent Code Review](SOP-cross-model-code-review.md)
 - [AGENTS.md Template](AGENTS-TEMPLATE.md)
 
-## Product Goal
+## Product Scope
 
-Veritas Kanban should become the local-first command center for Codex-backed software work:
+Veritas Kanban is a local-first command center for Codex-backed software work:
 
 - Start Codex on a Veritas code task from the UI or API.
 - Run Codex inside the task worktree with tracked status, logs, outputs, and telemetry.
@@ -78,7 +76,7 @@ POST /api/github/codex/delegate
 }
 ```
 
-## Architecture Direction
+## Architecture
 
 Executable task providers resolve through the dedicated
 `AgentProviderAdapterRegistry`. The registry owns exact provider selection,
@@ -92,7 +90,7 @@ to the SDK session runner, and `codex-cloud` uses GitHub-native delegation.
 OpenClaw task dispatch uses the gateway `sessions_spawn` path and persists the
 returned session identity on the active attempt.
 
-Expected long-term provider capabilities:
+Provider capabilities include:
 
 - `start`
 - `stop`
@@ -109,11 +107,11 @@ The provider adapter interface supports:
 - Codex CLI through a local process provider.
 - Codex SDK through the implemented thread/session provider.
 - Codex Cloud through GitHub issue/PR delegation.
-- Future providers without route-level branching.
+- Additional providers can be added without route-level branching.
 
 ## Telemetry And Logs
 
-Codex JSONL should be normalized into Veritas concepts:
+Codex JSONL is normalized into Veritas concepts:
 
 - agent messages
 - reasoning and progress updates
@@ -124,7 +122,7 @@ Codex JSONL should be normalized into Veritas concepts:
 - final summaries
 - token usage from completed turns when available
 
-Attempt logs should remain readable markdown, while raw JSONL can be retained where it helps debugging.
+Attempt logs remain readable Markdown, while raw JSONL can be retained where it helps debugging.
 
 ## Workflow Engine
 
@@ -180,56 +178,14 @@ GET /api/settings/codex/health
 The response reports Codex CLI install/version/auth state, the installed Codex
 SDK version and import availability, Codex agent profile readiness, enabled
 Codex profiles, and recommendations. Veritas Kanban currently validates its
-stream adapter against `@openai/codex-sdk` 0.144.1 event contracts.
+stream adapter against `@openai/codex-sdk` 0.149.0 event contracts.
 
 ## MCP And Project Instructions
 
-v4.3 makes Veritas MCP setup easy for Codex:
+Configure Veritas MCP for Codex with:
 
 ```bash
 codex mcp add veritas-kanban --env VK_API_URL=http://localhost:3001 -- node /absolute/path/to/veritas-kanban/mcp/dist/index.js
 ```
 
-The docs should also provide an `AGENTS.md` pattern that teaches Codex the Veritas task lifecycle: begin work, update task state, log findings, report deliverables, run checks, summarize completion, and keep the board as source of truth.
-
-## v4.3 Issue Track
-
-- [#298](https://github.com/BradGroux/veritas-kanban/issues/298) - v4.3 Epic: Build first-class OpenAI Codex support
-- [#299](https://github.com/BradGroux/veritas-kanban/issues/299) - Add agent provider abstraction for OpenClaw, Codex CLI, Codex SDK, and future agents
-- [#300](https://github.com/BradGroux/veritas-kanban/issues/300) - Implement local Codex CLI adapter using codex exec JSONL events
-- [#301](https://github.com/BradGroux/veritas-kanban/issues/301) - Add Codex SDK provider for long-lived local threads and richer session control
-- [#302](https://github.com/BradGroux/veritas-kanban/issues/302) - Support Codex Cloud delegation through GitHub issue/PR workflows
-- [#303](https://github.com/BradGroux/veritas-kanban/issues/303) - Build Codex settings UX for profiles, auth checks, sandbox mode, model, and provider mode
-- [#304](https://github.com/BradGroux/veritas-kanban/issues/304) - Map Codex logs, JSONL events, token usage, and artifacts into Veritas telemetry
-- [#305](https://github.com/BradGroux/veritas-kanban/issues/305) - Make Veritas MCP and AGENTS.md setup first-class for Codex
-- [#306](https://github.com/BradGroux/veritas-kanban/issues/306) - Execute workflow engine agent steps through provider adapters including Codex
-- [#307](https://github.com/BradGroux/veritas-kanban/issues/307) - Add Codex review and PR automation workflows
-- [#308](https://github.com/BradGroux/veritas-kanban/issues/308) - Write v4.3 Codex documentation, examples, and release notes
-- [#309](https://github.com/BradGroux/veritas-kanban/issues/309) - Create Codex test harness, mocked runners, E2E coverage, and v4.3 release QA checklist
-
-## Documentation Pass
-
-The v4.3 docs should land with the implementation, not after it. Required documentation updates:
-
-- Codex integration roadmap: architecture and release scope.
-- Codex SOP: operational playbook for CLI, SDK, Cloud, MCP, telemetry, reviews, and workflow execution.
-- Codex examples: copy/pasteable task, review, SDK, Cloud, MCP, and workflow recipes.
-- README documentation map.
-- FEATURES entry for Codex provider support.
-- MCP guide with Codex setup.
-- API reference for provider fields and Codex-specific routes.
-- CLI guide if a setup/check helper is added.
-- AGENTS.md template with Codex-specific lifecycle instructions and MCP commands.
-- Release notes with known limitations and QA evidence.
-
-## Release Acceptance
-
-v4.3 is done when:
-
-- Codex can complete a Veritas code task from the UI or API through the local CLI provider.
-- Codex can run as a workflow-engine agent step.
-- Codex logs, final output, and token usage appear in Veritas attempt and telemetry surfaces.
-- Codex setup has first-class Settings UX and docs.
-- Veritas MCP setup for Codex is documented and smoke-tested.
-- CI includes mocked Codex coverage.
-- Manual release QA includes one real local Codex task, one Codex review, and one Codex workflow step.
+Use the [AGENTS.md Template](AGENTS-TEMPLATE.md) to teach Codex the Veritas task lifecycle: begin work, update task state, log findings, report deliverables, run checks, summarize completion, and keep the board as source of truth.

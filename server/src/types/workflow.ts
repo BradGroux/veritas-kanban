@@ -2,7 +2,7 @@
  * Workflow Engine Types — Veritas Kanban v3.0
  * Phase 1: Core Engine
  *
- * Architecture: /Users/bradgroux/Projects/veritas-kanban/docs/WORKFLOW_ENGINE_ARCHITECTURE.md
+ * References: docs/WORKFLOW-GUIDE.md and docs/API-WORKFLOWS.md
  */
 
 // ==================== Workflow Definition Types ====================

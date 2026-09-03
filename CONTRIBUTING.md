@@ -61,6 +61,8 @@ veritas-kanban/
 
 > **Note:** Your task data (`tasks/active/`, `tasks/archive/`) is `.gitignore`d and never committed. Only `tasks/examples/` (seed data) is tracked.
 
+`docs/` is public product documentation. Keep execution prompts, one-time handoffs, raw audit notes, learnings, and scratch material in GitHub issues, Veritas tasks, or the ignored `.veritas-kanban/internal/` directory. See the [documentation index and publication boundary](docs/README.md).
+
 ## Development Workflow
 
 ### Creating a Feature Branch

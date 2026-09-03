@@ -368,17 +368,6 @@ curl -s "http://localhost:3001/api/analytics/metrics?from=2026-01-01T00:00:00Z&t
   jq '.data.agentUtilization | sort_by(.durationSeconds) | reverse'
 ```
 
-## Future Enhancements
-
-1. **Status History Integration**: Use status transitions for more precise lead time calculations
-2. **Caching**: Cache historical metrics (periods that don't change)
-3. **Comparison Reports**: Compare metrics across sprints/agents
-4. **Anomaly Detection**: Flag unusual patterns (e.g., zero concurrency for extended periods)
-5. **Cost Analysis**: Integrate with token/cost metrics for ROI calculations
-6. **Predictive Analytics**: Estimate completion dates based on historical throughput
-7. **Visualization UI**: Build a Gantt chart view in the web dashboard
-8. **Real-time Updates**: WebSocket support for live metrics
-
 ## Troubleshooting
 
 ### Empty Timeline
@@ -409,7 +398,7 @@ curl -s "http://localhost:3001/api/analytics/metrics?from=2026-01-01T00:00:00Z&t
 
 - Computing exact parallelism at every microsecond is inefficient
 - 5-minute sampling provides sufficient granularity for visualization
-- Can be made configurable in future versions
+- The current contract uses five-minute sampling
 
 ### Why Separate Timeline and Metrics Endpoints?
 

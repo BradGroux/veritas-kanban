@@ -403,7 +403,7 @@ desktop install, remote/mobile, admin, compatibility, and GA checklist docs.
 - [v5 Visual Tour](V5-VISUAL-TOUR.md)
 - [v5 Compatibility And Release Policy](V5-COMPATIBILITY-AND-RELEASE-POLICY.md)
 - [v5 GA Checklist](V5-GA-CHECKLIST.md)
-- [Post-GA Desktop Agent Workbench Spec](DESKTOP-AGENT-WORKBENCH.md)
+- [Desktop agent workbench follow-up](https://github.com/BradGroux/veritas-kanban/issues/545)
 - [Post-GA Native Mobile Offline ADR](architecture/ADR-0003-post-ga-native-mobile-offline.md)
 - [Post-GA Cloud Sync And Hosted SaaS ADR](architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md)
 - [Desktop Release](DESKTOP-RELEASE.md)
@@ -424,5 +424,5 @@ desktop install, remote/mobile, admin, compatibility, and GA checklist docs.
   [ADR 0003](architecture/ADR-0003-post-ga-native-mobile-offline.md).
 - Cloud sync and hosted SaaS are scoped as optional post-GA work in
   [ADR 0004](architecture/ADR-0004-post-ga-cloud-sync-hosted-saas.md).
-- Deeper desktop agent workbench features are scoped in
-  [Post-GA Desktop Agent Workbench Spec](DESKTOP-AGENT-WORKBENCH.md).
+- Deeper desktop agent workbench work is tracked in
+  [#545](https://github.com/BradGroux/veritas-kanban/issues/545).

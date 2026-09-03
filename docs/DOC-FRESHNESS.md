@@ -33,14 +33,14 @@ When completing a task that changes user-facing behavior:
 
 ### Where Docs Live
 
-| Doc                                | Purpose                  | Owner           |
-| ---------------------------------- | ------------------------ | --------------- |
-| `README.md`                        | Public-facing overview   | Any contributor |
-| `docs/`                            | Detailed guides & specs  | Feature author  |
-| `CHANGELOG.md`                     | Release history          | Release manager |
-| `docs/AGENTS-TEMPLATE.md`          | Agent integration guide  | Agent team      |
-| `docs/multi-agent-git-workflow.md` | Multi-agent coordination | Agent team      |
-| JSDoc in source files              | API contracts            | Feature author  |
+| Doc                                | Purpose                                                 | Owner           |
+| ---------------------------------- | ------------------------------------------------------- | --------------- |
+| `README.md`                        | Public-facing overview                                  | Any contributor |
+| `docs/`                            | Public product, operator, contributor, and release docs | Feature author  |
+| `CHANGELOG.md`                     | Release history                                         | Release manager |
+| `docs/AGENTS-TEMPLATE.md`          | Agent integration guide                                 | Agent team      |
+| `docs/multi-agent-git-workflow.md` | Multi-agent coordination                                | Agent team      |
+| JSDoc in source files              | API contracts                                           | Feature author  |
 
 ### Freshness Indicators
 
@@ -128,6 +128,7 @@ rules. Key rules:
 3. **JSDoc is documentation** — route handlers and services must have JSDoc
 4. **Examples must work** — if you change an API, update the examples
 5. **CHANGELOG is mandatory** — every release gets an entry
+6. **Keep working artifacts private** — execution prompts, handoffs, raw audits, and scratch files belong in issues, tasks, or `.veritas-kanban/internal/`, never `docs/`
 
 ## Credit
 
