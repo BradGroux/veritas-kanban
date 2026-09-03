@@ -262,4 +262,47 @@ describe('KeyboardProvider', () => {
     fireEvent.keyDown(input, { key: 'j' });
     expect(screen.getByTestId('selected').textContent).toBe('none');
   });
+
+  it.each(['button', 'a', 'select', 'summary'])(
+    'preserves native Enter behavior on a focused %s',
+    (tag) => {
+      const { container } = renderWithProvider();
+      const control = document.createElement(tag);
+      if (tag === 'a') control.setAttribute('href', '#example');
+      container.appendChild(control);
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      control.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+  );
+
+  it('respects keyboard events already handled by a child control', () => {
+    const tasks = [createMockTask({ id: 'handled', title: 'Handled', status: 'todo' })];
+    renderWithProvider({ tasks });
+    const event = new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true });
+    event.preventDefault();
+    fireEvent(window, event);
+    expect(screen.getByTestId('selected').textContent).toBe('none');
+  });
+
+  it.each(['button', 'tab', 'switch', 'combobox'])(
+    'leaves arrow navigation owned by a nested role=%s control',
+    (role) => {
+      const tasks = [createMockTask({ id: 'control', title: 'Control', status: 'todo' })];
+      const { container } = renderWithProvider({ tasks });
+      const control = document.createElement('div');
+      control.setAttribute('role', role);
+      const child = document.createElement('span');
+      control.appendChild(child);
+      container.appendChild(control);
+      const event = new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      });
+      fireEvent(child, event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.getByTestId('selected').textContent).toBe('none');
+    }
+  );
 });

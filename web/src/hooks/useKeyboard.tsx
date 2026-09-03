@@ -111,9 +111,16 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   // Keyboard event handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input/textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      // Native controls and composite widgets own their keyboard interaction.
+      // In particular, preventing Enter here suppresses a focused button's click.
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (
+        e.defaultPrevented ||
+        target?.isContentEditable ||
+        target?.closest(
+          'input, textarea, select, button, a[href], summary, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="combobox"], [role="listbox"], [role="option"], [role="slider"], [role="spinbutton"], [role="tab"], [role="menuitem"]'
+        )
+      ) {
         return;
       }
 
