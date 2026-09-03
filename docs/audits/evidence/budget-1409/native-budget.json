@@ -1,0 +1,21 @@
+{
+  "testedAt": "2026-09-03T21:35:11.377Z",
+  "records": [
+    {
+      "theme": "light",
+      "viewport": "1180x760",
+      "fontSize": 20,
+      "savedFanOutLimit": 100,
+      "width": 280,
+      "survivedReload": true
+    },
+    {
+      "theme": "dark",
+      "viewport": "1180x760",
+      "fontSize": 20,
+      "savedFanOutLimit": 99,
+      "width": 280,
+      "survivedReload": true
+    }
+  ]
+}
