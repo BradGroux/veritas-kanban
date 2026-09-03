@@ -168,7 +168,13 @@ describe('MultiUserTab', () => {
 
     const { baseElement } = renderMultiUserTab();
 
-    expect(await screen.findByText('Local Workspace')).toBeDefined();
+    expect(await screen.findByRole('heading', { name: 'Multi-user' })).toBeDefined();
+    expect(screen.getByRole('navigation', { name: 'Multi-user settings sections' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Devices' }).getAttribute('href')).toBe(
+      '#multi-user-devices'
+    );
+    expect(baseElement.querySelectorAll('[data-settings-section]')).toHaveLength(5);
+    expect(screen.getByText('Local Workspace')).toBeDefined();
     expect(await screen.findByText('Local User')).toBeDefined();
     expect(await screen.findByText('expired@example.com')).toBeDefined();
     expect(await screen.findByText('Brad phone')).toBeDefined();

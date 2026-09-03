@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent } from 'react';
 import { ActionIcon, Badge, Button, Checkbox, Select, TextInput } from '@mantine/core';
 import {
   AlertTriangle,
-  Building2,
   CheckCircle2,
   Clipboard,
   KeyRound,
@@ -11,10 +10,7 @@ import {
   QrCode,
   RefreshCw,
   Shield,
-  Smartphone,
   Trash2,
-  Users,
-  type LucideIcon,
 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import {
@@ -45,6 +41,7 @@ import type {
   WorkspaceInvitation,
   WorkspaceMembership,
 } from '@/lib/api/identity';
+import { SettingsLocalNav, SettingsPage, SettingsSection } from '../shared';
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
   owner: 'Owner',
@@ -179,26 +176,6 @@ function memberName(member: WorkspaceMembership) {
 
 function permissionLabel(permission: ClientAuthPermission) {
   return permission.replace(':', ' ');
-}
-
-function Section({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h3 className="text-sm font-semibold">{title}</h3>
-      </div>
-      {children}
-    </section>
-  );
 }
 
 function PermissionEmptyState({ message }: { message: string }) {
@@ -568,8 +545,26 @@ export function MultiUserTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <Section title="Workspace" icon={Building2}>
+    <SettingsPage
+      title="Multi-user"
+      description="Manage workspace membership, invitations, trusted devices, and scoped API access."
+    >
+      <SettingsLocalNav
+        label="Multi-user settings sections"
+        items={[
+          { id: 'multi-user-workspace', label: 'Workspace' },
+          { id: 'multi-user-members', label: 'Members' },
+          { id: 'multi-user-invitations', label: 'Invitations' },
+          { id: 'multi-user-devices', label: 'Devices' },
+          { id: 'multi-user-api-access', label: 'API Access' },
+        ]}
+      />
+
+      <SettingsSection
+        id="multi-user-workspace"
+        title="Workspace"
+        description="Choose the active workspace and review your current access role."
+      >
         <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_auto]">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -599,9 +594,13 @@ export function MultiUserTab() {
             radius="md"
           />
         </div>
-      </Section>
+      </SettingsSection>
 
-      <Section title="Members" icon={Users}>
+      <SettingsSection
+        id="multi-user-members"
+        title="Members"
+        description="Review workspace members and manage their roles."
+      >
         {membersQuery.isLoading ? (
           <div className="text-sm text-muted-foreground">Loading members...</div>
         ) : members.length === 0 ? (
@@ -609,7 +608,7 @@ export function MultiUserTab() {
         ) : (
           <div className="overflow-hidden rounded-md border">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+              <thead className="hidden bg-muted/50 text-xs uppercase text-muted-foreground sm:table-header-group">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Member</th>
                   <th className="px-3 py-2 text-left font-medium">Role</th>
@@ -624,14 +623,17 @@ export function MultiUserTab() {
                     canManageMembers &&
                     (activeMembership.role === 'owner' || member.role !== 'owner');
                   return (
-                    <tr key={member.userId} className="border-t">
-                      <td className="px-3 py-2">
+                    <tr key={member.userId} className="grid gap-3 border-t p-3 sm:table-row sm:p-0">
+                      <td className="sm:px-3 sm:py-2">
                         <div className="font-medium">{memberName(member)}</div>
                         <div className="text-xs text-muted-foreground">
                           {member.user?.email ?? member.userId}
                         </div>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="flex items-center justify-between gap-3 sm:table-cell sm:px-3 sm:py-2">
+                        <span className="text-xs font-medium uppercase text-muted-foreground sm:hidden">
+                          Role
+                        </span>
                         <Select
                           data={roleSelectData}
                           value={member.role}
@@ -642,15 +644,16 @@ export function MultiUserTab() {
                           }}
                           disabled={!canEditMember}
                           aria-label={`Role for ${memberName(member)}`}
-                          w={144}
+                          className="w-40 sm:w-36"
                           size="xs"
                           radius="md"
                         />
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {formatDate(member.joinedAt)}
+                      <td className="flex items-center justify-between gap-3 text-muted-foreground sm:table-cell sm:px-3 sm:py-2">
+                        <span className="text-xs font-medium uppercase sm:hidden">Joined</span>
+                        <span>{formatDate(member.joinedAt)}</span>
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="flex justify-end sm:table-cell sm:px-3 sm:py-2 sm:text-right">
                         <ActionIcon
                           type="button"
                           variant="subtle"
@@ -678,9 +681,13 @@ export function MultiUserTab() {
             </table>
           </div>
         )}
-      </Section>
+      </SettingsSection>
 
-      <Section title="Invitations" icon={MailPlus}>
+      <SettingsSection
+        id="multi-user-invitations"
+        title="Invitations"
+        description="Invite people into this workspace and manage pending access."
+      >
         {!canManageMembers ? (
           <PermissionEmptyState message="Owner or admin permission is required to view and send invitations." />
         ) : (
@@ -812,9 +819,14 @@ export function MultiUserTab() {
             )}
           </div>
         )}
-      </Section>
+      </SettingsSection>
 
-      <Section title="Trusted Devices" icon={Smartphone}>
+      <SettingsSection
+        id="multi-user-devices"
+        title="Trusted Devices"
+        description="Pair devices with explicit capabilities, scopes, roles, and expiration."
+        tone="advanced"
+      >
         {!canManageDeviceSessions ? (
           <PermissionEmptyState message="Owner or admin permission is required to pair and revoke trusted devices." />
         ) : (
@@ -1085,9 +1097,14 @@ export function MultiUserTab() {
             )}
           </div>
         )}
-      </Section>
+      </SettingsSection>
 
-      <Section title="API Access" icon={KeyRound}>
+      <SettingsSection
+        id="multi-user-api-access"
+        title="API Access"
+        description="Review the current authentication context and manage scoped API tokens."
+        tone="advanced"
+      >
         <div className="space-y-3 rounded-md border p-3">
           <div className="grid gap-2 text-sm sm:grid-cols-3">
             <div>
@@ -1289,7 +1306,7 @@ export function MultiUserTab() {
             </div>
           )}
         </div>
-      </Section>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
