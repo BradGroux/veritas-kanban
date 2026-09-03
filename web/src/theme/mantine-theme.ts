@@ -1,4 +1,5 @@
 import { createTheme, type MantineColorsTuple } from '@mantine/core';
+import { VERITAS_UI_METRICS } from './ui-contract';
 
 export const veritasPrimary: MantineColorsTuple = [
   '#f4f1ff',
@@ -86,10 +87,10 @@ export const veritasMantineTheme = createTheme({
   autoContrast: true,
   other: {
     density: {
-      controlHeight: 34,
+      controlHeight: VERITAS_UI_METRICS.actionMinHeight,
       compactControlHeight: 30,
-      panelRadius: 7,
-      cardRadius: 7,
+      panelRadius: VERITAS_UI_METRICS.surfaceRadius,
+      cardRadius: VERITAS_UI_METRICS.surfaceRadius,
     },
     statusColors: veritasStatusColors,
   },
@@ -100,8 +101,9 @@ export const veritasMantineTheme = createTheme({
       },
       styles: {
         root: {
-          minHeight: '2rem',
-          minWidth: '2rem',
+          minHeight: `${VERITAS_UI_METRICS.actionMinHeight}px`,
+          minWidth: `${VERITAS_UI_METRICS.actionMinHeight}px`,
+          fontWeight: 650,
         },
       },
     },
@@ -112,8 +114,24 @@ export const veritasMantineTheme = createTheme({
       },
       styles: {
         root: {
-          minHeight: '2rem',
-          minWidth: '2rem',
+          minHeight: `${VERITAS_UI_METRICS.iconActionSize}px`,
+          minWidth: `${VERITAS_UI_METRICS.iconActionSize}px`,
+        },
+      },
+    },
+    Badge: {
+      defaultProps: {
+        radius: VERITAS_UI_METRICS.pillRadius,
+        size: 'sm',
+        tt: 'none',
+      },
+      styles: {
+        root: {
+          minHeight: `${VERITAS_UI_METRICS.pillMinHeight}px`,
+          height: 'auto',
+          paddingInline: '0.5rem',
+          lineHeight: 1.2,
+          whiteSpace: 'normal',
         },
       },
     },

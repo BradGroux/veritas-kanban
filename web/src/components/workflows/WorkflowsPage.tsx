@@ -1,3 +1,4 @@
+import { UiPill, UiAction, UiSurface } from '@/components/ui/UiVocabulary';
 /**
  * WorkflowsPage - Browse and manage workflows
  *
@@ -12,10 +13,7 @@
 import { lazy, Suspense, useState, useMemo, useEffect, useCallback } from 'react';
 import type { WorkflowDefinition } from '@veritas-kanban/shared';
 import {
-  Badge,
-  Button,
   Group,
-  Paper,
   Skeleton,
   Stack,
   Tabs,
@@ -280,17 +278,15 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
       title="Workflows"
       onBack={onBack}
       width="wide"
-      status={<Badge variant="light">{filteredWorkflows.length} workflows</Badge>}
+      status={<UiPill kind="count">{filteredWorkflows.length} workflows</UiPill>}
       actions={
-        <Button
-          variant="filled"
-          color="veritas"
-          size="sm"
+        <UiAction
+          variant="primary"
           leftSection={<BarChart3 className="h-4 w-4" />}
           onClick={() => setShowDashboard(true)}
         >
           Dashboard
-        </Button>
+        </UiAction>
       }
     >
       <Stack gap="lg">
@@ -396,7 +392,7 @@ function WorkflowCard({
   canStartRun,
 }: WorkflowCardProps) {
   return (
-    <Paper className="p-6 transition-colors hover:bg-accent/50" radius="md" withBorder>
+    <UiSurface interactive className="p-6 transition-colors">
       <Group align="flex-start" justify="space-between" gap="md">
         <div className="flex-1 min-w-0">
           <Group gap="sm" mb="xs">
@@ -409,13 +405,11 @@ function WorkflowCard({
                 {workflow.name}
               </Title>
             </UnstyledButton>
-            <Badge variant="outline" className="text-xs">
-              v{workflow.version}
-            </Badge>
+            <UiPill className="text-xs">v{workflow.version}</UiPill>
             {workflow.activeRunCount !== undefined && workflow.activeRunCount > 0 && (
-              <Badge variant="light" className="text-xs">
+              <UiPill kind="status" tone="info">
                 {workflow.activeRunCount} active run{workflow.activeRunCount !== 1 ? 's' : ''}
-              </Badge>
+              </UiPill>
             )}
           </Group>
 
@@ -436,8 +430,8 @@ function WorkflowCard({
         </div>
 
         <Stack gap="xs" className="shrink-0">
-          <Button
-            size="sm"
+          <UiAction
+            variant="primary"
             onClick={(event) => {
               event.stopPropagation();
               onStartRun();
@@ -447,10 +441,9 @@ function WorkflowCard({
             leftSection={<Play className="h-3 w-3" />}
           >
             Start Run
-          </Button>
-          <Button
-            size="sm"
-            variant="subtle"
+          </UiAction>
+          <UiAction
+            variant="quiet"
             leftSection={<Eye className="h-3 w-3" />}
             onClick={(event) => {
               event.stopPropagation();
@@ -458,21 +451,20 @@ function WorkflowCard({
             }}
           >
             View details
-          </Button>
+          </UiAction>
           {workflow.activeRunCount !== undefined && workflow.activeRunCount > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
+            <UiAction
+              variant="secondary"
               onClick={(event) => {
                 event.stopPropagation();
                 onViewRuns();
               }}
             >
               View Runs
-            </Button>
+            </UiAction>
           )}
         </Stack>
       </Group>
-    </Paper>
+    </UiSurface>
   );
 }

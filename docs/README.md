@@ -6,6 +6,7 @@ This directory is the public documentation surface for Veritas Kanban. It contai
 
 - [Getting Started](GETTING-STARTED.md)
 - [Features](FEATURES.md)
+- [Desktop UI Contract](UI-CONTRACT.md)
 - [CLI Guide](CLI-GUIDE.md)
 - [API Reference](API-REFERENCE.md)
 - [Agent Providers](AGENT-PROVIDERS.md)

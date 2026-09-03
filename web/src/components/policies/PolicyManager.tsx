@@ -1,3 +1,10 @@
+import {
+  UiSurface,
+  UiPill,
+  semanticToneForLegacyColor,
+  UiAction,
+  UiIconAction,
+} from '@/components/ui/UiVocabulary';
 import { useMemo, useState } from 'react';
 import type {
   AgentPolicy,
@@ -6,17 +13,7 @@ import type {
   PolicyResponseAction,
 } from '@veritas-kanban/shared';
 import { Edit, ExternalLink, FlaskConical, Plus, Trash2 } from 'lucide-react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Select,
-  Switch,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { Group, Modal, Select, Switch, Textarea, TextInput } from '@mantine/core';
 import { useToast } from '@/hooks/useToast';
 import {
   useCreatePolicy,
@@ -416,11 +413,7 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <div className="font-medium">{policy.name}</div>
-            {policy.preset && (
-              <Badge variant="outline" tt="none" className="capitalize">
-                {policy.preset}
-              </Badge>
-            )}
+            {policy.preset && <UiPill className="capitalize">{policy.preset}</UiPill>}
           </div>
           <div className="text-xs text-muted-foreground">{policy.id}</div>
           {policy.description && (
@@ -432,11 +425,7 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
     {
       key: 'type',
       header: 'Type',
-      cell: (policy) => (
-        <Badge variant="light" tt="none">
-          {policyTypeLabel(policy.type)}
-        </Badge>
-      ),
+      cell: (policy) => <UiPill>{policyTypeLabel(policy.type)}</UiPill>,
     },
     {
       key: 'scope',
@@ -449,9 +438,12 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
       key: 'response',
       header: 'Response',
       cell: (policy) => (
-        <Badge color={responseColor(policy.responseAction)} variant="light" tt="none">
+        <UiPill
+          kind="status"
+          tone={semanticToneForLegacyColor(responseColor(policy.responseAction))}
+        >
           {policy.responseAction}
-        </Badge>
+        </UiPill>
       ),
     },
     {
@@ -473,21 +465,21 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
       className: 'w-[190px]',
       cell: (policy) => (
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => openEditDialog(policy)}>
+          <UiAction variant="secondary" onClick={() => openEditDialog(policy)}>
             <Edit className="mr-1 h-3.5 w-3.5" />
             Edit
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => openPreview(policy)}>
+          </UiAction>
+          <UiAction variant="secondary" onClick={() => openPreview(policy)}>
             <FlaskConical className="mr-1 h-3.5 w-3.5" />
             Test
-          </Button>
-          <ActionIcon
-            variant="subtle"
+          </UiAction>
+          <UiIconAction
+            variant="destructive"
             onClick={() => void handleDelete(policy)}
             aria-label={`Delete ${policy.name}`}
           >
             <Trash2 className="h-4 w-4" />
-          </ActionIcon>
+          </UiIconAction>
         </div>
       ),
     },
@@ -502,32 +494,32 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
       className="h-full min-h-0"
       contentClassName="min-h-0"
       actions={
-        <Button variant="filled" color="veritas" size="sm" onClick={openCreateDialog}>
+        <UiAction variant="primary" onClick={openCreateDialog}>
           <Plus className="mr-2 h-4 w-4" />
           New Policy
-        </Button>
+        </UiAction>
       }
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border bg-card p-4">
+          <UiSurface level="card" className="p-4">
             <div className="text-sm font-medium">Strict</div>
             <div className="mt-1 text-sm text-muted-foreground">
               Blocks high-risk actions immediately.
             </div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
+          </UiSurface>
+          <UiSurface level="card" className="p-4">
             <div className="text-sm font-medium">Balanced</div>
             <div className="mt-1 text-sm text-muted-foreground">
               Requires approval on elevated-risk actions.
             </div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
+          </UiSurface>
+          <UiSurface level="card" className="p-4">
             <div className="text-sm font-medium">Permissive</div>
             <div className="mt-1 text-sm text-muted-foreground">
               Allows most activity and surfaces warnings for bursts.
             </div>
-          </div>
+          </UiSurface>
         </div>
 
         <div className="flex items-center gap-3">
@@ -537,15 +529,13 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
             onChange={(event) => setSearch(event.target.value)}
             className="max-w-md"
           />
-          <Badge variant="outline" tt="none">
-            {filteredPolicies.length} policies
-          </Badge>
+          <UiPill>{filteredPolicies.length} policies</UiPill>
         </div>
 
         {isLoading ? (
-          <div className="rounded-lg border bg-card p-8 text-muted-foreground">
+          <UiSurface level="card" className="p-8 text-muted-foreground">
             Loading policies...
-          </div>
+          </UiSurface>
         ) : (
           <DataTable
             columns={columns}
@@ -858,7 +848,10 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
                   }
                 />
               </div>
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2 md:col-span-2">
+              <UiSurface
+                level="card"
+                className="flex items-center justify-between px-3 py-2 md:col-span-2"
+              >
                 <div>
                   <div className="text-sm font-medium">Send evaluation context</div>
                   <div className="text-xs text-muted-foreground">
@@ -874,11 +867,11 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
                     }))
                   }
                 />
-              </div>
+              </UiSurface>
             </div>
           )}
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+          <UiSurface level="card" className="flex items-center justify-between px-3 py-2">
             <div>
               <div className="text-sm font-medium">Enabled</div>
               <div className="text-xs text-muted-foreground">
@@ -891,18 +884,19 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
                 setForm((current) => ({ ...current, enabled: event.currentTarget.checked }))
               }
             />
-          </div>
+          </UiSurface>
 
           <Group justify="flex-end" mt="md">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <UiAction variant="secondary" onClick={() => setDialogOpen(false)}>
               Cancel
-            </Button>
-            <Button
+            </UiAction>
+            <UiAction
+              variant="primary"
               onClick={() => void handleSave()}
               disabled={createPolicy.isPending || updatePolicy.isPending}
             >
               {editingPolicyId ? 'Save Changes' : 'Create Policy'}
-            </Button>
+            </UiAction>
           </Group>
         </div>
       </Modal>
@@ -969,64 +963,66 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
         </div>
 
         {previewPolicy && (
-          <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+          <UiSurface level="inset" className="p-3 text-sm">
             Testing against <span className="font-medium">{previewPolicy.name}</span>. Evaluation
             runs against all enabled policies so you can see collisions and escalations.
-          </div>
+          </UiSurface>
         )}
 
         {evaluatePolicies.data && (
-          <div className="space-y-3 rounded-lg border bg-card p-4">
+          <UiSurface level="card" className="space-y-3 p-4">
             <div className="flex items-center gap-2">
-              <Badge
-                color={responseColor(evaluatePolicies.data.decision)}
-                variant="light"
-                tt="none"
+              <UiPill
+                kind="status"
+                tone={semanticToneForLegacyColor(responseColor(evaluatePolicies.data.decision))}
               >
                 {evaluatePolicies.data.decision}
-              </Badge>
+              </UiPill>
               <span className="text-sm text-muted-foreground">
                 {evaluatePolicies.data.matches.length} matching policies
               </span>
               {evaluatePolicies.data.traceId && (
-                <Button
+                <UiAction
+                  variant="quiet"
                   component="a"
                   href={`${BASE_PATH}/decisions?trace=${encodeURIComponent(evaluatePolicies.data.traceId)}`}
-                  size="xs"
-                  variant="subtle"
                   target="_self"
                 >
                   <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                   Open Trace
-                </Button>
+                </UiAction>
               )}
             </div>
             <div className="space-y-2">
               {evaluatePolicies.data.matches.map((match) => (
-                <div key={match.policyId} className="rounded-md border px-3 py-2">
+                <UiSurface level="inset" key={match.policyId} className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <div className="font-medium">{match.policyName}</div>
-                    <Badge color={responseColor(match.responseAction)} variant="light" tt="none">
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(responseColor(match.responseAction))}
+                    >
                       {match.responseAction}
-                    </Badge>
+                    </UiPill>
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">{match.message}</div>
-                </div>
+                </UiSurface>
               ))}
             </div>
-          </div>
+          </UiSurface>
         )}
 
         <Group justify="flex-end" mt="md">
-          <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+          <UiAction variant="secondary" onClick={() => setPreviewOpen(false)}>
             Close
-          </Button>
-          <Button
+          </UiAction>
+          <UiAction
+            variant="primary"
             onClick={() => void evaluatePolicies.mutateAsync({ ...previewInput, preview: true })}
             disabled={evaluatePolicies.isPending}
           >
             {evaluatePolicies.isPending ? 'Evaluating...' : 'Run Preview'}
-          </Button>
+          </UiAction>
         </Group>
       </Modal>
     </PrimaryPageShell>

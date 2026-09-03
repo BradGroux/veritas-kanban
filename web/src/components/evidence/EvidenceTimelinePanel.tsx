@@ -1,5 +1,12 @@
+import {
+  UiHeading,
+  UiSurface,
+  UiAction,
+  UiPill,
+  semanticToneForLegacyColor,
+} from '@/components/ui/UiVocabulary';
 import { useMemo, useState, type ElementType } from 'react';
-import { Alert, Badge, Button, Code, Group, Loader, Select, Text, TextInput } from '@mantine/core';
+import { Alert, Code, Group, Loader, Select, Text, TextInput } from '@mantine/core';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -255,17 +262,15 @@ export function EvidenceTimelinePanel({
         </div>
 
         <Group gap="xs" wrap="wrap">
-          <Button
-            variant="filled"
-            color="veritas"
-            size="sm"
+          <UiAction
+            variant="primary"
             onClick={() => void query.refetch()}
             leftSection={
               <RefreshCw className={cn('h-4 w-4', query.isFetching && 'animate-spin')} />
             }
           >
             Generate Recap
-          </Button>
+          </UiAction>
         </Group>
       </div>
 
@@ -320,17 +325,17 @@ export function EvidenceTimelinePanel({
         <Metric label="Sources" value={sourceCount} tone="orange" />
       </section>
 
-      <section className="rounded-lg border bg-card p-4">
+      <UiSurface component="section" level="card" className="p-4">
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-base font-semibold">Source-Backed Recap</h2>
+            <UiHeading order={2} className="text-base font-semibold">
+              Source-Backed Recap
+            </UiHeading>
             <Text size="sm" c="dimmed">
               {timeline ? formatDateTime(timeline.generatedAt) : 'Not generated'}
             </Text>
           </div>
-          <Badge variant="light" color="gray" tt="none">
-            {timeline?.recap.citations.length ?? 0} citations
-          </Badge>
+          <UiPill>{timeline?.recap.citations.length ?? 0} citations</UiPill>
         </div>
         {query.isLoading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
@@ -345,50 +350,50 @@ export function EvidenceTimelinePanel({
             {timeline?.recap.citations.length ? (
               <Group gap="xs" wrap="wrap">
                 {timeline.recap.citations.map((citation, index) => (
-                  <Badge key={citation.eventId} variant="light" color="gray" tt="none">
+                  <UiPill key={citation.eventId}>
                     E{index + 1}: {SOURCE_LABELS[citation.source]}
-                  </Badge>
+                  </UiPill>
                 ))}
               </Group>
             ) : null}
           </div>
         )}
-      </section>
+      </UiSurface>
 
       <section className="space-y-3">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-base font-semibold">Evidence Events</h2>
+            <UiHeading order={2} className="text-base font-semibold">
+              Evidence Events
+            </UiHeading>
             <Text size="sm" c="dimmed">
               {total ? `${start}-${end} of ${total}` : 'No events'}
             </Text>
           </div>
           <Group gap="xs">
-            <Button
-              variant="subtle"
-              size="sm"
+            <UiAction
+              variant="quiet"
               onClick={() => setPage((value) => Math.max(1, value - 1))}
               disabled={currentPage <= 1 || query.isLoading}
               leftSection={<ArrowLeft className="h-4 w-4" />}
             >
               Previous
-            </Button>
-            <Button
-              variant="subtle"
-              size="sm"
+            </UiAction>
+            <UiAction
+              variant="quiet"
               onClick={() => setPage((value) => value + 1)}
               disabled={!timeline?.hasMore || query.isLoading}
               rightSection={<ArrowRight className="h-4 w-4" />}
             >
               Next
-            </Button>
+            </UiAction>
           </Group>
         </div>
 
         {query.isLoading ? (
-          <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+          <UiSurface level="empty" className="px-4 py-10 text-center text-sm text-muted-foreground">
             Loading evidence events...
-          </div>
+          </UiSurface>
         ) : events.length ? (
           <div className="space-y-3">
             {events.map((event) => (
@@ -396,9 +401,9 @@ export function EvidenceTimelinePanel({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+          <UiSurface level="empty" className="px-4 py-10 text-center text-sm text-muted-foreground">
             No evidence events match the current filters.
-          </div>
+          </UiSurface>
         )}
       </section>
     </div>
@@ -419,29 +424,24 @@ function EvidenceEventRow({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Group gap="xs" wrap="wrap">
-            <Badge
-              variant="light"
-              color={EVENT_COLORS[event.type]}
-              tt="none"
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(EVENT_COLORS[event.type])}
               leftSection={<Icon className="h-3 w-3" />}
             >
               {EVENT_LABELS[event.type]}
-            </Badge>
-            <Badge variant="outline" color="gray" tt="none">
-              {SOURCE_LABELS[event.source]}
-            </Badge>
+            </UiPill>
+            <UiPill>{SOURCE_LABELS[event.source]}</UiPill>
             {event.agent ? (
-              <Badge variant="light" color="indigo" tt="none">
+              <UiPill kind="status" tone="info">
                 {event.agent}
-              </Badge>
+              </UiPill>
             ) : null}
-            {event.actor ? (
-              <Badge variant="light" color="gray" tt="none">
-                {event.actor}
-              </Badge>
-            ) : null}
+            {event.actor ? <UiPill>{event.actor}</UiPill> : null}
           </Group>
-          <h3 className="mt-2 text-base font-semibold">{event.title}</h3>
+          <UiHeading order={3} className="mt-2 text-base font-semibold">
+            {event.title}
+          </UiHeading>
           {event.detail ? <Text size="sm">{event.detail}</Text> : null}
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span>{formatDateTime(event.timestamp)}</span>
@@ -454,15 +454,13 @@ function EvidenceEventRow({
 
         <Group gap="xs" wrap="wrap" justify="flex-end">
           {event.sourceLink ? (
-            <Button
-              variant="light"
-              color="gray"
-              size="compact-sm"
+            <UiAction
+              variant="secondary"
               onClick={() => onOpenSource(event.sourceLink)}
               rightSection={<ExternalLink className="h-3 w-3" />}
             >
               {event.sourceLink.label}
-            </Button>
+            </UiAction>
           ) : null}
         </Group>
       </div>
@@ -493,11 +491,11 @@ function Metric({
   tone: 'blue' | 'green' | 'violet' | 'orange';
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <UiSurface level="card" className="p-4">
       <div className="text-sm text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tabular-nums">{formatNumber(value)}</div>
       <div className={cn('mt-3 h-1 rounded-full', toneClass(tone))} />
-    </div>
+    </UiSurface>
   );
 }
 

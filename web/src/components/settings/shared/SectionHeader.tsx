@@ -1,6 +1,7 @@
+import { UiAction, UiHeading } from '@/components/ui/UiVocabulary';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Button, Group, Modal, Stack, Text } from '@mantine/core';
+import { Group, Modal, Stack, Text } from '@mantine/core';
 import { RotateCcw } from 'lucide-react';
 
 export function SectionHeader({
@@ -37,9 +38,9 @@ export function SectionHeader({
     >
       <div className="min-w-0 flex-1">
         <Group gap="xs" wrap="wrap">
-          <Text id={id} component="h3" size="sm" fw={650}>
+          <UiHeading id={id} order={3}>
             {title}
-          </Text>
+          </UiHeading>
           {status}
         </Group>
         {description && (
@@ -53,16 +54,14 @@ export function SectionHeader({
           {actions}
           {onReset && (
             <>
-              <Button
+              <UiAction
+                variant="quiet"
                 type="button"
-                variant="subtle"
-                size="xs"
-                color="gray"
                 leftSection={<RotateCcw className="h-3 w-3" />}
                 onClick={() => setResetOpen(true)}
               >
                 Reset
-              </Button>
+              </UiAction>
               <Modal
                 opened={resetOpen}
                 onClose={() => setResetOpen(false)}
@@ -74,10 +73,12 @@ export function SectionHeader({
                     This will reset all {title.toLowerCase()} settings to their default values.
                   </Text>
                   <Group justify="flex-end">
-                    <Button variant="subtle" color="gray" onClick={() => setResetOpen(false)}>
+                    <UiAction variant="quiet" onClick={() => setResetOpen(false)}>
                       Cancel
-                    </Button>
-                    <Button onClick={handleReset}>Reset</Button>
+                    </UiAction>
+                    <UiAction variant="primary" onClick={handleReset}>
+                      Reset
+                    </UiAction>
                   </Group>
                 </Stack>
               </Modal>

@@ -1,8 +1,13 @@
+import {
+  UiHeading,
+  UiSurface,
+  UiPill,
+  UiAction,
+  semanticToneForLegacyColor,
+} from '@/components/ui/UiVocabulary';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Badge,
-  Button,
   Checkbox,
   Code,
   Group,
@@ -160,44 +165,34 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
       subtitle="Editable explicit, inferred, and ambiguous time blocks with evidence exports."
       onBack={onBack}
       width="wide"
-      status={
-        <Badge variant="light" color="gray" tt="none" leftSection={<Clock className="h-3 w-3" />}>
-          Source-backed
-        </Badge>
-      }
+      status={<UiPill leftSection={<Clock className="h-3 w-3" />}>Source-backed</UiPill>}
       actions={
         <Group gap="xs" wrap="wrap">
-          <Button
-            variant="filled"
-            color="veritas"
-            size="sm"
+          <UiAction
+            variant="primary"
             onClick={() => void query.refetch()}
             leftSection={
               <RefreshCw className={cn('h-4 w-4', query.isFetching && 'animate-spin')} />
             }
           >
             Generate
-          </Button>
-          <Button
-            variant="light"
-            color="veritas"
-            size="sm"
+          </UiAction>
+          <UiAction
+            variant="secondary"
             onClick={exportCsv}
             disabled={!includedBlocks.length}
             leftSection={<Download className="h-4 w-4" />}
           >
             CSV
-          </Button>
-          <Button
-            variant="light"
-            color="veritas"
-            size="sm"
+          </UiAction>
+          <UiAction
+            variant="secondary"
             onClick={exportMarkdown}
             disabled={!includedBlocks.length}
             leftSection={<Download className="h-4 w-4" />}
           >
             Markdown
-          </Button>
+          </UiAction>
         </Group>
       }
     >
@@ -293,12 +288,12 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
           <Metric label="Ambiguous" value={String(totals.ambiguousCount)} tone="orange" />
         </section>
 
-        <section className="rounded-lg border bg-card p-4">
+        <UiSurface component="section" level="card" className="p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">Client Summary</h2>
-            <Badge variant="light" color="gray" tt="none">
-              Reviewable
-            </Badge>
+            <UiHeading order={2} className="text-base font-semibold">
+              Client Summary
+            </UiHeading>
+            <UiPill>Reviewable</UiPill>
           </div>
           <Textarea
             value={clientSummary}
@@ -306,12 +301,14 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
             minRows={3}
             aria-label="Client summary"
           />
-        </section>
+        </UiSurface>
 
         <section className="space-y-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-base font-semibold">Editable Draft Blocks</h2>
+              <UiHeading order={2} className="text-base font-semibold">
+                Editable Draft Blocks
+              </UiHeading>
               <Text size="sm" c="dimmed">
                 {breakdown
                   ? `${draftBlocks.length} blocks from ${breakdown.period.from.slice(
@@ -324,9 +321,12 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
           </div>
 
           {query.isLoading ? (
-            <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+            <UiSurface
+              level="empty"
+              className="px-4 py-10 text-center text-sm text-muted-foreground"
+            >
               <Loader size="sm" />
-            </div>
+            </UiSurface>
           ) : draftBlocks.length ? (
             (['explicit', 'inferred', 'ambiguous'] as const).map((kind) => {
               const blocks = draftBlocks.filter((block) => block.kind === kind);
@@ -334,10 +334,12 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
               return (
                 <div key={kind} className="space-y-3">
                   <Group gap="xs">
-                    <h3 className="text-sm font-semibold">{KIND_LABELS[kind]}</h3>
-                    <Badge variant="light" color={KIND_COLORS[kind]} tt="none">
+                    <UiHeading order={3} className="text-sm font-semibold">
+                      {KIND_LABELS[kind]}
+                    </UiHeading>
+                    <UiPill kind="status" tone={semanticToneForLegacyColor(KIND_COLORS[kind])}>
                       {blocks.length}
-                    </Badge>
+                    </UiPill>
                   </Group>
                   <div className="space-y-3">
                     {blocks.map((block) => (
@@ -353,9 +355,12 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
               );
             })
           ) : (
-            <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+            <UiSurface
+              level="empty"
+              className="px-4 py-10 text-center text-sm text-muted-foreground"
+            >
               No time evidence matches the current filters.
-            </div>
+            </UiSurface>
           )}
         </section>
       </div>
@@ -404,16 +409,14 @@ function DraftBlockRow({
           placeholder="Optional export note"
           aria-label={`Note for ${block.label}`}
         />
-        <Button
-          variant="light"
-          color="gray"
-          size="sm"
+        <UiAction
+          variant="secondary"
           onClick={onOpenSource}
           disabled={!block.sources.length}
           rightSection={<ExternalLink className="h-3 w-3" />}
         >
           Source
-        </Button>
+        </UiAction>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -449,11 +452,11 @@ function Metric({
   tone: 'green' | 'blue' | 'violet' | 'orange';
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <UiSurface level="card" className="p-4">
       <div className="text-sm text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tabular-nums">{value}</div>
       <div className={cn('mt-3 h-1 rounded-full', toneClass(tone))} />
-    </div>
+    </UiSurface>
   );
 }
 

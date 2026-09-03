@@ -1,3 +1,10 @@
+import {
+  UiHeading,
+  UiSurface,
+  UiPill,
+  semanticToneForLegacyColor,
+  UiAction,
+} from '@/components/ui/UiVocabulary';
 import { useMemo, useState } from 'react';
 import type {
   DriftAlert,
@@ -17,7 +24,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Badge, Button, Skeleton, TextInput } from '@mantine/core';
+import { Skeleton, TextInput } from '@mantine/core';
 import {
   useAcknowledgeDriftAlert,
   useAnalyzeDrift,
@@ -98,14 +105,14 @@ function AlertsTable({
 
   if (alerts.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+      <UiSurface level="card" className="p-6 text-sm text-muted-foreground">
         No drift alerts for the current filter.
-      </div>
+      </UiSurface>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
+    <UiSurface level="card" className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="border-b bg-muted/40 text-left">
           <tr>
@@ -123,9 +130,12 @@ function AlertsTable({
           {alerts.map((alert) => (
             <tr key={alert.id} className="border-b last:border-b-0">
               <td className="px-4 py-3">
-                <Badge color={severityTone(alert.severity)} variant="light" tt="none">
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(severityTone(alert.severity))}
+                >
                   {alert.severity}
-                </Badge>
+                </UiPill>
               </td>
               <td className="px-4 py-3 font-medium">{alert.agentId}</td>
               <td className="px-4 py-3">{METRIC_LABELS[alert.metric]}</td>
@@ -137,23 +147,22 @@ function AlertsTable({
               </td>
               <td className="px-4 py-3">
                 {alert.acknowledged ? (
-                  <Badge variant="outline">Acknowledged</Badge>
+                  <UiPill>Acknowledged</UiPill>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
+                  <UiAction
+                    variant="secondary"
                     onClick={() => onAcknowledge(alert.id)}
                     disabled={acknowledgingId === alert.id}
                   >
                     {acknowledgingId === alert.id ? 'Saving…' : 'Acknowledge'}
-                  </Button>
+                  </UiAction>
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </UiSurface>
   );
 }
 
@@ -180,14 +189,14 @@ function BaselineTable({
 
   if (baselines.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+      <UiSurface level="card" className="p-6 text-sm text-muted-foreground">
         No drift baselines have been computed yet.
-      </div>
+      </UiSurface>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
+    <UiSurface level="card" className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="border-b bg-muted/40 text-left">
           <tr>
@@ -213,20 +222,19 @@ function BaselineTable({
                 {new Date(baseline.windowEnd).toLocaleDateString()}
               </td>
               <td className="px-4 py-3">
-                <Button
-                  size="sm"
-                  variant="outline"
+                <UiAction
+                  variant="secondary"
                   disabled={resetting}
                   onClick={() => onReset(baseline.agentId, baseline.metric)}
                 >
                   Reset
-                </Button>
+                </UiAction>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </UiSurface>
   );
 }
 
@@ -242,22 +250,22 @@ function DriftChart({ alerts, baselines }: { alerts: DriftAlert[]; baselines: Dr
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+      <UiSurface level="card" className="p-6 text-sm text-muted-foreground">
         Run an analysis to generate z-score drift bars.
-      </div>
+      </UiSurface>
     );
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <UiSurface level="card" className="p-4">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="font-semibold">Trend Visualization</h3>
+          <UiHeading order={3} className="font-semibold">
+            Trend Visualization
+          </UiHeading>
           <p className="text-sm text-muted-foreground">{baselines.length} baselines loaded</p>
         </div>
-        <Badge variant="outline" tt="none">
-          Z-score bars
-        </Badge>
+        <UiPill>Z-score bars</UiPill>
       </div>
       <div className="h-[320px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -289,7 +297,7 @@ function DriftChart({ alerts, baselines }: { alerts: DriftAlert[]; baselines: Dr
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </UiSurface>
   );
 }
 
@@ -374,16 +382,10 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
       onBack={onBack}
       width="wide"
       actions={
-        <Button
-          variant="filled"
-          color="veritas"
-          size="sm"
-          onClick={handleAnalyze}
-          disabled={analyzeMutation.isPending}
-        >
+        <UiAction variant="primary" onClick={handleAnalyze} disabled={analyzeMutation.isPending}>
           <RefreshCw className={cn('mr-2 h-4 w-4', analyzeMutation.isPending && 'animate-spin')} />
           Analyze Agent
-        </Button>
+        </UiAction>
       }
     >
       <div className="space-y-6">
@@ -395,7 +397,7 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
             onChange={(event) => setAgentId(event.target.value)}
             className="w-[180px]"
           />
-          <div className="flex rounded-lg border bg-card p-1">
+          <UiSurface level="card" className="flex p-1">
             {(['all', 'critical', 'warning', 'info'] as const).map((level) => (
               <button
                 key={level}
@@ -411,24 +413,24 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
                 {level}
               </button>
             ))}
-          </div>
+          </UiSurface>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border bg-card p-4">
+          <UiSurface level="card" className="p-4">
             <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
               <ShieldAlert className="h-4 w-4" />
               Unacknowledged Critical
             </div>
             <div className="text-3xl font-semibold">{topSummary.critical}</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
+          </UiSurface>
+          <UiSurface level="card" className="p-4">
             <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4" />
               Active Warnings
             </div>
             <div className="text-3xl font-semibold">{topSummary.warning}</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
+          </UiSurface>
+          <UiSurface level="card" className="p-4">
             <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
               <TrendingUp className="h-4 w-4" />
               Latest Direction
@@ -438,17 +440,17 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
                 ? `${METRIC_LABELS[latestTrend.metric]} · ${TREND_LABELS[latestTrend.trend]}`
                 : `${topSummary.agents} agents tracked`}
             </div>
-          </div>
+          </UiSurface>
         </div>
 
         <DriftChart alerts={sortedAlerts} baselines={baselines} />
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Alerts</h2>
-            <Badge variant="outline" tt="none">
-              {sortedAlerts.length} total
-            </Badge>
+            <UiHeading order={2} className="text-lg font-semibold">
+              Alerts
+            </UiHeading>
+            <UiPill>{sortedAlerts.length} total</UiPill>
           </div>
           <AlertsTable
             alerts={sortedAlerts}
@@ -469,9 +471,11 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Baselines</h2>
-            <Button
-              variant="outline"
+            <UiHeading order={2} className="text-lg font-semibold">
+              Baselines
+            </UiHeading>
+            <UiAction
+              variant="secondary"
               disabled={!agentId || resetMutation.isPending}
               onClick={() =>
                 resetMutation.mutate(
@@ -493,7 +497,7 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
               }
             >
               Reset Agent Baselines
-            </Button>
+            </UiAction>
           </div>
           <BaselineTable
             baselines={baselines}

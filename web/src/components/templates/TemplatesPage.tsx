@@ -1,3 +1,4 @@
+import { UiHeading, UiSurface, UiAction, UiPill, UiIconAction } from '@/components/ui/UiVocabulary';
 /**
  * TemplatesPage - Browse, manage, and preview task templates
  *
@@ -10,18 +11,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  ScrollArea,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { Group, Modal, ScrollArea, Select, Stack, Text, TextInput } from '@mantine/core';
 import { useTemplates, useDeleteTemplate } from '@/hooks/useTemplates';
 import { Plus, Trash2, Eye, Edit2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
@@ -117,10 +107,10 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
       className="h-full min-h-0"
       contentClassName="flex min-h-0 flex-col overflow-hidden"
       actions={
-        <Button variant="filled" color="veritas" size="sm" onClick={handleCreateNew}>
+        <UiAction variant="primary" onClick={handleCreateNew}>
           <Plus className="h-4 w-4 mr-2" />
           New Template
-        </Button>
+        </UiAction>
       }
     >
       {/* Main Content */}
@@ -176,7 +166,9 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
                         {/* Header */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold truncate">{template.name}</h3>
+                            <UiHeading order={3} className="font-semibold truncate">
+                              {template.name}
+                            </UiHeading>
                             {template.description && (
                               <p className="text-sm text-muted-foreground line-clamp-2">
                                 {template.description}
@@ -188,20 +180,16 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
                         {/* Category and Type Badge */}
                         <div className="flex flex-wrap gap-2">
                           {template.category && (
-                            <Badge variant="outline" color="gray" size="xs" tt="none">
+                            <UiPill>
                               {getCategoryIcon(template.category)}
                               {getCategoryLabel(template.category)}
-                            </Badge>
+                            </UiPill>
                           )}
                           {template.taskDefaults?.type && (
-                            <Badge variant="light" color="gray" size="xs" tt="none">
-                              {template.taskDefaults.type}
-                            </Badge>
+                            <UiPill>{template.taskDefaults.type}</UiPill>
                           )}
                           {template.taskDefaults?.priority && (
-                            <Badge variant="light" color="gray" size="xs" tt="none">
-                              {template.taskDefaults.priority}
-                            </Badge>
+                            <UiPill>{template.taskDefaults.priority}</UiPill>
                           )}
                         </div>
 
@@ -223,9 +211,8 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
 
                         {/* Actions */}
                         <div className="flex gap-2 pt-2 border-t">
-                          <Button
-                            variant="outline"
-                            size="sm"
+                          <UiAction
+                            variant="secondary"
                             className="flex-1"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -234,10 +221,9 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
                           >
                             <Eye className="h-3.5 w-3.5 mr-1" />
                             Preview
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
+                          </UiAction>
+                          <UiAction
+                            variant="secondary"
                             className="flex-1"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -246,12 +232,10 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
                           >
                             <Edit2 className="h-3.5 w-3.5 mr-1" />
                             Edit
-                          </Button>
-                          <ActionIcon
+                          </UiAction>
+                          <UiIconAction
+                            variant="destructive"
                             type="button"
-                            variant="outline"
-                            size="sm"
-                            color="red"
                             onClick={(e) => {
                               e.stopPropagation();
                               setTemplateToDelete(template);
@@ -259,7 +243,7 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
                             aria-label={`Delete ${template.name}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                          </ActionIcon>
+                          </UiIconAction>
                         </div>
                       </div>
                     </div>
@@ -272,9 +256,9 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
 
         {/* Preview Panel */}
         {selectedTemplate && (
-          <div className="w-96 flex flex-col border rounded-lg bg-card overflow-hidden">
+          <UiSurface level="card" className="w-96 flex flex-col overflow-hidden">
             <TemplatePreviewPanel template={selectedTemplate} />
-          </div>
+          </UiSurface>
         )}
       </div>
 
@@ -298,12 +282,12 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
             undone.
           </Text>
           <Group justify="flex-end">
-            <Button variant="subtle" color="gray" onClick={() => setTemplateToDelete(null)}>
+            <UiAction variant="quiet" onClick={() => setTemplateToDelete(null)}>
               Cancel
-            </Button>
-            <Button color="red" onClick={handleDeleteConfirm}>
+            </UiAction>
+            <UiAction variant="destructive" onClick={handleDeleteConfirm}>
               Delete
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>
@@ -320,9 +304,9 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
           <Stack gap="md">
             <TemplatePreviewPanel template={selectedTemplate} />
             <Group justify="flex-end">
-              <Button variant="outline" onClick={() => setShowPreview(false)}>
+              <UiAction variant="secondary" onClick={() => setShowPreview(false)}>
                 Close
-              </Button>
+              </UiAction>
             </Group>
           </Stack>
         )}
