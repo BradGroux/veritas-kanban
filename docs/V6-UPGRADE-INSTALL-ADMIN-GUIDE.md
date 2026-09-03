@@ -6,10 +6,10 @@ machine-readable support contract is summarized in
 [Harness Compatibility](HARNESS-COMPATIBILITY.md), and Buzz relay setup lives
 in [Buzz Integration](BUZZ-INTEGRATION.md).
 
-Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release candidate.
+Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.5 stable release.
 
-Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.1.4
-remains the supported stable v6 release until 6.1.5 completes publication.
+Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.1.5
+is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
 
 ## Fresh Mac Desktop Install
 
@@ -22,7 +22,7 @@ brew install --cask veritas-kanban
 
 Manual installation uses
 `Veritas-Kanban-6.1.5-mac-arm64.zip` from the
-[v6.1.5 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5) after publication.
+[v6.1.5 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5).
 Move `Veritas Kanban.app` into `/Applications`, launch it normally, and verify
 Settings -> Maintenance before enabling an agent or external integration.
 

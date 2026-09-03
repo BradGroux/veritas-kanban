@@ -1,11 +1,11 @@
 # Veritas Kanban v6 Compatibility And Release Policy
 
-This policy defines the v6.1.5 release-candidate combinations, harness evidence, release
+This policy defines the v6.1.5 stable combinations, harness evidence, release
 channels, and rollback limits. The machine-readable harness record at
 `GET /api/config/harness-compatibility` is authoritative for exact capability
 digests, fixture revisions, and the current host's live state.
 
-Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release candidate.
+Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.5 stable release.
 
 ## Harness Support Tiers
 
@@ -37,7 +37,7 @@ are incompatible with v6.
 | GitHub Copilot CLI                     | v1.0.74 public-preview ACP; tag commit `2b809c84e87dbcc88f897cb4f3fb97c43b77af95`.          | Version and ACP initialize handshake; authentication remains provider-managed.                          | Version drift, broad allow, remote/plugin/config injection, or unsupported controls blocks.                                     |
 | Hermes Agent                           | v2026.7.7.2 one-shot process adapter.                                                       | `hermes --version` and allowlisted boot authentication.                                                 | Resume/follow-up remains unsupported.                                                                                           |
 | OpenClaw                               | v2026.6.11 gateway adapter.                                                                 | Gateway health, runtime manifest, explicit operator tool policy.                                        | Missing `sessions_spawn`/`sessions_send`, unknown evidence, or unsupported task controls blocks.                                |
-| macOS desktop                          | macOS arm64 candidate with bundled 6.1.5 server/web; stable requires signed publication.    | Bundle version, signature, Gatekeeper, stapling, `/api/health.version`, update metadata.                | Mixed bundle/runtime, failed readiness, signature, or metadata checks blocks stable publication.                                |
+| macOS desktop                          | Signed/notarized macOS 13 Ventura or later arm64 app with bundled 6.1.5 server/web.         | Bundle version, signature, Gatekeeper, stapling, `/api/health.version`, update metadata.                | Mixed bundle/runtime, failed readiness, signature, or metadata checks blocks stable publication.                                |
 | Linux/Windows desktop                  | Unsigned preview artifacts only.                                                            | Cross-platform packaging workflows.                                                                     | Not a supported stable install or update channel.                                                                               |
 | Desktop SQLite/profile                 | Existing v5.2.5 workspace upgraded in place after a complete backup.                        | Data/profile counts, integrity check, startup normalization, board/runtime smoke.                       | Competing writers, unsafe filesystem, failed migration, or missing recovery evidence blocks acceptance.                         |
 

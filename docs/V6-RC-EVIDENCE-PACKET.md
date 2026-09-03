@@ -1,35 +1,53 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the active Veritas Kanban 6.1.5 integrated backlog candidate and
+This packet records the completed Veritas Kanban 6.1.5 integrated backlog release and
 retains historical evidence for the completed 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.4 remains the supported stable v6 release until the 6.1.5
-candidate completes signed publication and distribution verification. Do not
-use 6.0.0 for installation or upgrade validation.
+Veritas Kanban 6.1.5 is the supported stable v6 release. Do not use 6.0.0 for
+installation or upgrade validation.
 
-Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release candidate.
+Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.5 stable release.
 
-## 6.1.5 Integrated Backlog Release Candidate
+## 6.1.5 Integrated Backlog Release
 
-| Field                     | Value                                                                                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Candidate version         | 6.1.5                                                                                                                                                |
-| Release tracker           | [#1356](https://github.com/BradGroux/veritas-kanban/issues/1356)                                                                                     |
-| Source base               | `76ffa4966ffd3b450325b9b72159d640a5bb6ee3`, containing the completed backlog, reliability follow-up, and documentation boundary                      |
-| Starting backlog          | Issues #1295-#1302 completed; dependency PRs #1303-#1306 superseded by focused PRs #1311-#1313                                                       |
-| Version and compatibility | All maintained packages move together to 6.1.5; REST API remains `v1`; no database migration; valid 6.1.4 workspaces remain compatible               |
-| Local candidate evidence  | Frozen install, all-workspace build, Electron artifact checks, unsigned arm64 packaging, isolated launch, renderer/server readiness, and UI readback |
-| Documentation media       | Twelve current public-safe PNGs, two GIFs, and the demo video regenerated from an isolated 6.1.5 workspace with `pnpm docs:capture-media`            |
-| Publication status        | Pending release PR, authoritative full CI, annotated tag, GitHub release, signed desktop assets, updater metadata, and Homebrew verification         |
+| Field                     | Value                                                                                                                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version           | 6.1.5                                                                                                                                                                             |
+| Release tracker           | [#1356](https://github.com/BradGroux/veritas-kanban/issues/1356)                                                                                                                  |
+| Source base               | `76ffa4966ffd3b450325b9b72159d640a5bb6ee3`, containing the completed backlog, reliability follow-up, and documentation boundary                                                   |
+| Starting backlog          | Issues #1295-#1302 completed; dependency PRs #1303-#1306 superseded by focused PRs #1311-#1313                                                                                    |
+| Release implementation    | [PR #1357](https://github.com/BradGroux/veritas-kanban/pull/1357), reviewed head `d84d8414697e58c66a54242221e454c8dc4c34be`, merged as `4d27bfcff0c881c2205d36654cb6b6f558bb1cba` |
+| Version and compatibility | All maintained packages are 6.1.5; REST API remains `v1`; no database migration; valid 6.1.4 workspaces remain compatible; macOS desktop requires macOS 13 Ventura or later       |
+| Local candidate evidence  | Frozen install, all-workspace build, Electron artifact checks, unsigned arm64 packaging, isolated launch, renderer/server readiness, and UI readback                              |
+| Documentation media       | Twelve current public-safe PNGs, two GIFs, and the demo video regenerated from an isolated 6.1.5 workspace with `pnpm docs:capture-media`                                         |
+| Publication status        | Complete: authoritative full CI, annotated tag, GitHub release, signed desktop assets, updater metadata, independent launch, and Homebrew verification                            |
 
 The isolated current-main macOS candidate reached the board with `/api/health` reporting the matching application version. Settings exposed the grouped Core, Collaboration, Automation, Governance, and System navigation with all twenty destinations, and the built renderer contained the progressive task-workspace modes. This confirms the backlog UI is present in the integrated source candidate; it was not present in the earlier 6.1.4 signed application because those pull requests merged after that tag.
 
 The documentation media capture passed in an isolated Playwright profile using only seeded dummy tasks. The maintained set contains twelve PNG screenshots, a 75-frame 1200x833 desktop GIF, a 54-frame 390x844 mobile GIF, and identical 1280x720 H.264 demo-video copies with SHA-256 `7200da247183fca4090ba96505665b26387a4db9bc38843928581d34bbbe0f73`.
 
 Local feature-level acceptance passed five Chromium task-status and Mantine interaction checks plus six mobile-flow checks across Chromium and WebKit. The canonical sequential workspace unit gate passed, all workspaces built, and the unpacked arm64 Electron bundle reported 6.1.5 in `Info.plist`. A fresh packaged-app profile completed onboarding, served a ready 6.1.5 health response from the bundled server, loaded the board, and exposed the grouped Settings UI. A second packaged-app readback confirmed the native About panel reports 6.1.5, the stable channel, Apple silicon, the project URL, and `MIT License · © 2026 Digital Meld`. Each candidate and child server then stopped cleanly.
+
+The release pull request passed all sixteen required checks on reviewed head `d84d8414697e58c66a54242221e454c8dc4c34be`. CI run [33722804894](https://github.com/BradGroux/veritas-kanban/actions/runs/33722804894) passed build, lint/typecheck, workspace units, changed tests, critical-path coverage, security audit, and test-scope selection. Companion runs [33722805011](https://github.com/BradGroux/veritas-kanban/actions/runs/33722805011), [33722805015](https://github.com/BradGroux/veritas-kanban/actions/runs/33722805015), [33722805084](https://github.com/BradGroux/veritas-kanban/actions/runs/33722805084), and [33722804896](https://github.com/BradGroux/veritas-kanban/actions/runs/33722804896) passed CodeQL, gitleaks, Playwright, k6, the Docker runtime contract, and unsigned macOS, Linux, and Windows artifacts.
+
+Annotated tag object `ac15d17edb36ef1ac01a4a72322bf2ab74444deb` peels to exact release merge `4d27bfcff0c881c2205d36654cb6b6f558bb1cba`. The [v6.1.5 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5) was published on 2026-09-03 with a live body matching `docs/releases/v6.1.5.md`. Desktop Release run [33723400659](https://github.com/BradGroux/veritas-kanban/actions/runs/33723400659) completed successfully against that merge and published these maintained macOS assets:
+
+| Asset                                         |              Size | SHA-256                                                            |
+| --------------------------------------------- | ----------------: | ------------------------------------------------------------------ |
+| `Veritas-Kanban-6.1.5-mac-arm64.dmg`          | 280,152,680 bytes | `a6b637fbfd18a5ed0315a1d8dc8233e36c4de8864948aec5c19d3ee321865b55` |
+| `Veritas-Kanban-6.1.5-mac-arm64.zip`          | 284,554,805 bytes | `478b15d25473c07e77c4d7f264af51c126203810c58ccdfe43347915623df91a` |
+| `Veritas-Kanban-6.1.5-mac-arm64.dmg.blockmap` |     290,649 bytes | `752f452eaeb27b4c2bb2985b7b6f44d5d68540413edc1a4ea33ca3dbfe30476b` |
+| `Veritas-Kanban-6.1.5-mac-arm64.zip.blockmap` |     296,686 bytes | `82baa30685483b609fc9cd298161017c06e0e7bdeb9de0e0076e3465da1177f3` |
+| `Veritas-Kanban-6.1.5-mac-arm64.dmg.sha256`   |         101 bytes | `9efcdc2ce7ef779e03df8ccd2a6adb51775e0469bc21306e40de9af013084eef` |
+| `Veritas-Kanban-6.1.5-mac-arm64.zip.sha256`   |         101 bytes | `18801598dbfc1dfd387de99a75710e067de8111c72cbedfe580f9251e728b3cc` |
+| `latest-mac.yml`                              |         530 bytes | `3dd956778011f978923ffc84cd3e5853555945dd7e7c2fc7a60cde114eec4351` |
+
+Independent downloads matched both published checksum sidecars and updater metadata. The DMG and mounted app passed deep strict signature verification, Gatekeeper acceptance as a notarized Developer ID application, and stapling validation for team `RLBHD62MPW`. The exact mounted app launched with an isolated profile, its bundled server owned the listener and reported health version 6.1.5, and the signed About panel exposed the expected MIT license and release identity before the candidate stopped cleanly.
+
+Homebrew tap [PR #57](https://github.com/BradGroux/homebrew-tap/pull/57) merged as `71f36238c736df94281ca9f2cfe96f52a6af8671` with version 6.1.5 and the published ZIP checksum. Artifact inspection identified `LSMinimumSystemVersion` 13.0, and follow-up [PR #59](https://github.com/BradGroux/homebrew-tap/pull/59) merged as `3d608110f2d57fbaab5f8bf6b15435fa92392bae` to align the cask at macOS Ventura. The registered tap then passed Ruby syntax, strict online audit, forced fetch, livecheck, and dry-run installation without replacing the installed application.
 
 ## Historical 6.1.4 Security Release
 
