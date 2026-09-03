@@ -79,7 +79,7 @@ describe('TemplateEditorDialog', () => {
 
     expect(modal.className).toContain('h-[min(780px,calc(100dvh-2rem))]');
     expect(modal.className).toContain('max-h-[calc(100dvh-2rem)]');
-    expect(scrollRegion.className).toContain('overflow-y-auto');
+    expect(scrollRegion.className).toContain('vk-overlay-scroll');
     expect(scrollRegion.getAttribute('tabindex')).toBe('0');
     expect(scrollRegion.contains(actions)).toBe(false);
 
@@ -127,5 +127,48 @@ describe('TemplateEditorDialog', () => {
         variant: 'destructive',
       })
     );
+  });
+
+  it('sends explicit nulls when optional fields are cleared from an existing template', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TemplateEditorDialog template={template} open onOpenChange={vi.fn()} />);
+    await user.clear(screen.getByRole('textbox', { name: 'Description' }));
+    await user.click(screen.getByRole('button', { name: 'Clear category' }));
+    await user.click(screen.getByRole('tab', { name: 'Task Defaults' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Default Project' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Description Template' }));
+    for (const field of ['type', 'priority', 'agent']) {
+      await user.click(screen.getByRole('button', { name: `Clear default ${field}` }));
+    }
+    await user.click(screen.getByRole('button', { name: 'Update Template' }));
+    expect(mocks.updateTemplate).toHaveBeenCalledWith({
+      id: template.id,
+      input: {
+        name: template.name,
+        description: null,
+        category: null,
+        taskDefaults: {
+          type: null,
+          priority: null,
+          project: null,
+          agent: null,
+          descriptionTemplate: null,
+        },
+      },
+    });
+  });
+
+  it.each(['{Enter}', ' '])('clears a default with %s and restores input focus', async (key) => {
+    const user = userEvent.setup();
+    renderWithProviders(<TemplateEditorDialog template={template} open onOpenChange={vi.fn()} />);
+    const category = screen.getByRole('combobox', { name: 'Category' });
+    await user.click(screen.getByRole('textbox', { name: 'Description' }));
+    await user.tab();
+    expect(document.activeElement).toBe(category);
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Clear category' }));
+    await user.keyboard(key);
+    expect(screen.queryByRole('button', { name: 'Clear category' })).toBeNull();
+    expect(document.activeElement).toBe(category);
   });
 });

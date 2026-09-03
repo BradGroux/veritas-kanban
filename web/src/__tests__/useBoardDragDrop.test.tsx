@@ -177,6 +177,28 @@ describe('useBoardDragDrop keyboard parity', () => {
     expect(announce).toHaveBeenCalledWith('Second task moved to To Do, position 1 of 2');
   });
 
+  it.each([
+    { overId: 'todo-1', destinationStatus: 'todo' },
+    { overId: 'blocked', destinationStatus: 'blocked' },
+  ])(
+    'commits the latest $destinationStatus projection before a render',
+    async ({ overId, destinationStatus }) => {
+      const { result, onMove } = renderDragHook();
+
+      act(() => result.current.handleDragStart(dragEvent('todo-2') as unknown as DragStartEvent));
+      await act(async () => {
+        result.current.handleDragOver(dragEvent('todo-2', overId) as DragOverEvent);
+        await result.current.handleDragEnd(dragEvent('todo-2', 'todo-2') as DragEndEvent);
+      });
+
+      expect(onMove).toHaveBeenCalledOnce();
+      expect(onMove).toHaveBeenCalledWith(
+        'todo-2',
+        expect.objectContaining({ destinationStatus, destinationIndex: 0 })
+      );
+    }
+  );
+
   it('announces the authoritative order when the committed result differs from projection', async () => {
     const tasks = [
       createMockTask({ id: 'todo-1', title: 'First task', status: 'todo' }),
@@ -264,7 +286,17 @@ describe('useBoardDragDrop keyboard parity', () => {
     const { result, onMove, announce } = renderDragHook();
 
     act(() => result.current.handleDragStart(dragEvent('todo-1') as unknown as DragStartEvent));
-    act(() => result.current.handleDragCancel(dragEvent('todo-1') as DragCancelEvent));
+    await act(async () => {
+      result.current.handleDragOver(dragEvent('todo-1', 'done') as DragOverEvent);
+      result.current.handleDragCancel(dragEvent('todo-1') as DragCancelEvent);
+      await result.current.handleDragEnd(dragEvent('todo-1', 'done') as DragEndEvent);
+    });
+
+    // A new drag must not inherit the canceled projection.
+    await act(async () => {
+      result.current.handleDragStart(dragEvent('todo-1') as unknown as DragStartEvent);
+      await result.current.handleDragEnd(dragEvent('todo-1', 'todo-1') as DragEndEvent);
+    });
 
     await waitFor(() => expect(document.activeElement).toBe(card));
     expect(onMove).not.toHaveBeenCalled();

@@ -1,15 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  Group,
-  Modal,
-  Select,
-  Stack,
-  Tabs,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Group, Select, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { useCreateTemplate, useUpdateTemplate, type TaskTemplate } from '@/hooks/useTemplates';
 import { useTaskTypesManager, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useToast } from '@/hooks/useToast';
@@ -64,6 +55,10 @@ function serializeForm(values: TemplateFormValues): string {
 }
 
 export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateEditorDialogProps) {
+  const categoryRef = useRef<HTMLInputElement>(null);
+  const typeRef = useRef<HTMLInputElement>(null);
+  const priorityRef = useRef<HTMLInputElement>(null);
+  const agentRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<string>('');
@@ -170,7 +165,21 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
       };
 
       if (template) {
-        await updateTemplate.mutateAsync({ id: template.id, input });
+        await updateTemplate.mutateAsync({
+          id: template.id,
+          input: {
+            ...input,
+            description: input.description ?? null,
+            category: input.category ?? null,
+            taskDefaults: {
+              type: input.taskDefaults.type ?? null,
+              priority: input.taskDefaults.priority ?? null,
+              project: input.taskDefaults.project ?? null,
+              agent: input.taskDefaults.agent ?? null,
+              descriptionTemplate: input.taskDefaults.descriptionTemplate ?? null,
+            },
+          },
+        });
         toast({
           title: 'Success',
           description: `Template "${name}" updated successfully.`,
@@ -196,10 +205,11 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
 
   return (
     <Modal
+      variant="authoring"
+      compound
       opened={open}
       onClose={requestClose}
       title={template ? 'Edit Template' : 'Create New Template'}
-      size="min(960px, calc(100vw - 2rem))"
       centered
       classNames={{
         content:
@@ -209,11 +219,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
       }}
     >
       <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
-        <div
-          data-testid="template-editor-scroll-region"
-          className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6"
-          tabIndex={0}
-        >
+        <div data-testid="template-editor-scroll-region" className="vk-overlay-scroll" tabIndex={0}>
           <Stack gap="lg">
             <Tabs defaultValue="basic" className="w-full">
               <Tabs.List className="w-fit max-w-full">
@@ -257,6 +263,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                   <Select
                     id="category"
                     label="Category"
+                    ref={categoryRef}
+                    onClear={() => categoryRef.current?.focus()}
+                    clearable
+                    clearButtonProps={{
+                      'aria-label': 'Clear category',
+                      'aria-hidden': false,
+                      tabIndex: 0,
+                    }}
                     value={category || null}
                     onChange={(value) => setCategory(value ?? '')}
                     data={categoryOptions}
@@ -272,6 +286,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                     <Select
                       id="type"
                       label="Default Type"
+                      ref={typeRef}
+                      onClear={() => typeRef.current?.focus()}
+                      clearable
+                      clearButtonProps={{
+                        'aria-label': 'Clear default type',
+                        'aria-hidden': false,
+                        tabIndex: 0,
+                      }}
                       value={type || null}
                       onChange={(value) => setType(value ?? '')}
                       data={taskTypeOptions}
@@ -293,6 +315,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                     <Select
                       id="priority"
                       label="Default Priority"
+                      ref={priorityRef}
+                      onClear={() => priorityRef.current?.focus()}
+                      clearable
+                      clearButtonProps={{
+                        'aria-label': 'Clear default priority',
+                        'aria-hidden': false,
+                        tabIndex: 0,
+                      }}
                       value={priority || null}
                       onChange={(value) => setPriority((value as TaskPriority | null) ?? '')}
                       data={priorityOptions}
@@ -312,6 +342,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                     <Select
                       id="agent"
                       label="Default Agent"
+                      ref={agentRef}
+                      onClear={() => agentRef.current?.focus()}
+                      clearable
+                      clearButtonProps={{
+                        'aria-label': 'Clear default agent',
+                        'aria-hidden': false,
+                        tabIndex: 0,
+                      }}
                       value={agent || null}
                       onChange={(value) => setAgent((value as AgentType | null) ?? '')}
                       data={agentOptions}
@@ -340,11 +378,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
           </Stack>
         </div>
 
-        <Group
-          data-testid="template-editor-actions"
-          justify="flex-end"
-          className="shrink-0 border-t bg-card px-4 py-4 sm:px-6"
-        >
+        <OverlayFooter data-testid="template-editor-actions">
           <Button type="button" variant="outline" onClick={requestClose}>
             Cancel
           </Button>
@@ -352,7 +386,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {template ? 'Update Template' : 'Create Template'}
           </Button>
-        </Group>
+        </OverlayFooter>
       </form>
     </Modal>
   );

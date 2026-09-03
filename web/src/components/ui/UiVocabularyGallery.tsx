@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { UiOverlayGallery } from './UiOverlayGallery';
 
 import {
   UiAction,
@@ -15,6 +16,7 @@ const TONES = ['neutral', 'info', 'success', 'warning', 'error', 'blocked', 'sel
 export function UiVocabularyGallery() {
   return (
     <Stack gap="xl" data-ui-vocabulary-gallery>
+      <UiOverlayGallery />
       <div>
         <Title order={1}>Desktop UI vocabulary</Title>
         <Text c="dimmed" mt={4}>
