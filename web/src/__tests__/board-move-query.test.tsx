@@ -170,6 +170,42 @@ describe('board move QueryClient and WebSocket convergence', () => {
     expect(mocks.toast).not.toHaveBeenCalled();
   });
 
+  it('uses the newest revision when an inactive detail cache trails the board', async () => {
+    const movedAgain: Task = {
+      ...moved,
+      status: 'todo',
+      position: 1,
+      revision: 5,
+    };
+    queryClient.setQueryData(['tasks'], [moved]);
+    queryClient.setQueryData(['tasks', original.id], original);
+    mocks.move.mockResolvedValue({
+      task: movedAgain,
+      operationId: '00000000-0000-4000-8000-000000000018',
+      orderedTaskIds: [movedAgain.id],
+      replayed: false,
+    });
+    const { result } = renderHook(() => useMoveTask(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: original.id,
+        input: {
+          operationId: '00000000-0000-4000-8000-000000000018',
+          sourceStatus: 'blocked',
+          sourcePosition: 0.5,
+          destinationStatus: 'todo',
+          destinationIndex: 0,
+        },
+      });
+    });
+
+    expect(mocks.move).toHaveBeenCalledOnce();
+    expect(mocks.move.mock.calls[0]?.[2]).toBe(4);
+    expect(queryClient.getQueryData<Task[]>(['tasks'])?.[0]).toEqual(movedAgain);
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
   it('loads the authoritative task and reports one task-specific stale-move message', async () => {
     const current = { ...original, title: 'Edited elsewhere', revision: 4 };
     const conflict = Object.assign(new Error('stale revision'), {

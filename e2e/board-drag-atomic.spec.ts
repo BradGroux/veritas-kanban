@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Task } from '@veritas-kanban/shared';
 import { bypassAuth, cleanupRoutes, deleteTask, seedTestTask, unwrapApiData } from './helpers/auth';
 
 const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
@@ -307,6 +308,96 @@ test.describe('Atomic board drag', () => {
         return { status: body.status, revision: body.revision, title: body.title };
       })
       .toEqual({ status: 'todo', revision: 2, title: 'Atomic stale drag source updated' });
+  });
+
+  test('moves two tasks consecutively when one detail cache trails the live board', async ({
+    page,
+  }) => {
+    const destination = await seedTestTask(page, {
+      title: 'Consecutive drag destination',
+      status: 'blocked',
+    });
+    const first = await seedTestTask(page, {
+      title: 'Consecutive drag first',
+      status: 'todo',
+    });
+    const second = await seedTestTask(page, {
+      title: 'Consecutive drag second',
+      status: 'todo',
+    });
+    const destinationId = destination.id as string;
+    const firstId = first.id as string;
+    const secondId = second.id as string;
+    taskIds.push(destinationId, firstId, secondId);
+
+    const moveHeaders: Array<{ taskId: string; revision: string | undefined }> = [];
+    page.on('request', (request) => {
+      const match = new URL(request.url()).pathname.match(/^\/api\/tasks\/([^/]+)\/move$/);
+      if (request.method() !== 'POST' || !match) return;
+      moveHeaders.push({ taskId: match[1], revision: request.headers()['if-match'] });
+    });
+
+    await page.goto('/');
+    await page.getByLabel('Search tasks').fill('Consecutive drag');
+    await page.getByLabel('Search tasks').blur();
+    const secondCard = page.locator(`[data-task-id="${secondId}"]`);
+    await secondCard.click();
+    const detail = page.locator('[role="dialog"]');
+    await expect(detail).toBeVisible();
+    const titleInput = detail.locator('input').first();
+    await expect(titleInput).toHaveValue('Consecutive drag second');
+    const titleSave = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/tasks/${secondId}` &&
+        response.request().method() === 'PATCH'
+    );
+    await titleInput.fill('Consecutive drag second edited');
+    const titleResponse = await titleSave;
+    expect(titleResponse.ok()).toBe(true);
+    const edited = unwrapApiData<Task>(await titleResponse.json());
+    await detail.getByRole('button', { name: 'Close task workspace' }).click();
+    await expect(detail).not.toBeVisible();
+
+    const externalResponse = await page.request.patch(`${API_BASE}/api/tasks/${secondId}`, {
+      headers: { 'If-Match': `"task:${secondId}:${edited.revision}"` },
+      data: { description: 'The live board has a newer revision than the inactive detail cache.' },
+    });
+    expect(externalResponse.ok()).toBe(true);
+    const externallyUpdated = unwrapApiData<Task>(await externalResponse.json());
+    await expect(secondCard).toContainText('The live board has a newer revision');
+
+    const blocked = page.getByRole('region', { name: 'Blocked' });
+    const destinationCard = page.locator(`[data-task-id="${destinationId}"]`);
+    const dragToDestination = async (taskId: string) => {
+      const moveResponse = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === `/api/tasks/${taskId}/move` &&
+          response.request().method() === 'POST'
+      );
+      const source = page.locator(`[data-task-id="${taskId}"]`);
+      const sourceBox = await source.boundingBox();
+      const destinationBox = await destinationCard.boundingBox();
+      expect(sourceBox).not.toBeNull();
+      expect(destinationBox).not.toBeNull();
+      await page.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + 18);
+      await page.mouse.down();
+      await page.mouse.move(destinationBox!.x + destinationBox!.width / 2, destinationBox!.y + 18, {
+        steps: 8,
+      });
+      await page.mouse.up();
+      expect((await moveResponse).ok()).toBe(true);
+      await expect(page.locator('[data-board-drag-overlay]')).toHaveCount(0);
+      await expect(blocked.locator(`[data-task-id="${taskId}"]`)).toBeVisible();
+    };
+
+    await dragToDestination(firstId);
+    await dragToDestination(secondId);
+
+    expect(moveHeaders).toEqual([
+      { taskId: firstId, revision: `"task:${firstId}:${first.revision}"` },
+      { taskId: secondId, revision: `"task:${secondId}:${externallyUpdated.revision}"` },
+    ]);
+    await expect(page.getByText('Move not saved')).toHaveCount(0);
   });
 
   test('routes a keyboard column move through the same move endpoint', async ({ page }) => {

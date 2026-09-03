@@ -46,12 +46,11 @@ type ApiMutationError = Error & { code?: string; details?: unknown };
 
 function cachedTaskRevision(queryClient: QueryClient, taskId: string): number | undefined {
   const detailTask = queryClient.getQueryData<Task>(['tasks', taskId]);
-  if (typeof detailTask?.revision === 'number') {
-    return detailTask.revision;
-  }
-
   const listTask = queryClient.getQueryData<Task[]>(['tasks'])?.find((task) => task.id === taskId);
-  return typeof listTask?.revision === 'number' ? listTask.revision : undefined;
+  const revisions = [detailTask?.revision, listTask?.revision].filter(
+    (revision): revision is number => typeof revision === 'number'
+  );
+  return revisions.length > 0 ? Math.max(...revisions) : undefined;
 }
 
 function cachedTask(queryClient: QueryClient, taskId: string): Task | undefined {
