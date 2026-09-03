@@ -160,6 +160,18 @@ vi.mock('@/components/task/WorkflowSection', () => ({
     open ? <div role="dialog" aria-label="Run Workflow" /> : null,
 }));
 
+vi.mock('@/components/task/RunWorkflowPanel', () => ({
+  RunWorkflowPanel: ({ onOpenWorkflow }: { onOpenWorkflow: () => void }) => (
+    <button type="button" onClick={onOpenWorkflow}>
+      Choose workflow
+    </button>
+  ),
+}));
+
+vi.mock('@/components/task/RunAccessSection', () => ({
+  RunAccessSection: () => <div>Run access section</div>,
+}));
+
 vi.mock('@/components/evidence/EvidenceTimelinePanel', () => ({
   EvidenceTimelinePanel: () => (
     <div data-testid="long-evidence-content">
@@ -342,13 +354,45 @@ describe('task detail Mantine migration', () => {
     renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
 
     await user.click(screen.getByRole('button', { name: 'Run' }));
-    await user.click(screen.getByRole('button', { name: 'Workflow' }));
+    await user.click(screen.getByRole('tab', { name: 'Workflow' }));
+    await user.click(screen.getByRole('button', { name: 'Choose workflow' }));
     expect(screen.getByRole('dialog', { name: 'Run Workflow' })).toBeDefined();
 
     fireEvent.keyDown(screen.getByTestId('task-detail-panel'), { key: 'Escape' });
 
     expect(mocks.onOpenChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('task-detail-panel')).toBeDefined();
+  });
+
+  it('groups execution destinations under Run without a duplicate global workflow action', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-run-navigation',
+      title: 'Monitor a task run',
+      type: 'code',
+      status: 'in-progress',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'task-workspace-run',
+        baseBranch: 'main',
+        worktreePath: '/tmp/task-workspace-run',
+      },
+    });
+    renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
+
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    const runSections = screen.getByRole('tablist', { name: 'Run sections' });
+    expect(
+      within(runSections)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent)
+    ).toEqual(['Agent', 'Workflow', 'Access', 'Git']);
+    expect(screen.getByText('Task: in progress')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Workflow' })).toBeNull();
+
+    await user.click(within(runSections).getByRole('tab', { name: 'Access' }));
+    expect(await screen.findByText('Run access section')).toBeDefined();
   });
 
   it('keeps title editing and progress tab behavior wired after the migration', async () => {

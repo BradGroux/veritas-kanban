@@ -317,7 +317,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                               {run.id}
                             </Badge>
                             <Badge variant="light" color={getRunStatusColor(run.status)}>
-                              {run.status}
+                              Workflow: {run.status}
                             </Badge>
                           </Group>
                           {run.currentStep && (

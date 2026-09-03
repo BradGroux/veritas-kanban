@@ -6,6 +6,8 @@ export type TaskDetailTabId =
   | 'work-products'
   | 'observations'
   | 'attachments'
+  | 'workflow'
+  | 'access'
   | 'git'
   | 'agent'
   | 'timeline'
@@ -48,7 +50,9 @@ export type TaskDetailTabIcon =
   | 'History'
   | 'Network'
   | 'NotebookPen'
-  | 'Paperclip';
+  | 'Paperclip'
+  | 'ShieldCheck'
+  | 'Workflow';
 
 export interface TaskDetailTabMetadata {
   id: TaskDetailTabId;
@@ -94,7 +98,7 @@ export const TASK_WORKSPACE_MODE_METADATA: readonly TaskWorkspaceModeMetadata[] 
     id: 'run',
     label: 'Run',
     description: 'Agent session, workflow controls, and source context.',
-    sections: ['git', 'agent'],
+    sections: ['agent', 'workflow', 'access', 'git'],
   },
   {
     id: 'results',
@@ -159,6 +163,20 @@ export const TASK_DETAIL_TAB_METADATA: readonly TaskDetailTabMetadata[] = [
     icon: 'Paperclip',
     fallbackTitle: 'Attachments section failed to load',
     isVisible: ({ attachmentsEnabled }) => attachmentsEnabled,
+  },
+  {
+    id: 'workflow',
+    label: 'Workflow',
+    icon: 'Workflow',
+    fallbackTitle: 'Workflow section failed to load',
+    isVisible: ({ isCodeTask }) => isCodeTask,
+  },
+  {
+    id: 'access',
+    label: 'Access',
+    icon: 'ShieldCheck',
+    fallbackTitle: 'Run access failed to load',
+    isVisible: ({ isCodeTask }) => isCodeTask,
   },
   {
     id: 'git',

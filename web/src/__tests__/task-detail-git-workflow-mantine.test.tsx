@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { GitSection } from '@/components/task/GitSection';
 import { RunModeGateSection } from '@/components/task/RunModeGateSection';
+import { RunWorkflowPanel } from '@/components/task/RunWorkflowPanel';
 import { WorkflowSection } from '@/components/task/WorkflowSection';
 import { WorktreeStatus } from '@/components/task/git/WorktreeStatus';
 import { createMockTask, renderWithProviders } from './test-utils';
@@ -22,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   mergeWorktreeMutate: vi.fn(),
   createPRMutateAsync: vi.fn(),
   toast: vi.fn(),
+  useActiveRuns: vi.fn(),
+  useRecentRuns: vi.fn(),
 }));
 
 vi.mock('@/hooks/useConfig', () => ({
@@ -76,6 +79,11 @@ vi.mock('@/hooks/useConflicts', () => ({
 
 vi.mock('@/hooks/useToast', () => ({
   useToast: () => ({ toast: mocks.toast }),
+}));
+
+vi.mock('@/hooks/useWorkflowStats', () => ({
+  useActiveRuns: mocks.useActiveRuns,
+  useRecentRuns: mocks.useRecentRuns,
 }));
 
 vi.mock('@/components/task/ConflictResolver', () => ({
@@ -142,6 +150,8 @@ describe('task detail Git and workflow Mantine migration', () => {
       data: { hasConflicts: false, conflictingFiles: [], rebaseInProgress: false },
     });
     mocks.createPRMutateAsync.mockResolvedValue({ url: 'https://github.com/example/pr/1' });
+    mocks.useActiveRuns.mockReturnValue({ data: [] });
+    mocks.useRecentRuns.mockReturnValue({ data: [] });
     vi.stubGlobal('open', vi.fn());
   });
 
@@ -467,6 +477,37 @@ describe('task detail Git and workflow Mantine migration', () => {
     expect(window.location.pathname).toBe('/');
     expect(window.location.search).toBe('?q=release');
     expect(window.history.state.veritasTaskDetail).toBe(task.id);
+  });
+
+  it('shows task-owned workflow state in Run and preserves the workflow overlay action', async () => {
+    const user = userEvent.setup();
+    const onOpenWorkflow = vi.fn();
+    const task = createMockTask({ id: 'task-run-workflow', type: 'code' });
+    mocks.useActiveRuns.mockReturnValue({
+      data: [
+        {
+          id: 'run-blocked',
+          workflowId: 'release',
+          workflowVersion: 3,
+          taskId: task.id,
+          status: 'blocked',
+          currentStep: 'Maintainer approval',
+          startedAt: '2026-09-02T20:00:00.000Z',
+          steps: [],
+        },
+      ],
+    });
+
+    renderWithProviders(
+      <RunWorkflowPanel task={task} readOnly={false} onOpenWorkflow={onOpenWorkflow} />
+    );
+
+    expect(screen.getByText('Workflow: blocked')).toBeDefined();
+    expect(screen.getByText('release v3')).toBeDefined();
+    expect(screen.getByText('Current step: Maintainer approval')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'Choose workflow' }));
+    expect(onOpenWorkflow).toHaveBeenCalledOnce();
   });
 
   it('renders run mode and QA gate controls through direct Mantine primitives', async () => {

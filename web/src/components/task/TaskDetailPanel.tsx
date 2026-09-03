@@ -33,7 +33,6 @@ import {
   MessageSquare,
   Monitor,
   PlayCircle,
-  Workflow,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -149,8 +148,12 @@ export function TaskDetailPanel({
   const activeMode = getTaskWorkspaceDestination(activeTab).mode;
   const activeModeMetadata = workspaceModes.find((mode) => mode.id === activeMode);
   const activeModeTabs = useMemo(
-    () => visibleTabs.filter((tab) => getTaskWorkspaceDestination(tab.id).mode === activeMode),
-    [activeMode, visibleTabs]
+    () =>
+      activeModeMetadata?.sections.flatMap((section) => {
+        const tab = visibleTabs.find((candidate) => candidate.id === section);
+        return tab ? [tab] : [];
+      }) ?? [],
+    [activeModeMetadata, visibleTabs]
   );
   const activeTabMetadata = visibleTabs.find((tab) => tab.id === activeTab);
 
@@ -411,6 +414,11 @@ export function TaskDetailPanel({
                         </Text>
                       </div>
                       <Group gap="xs" wrap="wrap">
+                        {activeMode === 'run' && (
+                          <Badge variant="light" color="gray" tt="capitalize">
+                            Task: {localTask.status.replaceAll('-', ' ')}
+                          </Badge>
+                        )}
                         {!readOnly && activeMode === 'plan' && (
                           <Button
                             variant="outline"
@@ -419,16 +427,6 @@ export function TaskDetailPanel({
                             leftSection={<FileCode className="h-3 w-3" />}
                           >
                             Template
-                          </Button>
-                        )}
-                        {!readOnly && activeMode === 'run' && (
-                          <Button
-                            variant="outline"
-                            size="compact-sm"
-                            onClick={() => setWorkflowOpen(true)}
-                            leftSection={<Workflow className="h-3 w-3" />}
-                          >
-                            Workflow
                           </Button>
                         )}
                         {!readOnly &&

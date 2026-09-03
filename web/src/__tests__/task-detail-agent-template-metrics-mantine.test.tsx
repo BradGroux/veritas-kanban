@@ -458,7 +458,8 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
       />
     );
 
-    expect(screen.queryByText('Running')).toBeNull();
+    expect(screen.getByText('Attempt: idle')).toBeDefined();
+    expect(screen.getByText('Transport: connected')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Stop agent' })).toBeNull();
     expect(screen.getByText('Agent output will appear here')).toBeDefined();
   });
@@ -485,7 +486,8 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
       />
     );
 
-    expect(screen.getByText('Running')).toBeDefined();
+    expect(screen.getByText('Attempt: running')).toBeDefined();
+    expect(screen.getByText('Transport: connected')).toBeDefined();
   });
 
   it('disables an open stop confirmation when refreshed capability evidence fails', async () => {

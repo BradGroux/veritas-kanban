@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { RunAccessSummary } from '@veritas-kanban/shared';
-import { renderWithProviders } from './test-utils';
+import { createMockTask, renderWithProviders } from './test-utils';
 
 const { mockApplyMutate, mockPreviewMutate, mockUseAgentAccess } = vi.hoisted(() => ({
   mockApplyMutate: vi.fn(),
@@ -17,6 +17,7 @@ vi.mock('@/hooks/useAgent', () => ({
 }));
 
 import { RunAccessPanel } from '@/components/task/RunAccessPanel';
+import { RunAccessSection } from '@/components/task/RunAccessSection';
 
 afterEach(cleanup);
 
@@ -26,6 +27,15 @@ beforeEach(() => {
 });
 
 describe('RunAccessPanel', () => {
+  it('keeps access reachable before an attempt creates evidence', () => {
+    renderWithProviders(<RunAccessSection task={createMockTask({ attempt: undefined })} />);
+
+    expect(
+      screen.getByText('Access evidence becomes available after an execution attempt starts.')
+    ).toBeDefined();
+    expect(mockUseAgentAccess).not.toHaveBeenCalled();
+  });
+
   it('renders the shared current contract with blockers and source evidence', async () => {
     const user = userEvent.setup();
     const current = summaryFixture({
@@ -41,7 +51,8 @@ describe('RunAccessPanel', () => {
     renderWithProviders(<RunAccessPanel taskId="task-access" attemptId="attempt-access" live />);
 
     const panel = screen.getByLabelText('Run Access');
-    expect(within(panel).getByText('incomplete')).toBeDefined();
+    expect(within(panel).getByText('Access: incomplete')).toBeDefined();
+    expect(within(panel).getByText('Phase: plan')).toBeDefined();
     expect(within(panel).getByText('workspace-write · 1 scope')).toBeDefined();
     expect(within(panel).getByText('disabled · supported')).toBeDefined();
     expect(within(panel).getByLabelText('Run access blockers').textContent).toContain(
@@ -49,7 +60,7 @@ describe('RunAccessPanel', () => {
     );
     expect(mockUseAgentAccess).toHaveBeenCalledWith('task-access', 'attempt-access', true);
 
-    await user.click(within(panel).getByRole('button', { name: 'Evidence sources' }));
+    await user.click(within(panel).getByRole('button', { name: 'Diagnostics: evidence sources' }));
     expect(within(panel).getByText(/run-launch-manifest/)).toBeDefined();
     expect(within(panel).getByText('verified')).toBeDefined();
   });

@@ -12,6 +12,8 @@ import {
   Network,
   NotebookPen,
   Paperclip,
+  ShieldCheck,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 import type { ObservationType, ReviewComment, ReviewState, Task } from '@veritas-kanban/shared';
@@ -61,6 +63,12 @@ const ProgressTab = lazy(() =>
 );
 const ReviewPanel = lazy(() =>
   import('./ReviewPanel').then((mod) => ({ default: mod.ReviewPanel }))
+);
+const RunAccessSection = lazy(() =>
+  import('./RunAccessSection').then((mod) => ({ default: mod.RunAccessSection }))
+);
+const RunWorkflowPanel = lazy(() =>
+  import('./RunWorkflowPanel').then((mod) => ({ default: mod.RunWorkflowPanel }))
 );
 const TaskMetricsPanel = lazy(() =>
   import('./TaskMetricsPanel').then((mod) => ({ default: mod.TaskMetricsPanel }))
@@ -131,6 +139,8 @@ const TAB_ICONS: Record<TaskDetailTabIcon, LucideIcon> = {
   Network,
   NotebookPen,
   Paperclip,
+  ShieldCheck,
+  Workflow,
 };
 
 const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) => ReactNode> = {
@@ -169,6 +179,10 @@ const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) 
     />
   ),
   attachments: ({ task }) => <AttachmentsSection task={task} />,
+  workflow: ({ task, readOnly, openWorkflow }) => (
+    <RunWorkflowPanel task={task} readOnly={readOnly} onOpenWorkflow={openWorkflow} />
+  ),
+  access: ({ task }) => <RunAccessSection task={task} />,
   git: ({ task, updateField }) => (
     <GitSection task={task} onGitChange={(git) => updateField('git', git as Task['git'])} />
   ),

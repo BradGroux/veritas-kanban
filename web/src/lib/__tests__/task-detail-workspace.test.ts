@@ -20,6 +20,8 @@ describe('task workspace navigation', () => {
       'work-products': 'results',
       observations: 'plan',
       attachments: 'plan',
+      workflow: 'run',
+      access: 'run',
       git: 'run',
       agent: 'run',
       timeline: 'history',
@@ -74,6 +76,12 @@ describe('task workspace navigation', () => {
     });
 
     expect(resolveTaskDetailNavigationTab({ tab: 'timeline' }, tabs)).toBe('timeline');
+    for (const section of ['agent', 'workflow', 'access', 'git'] as const) {
+      expect(resolveTaskDetailNavigationTab({ tab: section }, tabs)).toBe(section);
+      expect(
+        resolveTaskDetailNavigationTab({ workspace: { version: 1, mode: 'run', section } }, tabs)
+      ).toBe(section);
+    }
     for (const section of [
       'details',
       'progress',
