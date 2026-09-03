@@ -139,22 +139,6 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const [bottomPanel, setBottomPanel] = useState<DesktopBottomPanel | null>(null);
   const [rightPanelWidth, setRightPanelWidthState] = useState(() => readStoredRightPanelWidth());
 
-  const setLeftRailOpen = useCallback(
-    (open: boolean) => {
-      setLeftRailOpenState(open);
-      if (desktopClient) writeStoredValue(LEFT_RAIL_STORAGE_KEY, String(open));
-    },
-    [desktopClient]
-  );
-
-  const setRightRailOpen = useCallback(
-    (open: boolean) => {
-      setRightRailOpenState(open);
-      if (desktopClient) writeStoredValue(RIGHT_RAIL_STORAGE_KEY, String(open));
-    },
-    [desktopClient]
-  );
-
   const setRightPanelWidth = useCallback((width: number) => {
     const next = clampRightPanelWidth(width);
     setRightPanelWidthState(next);
@@ -178,6 +162,37 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       window.history.back();
     }
   }, [restorePanelFocus]);
+
+  const prepareCompactRail = useCallback(() => {
+    if (!desktopClient || !isCompactDesktopLayout()) return;
+    setLeftRailOpenState(false);
+    setRightRailOpenState(false);
+    writeStoredValue(LEFT_RAIL_STORAGE_KEY, 'false');
+    writeStoredValue(RIGHT_RAIL_STORAGE_KEY, 'false');
+    if (bottomPanel) {
+      // The newly selected rail control owns focus, not the previous chat trigger.
+      panelTriggerRef.current = null;
+      closeBottomPanel();
+    }
+  }, [bottomPanel, closeBottomPanel, desktopClient]);
+
+  const setLeftRailOpen = useCallback(
+    (open: boolean) => {
+      if (open) prepareCompactRail();
+      setLeftRailOpenState(open);
+      if (desktopClient) writeStoredValue(LEFT_RAIL_STORAGE_KEY, String(open));
+    },
+    [desktopClient, prepareCompactRail]
+  );
+
+  const setRightRailOpen = useCallback(
+    (open: boolean) => {
+      if (open) prepareCompactRail();
+      setRightRailOpenState(open);
+      if (desktopClient) writeStoredValue(RIGHT_RAIL_STORAGE_KEY, String(open));
+    },
+    [desktopClient, prepareCompactRail]
+  );
 
   const openBottomPanel = useCallback(
     (panel: DesktopBottomPanel) => {
@@ -264,6 +279,15 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || !bottomPanel) return;
+      // Let a nested popup handle Escape before dismissing its parent Workbench.
+      if (
+        Array.from(
+          document.querySelectorAll(
+            '[role="listbox"], [role="menu"], [role="dialog"][aria-modal="true"]'
+          )
+        ).some((element) => element.getClientRects().length > 0)
+      )
+        return;
       event.preventDefault();
       closeBottomPanel();
     };
@@ -293,12 +317,12 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       if (bottomPanel) closeBottomPanel();
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('resize', handleResize);
     document.addEventListener('fullscreenchange', handleResize);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleResize);

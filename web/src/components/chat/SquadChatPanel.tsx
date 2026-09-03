@@ -145,7 +145,7 @@ export function SquadChatPanel({
     }
   }, [humanDisplayName]);
   const { data: messages = [], isLoading } = useSquadMessages({ limit: 50, includeSystem });
-  const { mutate: sendMessage, isPending } = useSendSquadMessage();
+  const { mutateAsync: sendMessage, isPending } = useSendSquadMessage();
   const { newMessage } = useSquadStream();
   const actorForRead = selectedAgent === humanDisplayName ? 'Human' : selectedAgent;
   const { data: unreadState } = useSquadUnread(actorForRead);
@@ -183,10 +183,11 @@ export function SquadChatPanel({
   useEffect(() => {
     if (open) {
       // Use setTimeout to ensure DOM is fully rendered
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         scrollToBottom('instant');
         setShouldAutoScroll(true);
       }, 150);
+      return () => clearTimeout(timer);
     }
   }, [open, scrollToBottom]);
 
@@ -210,23 +211,22 @@ export function SquadChatPanel({
     // Send "Human" to backend if user selected their display name, otherwise send the agent name
     const agentForBackend = selectedAgent === humanDisplayName ? 'Human' : selectedAgent;
 
-    sendMessage(
-      {
-        agent: agentForBackend,
-        message: message.trim(),
-        replyToId: replyTo?.id,
+    // Complete even when Activity has suspended the hidden channel's observer.
+    void sendMessage({
+      agent: agentForBackend,
+      message: message.trim(),
+      replyToId: replyTo?.id,
+    }).then(
+      () => {
+        setMessage((current) => (current === message ? '' : current));
+        setReplyTo((current) => (current?.id === replyTo?.id ? null : current));
+        setShouldAutoScroll(true);
+        // Force scroll to bottom immediately after sending
+        setTimeout(() => scrollToBottom(), 100);
+        // Re-focus the input so user can keep typing
+        requestAnimationFrame(() => inputRef.current?.focus());
       },
-      {
-        onSuccess: () => {
-          setMessage('');
-          setReplyTo(null);
-          setShouldAutoScroll(true);
-          // Force scroll to bottom immediately after sending
-          setTimeout(() => scrollToBottom(), 100);
-          // Re-focus the input so user can keep typing
-          requestAnimationFrame(() => inputRef.current?.focus());
-        },
-      }
+      () => undefined // Retain the draft when sending fails.
     );
   };
 
@@ -309,14 +309,14 @@ export function SquadChatPanel({
   const panelContent = (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Filter Bar */}
-      <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-shrink-0">
-        <Filter className="h-4 w-4 text-muted-foreground" />
+      <div className="border-b border-border px-4 py-2 flex flex-wrap items-center gap-2 flex-shrink-0">
         <Select
           value={agentFilter}
           onChange={(value) => setAgentFilter(value ?? 'all')}
           allowDeselect={false}
           size="xs"
-          w={150}
+          style={{ flex: '1 0 140px' }}
+          leftSection={<Filter className="h-3.5 w-3.5" aria-hidden="true" />}
           data={[
             { value: 'all', label: 'All Agents' },
             ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
@@ -330,12 +330,13 @@ export function SquadChatPanel({
           placeholder="Search"
           size="xs"
           aria-label="Search squad chat"
-          className="min-w-0 flex-1"
+          style={{ flex: '1 0 140px' }}
         />
         <Button
           variant={unreadState?.unreadCount ? 'filled' : 'outline'}
           size="xs"
           onClick={handleMarkRead}
+          style={{ flexShrink: 0 }}
           disabled={!latestMessageId || isMarkingRead}
           leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
         >
@@ -353,6 +354,7 @@ export function SquadChatPanel({
           size="xs"
           onClick={() => setIncludeSystem(!includeSystem)}
           className="gap-1.5"
+          style={{ flexShrink: 0 }}
           title={includeSystem ? 'Hide system messages' : 'Show system messages'}
           leftSection={<Settings2 className="h-3.5 w-3.5" />}
         >
