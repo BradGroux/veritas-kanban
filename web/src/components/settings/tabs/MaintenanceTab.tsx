@@ -40,6 +40,7 @@ import type {
   MaintenanceHealthCheck,
   MaintenanceStorageCategory,
 } from '@veritas-kanban/shared';
+import { SettingsLocalNav, SettingsPage, SettingsSection } from '../shared';
 
 const HEALTH_COLORS: Record<MaintenanceHealthCheck['state'], string> = {
   ok: 'green',
@@ -116,39 +117,44 @@ function HealthCheckList({ checks }: { checks: MaintenanceHealthCheck[] }) {
 
 function StorageTable({ categories }: { categories: MaintenanceStorageCategory[] }) {
   return (
-    <Table striped highlightOnHover withTableBorder>
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Artifact</Table.Th>
-          <Table.Th>Items</Table.Th>
-          <Table.Th>Size</Table.Th>
-          <Table.Th>Cleanup</Table.Th>
-          <Table.Th>Last used</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {categories.map((category) => (
-          <Table.Tr key={category.id}>
-            <Table.Td>
-              <Text size="sm" fw={600}>
-                {category.label}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {category.retainedReason}
-              </Text>
-            </Table.Td>
-            <Table.Td>{category.itemCount}</Table.Td>
-            <Table.Td>{formatBytes(category.bytes)}</Table.Td>
-            <Table.Td>
-              <Badge color={category.cleanupEligibleCount > 0 ? 'yellow' : 'gray'} variant="light">
-                {category.cleanupEligibleCount}
-              </Badge>
-            </Table.Td>
-            <Table.Td>{formatDate(category.lastUsedAt)}</Table.Td>
+    <Table.ScrollContainer minWidth={640}>
+      <Table striped highlightOnHover withTableBorder>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Artifact</Table.Th>
+            <Table.Th>Items</Table.Th>
+            <Table.Th>Size</Table.Th>
+            <Table.Th>Cleanup</Table.Th>
+            <Table.Th>Last used</Table.Th>
           </Table.Tr>
-        ))}
-      </Table.Tbody>
-    </Table>
+        </Table.Thead>
+        <Table.Tbody>
+          {categories.map((category) => (
+            <Table.Tr key={category.id}>
+              <Table.Td>
+                <Text size="sm" fw={600}>
+                  {category.label}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {category.retainedReason}
+                </Text>
+              </Table.Td>
+              <Table.Td>{category.itemCount}</Table.Td>
+              <Table.Td>{formatBytes(category.bytes)}</Table.Td>
+              <Table.Td>
+                <Badge
+                  color={category.cleanupEligibleCount > 0 ? 'yellow' : 'gray'}
+                  variant="light"
+                >
+                  {category.cleanupEligibleCount}
+                </Badge>
+              </Table.Td>
+              <Table.Td>{formatDate(category.lastUsedAt)}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }
 
@@ -309,17 +315,10 @@ export function MaintenanceTab() {
       : 0;
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="flex-start">
-        <div>
-          <Text size="sm" fw={700}>
-            Maintenance Center
-          </Text>
-          <Text size="xs" c="dimmed">
-            {summary.storageMode} storage, {summary.mode} mode, refreshed{' '}
-            {formatDate(summary.generatedAt)}
-          </Text>
-        </div>
+    <SettingsPage
+      title="Maintenance"
+      description={`${summary.storageMode} storage, ${summary.mode} mode, refreshed ${formatDate(summary.generatedAt)}.`}
+      actions={
         <Group gap="xs">
           <Tooltip label="Refresh maintenance state">
             <Button
@@ -342,59 +341,71 @@ export function MaintenanceTab() {
             Debug Bundle
           </Button>
         </Group>
-      </Group>
+      }
+    >
+      <SettingsLocalNav
+        label="Maintenance settings sections"
+        items={[
+          { id: 'maintenance-overview', label: 'Overview' },
+          { id: 'maintenance-cleanup', label: 'Cleanup' },
+          { id: 'maintenance-logs', label: 'Logs' },
+          { id: 'maintenance-backup', label: 'Backup/Restore' },
+          { id: 'maintenance-lifecycle', label: 'Lifecycle' },
+        ]}
+      />
 
-      <SimpleGrid cols={{ base: 1, sm: 4 }} spacing="xs">
-        <SummaryMetric
-          label="Storage"
-          value={formatBytes(summary.storage.totalBytes)}
-          icon={HardDrive}
-        />
-        <SummaryMetric
-          label="Cleanup Preview"
-          value={`${summary.cleanupPreview.items.length} items`}
-          icon={Trash2}
-        />
-        <SummaryMetric
-          label="Work Products"
-          value={`${summary.workProducts.totals.products} products`}
-          icon={Archive}
-        />
-        <SummaryMetric
-          label="Lifecycle Classes"
-          value={`${summary.lifecycle.length} classes`}
-          icon={ShieldCheck}
-        />
-      </SimpleGrid>
+      <SettingsSection
+        id="maintenance-overview"
+        title="Overview"
+        description="Review service health, storage usage, and current maintenance scope."
+      >
+        <SimpleGrid cols={{ base: 1, sm: 4 }} spacing="xs">
+          <SummaryMetric
+            label="Storage"
+            value={formatBytes(summary.storage.totalBytes)}
+            icon={HardDrive}
+          />
+          <SummaryMetric
+            label="Cleanup Preview"
+            value={`${summary.cleanupPreview.items.length} items`}
+            icon={Trash2}
+          />
+          <SummaryMetric
+            label="Work Products"
+            value={`${summary.workProducts.totals.products} products`}
+            icon={Archive}
+          />
+          <SummaryMetric
+            label="Lifecycle Classes"
+            value={`${summary.lifecycle.length} classes`}
+            icon={ShieldCheck}
+          />
+        </SimpleGrid>
 
-      <section className="space-y-3">
-        <Text size="sm" fw={700}>
-          Health
-        </Text>
-        <HealthCheckList checks={summary.health} />
-      </section>
-
-      <section className="space-y-3">
-        <Group justify="space-between">
+        <div className="mt-4 space-y-3">
           <Text size="sm" fw={700}>
-            Storage Usage
+            Health
           </Text>
-          <Badge variant="light">{formatBytes(summary.storage.totalBytes)}</Badge>
-        </Group>
-        <StorageTable categories={summary.storage.categories} />
-      </section>
+          <HealthCheckList checks={summary.health} />
+        </div>
 
-      <section className="space-y-3">
-        <Group justify="space-between">
-          <div>
+        <div className="mt-4 space-y-3">
+          <Group justify="space-between">
             <Text size="sm" fw={700}>
-              Cleanup Preview
+              Storage Usage
             </Text>
-            <Text size="xs" c="dimmed">
-              {formatBytes(cleanupBytes)} across {summary.cleanupPreview.items.length} previewed
-              items
-            </Text>
-          </div>
+            <Badge variant="light">{formatBytes(summary.storage.totalBytes)}</Badge>
+          </Group>
+          <StorageTable categories={summary.storage.categories} />
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        id="maintenance-cleanup"
+        title="Cleanup"
+        description={`${formatBytes(cleanupBytes)} across ${summary.cleanupPreview.items.length} previewed items. Review retained reasons before taking action.`}
+        tone="danger"
+        actions={
           <Button
             type="button"
             size="xs"
@@ -405,59 +416,67 @@ export function MaintenanceTab() {
           >
             Review Cleanup
           </Button>
-        </Group>
-        <CleanupPreviewList items={summary.cleanupPreview.items} />
-        <Progress
-          value={workProductRatio}
-          size="sm"
-          color="yellow"
-          aria-label="Work product cleanup ratio"
-        />
-      </section>
-
-      <section className="space-y-3">
-        <Text size="sm" fw={700}>
-          Logs
-        </Text>
-        <Group align="flex-end" gap="sm">
-          <Select
-            label="Source"
-            value={selectedLog}
-            onChange={(value) => value && setSelectedLog(value)}
-            data={logOptions}
-            leftSection={<FileClock className="h-4 w-4" />}
-            className="flex-1"
+        }
+      >
+        <Stack gap="sm">
+          <CleanupPreviewList items={summary.cleanupPreview.items} />
+          <Progress
+            value={workProductRatio}
+            size="sm"
+            color="yellow"
+            aria-label="Work product cleanup ratio"
           />
-          <NumberInput
-            label="Tail"
-            value={tailLines}
-            onChange={(value) => setTailLines(typeof value === 'number' ? value : 200)}
-            min={1}
-            max={500}
-            w={120}
-          />
-          <Button
-            type="button"
-            variant="light"
-            leftSection={<RefreshCcw className="h-4 w-4" />}
-            onClick={() => logQuery.refetch()}
-          >
-            Tail
-          </Button>
-        </Group>
-        <Textarea
-          aria-label="Redacted log tail"
-          value={logQuery.data?.lines.join('\n') ?? ''}
-          minRows={8}
-          readOnly
-          styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-        />
-      </section>
+        </Stack>
+      </SettingsSection>
 
-      <section className="space-y-3">
-        <Text size="sm" fw={700}>
-          Backup and Restore
-        </Text>
+      <SettingsSection
+        id="maintenance-logs"
+        title="Logs"
+        description="Tail a redacted diagnostic source without exposing stored secrets."
+      >
+        <Stack gap="sm">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
+            <Select
+              label="Source"
+              value={selectedLog}
+              onChange={(value) => value && setSelectedLog(value)}
+              data={logOptions}
+              leftSection={<FileClock className="h-4 w-4" />}
+              className="col-span-2 min-w-0 sm:col-span-1"
+            />
+            <NumberInput
+              label="Tail"
+              value={tailLines}
+              onChange={(value) => setTailLines(typeof value === 'number' ? value : 200)}
+              min={1}
+              max={500}
+              className="w-full"
+            />
+            <Button
+              type="button"
+              variant="light"
+              leftSection={<RefreshCcw className="h-4 w-4" />}
+              onClick={() => logQuery.refetch()}
+            >
+              Tail
+            </Button>
+          </div>
+          <Textarea
+            aria-label="Redacted log tail"
+            value={logQuery.data?.lines.join('\n') ?? ''}
+            minRows={8}
+            readOnly
+            styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
+          />
+        </Stack>
+      </SettingsSection>
+
+      <SettingsSection
+        id="maintenance-backup"
+        title="Backup and Restore"
+        description="Export or import SQLite data through explicit source and destination paths."
+        tone="advanced"
+      >
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
           <Stack gap="xs">
             <TextInput
@@ -525,12 +544,13 @@ export function MaintenanceTab() {
             {lastBackupResult && <Code block>{lastBackupResult}</Code>}
           </Stack>
         </SimpleGrid>
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-3">
-        <Text size="sm" fw={700}>
-          Lifecycle Policy
-        </Text>
+      <SettingsSection
+        id="maintenance-lifecycle"
+        title="Lifecycle Policy"
+        description="Review retention classes and the kinds of sensitive data each class contains."
+      >
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
           {summary.lifecycle.map((entry) => (
             <Paper key={entry.id} withBorder radius="md" p="sm">
@@ -552,7 +572,7 @@ export function MaintenanceTab() {
             </Paper>
           ))}
         </SimpleGrid>
-      </section>
+      </SettingsSection>
 
       <Modal
         opened={cleanupOpen}
@@ -581,6 +601,6 @@ export function MaintenanceTab() {
           </Group>
         </Stack>
       </Modal>
-    </Stack>
+    </SettingsPage>
   );
 }
