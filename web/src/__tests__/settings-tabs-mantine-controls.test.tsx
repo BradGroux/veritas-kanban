@@ -425,9 +425,17 @@ describe('Settings tab Mantine controls', () => {
   it('renders Notifications text and select controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<NotificationsTab />);
 
+    expect(screen.getByRole('heading', { name: 'Notifications' })).toBeDefined();
+    expect(
+      screen.getByRole('navigation', { name: 'Notification settings sections' })
+    ).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Reply Adapters' }).getAttribute('href')).toBe(
+      '#notifications-replies'
+    );
+    expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(5);
     expect(await screen.findByText('Communication Health')).toBeDefined();
     expect(screen.getByText('Local Squad Chat')).toBeDefined();
-    expect(screen.getByText('Human Reply Adapter')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Reply adapters' })).toBeDefined();
     expect(screen.getByText('Buzz Connection')).toBeDefined();
     expect(screen.getByLabelText(/Relay HTTP URL/)).toBeDefined();
     expect(screen.getByLabelText(/Relay WebSocket URL/)).toBeDefined();
