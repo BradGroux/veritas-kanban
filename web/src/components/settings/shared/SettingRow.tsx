@@ -27,7 +27,7 @@ export const SettingRow = memo(function SettingRow({
         )}
       </Stack>
       <div
-        className="flex min-w-0 w-full sm:justify-end [&_.mantine-InputWrapper-root]:w-full [&_.mantine-Select-root]:w-full"
+        className="flex min-w-0 w-full sm:justify-end [&>.mantine-InputWrapper-root]:!w-full [&>.mantine-InputWrapper-root]:!max-w-full"
         data-settings-control
       >
         {children}
