@@ -18,7 +18,7 @@ export function SaveIndicator({ isPending }: { isPending: boolean }) {
 
   if (isPending) {
     return (
-      <div 
+      <div
         className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse"
         role="status"
         aria-live="polite"
@@ -31,8 +31,8 @@ export function SaveIndicator({ isPending }: { isPending: boolean }) {
   }
   if (showSaved) {
     return (
-      <div 
-        className="flex items-center gap-1.5 text-xs text-green-500"
+      <div
+        className="flex items-center gap-1.5 text-xs text-[var(--vk-semantic-success-fg)]"
         role="status"
         aria-live="polite"
         aria-atomic="true"

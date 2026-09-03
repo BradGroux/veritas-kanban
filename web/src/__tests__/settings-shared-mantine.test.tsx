@@ -7,6 +7,8 @@ import {
   SettingsErrorText,
   SettingsFieldGrid,
   SettingsHelpText,
+  SettingsGroup,
+  SettingsNotice,
   SettingsLocalNav,
   SettingsPage,
   SettingsSection,
@@ -71,6 +73,47 @@ describe('Settings shared Mantine rows', () => {
     expect(container.querySelector('[data-settings-help]')).not.toBeNull();
     expect(container.querySelector('[data-settings-error][role="alert"]')).not.toBeNull();
     expect(container.querySelector('[data-settings-actions="danger"]')).not.toBeNull();
+  });
+
+  it('limits nested groups to two bordered surface levels across component boundaries', () => {
+    function NestedGroup() {
+      return (
+        <>
+          <SettingsGroup data-testid="deep-group">Fields</SettingsGroup>
+          <SettingsGroup empty data-testid="deep-empty">
+            No records
+          </SettingsGroup>
+          <SettingsNotice tone="warning">Missing evidence</SettingsNotice>
+        </>
+      );
+    }
+    renderWithProviders(
+      <SettingsSection title="Section">
+        <SettingsGroup data-testid="subgroup">
+          <NestedGroup />
+        </SettingsGroup>
+      </SettingsSection>
+    );
+
+    expect(screen.getByTestId('subgroup').getAttribute('data-ui-surface')).toBe('inset');
+    expect(screen.getByTestId('deep-group').getAttribute('data-ui-surface')).toBe('section');
+    expect(screen.getByTestId('deep-empty').getAttribute('data-ui-surface')).toBe('section');
+    expect(screen.getByRole('alert').style.borderWidth).toBe('0px');
+  });
+
+  it('keeps ordinary notices neutral and reserves alerts for warning and error states', () => {
+    renderWithProviders(
+      <>
+        <SettingsNotice>Configuration guidance</SettingsNotice>
+        <SettingsNotice tone="warning">Missing configuration</SettingsNotice>
+        <SettingsNotice tone="error">Save failed</SettingsNotice>
+      </>
+    );
+
+    expect(screen.getByRole('status').getAttribute('data-settings-notice')).toBe('neutral');
+    expect(
+      screen.getAllByRole('alert').map((alert) => alert.getAttribute('data-settings-notice'))
+    ).toEqual(['warning', 'error']);
   });
 
   it('renders toggles through Mantine Switch and preserves checked changes', () => {

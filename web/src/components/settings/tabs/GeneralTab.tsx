@@ -1,17 +1,7 @@
+import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Select,
-  SimpleGrid,
-  Stack,
-  Switch,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { Group, Modal, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import {
   useConfig,
   useAddRepo,
@@ -103,9 +93,7 @@ export function GeneralTab() {
           >
             <div className="min-w-0 flex-1 space-y-1">
               <Group gap={8}>
-                <Badge variant="light" color={selectedProductMode === 'advanced' ? 'gray' : 'cyan'}>
-                  {activeProductMode.label}
-                </Badge>
+                <UiPill>{activeProductMode.label}</UiPill>
                 <Text size="sm" fw={600}>
                   Focus preset
                 </Text>
@@ -179,14 +167,13 @@ export function GeneralTab() {
         description="Repositories available for task worktrees and source operations."
         actions={
           !showAddForm ? (
-            <Button
-              variant="outline"
-              size="xs"
+            <UiAction
+              variant="secondary"
               leftSection={<Plus className="h-4 w-4" />}
               onClick={() => setShowAddForm(true)}
             >
               Add Repo
-            </Button>
+            </UiAction>
           ) : undefined
         }
       >
@@ -194,9 +181,9 @@ export function GeneralTab() {
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading...</div>
         ) : config?.repos.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
+          <SettingsGroup empty className="text-sm text-muted-foreground py-4 text-center">
             No repositories configured.
-          </div>
+          </SettingsGroup>
         ) : (
           <div className="space-y-2">
             {config?.repos.map((repo) => (
@@ -234,39 +221,36 @@ export function GeneralTab() {
 
 function ModeDetail({ label, items }: { label: string; items: string[] }) {
   return (
-    <div className="rounded-md border bg-background/50 p-3">
+    <SettingsGroup>
       <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
         {label}
       </Text>
       <Group gap={6} mt={8}>
         {items.slice(0, 4).map((item) => (
-          <Badge key={item} size="xs" variant="outline" color="gray">
-            {item}
-          </Badge>
+          <UiPill key={item}>{item}</UiPill>
         ))}
       </Group>
-    </div>
+    </SettingsGroup>
   );
 }
 
 function AgentDefaultItem({ agent, isDefault }: { agent: AgentConfig; isDefault: boolean }) {
   const setDefaultAgent = useSetDefaultAgent();
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-md border bg-card">
+    <SettingsGroup className="flex items-center justify-between py-2 px-3">
       <div className="flex items-center gap-3">
         <Bot className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium">{agent.name}</span>
       </div>
-      <Button
-        variant={isDefault ? 'filled' : 'subtle'}
-        size="xs"
+      <UiAction
+        variant="secondary"
         leftSection={<Star className={cn('h-3 w-3', isDefault && 'fill-current')} />}
         onClick={() => setDefaultAgent.mutate(agent.type)}
         disabled={isDefault}
       >
         {isDefault ? 'Default' : 'Set Default'}
-      </Button>
-    </div>
+      </UiAction>
+    </SettingsGroup>
   );
 }
 
@@ -303,7 +287,7 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 border rounded-lg p-4 bg-muted/30">
+    <form onSubmit={handleSubmit} className="settings-form space-y-4">
       <div className="flex items-center gap-2 text-sm font-medium">
         <FolderGit2 className="h-4 w-4" /> Add Repository
       </div>
@@ -332,10 +316,9 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
               error={pathValid === false ? validatePath.error?.message || 'Invalid path' : null}
               className="flex-1"
             />
-            <Button
+            <UiAction
+              variant="secondary"
               type="button"
-              variant="outline"
-              size="sm"
               onClick={handleValidatePath}
               disabled={!path || validatePath.isPending}
               aria-label={
@@ -357,7 +340,7 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
               ) : (
                 'Validate'
               )}
-            </Button>
+            </UiAction>
           </div>
         </div>
         {branches.length > 0 && (
@@ -374,16 +357,16 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
         )}
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+        <UiAction variant="secondary" type="button" onClick={onClose}>
           Cancel
-        </Button>
-        <Button
+        </UiAction>
+        <UiAction
+          variant="primary"
           type="submit"
-          size="sm"
           disabled={!name || !path || !pathValid || addRepo.isPending}
         >
           {addRepo.isPending ? 'Adding...' : 'Add Repository'}
-        </Button>
+        </UiAction>
       </div>
     </form>
   );
@@ -399,7 +382,7 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
   };
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-md border bg-card">
+    <SettingsGroup className="flex items-center justify-between py-2 px-3">
       <div className="flex items-center gap-3">
         <FolderGit2 className="h-4 w-4 text-muted-foreground" />
         <div>
@@ -408,19 +391,15 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Badge variant="light" color="gray" size="sm">
-          {repo.defaultBranch}
-        </Badge>
-        <ActionIcon
+        <UiPill>{repo.defaultBranch}</UiPill>
+        <UiIconAction
+          variant="destructive"
           type="button"
-          variant="subtle"
-          color="gray"
-          size="sm"
           aria-label={`Remove ${repo.name}`}
           onClick={() => setRemoveOpen(true)}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-        </ActionIcon>
+          <Trash2 className="h-4 w-4" />
+        </UiIconAction>
         <Modal
           opened={removeOpen}
           onClose={() => setRemoveOpen(false)}
@@ -432,16 +411,16 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
               This will remove "{repo.name}" from your configuration.
             </Text>
             <Group justify="flex-end">
-              <Button variant="subtle" color="gray" onClick={() => setRemoveOpen(false)}>
+              <UiAction variant="quiet" onClick={() => setRemoveOpen(false)}>
                 Cancel
-              </Button>
-              <Button color="red" onClick={handleRemove}>
+              </UiAction>
+              <UiAction variant="destructive" onClick={handleRemove}>
                 Remove
-              </Button>
+              </UiAction>
             </Group>
           </Stack>
         </Modal>
       </div>
-    </div>
+    </SettingsGroup>
   );
 }

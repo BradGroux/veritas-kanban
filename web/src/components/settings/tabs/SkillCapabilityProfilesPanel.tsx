@@ -1,15 +1,11 @@
 import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Loader,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  Tooltip,
-} from '@mantine/core';
+  UiPill,
+  UiIconAction,
+  semanticToneForLegacyColor,
+  UiAction,
+} from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
+import { Group, Loader, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { AlertTriangle, ClipboardList, RefreshCw, ShieldCheck } from 'lucide-react';
 import type {
   SkillCapabilityId,
@@ -48,15 +44,11 @@ function CapabilityBadges({ values }: { values: SkillCapabilityId[] }) {
   return (
     <Group gap={4}>
       {values.slice(0, 4).map((value) => (
-        <Badge key={value} size="xs" variant="light" color="blue">
+        <UiPill kind="status" tone="info" key={value}>
           {value}
-        </Badge>
+        </UiPill>
       ))}
-      {values.length > 4 && (
-        <Badge size="xs" variant="light" color="gray">
-          +{values.length - 4}
-        </Badge>
-      )}
+      {values.length > 4 && <UiPill>+{values.length - 4}</UiPill>}
     </Group>
   );
 }
@@ -94,25 +86,22 @@ export function SkillCapabilityProfilesPanel() {
   };
 
   return (
-    <Paper withBorder radius="md" p="md">
+    <SettingsGroup>
       <Stack gap="md">
         <Group justify="space-between" gap="sm">
           <Group gap="xs">
             <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             <Text fw={600}>Skill Capability Profiles</Text>
-            <Badge color="gray" variant="light">
-              {profiles.length}
-            </Badge>
+            <UiPill>{profiles.length}</UiPill>
           </Group>
           <Tooltip label="Refresh profiles">
-            <ActionIcon
-              variant="subtle"
-              color="gray"
+            <UiIconAction
+              variant="quiet"
               aria-label="Refresh skill capability profiles"
               onClick={() => profilesQuery.refetch()}
             >
               {profilesQuery.isFetching ? <Loader size="xs" /> : <RefreshCw className="h-4 w-4" />}
-            </ActionIcon>
+            </UiIconAction>
           </Tooltip>
         </Group>
 
@@ -128,7 +117,7 @@ export function SkillCapabilityProfilesPanel() {
             No shared skill resources found.
           </Text>
         ) : (
-          <Table striped highlightOnHover withTableBorder>
+          <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Skill</Table.Th>
@@ -152,14 +141,20 @@ export function SkillCapabilityProfilesPanel() {
                     </Text>
                   </Table.Td>
                   <Table.Td>
-                    <Badge color={STATUS_COLORS[profile.status]} variant="light">
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(STATUS_COLORS[profile.status])}
+                    >
                       {profile.status}
-                    </Badge>
+                    </UiPill>
                   </Table.Td>
                   <Table.Td>
-                    <Badge color={SEVERITY_COLORS[profile.severity]} variant="light">
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(SEVERITY_COLORS[profile.severity])}
+                    >
                       {profile.severity}
-                    </Badge>
+                    </UiPill>
                   </Table.Td>
                   <Table.Td>
                     <CapabilityBadges values={profile.declaredCapabilities} />
@@ -176,15 +171,14 @@ export function SkillCapabilityProfilesPanel() {
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Button
-                      size="xs"
-                      variant="light"
+                    <UiAction
+                      variant="secondary"
                       leftSection={<ClipboardList className="h-3.5 w-3.5" />}
                       disabled={profile.findings.length === 0 || createTask.isPending}
                       onClick={() => handleCreateTask(profile)}
                     >
                       Create task
-                    </Button>
+                    </UiAction>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -192,6 +186,6 @@ export function SkillCapabilityProfilesPanel() {
           </Table>
         )}
       </Stack>
-    </Paper>
+    </SettingsGroup>
   );
 }

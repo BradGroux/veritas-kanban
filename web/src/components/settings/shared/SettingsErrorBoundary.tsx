@@ -1,6 +1,7 @@
 import React, { Component, ReactNode } from 'react';
 import { AlertCircle, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
-import { Button } from '@mantine/core';
+import { UiAction, UiHeading } from '@/components/ui/UiVocabulary';
+import { SettingsGroup, SettingsNotice } from './SettingsLayout';
 
 interface SettingsErrorBoundaryProps {
   tabName: string;
@@ -50,25 +51,21 @@ export class SettingsErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="p-6 space-y-4">
-          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6 space-y-4">
+          <SettingsNotice tone="error">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0 space-y-2">
-                <h3 className="text-base font-semibold text-foreground">
-                  This section failed to load
-                </h3>
-                <p className="text-sm text-muted-foreground">
+                <UiHeading order={3}>This section failed to load</UiHeading>
+                <p className="text-sm">
                   The {this.props.tabName} tab encountered an unexpected error and couldn't render
                   properly.
                 </p>
 
                 {this.state.error && (
                   <div className="pt-2">
-                    <Button
+                    <UiAction
                       onClick={this.toggleErrorDetails}
-                      variant="subtle"
-                      color="gray"
-                      size="compact-xs"
+                      variant="quiet"
                       leftSection={
                         this.state.errorExpanded ? (
                           <ChevronUp className="h-3 w-3" />
@@ -78,11 +75,11 @@ export class SettingsErrorBoundary extends Component<
                       }
                     >
                       {this.state.errorExpanded ? 'Hide' : 'Show'} error details
-                    </Button>
+                    </UiAction>
 
                     {this.state.errorExpanded && (
-                      <div className="mt-2 p-3 rounded bg-background/50 border border-border">
-                        <code className="text-xs text-red-400 break-all whitespace-pre-wrap">
+                      <SettingsGroup className="mt-2">
+                        <code className="text-xs break-all whitespace-pre-wrap">
                           {this.state.error.message}
                           {this.state.error.stack && (
                             <div className="mt-2 text-muted-foreground text-[10px] leading-relaxed">
@@ -90,7 +87,7 @@ export class SettingsErrorBoundary extends Component<
                             </div>
                           )}
                         </code>
-                      </div>
+                      </SettingsGroup>
                     )}
                   </div>
                 )}
@@ -98,16 +95,15 @@ export class SettingsErrorBoundary extends Component<
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button
+              <UiAction
                 onClick={this.handleReset}
-                variant="outline"
-                size="sm"
+                variant="secondary"
                 leftSection={<RotateCcw className="h-3.5 w-3.5" />}
               >
                 Try Again
-              </Button>
+              </UiAction>
             </div>
-          </div>
+          </SettingsNotice>
         </div>
       );
     }

@@ -105,7 +105,7 @@ export const NumberRow = memo(function NumberRow({
           min={min}
           max={max}
           step={step}
-          className="w-24"
+          className="w-28"
           styles={{ input: { textAlign: 'right' } }}
         />
         {unit && <SettingsUnit>{unit}</SettingsUnit>}

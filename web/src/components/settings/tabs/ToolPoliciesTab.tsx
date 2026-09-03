@@ -1,3 +1,5 @@
+import { UiAction, UiPill, UiIconAction } from '@/components/ui/UiVocabulary';
+import { SettingsNotice, SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 /**
  * Tool Policies Settings Tab
  * GitHub Issue: #110
@@ -6,18 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  ActionIcon,
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-} from '@mantine/core';
+import { Group, Modal, Stack, Text, TextInput, Textarea } from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { useToast } from '@/hooks/useToast';
 import { Edit, Info, Plus, Trash2 } from 'lucide-react';
@@ -168,52 +159,38 @@ export function ToolPoliciesTab() {
         description="Review default and custom role allowlists and denylists."
         tone="advanced"
         actions={
-          <Button
+          <UiAction
+            variant="primary"
             type="button"
             onClick={() => openEditDialog(null)}
-            size="xs"
-            radius="md"
             leftSection={<Plus className="h-4 w-4" />}
           >
             New Policy
-          </Button>
+          </UiAction>
         }
       >
-        <Alert
-          color="blue"
-          variant="light"
-          radius="md"
-          icon={<Info className="h-5 w-5" />}
-          className="border border-blue-200 dark:border-blue-800"
-        >
+        <SettingsNotice icon={<Info className="h-5 w-5" />}>
           <Text size="sm">
             <strong>Default roles:</strong> planner, developer, reviewer, tester, deployer.
             <br />
             Default policies can be edited but not deleted. Custom roles can be created for
             specialized workflows.
           </Text>
-        </Alert>
+        </SettingsNotice>
 
         <div className="mt-4 space-y-3">
           {policies.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8 border rounded-lg">
+            <SettingsGroup className="text-center text-muted-foreground py-8">
               No policies defined
-            </div>
+            </SettingsGroup>
           ) : (
             policies.map((policy) => (
-              <div
-                key={policy.role}
-                className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
-              >
+              <SettingsGroup key={policy.role} className="hover:bg-muted/30 transition-colors">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2">
                       <h4 className="font-semibold">{policy.role}</h4>
-                      {DEFAULT_ROLES.has(policy.role) && (
-                        <Badge variant="light" color="gray" size="xs">
-                          default
-                        </Badge>
-                      )}
+                      {DEFAULT_ROLES.has(policy.role) && <UiPill>default</UiPill>}
                     </div>
 
                     <p className="text-sm text-muted-foreground">{policy.description}</p>
@@ -226,20 +203,14 @@ export function ToolPoliciesTab() {
                         {policy.allowed.length === 0 ? (
                           <span className="text-muted-foreground">none</span>
                         ) : policy.allowed.includes('*') ? (
-                          <Badge variant="outline" color="gray">
-                            all tools
-                          </Badge>
+                          <UiPill>all tools</UiPill>
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {policy.allowed.slice(0, 5).map((tool) => (
-                              <Badge key={tool} variant="outline" color="gray" size="xs">
-                                {tool}
-                              </Badge>
+                              <UiPill key={tool}>{tool}</UiPill>
                             ))}
                             {policy.allowed.length > 5 && (
-                              <Badge variant="outline" color="gray" size="xs">
-                                +{policy.allowed.length - 5} more
-                              </Badge>
+                              <UiPill>+{policy.allowed.length - 5} more</UiPill>
                             )}
                           </div>
                         )}
@@ -252,14 +223,14 @@ export function ToolPoliciesTab() {
                           </span>
                           <div className="flex flex-wrap gap-1">
                             {policy.denied.slice(0, 5).map((tool) => (
-                              <Badge key={tool} variant="light" color="red" size="xs">
+                              <UiPill kind="status" tone="error" key={tool}>
                                 {tool}
-                              </Badge>
+                              </UiPill>
                             ))}
                             {policy.denied.length > 5 && (
-                              <Badge variant="light" color="red" size="xs">
+                              <UiPill kind="status" tone="error">
                                 +{policy.denied.length - 5} more
-                              </Badge>
+                              </UiPill>
                             )}
                           </div>
                         </div>
@@ -268,33 +239,27 @@ export function ToolPoliciesTab() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <ActionIcon
+                    <UiIconAction
+                      variant="quiet"
                       type="button"
-                      variant="subtle"
-                      color="gray"
-                      size="sm"
-                      radius="md"
                       aria-label={`Edit ${policy.role}`}
                       onClick={() => openEditDialog(policy)}
                     >
                       <Edit className="h-4 w-4" />
-                    </ActionIcon>
+                    </UiIconAction>
                     {!DEFAULT_ROLES.has(policy.role) && (
-                      <ActionIcon
+                      <UiIconAction
+                        variant="destructive"
                         type="button"
-                        variant="subtle"
-                        color="red"
-                        size="sm"
-                        radius="md"
                         aria-label={`Delete ${policy.role}`}
                         onClick={() => handleDeletePolicy(policy.role)}
                       >
                         <Trash2 className="h-4 w-4" />
-                      </ActionIcon>
+                      </UiIconAction>
                     )}
                   </div>
                 </div>
-              </div>
+              </SettingsGroup>
             ))
           )}
         </div>
@@ -356,17 +321,12 @@ export function ToolPoliciesTab() {
           />
 
           <Group justify="flex-end" gap="sm">
-            <Button
-              type="button"
-              variant="outline"
-              radius="md"
-              onClick={() => setEditDialogOpen(false)}
-            >
+            <UiAction variant="secondary" type="button" onClick={() => setEditDialogOpen(false)}>
               Cancel
-            </Button>
-            <Button type="button" radius="md" onClick={handleSavePolicy}>
+            </UiAction>
+            <UiAction variant="primary" type="button" onClick={handleSavePolicy}>
               {isNew ? 'Create' : 'Save Changes'}
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>

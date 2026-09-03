@@ -1,18 +1,14 @@
+import {
+  UiHeading,
+  UiAction,
+  UiPill,
+  semanticToneForLegacyColor,
+  UiIconAction,
+} from '@/components/ui/UiVocabulary';
+import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ActionIcon,
-  Alert,
-  Badge,
-  Button,
-  Modal,
-  NumberInput,
-  Select,
-  Switch,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { Modal, NumberInput, Select, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import {
   useAgentProfiles,
   useCodexHealth,
@@ -200,14 +196,13 @@ export function AgentsTab() {
         description="Installed agent runtimes and their launch configuration."
         actions={
           !showAddForm ? (
-            <Button
-              variant="outline"
-              size="xs"
+            <UiAction
+              variant="secondary"
               leftSection={<Plus className="h-4 w-4" />}
               onClick={() => setShowAddForm(true)}
             >
               Add Agent
-            </Button>
+            </UiAction>
           ) : undefined
         }
       >
@@ -231,9 +226,9 @@ export function AgentsTab() {
           {isLoading ? (
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : config?.agents.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
+            <SettingsGroup empty className="text-sm text-muted-foreground py-4 text-center">
               No agents configured. Add one to get started.
-            </div>
+            </SettingsGroup>
           ) : (
             <div className="space-y-2">
               {config?.agents.map((agent) =>
@@ -326,7 +321,7 @@ export function AgentsTab() {
             isLoading={isSandboxPoliciesLoading}
           />
 
-          <div className="space-y-4 rounded-md border bg-card p-3">
+          <SettingsGroup className="space-y-4">
             <SectionHeader
               title="Agent Behavior"
               actions={<SaveIndicator isPending={isPending} />}
@@ -374,7 +369,7 @@ export function AgentsTab() {
                 onCheckedChange={(v) => update('enablePreview', v)}
               />
             </div>
-          </div>
+          </SettingsGroup>
 
           <RoutingRulesSection agents={config?.agents || []} />
         </div>
@@ -389,14 +384,14 @@ function HarnessCompatibilityPanel({ matrix }: { matrix?: HarnessCompatibilityMa
   return (
     <section className="space-y-3" aria-labelledby="harness-compatibility-title">
       <div>
-        <h3 id="harness-compatibility-title" className="text-sm font-medium">
+        <UiHeading order={3} id="harness-compatibility-title">
           Harness Compatibility
-        </h3>
+        </UiHeading>
         <Text size="xs" c="dimmed">
           Reviewed builds and live support evidence from one compatibility record.
         </Text>
       </div>
-      <div className="divide-y rounded-md border">
+      <SettingsGroup className="divide-y">
         {matrix.records.map((record) => (
           <div
             key={record.profileId}
@@ -419,16 +414,12 @@ function HarnessCompatibilityPanel({ matrix }: { matrix?: HarnessCompatibilityMa
               {record.limitations[0]}
             </Text>
             <div className="flex flex-wrap items-start gap-1">
-              <Badge size="xs" variant="light">
-                {record.supportStatus?.supportTier ?? 'not configured'}
-              </Badge>
-              <Badge size="xs" variant="outline">
-                {record.sourceAvailability.replace('-', ' ')}
-              </Badge>
+              <UiPill>{record.supportStatus?.supportTier ?? 'not configured'}</UiPill>
+              <UiPill>{record.sourceAvailability.replace('-', ' ')}</UiPill>
             </div>
           </div>
         ))}
-      </div>
+      </SettingsGroup>
       <Text size="xs" c="dimmed">
         Matrix {matrix.digest.slice(0, 12)} · probe revision {matrix.probeRevision}
       </Text>
@@ -531,18 +522,17 @@ function BuzzDefinitionImportSection() {
   );
 
   return (
-    <div className="rounded-md border bg-card p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">Buzz Persona and Team Definitions</h3>
+          <UiHeading order={3}>Buzz Persona and Team Definitions</UiHeading>
           <p className="text-xs text-muted-foreground">
             One-way import from the configured signed Buzz connection. Imports never start, enable,
             or reroute an agent.
           </p>
         </div>
-        <Button
-          size="xs"
-          variant="outline"
+        <UiAction
+          variant="secondary"
           leftSection={<RefreshCw className="h-3.5 w-3.5" />}
           loading={definitionsQuery.isFetching}
           onClick={() => {
@@ -552,14 +542,14 @@ function BuzzDefinitionImportSection() {
           }}
         >
           Refresh Sources
-        </Button>
+        </UiAction>
       </div>
 
       {definitionsQuery.error ? (
-        <Alert color="yellow" icon={<AlertCircle className="h-4 w-4" />}>
+        <SettingsNotice tone="warning" icon={<AlertCircle className="h-4 w-4" />}>
           Configure and verify Buzz under Notifications before importing definitions.{' '}
           {definitionsQuery.error.message}
-        </Alert>
+        </SettingsNotice>
       ) : (
         <>
           <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_minmax(180px,260px)_auto]">
@@ -611,15 +601,15 @@ function BuzzDefinitionImportSection() {
               placeholder="Deterministic when omitted"
               disabled={action === 'create' || action === 'skip'}
             />
-            <Button
+            <UiAction
+              variant="secondary"
               className="self-end"
-              variant="outline"
               onClick={() => previewMutation.mutate()}
               loading={previewMutation.isPending}
               disabled={!selected}
             >
               Preview
-            </Button>
+            </UiAction>
           </div>
 
           {definitionsQuery.data && (
@@ -633,24 +623,21 @@ function BuzzDefinitionImportSection() {
           )}
 
           {preview && (
-            <div className="rounded-md border bg-background/70 p-3 space-y-3">
+            <SettingsGroup className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="light"
-                  color={preview.definition.type === 'persona' ? 'blue' : 'teal'}
-                >
-                  {preview.definition.type}
-                </Badge>
+                <UiPill>{preview.definition.type}</UiPill>
                 <Text size="sm" fw={600}>
                   {preview.definition.displayName}
                 </Text>
-                <Badge variant="outline">{preview.action}</Badge>
-                <Badge
-                  variant="light"
-                  color={preview.definition.compatibility === 'compatible' ? 'green' : 'red'}
+                <UiPill>{preview.action}</UiPill>
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(
+                    preview.definition.compatibility === 'compatible' ? 'green' : 'red'
+                  )}
                 >
                   {preview.definition.compatibility}
-                </Badge>
+                </UiPill>
                 <span className="text-xs text-muted-foreground">
                   {preview.definition.authorPubkey.slice(0, 12)}… / {preview.definition.dTag}
                 </span>
@@ -665,7 +652,7 @@ function BuzzDefinitionImportSection() {
               </div>
 
               {blocked && (
-                <Alert color="red" icon={<ShieldAlert className="h-4 w-4" />}>
+                <SettingsNotice tone="error" icon={<ShieldAlert className="h-4 w-4" />}>
                   Resolve every collision and unresolved same-author persona before importing.
                   {preview.collisions.map((collision) => (
                     <div key={`${collision.field}:${collision.value}`}>
@@ -675,11 +662,11 @@ function BuzzDefinitionImportSection() {
                   {preview.unresolvedPersonaIds.length > 0 && (
                     <div>Unresolved personas: {preview.unresolvedPersonaIds.join(', ')}</div>
                   )}
-                </Alert>
+                </SettingsNotice>
               )}
 
               {preview.diff.length > 0 && (
-                <div className="rounded border p-2" aria-label="Buzz definition proposed changes">
+                <SettingsGroup aria-label="Buzz definition proposed changes">
                   <div className="mb-1 text-xs font-medium">Proposed changes</div>
                   <div className="space-y-1">
                     {preview.diff.map((entry) => (
@@ -690,65 +677,64 @@ function BuzzDefinitionImportSection() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </SettingsGroup>
               )}
 
               <div className="grid gap-2 md:grid-cols-2">
                 {preview.fieldReport.map((field) => (
-                  <div
+                  <SettingsGroup
                     key={field.field}
-                    className="flex items-start justify-between gap-2 rounded border p-2"
+                    className="flex items-start justify-between gap-2"
                   >
                     <div>
                       <div className="text-xs font-medium">{field.field}</div>
                       <div className="text-xs text-muted-foreground">{field.detail}</div>
                     </div>
-                    <Badge
-                      size="xs"
-                      variant="light"
-                      color={
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(
                         field.disposition === 'mapped'
                           ? 'green'
                           : field.disposition === 'rejected' || field.disposition === 'conflict'
                             ? 'red'
                             : 'gray'
-                      }
+                      )}
                     >
                       {field.disposition}
-                    </Badge>
-                  </div>
+                    </UiPill>
+                  </SettingsGroup>
                 ))}
               </div>
 
               <div className="flex justify-end">
-                <Button
-                  size="xs"
+                <UiAction
+                  variant="primary"
                   onClick={() => importMutation.mutate()}
                   loading={importMutation.isPending}
                   disabled={blocked}
                 >
                   {preview.action === 'skip' ? 'Confirm Skip' : `Confirm ${preview.action}`}
-                </Button>
+                </UiAction>
               </div>
-            </div>
+            </SettingsGroup>
           )}
 
           {linksQuery.data && linksQuery.data.length > 0 && (
             <div className="flex flex-wrap gap-2" aria-label="Linked Buzz source status">
               {linksQuery.data.map((link) => (
-                <Badge
-                  key={`${link.targetType}:${link.targetId}`}
-                  variant="light"
-                  color={
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(
                     link.status === 'current'
                       ? 'green'
                       : link.status === 'changed'
                         ? 'yellow'
                         : 'red'
-                  }
+                  )}
+                  key={`${link.targetType}:${link.targetId}`}
                 >
                   {link.targetId}: {link.status}
-                </Badge>
+                </UiPill>
               ))}
             </div>
           )}
@@ -756,11 +742,11 @@ function BuzzDefinitionImportSection() {
       )}
 
       {error && (
-        <Alert color="red" icon={<AlertCircle className="h-4 w-4" />}>
+        <SettingsNotice tone="error" icon={<AlertCircle className="h-4 w-4" />}>
           {error.message}
-        </Alert>
+        </SettingsNotice>
       )}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -908,29 +894,27 @@ function AgentProfilePackagesSection({
   };
 
   return (
-    <div className="rounded-md border bg-card p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">Agent Profile Packages</h3>
+          <UiHeading order={3}>Agent Profile Packages</UiHeading>
           <p className="text-xs text-muted-foreground">
             {profiles.length} package{profiles.length === 1 ? '' : 's'} installed
           </p>
         </div>
-        <Badge variant="light" color="gray">
-          YAML / JSON
-        </Badge>
+        <UiPill>YAML / JSON</UiPill>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
         <div className="space-y-2">
           {isLoading ? (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            <SettingsGroup empty className="text-sm text-muted-foreground">
               Loading packages...
-            </div>
+            </SettingsGroup>
           ) : profiles.length === 0 ? (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            <SettingsGroup empty className="text-sm text-muted-foreground">
               No profile packages installed.
-            </div>
+            </SettingsGroup>
           ) : (
             profiles.map((profile) => (
               <AgentProfileCard
@@ -943,7 +927,7 @@ function AgentProfilePackagesSection({
           )}
         </div>
 
-        <div className="rounded-md border bg-background/60 p-3 space-y-3">
+        <SettingsGroup className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <Text size="sm" fw={500}>
               Import Package
@@ -967,22 +951,21 @@ function AgentProfilePackagesSection({
             spellCheck={false}
           />
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="xs"
-              variant="outline"
+            <UiAction
+              variant="secondary"
               onClick={handleValidate}
               loading={validateProfile.isPending}
             >
               Validate
-            </Button>
-            <Button
-              size="xs"
+            </UiAction>
+            <UiAction
+              variant="primary"
               leftSection={<Upload className="h-4 w-4" />}
               onClick={handleImport}
               loading={importProfile.isPending}
             >
               Import
-            </Button>
+            </UiAction>
           </div>
           {validationMessage && (
             <pre className="max-h-36 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">
@@ -998,9 +981,9 @@ function AgentProfilePackagesSection({
               spellCheck={false}
             />
           )}
-        </div>
+        </SettingsGroup>
       </div>
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -1051,18 +1034,21 @@ function AgentProfileCard({
   };
 
   return (
-    <div className="rounded-md border bg-background/70 p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Bot className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{profile.displayName}</span>
-            <Badge size="xs" variant="light" color={profile.enabled ? 'green' : 'gray'}>
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(profile.enabled ? 'green' : 'gray')}
+            >
               {profile.enabled ? 'Enabled' : 'Disabled'}
-            </Badge>
-            <Badge size="xs" variant="outline">
+            </UiPill>
+            <UiPill>
               {profile.id}@{profile.version}
-            </Badge>
+            </UiPill>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{profile.role}</p>
         </div>
@@ -1079,29 +1065,13 @@ function AgentProfileCard({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge size="xs" variant={runtimeAgent?.enabled ? 'light' : 'outline'} color="gray">
+        <UiPill kind="status" tone={runtimeAgent?.enabled ? 'success' : 'neutral'}>
           {profile.runtime.agent}
-        </Badge>
-        {profile.runtime.provider && (
-          <Badge size="xs" variant="outline" color="gray">
-            {profile.runtime.provider}
-          </Badge>
-        )}
-        {profile.runtime.model && (
-          <Badge size="xs" variant="outline" color="blue">
-            {profile.runtime.model}
-          </Badge>
-        )}
-        {profile.policy?.sandboxPresetId && (
-          <Badge size="xs" variant="light" color="teal">
-            {profile.policy.sandboxPresetId}
-          </Badge>
-        )}
-        {profile.policy?.budget?.enabled && (
-          <Badge size="xs" variant="light" color="orange">
-            Budget
-          </Badge>
-        )}
+        </UiPill>
+        {profile.runtime.provider && <UiPill>{profile.runtime.provider}</UiPill>}
+        {profile.runtime.model && <UiPill>{profile.runtime.model}</UiPill>}
+        {profile.policy?.sandboxPresetId && <UiPill>{profile.policy.sandboxPresetId}</UiPill>}
+        {profile.policy?.budget?.enabled && <UiPill>Budget</UiPill>}
       </div>
 
       <div className="grid gap-2 md:grid-cols-2">
@@ -1130,31 +1100,23 @@ function AgentProfileCard({
       />
 
       <div className="flex flex-wrap items-end gap-2">
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={saveMetadata}
-          loading={updateProfile.isPending}
-        >
+        <UiAction variant="secondary" onClick={saveMetadata} loading={updateProfile.isPending}>
           Save Metadata
-        </Button>
-        <Button
-          size="xs"
-          variant="outline"
+        </UiAction>
+        <UiAction
+          variant="secondary"
           leftSection={<Download className="h-4 w-4" />}
           onClick={() => onExport(profile.id, 'yaml')}
         >
           Export YAML
-        </Button>
-        <Button
-          size="xs"
-          variant="subtle"
-          color="red"
+        </UiAction>
+        <UiAction
+          variant="destructive"
           onClick={() => deleteProfile.mutate(profile.id)}
           loading={deleteProfile.isPending}
         >
           Remove
-        </Button>
+        </UiAction>
         <TextInput
           size="xs"
           label="Launch Task"
@@ -1162,17 +1124,17 @@ function AgentProfileCard({
           onChange={(event) => setLaunchTaskId(event.currentTarget.value)}
           placeholder="task id"
         />
-        <Button
-          size="xs"
+        <UiAction
+          variant="primary"
           leftSection={<Rocket className="h-4 w-4" />}
           onClick={launch}
           loading={startAgent.isPending}
           disabled={!profile.enabled || !launchTaskId.trim()}
         >
           Launch
-        </Button>
+        </UiAction>
       </div>
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -1186,19 +1148,18 @@ function ProviderHealthPanel({
   onRefresh: () => void;
 }) {
   return (
-    <div className="rounded-md border bg-card p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">Context Provider Health</h3>
+          <UiHeading order={3}>Context Provider Health</UiHeading>
           <p className="text-xs text-muted-foreground">
             {health?.checkedAt
               ? `Checked ${new Date(health.checkedAt).toLocaleTimeString()}`
               : 'Checking provider posture'}
           </p>
         </div>
-        <ActionIcon
-          variant="subtle"
-          size="sm"
+        <UiIconAction
+          variant="quiet"
           onClick={onRefresh}
           disabled={isFetching}
           aria-label="Refresh provider health"
@@ -1208,20 +1169,24 @@ function ProviderHealthPanel({
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-        </ActionIcon>
+        </UiIconAction>
       </div>
 
       {health && (
         <div className="flex flex-wrap gap-2">
-          <Badge variant="light" color="gray">
-            {health.summary.total} providers
-          </Badge>
-          <Badge variant="light" color={health.summary.writeCapable > 0 ? 'yellow' : 'gray'}>
+          <UiPill>{health.summary.total} providers</UiPill>
+          <UiPill
+            kind="status"
+            tone={semanticToneForLegacyColor(health.summary.writeCapable > 0 ? 'yellow' : 'gray')}
+          >
             {health.summary.writeCapable} write-capable
-          </Badge>
-          <Badge variant="light" color={health.summary.risky > 0 ? 'red' : 'green'}>
+          </UiPill>
+          <UiPill
+            kind="status"
+            tone={semanticToneForLegacyColor(health.summary.risky > 0 ? 'red' : 'green')}
+          >
             {health.summary.risky} risky
-          </Badge>
+          </UiPill>
         </div>
       )}
 
@@ -1230,52 +1195,49 @@ function ProviderHealthPanel({
           <ProviderHealthItem key={provider.id} provider={provider} />
         ))}
         {!health?.providers?.length && (
-          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          <SettingsGroup empty className="text-sm text-muted-foreground">
             No provider health data is available yet.
-          </div>
+          </SettingsGroup>
         )}
       </div>
-    </div>
+    </SettingsGroup>
   );
 }
 
 function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
   return (
-    <div className="rounded-md border bg-background/60 p-3 space-y-2">
+    <SettingsGroup className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{provider.name}</span>
-            <Badge size="xs" color={providerStateColor(provider.state)} variant="light">
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(providerStateColor(provider.state))}
+            >
               {formatProviderState(provider.state)}
-            </Badge>
-            <Badge
-              size="xs"
-              color={provider.risk === 'risky' ? 'red' : 'gray'}
-              variant={provider.risk === 'risky' ? 'light' : 'outline'}
+            </UiPill>
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(provider.risk === 'risky' ? 'red' : 'gray')}
             >
               {formatProviderState(provider.risk)}
-            </Badge>
+            </UiPill>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{provider.detail}</p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge size="xs" variant="outline">
-          {formatProviderState(provider.boundary)}
-        </Badge>
-        <Badge size="xs" variant={provider.readCapability ? 'light' : 'outline'} color="gray">
-          Read {provider.readCapability ? 'on' : 'off'}
-        </Badge>
-        <Badge
-          size="xs"
-          variant={provider.writeCapability ? 'light' : 'outline'}
-          color={provider.writeCapability ? 'yellow' : 'gray'}
+        <UiPill>{formatProviderState(provider.boundary)}</UiPill>
+        <UiPill>Read {provider.readCapability ? 'on' : 'off'}</UiPill>
+        <UiPill
+          kind="status"
+          tone={semanticToneForLegacyColor(provider.writeCapability ? 'yellow' : 'gray')}
         >
           Write {provider.writeCapability ? 'on' : 'off'}
-        </Badge>
+        </UiPill>
       </div>
 
       <p className="text-xs text-muted-foreground">{provider.privacyScope}</p>
@@ -1283,9 +1245,7 @@ function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
       {provider.tools.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {provider.tools.slice(0, 5).map((tool) => (
-            <Badge key={tool} size="xs" variant="outline" color="gray">
-              {tool}
-            </Badge>
+            <UiPill key={tool}>{tool}</UiPill>
           ))}
         </div>
       )}
@@ -1301,24 +1261,25 @@ function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
       {provider.postureChecks?.length ? (
         <div className="space-y-2">
           {provider.postureChecks.slice(0, 5).map((check) => (
-            <div key={check.id} className="rounded-md border bg-card/60 p-2">
+            <SettingsGroup key={check.id}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-medium">{check.label}</span>
-                <Badge size="xs" color={providerPostureStatusColor(check.status)} variant="light">
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(providerPostureStatusColor(check.status))}
+                >
                   {formatProviderState(check.status)}
-                </Badge>
+                </UiPill>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{check.detail}</p>
               {check.items?.length ? (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {check.items.slice(0, 6).map((item) => (
-                    <Badge key={item} size="xs" variant="outline" color="gray">
-                      {item}
-                    </Badge>
+                    <UiPill key={item}>{item}</UiPill>
                   ))}
                 </div>
               ) : null}
-            </div>
+            </SettingsGroup>
           ))}
         </div>
       ) : null}
@@ -1330,7 +1291,7 @@ function ProviderHealthItem({ provider }: { provider: ContextProviderHealth }) {
           ))}
         </ul>
       )}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -1385,19 +1346,18 @@ function AgentHostHealthPanel({ agents }: { agents: AgentConfig[] }) {
   );
 
   return (
-    <div className="rounded-md border bg-card p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">Agent Host Health</h3>
+          <UiHeading order={3}>Agent Host Health</UiHeading>
           <p className="text-xs text-muted-foreground">
             {health?.generatedAt
               ? `Checked ${new Date(health.generatedAt).toLocaleTimeString()}`
               : 'Checking supervisor posture'}
           </p>
         </div>
-        <ActionIcon
-          variant="subtle"
-          size="sm"
+        <UiIconAction
+          variant="quiet"
           onClick={() => refetch()}
           disabled={isFetching}
           aria-label="Refresh host health"
@@ -1407,7 +1367,7 @@ function AgentHostHealthPanel({ agents }: { agents: AgentConfig[] }) {
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-        </ActionIcon>
+        </UiIconAction>
       </div>
 
       <AgentHostSummary health={health} />
@@ -1418,9 +1378,9 @@ function AgentHostHealthPanel({ agents }: { agents: AgentConfig[] }) {
             <AgentHostItem key={host.id} host={host} />
           ))}
           {!health?.hosts?.length && (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            <SettingsGroup empty className="text-sm text-muted-foreground">
               No agent supervisors have registered host metadata yet.
-            </div>
+            </SettingsGroup>
           )}
         </div>
 
@@ -1435,7 +1395,7 @@ function AgentHostHealthPanel({ agents }: { agents: AgentConfig[] }) {
           onHostChange={setSelectedHostId}
         />
       </div>
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -1443,75 +1403,74 @@ function AgentHostSummary({ health }: { health?: AgentHostHealthResponse }) {
   if (!health) {
     return (
       <div className="flex flex-wrap gap-2">
-        <Badge variant="outline" color="gray">
-          Loading hosts
-        </Badge>
+        <UiPill>Loading hosts</UiPill>
       </div>
     );
   }
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Badge variant="light" color="gray">
-        {health.summary.total} hosts
-      </Badge>
-      <Badge variant="light" color="green">
+      <UiPill>{health.summary.total} hosts</UiPill>
+      <UiPill kind="status" tone="success">
         {health.summary.connected} connected
-      </Badge>
-      <Badge variant="light" color={health.summary.degraded > 0 ? 'yellow' : 'gray'}>
+      </UiPill>
+      <UiPill
+        kind="status"
+        tone={semanticToneForLegacyColor(health.summary.degraded > 0 ? 'yellow' : 'gray')}
+      >
         {health.summary.degraded} degraded
-      </Badge>
-      <Badge variant="light" color={health.summary.stale > 0 ? 'yellow' : 'gray'}>
+      </UiPill>
+      <UiPill
+        kind="status"
+        tone={semanticToneForLegacyColor(health.summary.stale > 0 ? 'yellow' : 'gray')}
+      >
         {health.summary.stale} stale
-      </Badge>
-      <Badge variant="light" color={health.summary.overloaded > 0 ? 'red' : 'gray'}>
+      </UiPill>
+      <UiPill
+        kind="status"
+        tone={semanticToneForLegacyColor(health.summary.overloaded > 0 ? 'red' : 'gray')}
+      >
         {health.summary.overloaded} overloaded
-      </Badge>
+      </UiPill>
     </div>
   );
 }
 
 function AgentHostItem({ host }: { host: AgentHostRecord }) {
   return (
-    <div className="rounded-md border bg-background/60 p-3 space-y-2">
+    <SettingsGroup className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Server className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{host.name}</span>
-            <Badge size="xs" color={hostPostureColor(host.posture)} variant="light">
+            <UiPill kind="status" tone={semanticToneForLegacyColor(hostPostureColor(host.posture))}>
               {formatProviderState(host.posture)}
-            </Badge>
+            </UiPill>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {host.supervisorType}
             {host.os ? ` · ${host.os}` : ''}
           </p>
         </div>
-        <Badge size="xs" color={host.overloaded ? 'red' : 'gray'} variant="outline">
+        <UiPill kind="status" tone={semanticToneForLegacyColor(host.overloaded ? 'red' : 'gray')}>
           Queue {host.queueDepth}/{host.maxQueueDepth}
-        </Badge>
+        </UiPill>
       </div>
 
       <div className="flex flex-wrap gap-1">
-        <Badge size="xs" variant="light" color="blue">
+        <UiPill kind="status" tone="info">
           {host.providerRuntimeManifests.length} validated manifest
           {host.providerRuntimeManifests.length === 1 ? '' : 's'}
-        </Badge>
+        </UiPill>
         {host.supportedAgents.slice(0, 4).map((agent) => (
-          <Badge key={agent} size="xs" variant="outline" color="gray">
-            {agent}
-          </Badge>
+          <UiPill key={agent}>{agent}</UiPill>
         ))}
         {host.supportedProviders.slice(0, 3).map((provider) => (
-          <Badge key={provider} size="xs" variant="light" color="gray">
-            {provider}
-          </Badge>
+          <UiPill key={provider}>{provider}</UiPill>
         ))}
         {host.sandboxCapabilities.slice(0, 3).map((capability) => (
-          <Badge key={capability} size="xs" variant="light" color="teal">
-            {capability}
-          </Badge>
+          <UiPill key={capability}>{capability}</UiPill>
         ))}
       </div>
 
@@ -1528,7 +1487,7 @@ function AgentHostItem({ host }: { host: AgentHostRecord }) {
           ))}
         </ul>
       )}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -1557,7 +1516,7 @@ function AgentHostPreviewPanel({
     : undefined;
 
   return (
-    <div className="rounded-md border bg-background/60 p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div>
         <h4 className="text-sm font-medium">Launch Compatibility</h4>
         <p className="text-xs text-muted-foreground">
@@ -1587,12 +1546,10 @@ function AgentHostPreviewPanel({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge variant="light" color={selectedHost ? 'green' : 'gray'}>
+        <UiPill kind="status" tone={semanticToneForLegacyColor(selectedHost ? 'green' : 'gray')}>
           {selectedHost || 'No host selected'}
-        </Badge>
-        <Badge variant="outline" color="gray">
-          {preview?.decision.policy || 'disabled'}
-        </Badge>
+        </UiPill>
+        <UiPill>{preview?.decision.policy || 'disabled'}</UiPill>
       </div>
 
       {selectedPreview && (
@@ -1600,9 +1557,12 @@ function AgentHostPreviewPanel({
           {selectedPreview.checks.slice(0, 5).map((check) => (
             <div key={check.id} className="flex items-start justify-between gap-2 text-xs">
               <span className="text-muted-foreground">{check.label}</span>
-              <Badge size="xs" color={check.passed ? 'green' : 'red'} variant="light">
+              <UiPill
+                kind="status"
+                tone={semanticToneForLegacyColor(check.passed ? 'green' : 'red')}
+              >
                 {check.passed ? 'Pass' : 'Block'}
-              </Badge>
+              </UiPill>
             </div>
           ))}
         </div>
@@ -1611,7 +1571,7 @@ function AgentHostPreviewPanel({
       {!selectedPreview && preview?.decision.fallbackBehavior && (
         <p className="text-xs text-muted-foreground">{preview.decision.fallbackBehavior}</p>
       )}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -1743,23 +1703,22 @@ function SandboxPoliciesSection({
   };
 
   return (
-    <div className="rounded-md border bg-card p-3 space-y-4">
+    <SettingsGroup className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">Sandbox Policies</h3>
+          <UiHeading order={3}>Sandbox Policies</UiHeading>
           <p className="text-xs text-muted-foreground">
             {isLoading ? 'Loading presets' : `${presets.length} presets configured`}
           </p>
         </div>
         {!showCreateForm && !editingPreset && (
-          <Button
-            variant="outline"
-            size="xs"
+          <UiAction
+            variant="secondary"
             leftSection={<Plus className="h-4 w-4" />}
             onClick={() => setShowCreateForm(true)}
           >
             Add Preset
-          </Button>
+          </UiAction>
         )}
       </div>
 
@@ -1780,23 +1739,20 @@ function SandboxPoliciesSection({
           {presets.map((preset) => {
             const assignedAgents = assignedByPreset.get(preset.id) ?? [];
             return (
-              <div key={preset.id} className="rounded-md border bg-background/60 p-3 space-y-2">
+              <SettingsGroup key={preset.id} className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <ShieldCheck className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">{preset.name}</span>
-                      <Badge size="xs" variant="light" color={preset.enabled ? 'green' : 'gray'}>
+                      <UiPill
+                        kind="status"
+                        tone={semanticToneForLegacyColor(preset.enabled ? 'green' : 'gray')}
+                      >
                         {preset.enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                      <Badge size="xs" variant="outline" color="gray">
-                        {preset.enforcement}
-                      </Badge>
-                      {preset.builtIn && (
-                        <Badge size="xs" variant="outline" color="teal">
-                          Built-in
-                        </Badge>
-                      )}
+                      </UiPill>
+                      <UiPill>{preset.enforcement}</UiPill>
+                      {preset.builtIn && <UiPill>Built-in</UiPill>}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {sandboxPresetSummary(preset)}
@@ -1804,17 +1760,15 @@ function SandboxPoliciesSection({
                   </div>
                   {!preset.builtIn && (
                     <div className="flex items-center gap-1">
-                      <ActionIcon
-                        variant="subtle"
-                        size="sm"
+                      <UiIconAction
+                        variant="quiet"
                         aria-label={`Edit ${preset.name}`}
                         onClick={() => setEditingPreset(preset)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        size="sm"
+                      </UiIconAction>
+                      <UiIconAction
+                        variant="quiet"
                         aria-label={
                           preset.enabled ? `Disable ${preset.name}` : `Enable ${preset.name}`
                         }
@@ -1826,48 +1780,36 @@ function SandboxPoliciesSection({
                         }
                       >
                         <ShieldAlert className="h-3.5 w-3.5" />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        color="red"
+                      </UiIconAction>
+                      <UiIconAction
+                        variant="destructive"
                         aria-label={`Delete ${preset.name}`}
                         onClick={() => deletePreset.mutate(preset.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </ActionIcon>
+                      </UiIconAction>
                     </div>
                   )}
                 </div>
 
                 <div className="flex flex-wrap gap-1">
-                  <Badge size="xs" variant="light" color="gray">
-                    {formatSandboxMode(preset)}
-                  </Badge>
-                  <Badge size="xs" variant="light" color="gray">
-                    Network {preset.network.defaultEgress}
-                  </Badge>
-                  <Badge size="xs" variant="light" color="gray">
-                    Env {preset.environment.passthrough.length}
-                  </Badge>
-                  {assignedAgents.length > 0 && (
-                    <Badge size="xs" variant="light" color="violet">
-                      {assignedAgents.length} assigned
-                    </Badge>
-                  )}
+                  <UiPill>{formatSandboxMode(preset)}</UiPill>
+                  <UiPill>Network {preset.network.defaultEgress}</UiPill>
+                  <UiPill>Env {preset.environment.passthrough.length}</UiPill>
+                  {assignedAgents.length > 0 && <UiPill>{assignedAgents.length} assigned</UiPill>}
                 </div>
-              </div>
+              </SettingsGroup>
             );
           })}
 
           {!presets.length && (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            <SettingsGroup empty className="text-sm text-muted-foreground">
               No sandbox presets configured.
-            </div>
+            </SettingsGroup>
           )}
         </div>
 
-        <div className="rounded-md border bg-background/60 p-3 space-y-3">
+        <SettingsGroup className="space-y-3">
           <div>
             <h4 className="text-sm font-medium">Dry Run</h4>
             <p className="text-xs text-muted-foreground">
@@ -1898,9 +1840,8 @@ function SandboxPoliciesSection({
               closed.
             </p>
           )}
-          <Button
-            size="xs"
-            variant="light"
+          <UiAction
+            variant="secondary"
             onClick={handlePreview}
             disabled={!selectedPreset || !previewManifest || validationPending}
             title={
@@ -1910,29 +1851,32 @@ function SandboxPoliciesSection({
             }
           >
             {validationPending ? 'Checking...' : 'Run Dry Check'}
-          </Button>
+          </UiAction>
 
           {validationError && (
-            <Alert color="red" icon={<AlertCircle className="h-4 w-4" />}>
+            <SettingsNotice tone="error" icon={<AlertCircle className="h-4 w-4" />}>
               {validationError}
-            </Alert>
+            </SettingsNotice>
           )}
 
           {validation && (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
-                <Badge color={sandboxDecisionColor(validation.decision)} variant="light">
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(sandboxDecisionColor(validation.decision))}
+                >
                   {validation.decision}
-                </Badge>
-                <Badge variant="outline" color="gray">
-                  {validation.effective.sandboxMode}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  color={validation.effective.networkAccessEnabled ? 'yellow' : 'green'}
+                </UiPill>
+                <UiPill>{validation.effective.sandboxMode}</UiPill>
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(
+                    validation.effective.networkAccessEnabled ? 'yellow' : 'green'
+                  )}
                 >
                   Network {validation.effective.networkAccessEnabled ? 'on' : 'off'}
-                </Badge>
+                </UiPill>
               </div>
               {validation.unsupportedRules.length > 0 && (
                 <ul className="space-y-1 text-xs text-muted-foreground">
@@ -1946,9 +1890,9 @@ function SandboxPoliciesSection({
               )}
             </div>
           )}
-        </div>
+        </SettingsGroup>
       </div>
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -2046,7 +1990,7 @@ function SandboxPresetForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-md border bg-muted/30 p-3 space-y-3">
+    <form onSubmit={handleSubmit} className="settings-form space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
         <ShieldCheck className="h-4 w-4" />
         {isEditing ? `Edit ${preset.name}` : 'Add Sandbox Preset'}
@@ -2153,23 +2097,22 @@ function SandboxPresetForm({
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button
+        <UiAction
+          variant="quiet"
           type="button"
-          variant="subtle"
-          size="xs"
           leftSection={<X className="h-3.5 w-3.5" />}
           onClick={onCancel}
         >
           Cancel
-        </Button>
-        <Button
+        </UiAction>
+        <UiAction
+          variant="primary"
           type="submit"
-          size="xs"
           leftSection={<Check className="h-3.5 w-3.5" />}
           disabled={!valid}
         >
           Save Preset
-        </Button>
+        </UiAction>
       </div>
     </form>
   );
@@ -2225,29 +2168,28 @@ function CodexHealthPanel({
   onRefresh: () => void;
 }) {
   const statusBadge = (ready: boolean, label: string) => (
-    <Badge
-      variant={ready ? 'light' : 'outline'}
-      color={ready ? 'green' : 'gray'}
+    <UiPill
+      kind="status"
+      tone={semanticToneForLegacyColor(ready ? 'green' : 'gray')}
       leftSection={ready ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
     >
       {label}
-    </Badge>
+    </UiPill>
   );
 
   return (
-    <div className="rounded-md border bg-card p-3 space-y-3">
+    <SettingsGroup className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">Codex Health</h3>
+          <UiHeading order={3}>Codex Health</UiHeading>
           <p className="text-xs text-muted-foreground">
             {health?.checkedAt
               ? `Checked ${new Date(health.checkedAt).toLocaleTimeString()}`
               : 'Checking Codex readiness'}
           </p>
         </div>
-        <ActionIcon
-          variant="subtle"
-          size="sm"
+        <UiIconAction
+          variant="quiet"
           onClick={onRefresh}
           disabled={isFetching}
           aria-label="Refresh Codex health"
@@ -2257,7 +2199,7 @@ function CodexHealthPanel({
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-        </ActionIcon>
+        </UiIconAction>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -2283,7 +2225,7 @@ function CodexHealthPanel({
           ))}
         </ul>
       ) : null}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -2328,46 +2270,27 @@ function AgentItem({
               >
                 {agent.name}
               </span>
-              {isDefault && (
-                <Badge size="xs" variant="light" color="violet">
-                  Default
-                </Badge>
-              )}
+              {isDefault && <UiPill>Default</UiPill>}
             </div>
             <code className="text-xs text-muted-foreground">
               {agent.command} {agent.args.join(' ')}
             </code>
             <div className="mt-1 flex flex-wrap gap-1">
-              {agent.provider && (
-                <Badge size="xs" variant="outline" color="gray">
-                  {formatAgentProvider(agent.provider)}
-                </Badge>
-              )}
+              {agent.provider && <UiPill>{formatAgentProvider(agent.provider)}</UiPill>}
               {supportStatus && (
-                <Badge
-                  size="xs"
-                  variant="light"
-                  color={harnessSupportTierColor(supportStatus.supportTier)}
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(
+                    harnessSupportTierColor(supportStatus.supportTier)
+                  )}
                   title={supportStatus.reason}
                 >
                   {formatProviderState(supportStatus.supportTier)}
-                </Badge>
+                </UiPill>
               )}
-              {agent.model && (
-                <Badge size="xs" variant="light" color="gray">
-                  {agent.model}
-                </Badge>
-              )}
-              {sandboxPreset && (
-                <Badge size="xs" variant="light" color="teal">
-                  {sandboxPreset.name}
-                </Badge>
-              )}
-              {agent.budget?.enabled && (
-                <Badge size="xs" variant="light" color="orange">
-                  Budget
-                </Badge>
-              )}
+              {agent.model && <UiPill>{agent.model}</UiPill>}
+              {sandboxPreset && <UiPill>{sandboxPreset.name}</UiPill>}
+              {agent.budget?.enabled && <UiPill>Budget</UiPill>}
             </div>
             {supportStatus && (
               <p className="mt-1 max-w-2xl text-xs text-muted-foreground">{supportStatus.reason}</p>
@@ -2375,9 +2298,9 @@ function AgentItem({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ActionIcon variant="subtle" size="sm" onClick={onEdit} aria-label={`Edit ${agent.name}`}>
+          <UiIconAction variant="quiet" onClick={onEdit} aria-label={`Edit ${agent.name}`}>
             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-          </ActionIcon>
+          </UiIconAction>
           {isDefault ? (
             <span
               className="text-xs text-muted-foreground px-1"
@@ -2386,14 +2309,13 @@ function AgentItem({
               —
             </span>
           ) : (
-            <ActionIcon
-              variant="subtle"
-              size="sm"
+            <UiIconAction
+              variant="quiet"
               onClick={() => setConfirmRemoveOpen(true)}
               aria-label={`Remove ${agent.name}`}
             >
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-            </ActionIcon>
+              <Trash2 className="h-3.5 w-3.5" />
+            </UiIconAction>
           )}
           <Switch
             checked={agent.enabled}
@@ -2416,18 +2338,18 @@ function AgentItem({
             configuration.
           </Text>
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="subtle" onClick={() => setConfirmRemoveOpen(false)}>
+            <UiAction variant="quiet" onClick={() => setConfirmRemoveOpen(false)}>
               Cancel
-            </Button>
-            <Button
-              color="red"
+            </UiAction>
+            <UiAction
+              variant="destructive"
               onClick={() => {
                 onRemove();
                 setConfirmRemoveOpen(false);
               }}
             >
               Remove
-            </Button>
+            </UiAction>
           </div>
         </Modal>
       )}
@@ -2571,14 +2493,13 @@ function RoutingRulesSection({ agents }: RoutingRulesSectionProps) {
                 Rules (first match wins)
               </h4>
               {!showAddRule && (
-                <Button
-                  variant="outline"
-                  size="xs"
+                <UiAction
+                  variant="secondary"
                   leftSection={<Plus className="h-3.5 w-3.5" />}
                   onClick={() => setShowAddRule(true)}
                 >
                   Add Rule
-                </Button>
+                </UiAction>
               )}
             </div>
 
@@ -2592,9 +2513,9 @@ function RoutingRulesSection({ agents }: RoutingRulesSectionProps) {
             )}
 
             {config.rules.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-3 text-center border rounded-md border-dashed">
+              <SettingsGroup empty className="text-sm text-muted-foreground py-3 text-center">
                 No routing rules — all tasks use the default agent.
-              </div>
+              </SettingsGroup>
             ) : (
               <div className="space-y-1">
                 {config.rules.map((rule, idx) =>
@@ -2632,9 +2553,9 @@ function RoutingRulesSection({ agents }: RoutingRulesSectionProps) {
               <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Defaults
               </h4>
-              <Button variant="subtle" size="compact-xs" onClick={resetRouting}>
+              <UiAction variant="quiet" onClick={resetRouting}>
                 Reset to defaults
-              </Button>
+              </UiAction>
             </div>
             <div className="divide-y">
               <div className="flex items-center justify-between py-2">
@@ -2778,21 +2699,19 @@ function RoutingRuleItem({
         </div>
         <div className="flex flex-wrap gap-1 mt-1">
           {matchLabels.map((label, i) => (
-            <Badge key={i} size="xs" variant="light" color="gray" className="font-mono">
+            <UiPill key={i} className="font-mono">
               {label}
-            </Badge>
+            </UiPill>
           ))}
           <span className="text-xs text-muted-foreground">→</span>
-          <Badge size="xs" variant="outline" color="gray">
+          <UiPill>
             {agentName}
             {rule.model ? ` (${rule.model})` : ''}
-          </Badge>
+          </UiPill>
           {fallbackName && (
             <>
               <span className="text-xs text-muted-foreground">fallback:</span>
-              <Badge size="xs" variant="outline" color="gray">
-                {fallbackName}
-              </Badge>
+              <UiPill>{fallbackName}</UiPill>
             </>
           )}
         </div>
@@ -2800,17 +2719,12 @@ function RoutingRuleItem({
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
-        <ActionIcon variant="subtle" size="sm" onClick={onEdit} aria-label={`Edit ${rule.name}`}>
+        <UiIconAction variant="quiet" onClick={onEdit} aria-label={`Edit ${rule.name}`}>
           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-        </ActionIcon>
-        <ActionIcon
-          variant="subtle"
-          size="sm"
-          onClick={onRemove}
-          aria-label={`Remove ${rule.name}`}
-        >
-          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-        </ActionIcon>
+        </UiIconAction>
+        <UiIconAction variant="destructive" onClick={onRemove} aria-label={`Remove ${rule.name}`}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </UiIconAction>
         <Switch
           checked={rule.enabled}
           onChange={() => onToggle()}
@@ -2900,7 +2814,7 @@ function RoutingRuleForm({ rule, agents, existingIds, onSubmit, onCancel }: Rout
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 border rounded-lg p-4 bg-muted/30">
+    <form onSubmit={handleSubmit} className="settings-form space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
         <Route className="h-4 w-4" />
         {isEditing ? `Edit Rule: ${rule.name}` : 'Add Routing Rule'}
@@ -3007,23 +2921,22 @@ function RoutingRuleForm({ rule, agents, existingIds, onSubmit, onCancel }: Rout
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button
+        <UiAction
+          variant="quiet"
           type="button"
-          variant="subtle"
-          size="xs"
           leftSection={<X className="h-3.5 w-3.5" />}
           onClick={onCancel}
         >
           Cancel
-        </Button>
-        <Button
+        </UiAction>
+        <UiAction
+          variant="primary"
           type="submit"
-          size="xs"
           leftSection={<Check className="h-3.5 w-3.5" />}
           disabled={!isValid}
         >
           {isEditing ? 'Save Rule' : 'Add Rule'}
-        </Button>
+        </UiAction>
       </div>
     </form>
   );
@@ -3097,7 +3010,7 @@ function AgentForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 border rounded-lg p-4 bg-muted/30">
+    <form onSubmit={handleSubmit} className="settings-form space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
         <Bot className="h-4 w-4" />
         {isEditing ? `Edit ${agent.name}` : 'Add Agent'}
@@ -3189,7 +3102,7 @@ function AgentForm({
           allowDeselect={false}
         />
 
-        <div className="rounded-md border bg-background/70 p-3 space-y-3">
+        <SettingsGroup className="space-y-3">
           <Switch
             label="Agent Budget Defaults"
             description="Apply stricter caps when this agent launches runs"
@@ -3230,27 +3143,26 @@ function AgentForm({
               />
             </div>
           )}
-        </div>
+        </SettingsGroup>
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button
+        <UiAction
+          variant="quiet"
           type="button"
-          variant="subtle"
-          size="xs"
           leftSection={<X className="h-3.5 w-3.5" />}
           onClick={onCancel}
         >
           Cancel
-        </Button>
-        <Button
+        </UiAction>
+        <UiAction
+          variant="primary"
           type="submit"
-          size="xs"
           leftSection={<Check className="h-3.5 w-3.5" />}
           disabled={!isValid}
         >
           {isEditing ? 'Save' : 'Add Agent'}
-        </Button>
+        </UiAction>
       </div>
     </form>
   );

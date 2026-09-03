@@ -1,5 +1,7 @@
+import { UiAction, UiPill, semanticToneForLegacyColor } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Group, Loader, Paper, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Group, Loader, Select, Stack, Text, TextInput } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Play, RefreshCw, Save, SearchCode, XCircle } from 'lucide-react';
 import type {
@@ -253,17 +255,15 @@ export function TrackersTab() {
       title="Trackers"
       description="Configure validated mappings between Veritas tasks and external work trackers."
       actions={
-        <Button
-          size="xs"
-          variant="subtle"
-          color="gray"
+        <UiAction
+          variant="quiet"
           leftSection={<SearchCode className="h-3.5 w-3.5" />}
           onClick={() => introspect.mutate()}
           loading={introspect.isPending}
           disabled={!canWrite}
         >
           Introspect
-        </Button>
+        </UiAction>
       }
     >
       <SettingsSection
@@ -271,38 +271,39 @@ export function TrackersTab() {
         description="Inspect connection posture and maintain the active mapping profile."
         status={
           <Group gap="xs" wrap="wrap">
-            <Badge variant="light" color="blue">
+            <UiPill kind="status" tone="info">
               {schema?.providerLabel ?? 'Mock Tracker'}
-            </Badge>
-            <Badge
-              variant="light"
-              color={schema?.connectionPosture.status === 'connected' ? 'green' : 'yellow'}
+            </UiPill>
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(
+                schema?.connectionPosture.status === 'connected' ? 'green' : 'yellow'
+              )}
             >
               {schema?.connectionPosture.status ?? 'unknown'}
-            </Badge>
-            <Badge variant="light" color="gray">
-              {schema?.fields.length ?? 0} fields
-            </Badge>
-            <Badge variant="light" color="gray">
-              {schema?.workItemTypes.length ?? 0} types
-            </Badge>
+            </UiPill>
+            <UiPill>{schema?.fields.length ?? 0} fields</UiPill>
+            <UiPill>{schema?.workItemTypes.length ?? 0} types</UiPill>
           </Group>
         }
       >
         <Stack gap="lg">
-          <Paper className="border bg-card p-4" radius="md">
+          <SettingsGroup>
             <Stack gap="md">
               <Group justify="space-between" align="center">
                 <Text size="sm" fw={600}>
                   Mapping Profile
                 </Text>
-                <Badge variant="light" color={validationColor(validation ?? undefined)}>
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(validationColor(validation ?? undefined))}
+                >
                   {validation
                     ? validation.valid
                       ? 'valid'
                       : `${validation.errors.length} errors`
                     : 'not checked'}
-                </Badge>
+                </UiPill>
               </Group>
 
               <TextInput
@@ -353,9 +354,9 @@ export function TrackersTab() {
                 />
               </Group>
             </Stack>
-          </Paper>
+          </SettingsGroup>
 
-          <Paper className="border bg-card p-4" radius="md">
+          <SettingsGroup>
             <Stack gap="sm">
               <Text size="sm" fw={600}>
                 Fields
@@ -389,9 +390,9 @@ export function TrackersTab() {
                 </Group>
               ))}
             </Stack>
-          </Paper>
+          </SettingsGroup>
 
-          <Paper className="border bg-card p-4" radius="md">
+          <SettingsGroup>
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text size="sm" fw={600}>
@@ -425,40 +426,36 @@ export function TrackersTab() {
                 </Text>
               ) : null}
             </Stack>
-          </Paper>
+          </SettingsGroup>
 
           <Group justify="flex-end">
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
+            <UiAction
+              variant="quiet"
               leftSection={<RefreshCw className="h-3.5 w-3.5" />}
               onClick={() => validateProfile.mutate()}
               loading={validateProfile.isPending}
               disabled={!draft.id}
             >
               Validate
-            </Button>
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
+            </UiAction>
+            <UiAction
+              variant="quiet"
               leftSection={<Play className="h-3.5 w-3.5" />}
               onClick={() => dryRun.mutate()}
               loading={dryRun.isPending}
               disabled={!draft.id}
             >
               Dry Run
-            </Button>
-            <Button
-              size="xs"
+            </UiAction>
+            <UiAction
+              variant="primary"
               leftSection={<Save className="h-3.5 w-3.5" />}
               onClick={() => saveProfile.mutate(draft)}
               loading={saveProfile.isPending}
               disabled={!canWrite}
             >
               Save
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </SettingsSection>

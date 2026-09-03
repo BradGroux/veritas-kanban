@@ -8,8 +8,17 @@ import {
 } from '@veritas-kanban/shared';
 import { Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { ToggleRow, SettingRow, SaveIndicator, SettingsPage, SettingsSection } from '../shared';
-import { Shield, ShieldCheck, Bot } from 'lucide-react';
+import {
+  ToggleRow,
+  SettingRow,
+  SaveIndicator,
+  SettingsPage,
+  SettingsSection,
+  SettingsGroup,
+  SettingsNotice,
+} from '../shared';
+import { UiPill } from '@/components/ui/UiVocabulary';
+import { Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const ceremonyModeOptions: Array<{ value: CeremonyEnforcementMode; label: string }> = [
@@ -81,10 +90,10 @@ export function EnforcementTab() {
                 onCheckedChange={(v) => updateEnforcement('reviewGate', v)}
               />
               {enforcement.reviewGate && (
-                <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 mt-2 ml-1">
-                  ℹ️ Applies to code task types only (code, bug, feature, automation, system).
-                  Non-code tasks can be completed without review scores.
-                </div>
+                <SettingsNotice>
+                  Applies to code task types only (code, bug, feature, automation, system). Non-code
+                  tasks can be completed without review scores.
+                </SettingsNotice>
               )}
             </div>
             <div className="border-t pt-3">
@@ -134,10 +143,10 @@ export function EnforcementTab() {
                   className="w-full sm:w-36"
                 />
               </SettingRow>
-              <div className="rounded-md bg-muted/50 px-3 py-2">
+              <SettingsGroup>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-medium text-foreground">Pending ceremonies</span>
-                  <span className="text-xs text-muted-foreground">{pendingCeremonies.length}</span>
+                  <UiPill kind="count">{pendingCeremonies.length}</UiPill>
                 </div>
                 {pendingCeremonies.length > 0 ? (
                   <div className="mt-2 space-y-2">
@@ -154,7 +163,7 @@ export function EnforcementTab() {
                 ) : (
                   <div className="mt-1 text-xs text-muted-foreground">No pending ceremonies</div>
                 )}
-              </div>
+              </SettingsGroup>
             </div>
           </div>
         </div>
@@ -193,27 +202,23 @@ export function EnforcementTab() {
         tone="advanced"
         status={
           delegationActive ? (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
-              <ShieldCheck className="h-3 w-3" />
-              <span className="text-xs font-medium">Active</span>
-            </div>
+            <UiPill kind="status" tone="success">
+              Active
+            </UiPill>
           ) : (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-              <Shield className="h-3 w-3" />
-              <span className="text-xs font-medium">Inactive</span>
-            </div>
+            <UiPill>Inactive</UiPill>
           )
         }
       >
         <div className="space-y-4">
-          <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+          <SettingsNotice>
             <p>
               <strong>What is orchestrator delegation?</strong> When enabled, the designated
               orchestrator agent is expected to coordinate work by delegating tasks to sub-agents
               rather than doing implementation work directly. VK will warn when the orchestrator
               starts doing hands-on work instead of delegating.
             </p>
-          </div>
+          </SettingsNotice>
 
           <div className="divide-y">
             <ToggleRow
@@ -235,6 +240,7 @@ export function EnforcementTab() {
                 <div className="flex items-center gap-2">
                   {orchestratorAgent && <Bot className="h-4 w-4 text-primary" />}
                   <Select
+                    disabled={!enforcement.orchestratorDelegation}
                     value={orchestratorAgent || '__none__'}
                     onChange={(value) =>
                       updateEnforcement(
@@ -261,10 +267,10 @@ export function EnforcementTab() {
           </div>
 
           {enforcement.orchestratorDelegation && !orchestratorAgent && (
-            <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-3 py-2">
-              ⚠️ Delegation enforcement is enabled but no orchestrator agent is selected. Select an
+            <SettingsNotice tone="warning">
+              Delegation enforcement is enabled but no orchestrator agent is selected. Select an
               agent above for enforcement to take effect.
-            </div>
+            </SettingsNotice>
           )}
         </div>
       </SettingsSection>

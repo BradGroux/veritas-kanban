@@ -1,6 +1,8 @@
+import { UiIconAction, UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState, memo } from 'react';
 import type { ManagedListItem } from '@veritas-kanban/shared';
-import { ActionIcon, Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core';
+import { Group, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -80,52 +82,44 @@ export const SortableListItem = memo(function SortableListItem<T extends Managed
 
   return (
     <>
-      <div
+      <SettingsGroup
+        data-settings-sortable-row
         ref={setNodeRef}
         style={style}
-        className="flex items-center gap-1.5 px-2 py-1.5 bg-card border rounded-md mb-1"
+        className="flex items-center gap-1.5 px-2 py-1.5 mb-1"
       >
-        <ActionIcon
+        <UiIconAction
+          variant="quiet"
           type="button"
-          variant="subtle"
-          color="gray"
-          size="sm"
-          radius="md"
           className="cursor-grab active:cursor-grabbing flex-shrink-0"
           aria-label="Drag to reorder"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-3.5 w-3.5" />
-        </ActionIcon>
+        </UiIconAction>
 
         <div className="flex gap-0.5 flex-shrink-0">
-          <ActionIcon
+          <UiIconAction
+            variant="quiet"
             type="button"
-            variant="subtle"
-            color="gray"
-            size="sm"
-            radius="md"
             onClick={() => onMoveUp(index)}
             disabled={index === 0}
             title="Move up"
             aria-label="Move up"
           >
             <ChevronUp className="h-3.5 w-3.5" />
-          </ActionIcon>
-          <ActionIcon
+          </UiIconAction>
+          <UiIconAction
+            variant="quiet"
             type="button"
-            variant="subtle"
-            color="gray"
-            size="sm"
-            radius="md"
             onClick={() => onMoveDown(index)}
             disabled={index === totalItems - 1}
             title="Move down"
             aria-label="Move down"
           >
             <ChevronDown className="h-3.5 w-3.5" />
-          </ActionIcon>
+          </UiIconAction>
         </div>
 
         <div className="flex-1 min-w-0">
@@ -161,20 +155,17 @@ export const SortableListItem = memo(function SortableListItem<T extends Managed
           {renderExtraFields && renderExtraFields(item, handleExtraFieldChange)}
         </div>
 
-        <ActionIcon
+        <UiIconAction
+          variant="destructive"
           type="button"
-          variant="subtle"
-          color="red"
-          size="sm"
-          radius="md"
           className="flex-shrink-0"
           onClick={handleDeleteClick}
           title={`Delete ${item.label}`}
           aria-label={`Delete ${item.label}`}
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-        </ActionIcon>
-      </div>
+        </UiIconAction>
+      </SettingsGroup>
 
       <Modal
         opened={deleteDialogOpen}
@@ -197,13 +188,13 @@ export const SortableListItem = memo(function SortableListItem<T extends Managed
             )}
           </Text>
           <Group justify="flex-end">
-            <Button variant="subtle" color="gray" onClick={() => setDeleteDialogOpen(false)}>
+            <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
-            </Button>
+            </UiAction>
             {(!deleteInfo || deleteInfo.allowed) && (
-              <Button color="red" onClick={handleDeleteConfirm}>
+              <UiAction variant="destructive" onClick={handleDeleteConfirm}>
                 Delete
-              </Button>
+              </UiAction>
             )}
           </Group>
         </Stack>

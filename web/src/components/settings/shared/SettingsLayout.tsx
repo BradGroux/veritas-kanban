@@ -1,8 +1,63 @@
-import type { ReactNode } from 'react';
-import { Alert, Group, Stack, Text } from '@mantine/core';
-import { UiSurface, UiHeading } from '@/components/ui/UiVocabulary';
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
+import { Alert, Group, Stack, Text, type AlertProps } from '@mantine/core';
+import { UiAction, UiSurface, UiHeading } from '@/components/ui/UiVocabulary';
+import type { VeritasSemanticTone } from '@/theme/ui-contract';
 import { Info, TriangleAlert } from 'lucide-react';
 import { SectionHeader } from './SectionHeader';
+
+// Context crosses tab subcomponents, so nested groups cannot add a third card border.
+const SettingsDepth = createContext(0);
+
+export function SettingsGroup({
+  children,
+  empty = false,
+  className,
+  ...props
+}: Omit<ComponentProps<typeof UiSurface>, 'level'> & { empty?: boolean }) {
+  const depth = useContext(SettingsDepth);
+  return (
+    <UiSurface
+      p="sm"
+      {...props}
+      level={depth >= 2 ? 'section' : empty ? 'empty' : depth === 0 ? 'card' : 'inset'}
+      className={[empty && 'settings-empty', className].filter(Boolean).join(' ')}
+      data-settings-group={empty ? 'empty' : depth}
+    >
+      <SettingsDepth.Provider value={depth + 1}>{children}</SettingsDepth.Provider>
+    </UiSurface>
+  );
+}
+
+export function SettingsNotice({
+  tone = 'neutral',
+  children,
+  ...props
+}: Omit<AlertProps, 'variant' | 'color' | 'radius' | 'styles'> & {
+  tone?: Exclude<VeritasSemanticTone, 'selection'>;
+}) {
+  const depth = useContext(SettingsDepth);
+  return (
+    <Alert
+      {...props}
+      role={tone === 'error' || tone === 'warning' || tone === 'blocked' ? 'alert' : 'status'}
+      data-settings-notice={tone}
+      radius="md"
+      p="sm"
+      styles={{
+        root: {
+          color: `var(--vk-semantic-${tone}-fg)`,
+          background: `var(--vk-semantic-${tone}-bg)`,
+          border: depth < 2 ? `1px solid var(--vk-semantic-${tone}-border)` : '0',
+        },
+        title: { color: 'inherit', fontSize: '0.8125rem', fontWeight: 650 },
+        message: { color: 'inherit', fontSize: '0.8125rem', lineHeight: 1.45 },
+        icon: { color: 'inherit' },
+      }}
+    >
+      <SettingsDepth.Provider value={depth + 1}>{children}</SettingsDepth.Provider>
+    </Alert>
+  );
+}
 
 export function SettingsPage({
   title,
@@ -73,7 +128,9 @@ export function SettingsSection({
         onReset={onReset}
         contained
       />
-      <div className={divided ? 'divide-y' : undefined}>{children}</div>
+      <SettingsDepth.Provider value={1}>
+        <div className={divided ? 'divide-y' : undefined}>{children}</div>
+      </SettingsDepth.Provider>
     </UiSurface>
   );
 }
@@ -97,21 +154,11 @@ export function SettingsStatusCard({
   tone?: 'neutral' | 'success' | 'warning' | 'error';
   actions?: ReactNode;
 }) {
-  const color =
-    tone === 'error'
-      ? 'red'
-      : tone === 'warning'
-        ? 'yellow'
-        : tone === 'success'
-          ? 'green'
-          : 'gray';
   const Icon = tone === 'warning' || tone === 'error' ? TriangleAlert : Info;
 
   return (
-    <Alert
-      color={color}
-      variant="light"
-      role={tone === 'warning' || tone === 'error' ? 'alert' : 'status'}
+    <SettingsNotice
+      tone={tone}
       icon={<Icon className="h-4 w-4" aria-hidden="true" />}
       title={title}
       data-settings-status={tone}
@@ -120,7 +167,7 @@ export function SettingsStatusCard({
         <Text size="sm">{description}</Text>
         {actions}
       </Group>
-    </Alert>
+    </SettingsNotice>
   );
 }
 
@@ -138,13 +185,15 @@ export function SettingsLocalNav({
     >
       <Group gap="xs" wrap="nowrap">
         {items.map((item) => (
-          <a
+          <UiAction
+            component="a"
+            variant="secondary"
             key={item.id}
             href={`#${item.id}`}
-            className="whitespace-nowrap rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+            className="shrink-0"
           >
             {item.label}
-          </a>
+          </UiAction>
         ))}
       </Group>
     </nav>

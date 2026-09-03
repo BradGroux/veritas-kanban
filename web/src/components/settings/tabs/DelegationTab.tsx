@@ -1,10 +1,12 @@
+import { UiPill, UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 /**
  * DelegationTab — Approval Delegation (Vacation Mode) Settings
  */
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, Select, Switch } from '@mantine/core';
+import { Select, Switch } from '@mantine/core';
 import { SettingsPage, SettingsSection } from '../shared';
 import { useToast } from '@/hooks/useToast';
 import { Plane, ShieldCheck, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
@@ -131,22 +133,20 @@ export function DelegationTab() {
         <div className="space-y-6">
           {/* Active Delegation Banner */}
           {isActive && !hasExpired && delegation && (
-            <div className="border-2 border-blue-500 bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+            <SettingsGroup>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   <span className="font-semibold text-base">Delegation Active</span>
                 </div>
-                <Badge variant="light" color="blue" size="sm">
+                <UiPill kind="status" tone="info">
                   Active
-                </Badge>
+                </UiPill>
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">🤖 Delegate Agent:</span>
-                  <Badge variant="light" color="gray" size="sm">
-                    {delegation.delegateAgent}
-                  </Badge>
+                  <UiPill>{delegation.delegateAgent}</UiPill>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -158,36 +158,35 @@ export function DelegationTab() {
                     <span>Excludes: {delegation.excludePriorities.join(', ')} priority</span>
                   </div>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
+                <UiAction
+                  variant="destructive"
                   onClick={handleRevokeDelegation}
                   disabled={revokeDelegationMutation.isPending}
                   mt="sm"
                 >
                   Revoke Delegation
-                </Button>
+                </UiAction>
               </div>
-            </div>
+            </SettingsGroup>
           )}
 
           {/* Expired Notice */}
           {delegation && hasExpired && (
-            <div className="border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-950 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                <span className="font-semibold text-base">Delegation Expired</span>
-              </div>
+            <SettingsNotice
+              tone="warning"
+              title="Delegation Expired"
+              icon={<AlertCircle className="h-4 w-4" />}
+            >
               <p className="text-sm">
                 The delegation expired on {formatDateTime(delegation.expires)}
               </p>
-            </div>
+            </SettingsNotice>
           )}
 
           <hr className="border-t border-gray-200 dark:border-gray-700" />
 
           {/* Setup Form */}
-          <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+          <SettingsGroup>
             <div className="mb-3">
               <h4 className="font-semibold text-base">Set Up Delegation</h4>
               <p className="text-sm text-muted-foreground">
@@ -260,7 +259,8 @@ export function DelegationTab() {
                 />
               </div>
 
-              <Button
+              <UiAction
+                variant="primary"
                 onClick={handleEnableDelegation}
                 disabled={setDelegationMutation.isPending || (isActive && !hasExpired)}
                 fullWidth
@@ -273,12 +273,12 @@ export function DelegationTab() {
                 }
               >
                 {isActive && !hasExpired ? 'Delegation Active' : 'Enable Delegation'}
-              </Button>
+              </UiAction>
             </div>
-          </div>
+          </SettingsGroup>
 
           {/* Info Card */}
-          <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+          <SettingsGroup>
             <h4 className="font-semibold text-sm mb-2">How It Works</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>
@@ -289,7 +289,7 @@ export function DelegationTab() {
               <p>• Delegation automatically expires after the configured duration</p>
               <p>• You can revoke delegation at any time</p>
             </div>
-          </div>
+          </SettingsGroup>
         </div>
       </SettingsSection>
     </SettingsPage>

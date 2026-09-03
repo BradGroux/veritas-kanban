@@ -1,0 +1,369 @@
+{
+  "packaged": true,
+  "records": [
+    {
+      "name": "General",
+      "scheme": "dark",
+      "filename": "general-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Board",
+      "scheme": "dark",
+      "filename": "board-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Tasks",
+      "scheme": "dark",
+      "filename": "tasks-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Agents",
+      "scheme": "dark",
+      "filename": "agents-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Data",
+      "scheme": "dark",
+      "filename": "data-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Notifications",
+      "scheme": "dark",
+      "filename": "notifications-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Multi-user",
+      "scheme": "dark",
+      "filename": "multi-user-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Workspaces",
+      "scheme": "dark",
+      "filename": "workspaces-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Delegation",
+      "scheme": "dark",
+      "filename": "delegation-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Scheduler",
+      "scheme": "dark",
+      "filename": "scheduler-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Queues",
+      "scheme": "dark",
+      "filename": "queues-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Reflections",
+      "scheme": "dark",
+      "filename": "reflections-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Trackers",
+      "scheme": "dark",
+      "filename": "trackers-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Security",
+      "scheme": "dark",
+      "filename": "security-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Tool Policies",
+      "scheme": "dark",
+      "filename": "tool-policies-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Enforcement",
+      "scheme": "dark",
+      "filename": "enforcement-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Shared Resources",
+      "scheme": "dark",
+      "filename": "shared-resources-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Doc Freshness",
+      "scheme": "dark",
+      "filename": "doc-freshness-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Maintenance",
+      "scheme": "dark",
+      "filename": "maintenance-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Manage",
+      "scheme": "dark",
+      "filename": "manage-dark.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "General",
+      "scheme": "light",
+      "filename": "general-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Board",
+      "scheme": "light",
+      "filename": "board-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Tasks",
+      "scheme": "light",
+      "filename": "tasks-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Agents",
+      "scheme": "light",
+      "filename": "agents-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Data",
+      "scheme": "light",
+      "filename": "data-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Notifications",
+      "scheme": "light",
+      "filename": "notifications-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Multi-user",
+      "scheme": "light",
+      "filename": "multi-user-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Workspaces",
+      "scheme": "light",
+      "filename": "workspaces-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Delegation",
+      "scheme": "light",
+      "filename": "delegation-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Scheduler",
+      "scheme": "light",
+      "filename": "scheduler-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Queues",
+      "scheme": "light",
+      "filename": "queues-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Reflections",
+      "scheme": "light",
+      "filename": "reflections-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Trackers",
+      "scheme": "light",
+      "filename": "trackers-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Security",
+      "scheme": "light",
+      "filename": "security-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Tool Policies",
+      "scheme": "light",
+      "filename": "tool-policies-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Enforcement",
+      "scheme": "light",
+      "filename": "enforcement-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Shared Resources",
+      "scheme": "light",
+      "filename": "shared-resources-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Doc Freshness",
+      "scheme": "light",
+      "filename": "doc-freshness-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Maintenance",
+      "scheme": "light",
+      "filename": "maintenance-light.png",
+      "width": 1360,
+      "height": 900
+    },
+    {
+      "name": "Manage",
+      "scheme": "light",
+      "filename": "manage-light.png",
+      "width": 1360,
+      "height": 900
+    }
+  ],
+  "enlarged": [
+    {
+      "name": "General",
+      "clipped": []
+    },
+    {
+      "name": "Board",
+      "clipped": []
+    },
+    {
+      "name": "Tasks",
+      "clipped": []
+    },
+    {
+      "name": "Agents",
+      "clipped": []
+    },
+    {
+      "name": "Data",
+      "clipped": []
+    },
+    {
+      "name": "Notifications",
+      "clipped": []
+    },
+    {
+      "name": "Multi-user",
+      "clipped": []
+    },
+    {
+      "name": "Workspaces",
+      "clipped": []
+    },
+    {
+      "name": "Delegation",
+      "clipped": []
+    },
+    {
+      "name": "Scheduler",
+      "clipped": []
+    },
+    {
+      "name": "Queues",
+      "clipped": []
+    },
+    {
+      "name": "Reflections",
+      "clipped": []
+    },
+    {
+      "name": "Trackers",
+      "clipped": []
+    },
+    {
+      "name": "Security",
+      "clipped": []
+    },
+    {
+      "name": "Tool Policies",
+      "clipped": []
+    },
+    {
+      "name": "Enforcement",
+      "clipped": []
+    },
+    {
+      "name": "Shared Resources",
+      "clipped": []
+    },
+    {
+      "name": "Doc Freshness",
+      "clipped": []
+    },
+    {
+      "name": "Maintenance",
+      "clipped": []
+    },
+    {
+      "name": "Manage",
+      "clipped": []
+    }
+  ],
+  "keyboard": "consecutive arrow navigation passed",
+  "compact": "diagnostic minimum override, actions visible"
+}

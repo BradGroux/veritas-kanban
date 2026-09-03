@@ -1,9 +1,8 @@
+import { UiPill, semanticToneForLegacyColor, UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import {
-  Badge,
-  Button,
   Code,
   Group,
-  Paper,
   PasswordInput,
   Select,
   SimpleGrid,
@@ -98,19 +97,19 @@ function HealthCard({
   detail: string;
 }) {
   return (
-    <Paper withBorder radius="md" p="sm">
+    <SettingsGroup>
       <Group justify="space-between" gap="sm">
         <Text size="sm" fw={600}>
           {title}
         </Text>
-        <Badge color={STATE_COLORS[state]} variant="light" tt="none">
+        <UiPill kind="status" tone={semanticToneForLegacyColor(STATE_COLORS[state])}>
           {label}
-        </Badge>
+        </UiPill>
       </Group>
       <Text size="xs" c="dimmed" mt={4}>
         {detail}
       </Text>
-    </Paper>
+    </SettingsGroup>
   );
 }
 
@@ -389,15 +388,15 @@ export function NotificationsTab() {
               'Configure a bidirectional adapter to map external replies back into Squad Chat threads.'
             }
           />
-          <Paper withBorder radius="md" p="sm">
+          <SettingsGroup>
             <Stack gap={4}>
               <Group justify="space-between" gap="sm">
                 <Text size="sm" fw={600}>
                   Payload & Signing
                 </Text>
-                <Badge color="blue" variant="light" tt="none">
+                <UiPill kind="status" tone="info">
                   Redacted
-                </Badge>
+                </UiPill>
               </Group>
               <Text size="xs" c="dimmed">
                 Generic webhooks send <Code>event</Code>, <Code>message.id</Code>,{' '}
@@ -408,7 +407,7 @@ export function NotificationsTab() {
                 are not shown after save.
               </Text>
             </Stack>
-          </Paper>
+          </SettingsGroup>
         </SimpleGrid>
       </SettingsSection>
 
@@ -425,7 +424,7 @@ export function NotificationsTab() {
         title="Reply adapters"
         description="Route approved external replies back into Squad Chat threads with attribution and audit."
       >
-        <Paper withBorder radius="md" p="sm">
+        <SettingsGroup>
           <Stack gap="sm">
             <Group justify="space-between" gap="sm">
               <div>
@@ -440,15 +439,16 @@ export function NotificationsTab() {
                       : 'Manual delivery stores thread mappings for reply ingestion'}
                 </Text>
               </div>
-              <Badge
-                color={STATE_COLORS[adapterHealthState(communicationAdapter)]}
-                variant="light"
-                tt="none"
+              <UiPill
+                kind="status"
+                tone={semanticToneForLegacyColor(
+                  STATE_COLORS[adapterHealthState(communicationAdapter)]
+                )}
               >
                 {communicationAdapter?.enabled
                   ? (communicationAdapter.lastHealth?.status ?? 'configured')
                   : 'disabled'}
-              </Badge>
+              </UiPill>
             </Group>
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
               <TextInput
@@ -551,34 +551,30 @@ export function NotificationsTab() {
                 Last adapter event: {formatCommunicationDelivery(latestCommunicationDelivery)}
               </Text>
               <Group gap="xs">
-                <Button
+                <UiAction
+                  variant="secondary"
                   type="button"
-                  size="xs"
-                  variant="light"
-                  color="gray"
                   onClick={() => testAdapter.mutate()}
                   disabled={!communicationAdapter || testAdapter.isPending || saveAdapter.isPending}
                 >
                   Test Send
-                </Button>
-                <Button
+                </UiAction>
+                <UiAction
+                  variant="destructive"
                   type="button"
-                  size="xs"
-                  variant="light"
-                  color="red"
                   onClick={() => disconnectAdapter.mutate()}
                   disabled={!communicationAdapter || disconnectAdapter.isPending}
                 >
                   Disconnect
-                </Button>
-                <Button
+                </UiAction>
+                <UiAction
+                  variant="primary"
                   type="button"
-                  size="xs"
                   onClick={() => saveAdapter.mutate()}
                   disabled={saveAdapter.isPending}
                 >
                   Save Adapter
-                </Button>
+                </UiAction>
               </Group>
             </Group>
             {(saveAdapter.error || testAdapter.error || disconnectAdapter.error) && (
@@ -587,7 +583,7 @@ export function NotificationsTab() {
               </Text>
             )}
           </Stack>
-        </Paper>
+        </SettingsGroup>
       </SettingsSection>
 
       <SettingsSection

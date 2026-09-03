@@ -6,6 +6,15 @@ import { renderWithProviders } from './test-utils';
 const mocks = vi.hoisted(() => ({
   refetchDiscovery: vi.fn(),
   mutateIntake: vi.fn(),
+  delegations: [
+    {
+      id: 'delegation_blocked',
+      title: 'Blocked handoff',
+      status: 'blocked',
+      source: { workspaceId: 'source' },
+      target: { workspaceId: 'local' },
+    },
+  ],
   discovery: {
     local: {
       id: 'local-board',
@@ -58,7 +67,7 @@ vi.mock('@/hooks/useWorkspaceCapabilities', () => ({
     refetch: mocks.refetchDiscovery,
   }),
   useWorkspaceDelegations: () => ({
-    data: [],
+    data: mocks.delegations,
     isLoading: false,
   }),
   useWorkspaceDelegatedIntake: () => ({
@@ -80,6 +89,9 @@ describe('WorkspaceCapabilitiesTab', () => {
     const { container } = renderWithProviders(<WorkspaceCapabilitiesTab />);
 
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeDefined();
+    expect(
+      screen.getByText('blocked').closest('[data-ui-pill]')?.getAttribute('data-ui-tone')
+    ).toBe('blocked');
     expect(container.querySelectorAll('[data-settings-section]')).toHaveLength(1);
     expect(screen.getByText('Local Board')).toBeTruthy();
     expect(screen.getAllByText('Source Board')[0]).toBeTruthy();

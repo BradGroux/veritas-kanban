@@ -1,17 +1,7 @@
+import { UiAction, semanticToneForLegacyColor, UiPill } from '@/components/ui/UiVocabulary';
+import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Loader,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-  Tooltip,
-} from '@mantine/core';
+import { Group, Loader, SimpleGrid, Stack, Text, Textarea, Tooltip } from '@mantine/core';
 import { CheckCircle2, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
 import type {
   AutomationDraft,
@@ -168,27 +158,23 @@ export function SchedulerTab() {
       actions={
         <Group gap="xs" wrap="wrap">
           <Tooltip label="Run due schedules">
-            <Button
-              size="xs"
-              variant="light"
-              color="gray"
+            <UiAction
+              variant="secondary"
               disabled={!canExecute || runDue.isPending}
               leftSection={<Play className="h-3.5 w-3.5" />}
               onClick={() => mutate(() => runDue.mutateAsync(), 'Due schedules checked')}
             >
               Run Due
-            </Button>
+            </UiAction>
           </Tooltip>
           <Tooltip label="Refresh scheduler">
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
+            <UiAction
+              variant="quiet"
               leftSection={<RefreshCw className="h-3.5 w-3.5" />}
               onClick={() => scheduler.refetch()}
             >
               Refresh
-            </Button>
+            </UiAction>
           </Tooltip>
         </Group>
       }
@@ -198,7 +184,7 @@ export function SchedulerTab() {
         description="Compile reviewable drafts, manage schedules, and inspect recent runs."
       >
         <Stack gap="lg">
-          <Paper className="border bg-card p-4" radius="md">
+          <SettingsGroup>
             <Stack gap="sm">
               <Stack gap={2}>
                 <Text size="sm" fw={600}>
@@ -225,27 +211,26 @@ export function SchedulerTab() {
                 className="font-mono"
               />
               <Group gap="xs">
-                <Button
-                  size="xs"
-                  variant="light"
+                <UiAction
+                  variant="secondary"
                   disabled={!intent.trim() || previewDraft.isPending || saveDraft.isPending}
                   onClick={() => void compileDraft(false)}
                 >
                   Preview
-                </Button>
-                <Button
-                  size="xs"
+                </UiAction>
+                <UiAction
+                  variant="primary"
                   disabled={
                     !canWrite || !intent.trim() || previewDraft.isPending || saveDraft.isPending
                   }
                   onClick={() => void compileDraft(true)}
                 >
                   Save Inactive Draft
-                </Button>
+                </UiAction>
               </Group>
               {draftPreview && <AutomationDraftReview draft={draftPreview} />}
             </Stack>
-          </Paper>
+          </SettingsGroup>
 
           {(drafts.data?.drafts.length ?? 0) > 0 && (
             <Stack gap="xs">
@@ -264,8 +249,8 @@ export function SchedulerTab() {
           )}
 
           {activationPreview && (
-            <Alert
-              color={activationPreview.evidence.enforceable ? 'blue' : 'red'}
+            <SettingsNotice
+              tone={activationPreview.evidence.enforceable ? 'neutral' : 'error'}
               title={`Activation review · ${activationPreview.draftId}`}
             >
               <Stack gap="xs">
@@ -289,13 +274,13 @@ export function SchedulerTab() {
                   </Text>
                 ))}
                 <Group gap="xs">
-                  <Button
-                    size="xs"
+                  <UiAction
+                    variant="primary"
                     disabled={!activationPreview.evidence.enforceable || applyActivation.isPending}
                     onClick={() => void requestOrApplyActivation()}
                   >
                     {activationApprovalId ? 'Activate Approved Version' : 'Request Exact Approval'}
-                  </Button>
+                  </UiAction>
                   {activationApprovalId && (
                     <Text size="xs" c="dimmed">
                       Approve {activationApprovalId} in Run Approvals, then activate this exact
@@ -304,7 +289,7 @@ export function SchedulerTab() {
                   )}
                 </Group>
               </Stack>
-            </Alert>
+            </SettingsNotice>
           )}
 
           {scheduler.data && (
@@ -319,14 +304,14 @@ export function SchedulerTab() {
 
           <Stack gap="sm">
             {items.length === 0 ? (
-              <Paper className="border border-dashed p-4 text-center" radius="md">
+              <SettingsGroup empty className="text-center">
                 <Text size="sm" c="dimmed">
                   No recurring work is configured.
                 </Text>
-              </Paper>
+              </SettingsGroup>
             ) : (
               items.map((item) => (
-                <Paper key={item.id} className="border bg-card p-4" radius="md">
+                <SettingsGroup key={item.id}>
                   <Stack gap="sm">
                     <Group justify="space-between" align="flex-start">
                       <Stack gap={2}>
@@ -334,17 +319,7 @@ export function SchedulerTab() {
                           <Text size="sm" fw={600}>
                             {item.name}
                           </Text>
-                          <Badge
-                            size="xs"
-                            color={
-                              item.kind === 'workflow'
-                                ? 'blue'
-                                : item.kind === 'queue-monitor'
-                                  ? 'teal'
-                                  : 'grape'
-                            }
-                            variant="light"
-                          >
+                          <UiPill>
                             {item.kind === 'workflow'
                               ? 'Workflow'
                               : item.kind === 'queue-monitor'
@@ -352,7 +327,7 @@ export function SchedulerTab() {
                                 : item.kind === 'automation'
                                   ? 'Automation'
                                   : 'Deliverable'}
-                          </Badge>
+                          </UiPill>
                           <HealthBadge item={item} />
                         </Group>
                         <Text size="xs" c="dimmed" lineClamp={2}>
@@ -360,10 +335,8 @@ export function SchedulerTab() {
                         </Text>
                       </Stack>
                       <Group gap="xs">
-                        <Button
-                          size="xs"
-                          variant="subtle"
-                          color="gray"
+                        <UiAction
+                          variant="quiet"
                           disabled={validate.isPending}
                           leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
                           onClick={() =>
@@ -371,11 +344,9 @@ export function SchedulerTab() {
                           }
                         >
                           Validate
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="gray"
+                        </UiAction>
+                        <UiAction
+                          variant="secondary"
                           disabled={!canExecute || runItem.isPending || !item.actions.canRun}
                           leftSection={<Play className="h-3.5 w-3.5" />}
                           onClick={() =>
@@ -383,12 +354,10 @@ export function SchedulerTab() {
                           }
                         >
                           Run
-                        </Button>
+                        </UiAction>
                         {item.enabled ? (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="gray"
+                          <UiAction
+                            variant="quiet"
                             disabled={!canWrite || pause.isPending || !item.actions.canPause}
                             leftSection={<Pause className="h-3.5 w-3.5" />}
                             onClick={() =>
@@ -396,12 +365,10 @@ export function SchedulerTab() {
                             }
                           >
                             Pause
-                          </Button>
+                          </UiAction>
                         ) : (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="gray"
+                          <UiAction
+                            variant="quiet"
                             disabled={!canWrite || resume.isPending || !item.actions.canResume}
                             leftSection={<RotateCw className="h-3.5 w-3.5" />}
                             onClick={() =>
@@ -409,7 +376,7 @@ export function SchedulerTab() {
                             }
                           >
                             Resume
-                          </Button>
+                          </UiAction>
                         )}
                       </Group>
                     </Group>
@@ -428,7 +395,7 @@ export function SchedulerTab() {
                       </Text>
                     )}
                   </Stack>
-                </Paper>
+                </SettingsGroup>
               ))
             )}
           </Stack>
@@ -476,8 +443,8 @@ function AutomationDraftReview({
 }) {
   const blockers = draft.validation.issues.filter((issue) => issue.severity === 'blocker');
   return (
-    <Alert
-      color={blockers.length === 0 ? 'green' : 'yellow'}
+    <SettingsNotice
+      tone={blockers.length === 0 ? 'success' : 'warning'}
       title={`${draft.id} · revision ${draft.revision}`}
     >
       <Stack gap="xs">
@@ -496,9 +463,9 @@ function AutomationDraftReview({
               No deterministic validation blockers. Activation still requires a separate review.
             </Text>
             {onReviewActivation && (
-              <Button size="xs" variant="light" onClick={onReviewActivation}>
+              <UiAction variant="secondary" onClick={onReviewActivation}>
                 Review Activation
-              </Button>
+              </UiAction>
             )}
           </Group>
         ) : (
@@ -511,7 +478,7 @@ function AutomationDraftReview({
           </Stack>
         )}
       </Stack>
-    </Alert>
+    </SettingsNotice>
   );
 }
 
@@ -525,14 +492,14 @@ function parseDraftHints(value: string): AutomationDraftHints {
 
 function SummaryStat({ label, value }: { label: string; value: number }) {
   return (
-    <Paper className="border bg-card p-3" radius="md">
+    <SettingsGroup>
       <Text size="xs" c="dimmed">
         {label}
       </Text>
       <Text size="lg" fw={700}>
         {value}
       </Text>
-    </Paper>
+    </SettingsGroup>
   );
 }
 
@@ -560,9 +527,9 @@ function HealthBadge({ item }: { item: SchedulerItem }) {
           : 'red';
   return (
     <Tooltip label={item.healthSummary}>
-      <Badge size="xs" color={color} variant="light">
+      <UiPill kind="status" tone={semanticToneForLegacyColor(color)}>
         {item.health}
-      </Badge>
+      </UiPill>
     </Tooltip>
   );
 }
@@ -577,9 +544,9 @@ function StatusBadge({ status }: { status: SchedulerRunStatus }) {
           ? 'gray'
           : 'red';
   return (
-    <Badge size="xs" color={color} variant="light">
+    <UiPill kind="status" tone={semanticToneForLegacyColor(color)}>
       {status}
-    </Badge>
+    </UiPill>
   );
 }
 
