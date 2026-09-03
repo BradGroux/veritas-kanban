@@ -12,6 +12,13 @@ const mocks = vi.hoisted(() => ({
   updateField: vi.fn(),
   updateProgress: vi.fn(),
   onOpenChange: vi.fn(),
+  taskFeatureSettings: {
+    enableAttachments: true,
+    enableComments: false,
+    enableDependencies: false,
+    enableTimeTracking: false,
+  },
+  progressContent: { value: '## Learnings\n- Mantine task detail renders' },
 }));
 
 vi.mock('@/hooks/useDebouncedSave', () => ({
@@ -48,10 +55,7 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
   useFeatureSettings: () => ({
     settings: {
       tasks: {
-        enableAttachments: true,
-        enableComments: false,
-        enableDependencies: false,
-        enableTimeTracking: false,
+        ...mocks.taskFeatureSettings,
       },
       agents: {
         enablePreview: true,
@@ -97,7 +101,7 @@ vi.mock('@/hooks/useTasks', () => ({
 
 vi.mock('@/hooks/useTaskProgress', () => ({
   useTaskProgress: () => ({
-    data: '## Learnings\n- Mantine task detail renders',
+    data: mocks.progressContent.value,
     isLoading: false,
   }),
   useUpdateProgress: () => ({ mutateAsync: mocks.updateProgress, isPending: false }),
@@ -129,6 +133,10 @@ vi.mock('@/components/task/PreviewPanel', () => ({
 
 vi.mock('@/components/task/AttachmentsSection', () => ({
   AttachmentsSection: () => <div>Attachments section</div>,
+}));
+
+vi.mock('@/components/task/DependenciesSection', () => ({
+  DependenciesSection: () => <div>Dependencies section</div>,
 }));
 
 vi.mock('@/components/task/ObservationsSection', () => ({
@@ -195,6 +203,13 @@ describe('task detail Mantine migration', () => {
     mocks.archiveTask.mockResolvedValue(undefined);
     mocks.deleteTask.mockResolvedValue(undefined);
     mocks.updateProgress.mockResolvedValue(undefined);
+    Object.assign(mocks.taskFeatureSettings, {
+      enableAttachments: true,
+      enableComments: false,
+      enableDependencies: false,
+      enableTimeTracking: false,
+    });
+    mocks.progressContent.value = '## Learnings\n- Mantine task detail renders';
   });
 
   afterEach(() => {
@@ -272,6 +287,30 @@ describe('task detail Mantine migration', () => {
     );
   });
 
+  it('groups every enabled preparation destination under Plan with stable wayfinding', async () => {
+    mocks.taskFeatureSettings.enableDependencies = true;
+    const user = userEvent.setup();
+    renderTaskDetail();
+
+    const planSections = screen.getByRole('tablist', { name: 'Plan sections' });
+    expect(
+      within(planSections)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent)
+    ).toEqual(['Details', 'Progress', 'Observations', 'Dependencies', 'Attachments']);
+
+    await user.click(within(planSections).getByRole('tab', { name: 'Dependencies' }));
+
+    const scrollRegion = screen.getByTestId('task-detail-scroll-region');
+    expect(scrollRegion.getAttribute('aria-labelledby')).toBe(
+      'task-workspace-mode-heading task-workspace-section-heading'
+    );
+    expect(within(scrollRegion).getByRole('heading', { level: 3 }).textContent).toBe(
+      'Dependencies'
+    );
+    expect(await within(scrollRegion).findByText('Dependencies section')).toBeDefined();
+  });
+
   it('applies description height and vertical resizing to the textarea input', () => {
     renderWithProviders(
       <MarkdownEditor
@@ -330,6 +369,21 @@ describe('task detail Mantine migration', () => {
     ).toBeDefined();
     expect(baseElement.querySelector('.mantine-Paper-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="textarea"]')).toBeNull();
+  });
+
+  it('keeps empty progress notes compact until editing starts', async () => {
+    mocks.progressContent.value = '';
+    const user = userEvent.setup();
+    renderTaskDetail();
+
+    await user.click(screen.getByRole('tab', { name: 'Progress' }));
+
+    expect(await screen.findByText('No progress notes yet')).toBeDefined();
+    expect(screen.queryByText('Progress Notes Best Practices:')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Add notes' }));
+
+    expect(screen.getByPlaceholderText(/Document insights discovered during work/)).toBeDefined();
   });
 
   it('uses a direct Mantine modal for destructive delete confirmation', async () => {
@@ -423,6 +477,41 @@ describe('task detail Mantine migration', () => {
     );
     expect(screen.getByRole('tab', { name: 'Evidence' }).getAttribute('aria-selected')).toBe(
       'true'
+    );
+  });
+
+  it('preserves legacy Plan deep links for optional preparation sections', async () => {
+    mocks.taskFeatureSettings.enableDependencies = true;
+    const task = createMockTask({ id: 'task-plan-link', title: 'Prepare a task' });
+
+    const { rerender } = renderWithProviders(
+      <TaskDetailPanel
+        task={task}
+        open
+        onOpenChange={mocks.onOpenChange}
+        navigationTarget={{ tab: 'dependencies' }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Dependencies' }).getAttribute('aria-selected')).toBe(
+        'true'
+      )
+    );
+
+    rerender(
+      <TaskDetailPanel
+        task={task}
+        open
+        onOpenChange={mocks.onOpenChange}
+        navigationTarget={{ workspace: { version: 1, mode: 'plan', section: 'attachments' } }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Attachments' }).getAttribute('aria-selected')).toBe(
+        'true'
+      )
     );
   });
 

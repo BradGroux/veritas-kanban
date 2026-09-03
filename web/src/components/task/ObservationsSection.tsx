@@ -276,7 +276,7 @@ export function ObservationsSection({
 
       <Stack gap="xs">
         {observations.length === 0 && !isAdding && (
-          <Text size="sm" c="dimmed" ta="center" className="py-8">
+          <Text size="sm" c="dimmed" ta="center" className="py-3">
             No observations yet. Add context, decisions, insights, or blockers as you work on this
             task.
           </Text>

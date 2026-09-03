@@ -264,6 +264,14 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
         </Alert>
       )}
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={(e) => handleFileSelect(e.target.files)}
+        className="hidden"
+      />
+
       {/* Upload zone */}
       <Paper
         role="button"
@@ -279,39 +287,46 @@ export function AttachmentsSection({ task }: AttachmentsSectionProps) {
           }
         }}
         className={cn(
-          'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+          'cursor-pointer rounded-lg border-2 border-dashed transition-colors',
+          attachments.length === 0 ? 'p-4' : 'p-8 text-center',
           isDragging && 'border-primary bg-primary/5',
           !isDragging && 'border-muted-foreground/25 hover:border-muted-foreground/50',
-          uploadAttachment.isPending && 'opacity-50 pointer-events-none'
+          uploadAttachment.isPending && 'pointer-events-none opacity-50'
         )}
         radius="lg"
+        aria-label="Upload attachments"
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={(e) => handleFileSelect(e.target.files)}
-          className="hidden"
-        />
-        <ThemeIcon variant="transparent" color="gray" size="xl" className="mx-auto mb-2">
-          <Upload className="h-8 w-8 text-muted-foreground" />
-        </ThemeIcon>
-        <Text size="sm" c="dimmed" className="mb-1">
-          {uploadAttachment.isPending ? 'Uploading...' : 'Drop files here or click to browse'}
-        </Text>
-        <Text size="xs" c="dimmed">
-          Max 10MB per file, 20 files total
-        </Text>
+        {attachments.length === 0 ? (
+          <Group gap="sm" wrap="nowrap">
+            <ThemeIcon variant="light" color="gray" size="md" className="flex-shrink-0">
+              <Upload className="h-4 w-4" />
+            </ThemeIcon>
+            <div className="min-w-0">
+              <Text size="sm" fw={500}>
+                {uploadAttachment.isPending ? 'Uploading...' : 'Add supporting files'}
+              </Text>
+              <Text size="xs" c="dimmed">
+                Drop files here or browse. Max 10MB per file.
+              </Text>
+            </div>
+          </Group>
+        ) : (
+          <>
+            <ThemeIcon variant="transparent" color="gray" size="xl" className="mx-auto mb-2">
+              <Upload className="h-8 w-8 text-muted-foreground" />
+            </ThemeIcon>
+            <Text size="sm" c="dimmed" className="mb-1">
+              {uploadAttachment.isPending ? 'Uploading...' : 'Drop files here or click to browse'}
+            </Text>
+            <Text size="xs" c="dimmed">
+              Max 10MB per file, 20 files total
+            </Text>
+          </>
+        )}
       </Paper>
 
       {/* Attachments list */}
-      {attachments.length === 0 ? (
-        <Paper className="py-4 text-center" radius="md" withBorder>
-          <Text size="sm" c="dimmed" fs="italic">
-            No attachments yet
-          </Text>
-        </Paper>
-      ) : (
+      {attachments.length > 0 && (
         <Stack gap="xs">
           {attachments.map((attachment) => (
             <AttachmentItem key={attachment.id} taskId={task.id} attachment={attachment} />

@@ -71,7 +71,7 @@ export function ProgressTab({ task }: ProgressTabProps) {
             onClick={handleEdit}
             leftSection={<Pencil className="h-3 w-3" />}
           >
-            Edit
+            {isEmpty ? 'Add notes' : 'Edit'}
           </Button>
         )}
       </Group>
@@ -118,17 +118,22 @@ export function ProgressTab({ task }: ProgressTabProps) {
 
       {/* View Mode */}
       {!isEditing && (
-        <Paper className="min-h-[200px] border bg-card p-4" radius="lg">
+        <Paper
+          className={isEmpty ? 'border bg-card p-4' : 'min-h-[200px] border bg-card p-4'}
+          radius="lg"
+        >
           {isEmpty ? (
-            <Stack align="center" gap={4} className="py-8 text-center text-muted-foreground">
-              <ThemeIcon color="gray" variant="subtle" size={48}>
-                <FileText className="h-8 w-8 opacity-50" />
+            <Group gap="sm" wrap="nowrap" className="text-muted-foreground">
+              <ThemeIcon color="gray" variant="light" size="md" className="flex-shrink-0">
+                <FileText className="h-4 w-4" />
               </ThemeIcon>
-              <Text size="sm">No progress notes yet</Text>
-              <Text size="xs">
-                Click Edit to add learnings, issues, and next steps for future sessions
-              </Text>
-            </Stack>
+              <div className="min-w-0">
+                <Text size="sm" fw={500}>
+                  No progress notes yet
+                </Text>
+                <Text size="xs">Add learnings, issues, and next steps when they are useful.</Text>
+              </div>
+            </Group>
           ) : (
             <MarkdownText>{progress}</MarkdownText>
           )}
@@ -136,17 +141,19 @@ export function ProgressTab({ task }: ProgressTabProps) {
       )}
 
       {/* Help Text */}
-      <Stack gap={4} className="border-t pt-3 text-xs text-muted-foreground">
-        <Text size="xs" fw={500}>
-          Progress Notes Best Practices:
-        </Text>
-        <ul className="list-disc list-inside space-y-1 ml-2">
-          <li>Document key learnings and insights discovered during work</li>
-          <li>Track issues encountered and their solutions</li>
-          <li>List next steps for future sessions to pick up where you left off</li>
-          <li>Use markdown sections (##) to organize by category</li>
-        </ul>
-      </Stack>
+      {!isEmpty && !isEditing && (
+        <Stack gap={4} className="border-t pt-3 text-xs text-muted-foreground">
+          <Text size="xs" fw={500}>
+            Progress Notes Best Practices:
+          </Text>
+          <ul className="list-disc list-inside space-y-1 ml-2">
+            <li>Document key learnings and insights discovered during work</li>
+            <li>Track issues encountered and their solutions</li>
+            <li>List next steps for future sessions to pick up where you left off</li>
+            <li>Use markdown sections (##) to organize by category</li>
+          </ul>
+        </Stack>
+      )}
     </Stack>
   );
 }

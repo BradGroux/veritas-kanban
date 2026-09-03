@@ -133,8 +133,9 @@ export function TaskDetailPanel({
       isCodeTask,
       hasWorktree,
       attachmentsEnabled: taskSettings.enableAttachments,
+      dependenciesEnabled: taskSettings.enableDependencies,
     }),
-    [hasWorktree, isCodeTask, taskSettings.enableAttachments]
+    [hasWorktree, isCodeTask, taskSettings.enableAttachments, taskSettings.enableDependencies]
   );
   const visibleTabs = useMemo(
     () => getAvailableTaskDetailTabs(tabAvailabilityContext),
@@ -151,6 +152,7 @@ export function TaskDetailPanel({
     () => visibleTabs.filter((tab) => getTaskWorkspaceDestination(tab.id).mode === activeMode),
     [activeMode, visibleTabs]
   );
+  const activeTabMetadata = visibleTabs.find((tab) => tab.id === activeTab);
 
   const addObservationForTask = useMemo(
     () => async (data: TaskDetailObservationInput) => {
@@ -401,7 +403,7 @@ export function TaskDetailPanel({
 
                     <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
                       <div className="min-w-0">
-                        <Text component="h2" fw={650} size="sm">
+                        <Text id="task-workspace-mode-heading" component="h2" fw={650} size="sm">
                           {activeModeMetadata?.label ?? 'Workspace'}
                         </Text>
                         <Text size="xs" c="dimmed" className="mt-0.5 max-w-xl">
@@ -490,9 +492,12 @@ export function TaskDetailPanel({
                   <div
                     className="veritas-overlay-scroll min-h-0 flex-1 overflow-y-scroll overscroll-contain px-4 py-4 sm:px-5 sm:py-5"
                     data-testid="task-detail-scroll-region"
-                    aria-label={`${activeModeMetadata?.label ?? 'Task workspace'} content`}
+                    aria-labelledby="task-workspace-mode-heading task-workspace-section-heading"
                     tabIndex={0}
                   >
+                    <Text id="task-workspace-section-heading" component="h3" className="sr-only">
+                      {activeTabMetadata?.label ?? 'Task details'}
+                    </Text>
                     {visibleTabs.map((tab) => {
                       const tabContent = (
                         <Suspense

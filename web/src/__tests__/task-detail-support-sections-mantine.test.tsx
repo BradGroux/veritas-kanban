@@ -198,6 +198,27 @@ describe('task detail support sections Mantine migration', () => {
     });
   });
 
+  it('keeps an empty attachment section compact while preserving upload access', () => {
+    const task = createMockTask({ id: 'task-empty-attachments', attachments: [] });
+    const { container } = renderWithProviders(<AttachmentsSection task={task} />);
+
+    const uploadTarget = screen.getByRole('button', { name: 'Upload attachments' });
+    expect(uploadTarget.className).toContain('p-4');
+    expect(uploadTarget.className).not.toContain('p-8');
+    expect(screen.getByText('Add supporting files')).toBeDefined();
+    expect(screen.queryByText('No attachments yet')).toBeNull();
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['plan'], 'plan.md', { type: 'text/markdown' })] },
+    });
+
+    expect(mocks.uploadAttachment).toHaveBeenCalledWith({
+      taskId: task.id,
+      formData: expect.any(FormData),
+    });
+  });
+
   it('renders observations through direct Mantine select, slider, textarea, badges, and modal', async () => {
     const user = userEvent.setup();
     const onAddObservation = vi.fn().mockResolvedValue(undefined);
