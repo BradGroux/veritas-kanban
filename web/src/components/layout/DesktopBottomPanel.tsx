@@ -8,7 +8,7 @@ import {
   type WheelEvent,
 } from 'react';
 import { ActionIcon, Group, SegmentedControl, Text } from '@mantine/core';
-import { GripVertical, MessageSquare, PanelRightClose, Users } from 'lucide-react';
+import { GripVertical, MessageSquare, Users, X } from 'lucide-react';
 
 import {
   MAX_RIGHT_PANEL_WIDTH,
@@ -90,6 +90,7 @@ export function DesktopBottomPanel() {
 
   return (
     <section
+      id="workbench-right-dock"
       className="workbench-chat-dock workbench-chat-dock--right bg-card"
       aria-label="Workbench right dock"
       data-dock-position="right"
@@ -135,7 +136,7 @@ export function DesktopBottomPanel() {
               aria-label="Close right dock"
               title="Close right dock"
             >
-              <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </ActionIcon>
           </Group>
         </Group>

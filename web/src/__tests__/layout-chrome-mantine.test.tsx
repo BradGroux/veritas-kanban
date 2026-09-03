@@ -269,20 +269,43 @@ describe('layout chrome Mantine migration', () => {
     expect(baseElement.querySelector('[data-slot="popover-content"]')).toBeNull();
   });
 
-  it('renders desktop shell controls and app icon branding in desktop mode', () => {
-    renderDesktopHeaderChrome();
+  it('renders route-valid desktop shell controls and distinct chat actions', () => {
+    const { container } = renderDesktopHeaderChrome();
 
-    expect(screen.getByRole('button', { name: 'Collapse left sidebar' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Expand right sidebar' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open chat dock' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open Squad Chat' })).toBeDefined();
+    const leftRail = screen.getByRole('button', { name: 'Collapse left sidebar' });
+    const rightRail = screen.getByRole('button', { name: 'Expand right sidebar' });
+    const boardChat = screen.getByRole('button', { name: 'Open Board Chat' });
+    const squadChat = screen.getByRole('button', { name: 'Open Squad Chat' });
+
+    expect(leftRail.getAttribute('aria-controls')).toBe('desktop-navigation-sidebar');
+    expect(leftRail.getAttribute('aria-expanded')).toBe('true');
+    expect(rightRail.getAttribute('aria-controls')).toBe('board-right-sidebar');
+    expect(rightRail.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Open chat dock' })).toBeNull();
+    expect(boardChat.querySelector('.lucide-message-square')).toBeDefined();
+    expect(squadChat.querySelector('.lucide-users')).toBeDefined();
+    expect(container.querySelectorAll('.lucide-panel-right')).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'Desktop layout controls' })).toBeDefined();
+    expect(screen.getByRole('group', { name: 'Chat controls' })).toBeDefined();
 
     const brandIcon = screen
       .getByRole('button', { name: 'Refresh page' })
       .querySelector('img[src="/icons/pwa-icon-192.png"]');
     expect(brandIcon).toBeDefined();
     expect(document.querySelector('header h1')).toBeNull();
+  });
+
+  it('does not render the board right-rail action on routes without that rail', () => {
+    window.history.replaceState({}, '', '/activity');
+    const { container } = renderDesktopHeaderChrome();
+
+    expect(screen.getByRole('button', { name: 'Collapse left sidebar' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /right sidebar/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open chat dock' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Open Squad Chat' })).toBeDefined();
+    expect(container.querySelector('.lucide-panel-right')).toBeNull();
+    expect(container.querySelector('.lucide-panel-right-close')).toBeNull();
   });
 
   it('uses the filled brand treatment with white text for the active desktop navigation item', () => {
@@ -320,6 +343,8 @@ describe('layout chrome Mantine migration', () => {
     await user.click(openBoard);
     const closeBoard = screen.getByRole('button', { name: 'Close Board Chat' });
     expect(closeBoard.getAttribute('aria-pressed')).toBe('true');
+    expect(closeBoard.getAttribute('aria-controls')).toBe('workbench-right-dock');
+    expect(closeBoard.querySelector('.lucide-message-square')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Switch to Squad Chat' })).toBeDefined();
 
     await user.click(closeBoard);
@@ -329,6 +354,8 @@ describe('layout chrome Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Switch to Squad Chat' }));
     const closeSquad = screen.getByRole('button', { name: 'Close Squad Chat' });
     expect(closeSquad.getAttribute('aria-pressed')).toBe('true');
+    expect(closeSquad.getAttribute('aria-controls')).toBe('workbench-right-dock');
+    expect(closeSquad.querySelector('.lucide-users')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Switch to Board Chat' })).toBeDefined();
 
     await user.click(closeSquad);

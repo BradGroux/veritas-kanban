@@ -49,6 +49,7 @@ export function DesktopLeftSidebar() {
 
   return (
     <aside
+      id="desktop-navigation-sidebar"
       aria-label="Desktop navigation"
       className={cn(
         'desktop-left-sidebar border-r border-border bg-card/80 transition-[width] duration-150',
