@@ -1,17 +1,28 @@
 import { Select } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
-import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
-import { SettingRow, ToggleRow, NumberRow, SectionHeader, SaveIndicator } from '../shared';
+import {
+  DEFAULT_FEATURE_SETTINGS,
+  type MarkdownSettings,
+  type TaskBehaviorSettings,
+} from '@veritas-kanban/shared';
+import {
+  SettingRow,
+  ToggleRow,
+  NumberRow,
+  SaveIndicator,
+  SettingsPage,
+  SettingsSection,
+} from '../shared';
 
 export function TasksTab() {
   const { settings } = useFeatureSettings();
   const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
 
-  const update = (key: string, value: any) => {
+  const update = <K extends keyof TaskBehaviorSettings>(key: K, value: TaskBehaviorSettings[K]) => {
     debouncedUpdate({ tasks: { [key]: value } });
   };
 
-  const updateMarkdown = (key: string, value: any) => {
+  const updateMarkdown = <K extends keyof MarkdownSettings>(key: K, value: MarkdownSettings[K]) => {
     debouncedUpdate({ markdown: { [key]: value } });
   };
 
@@ -24,12 +35,18 @@ export function TasksTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Task Behavior" onReset={resetTasks} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <div className="divide-y">
+    <SettingsPage
+      title="Tasks"
+      description="Set defaults and optional capabilities for task authoring and completion."
+      actions={<SaveIndicator isPending={isPending} />}
+    >
+      <SettingsSection
+        id="task-behavior"
+        title="Task behavior"
+        description="Common task defaults and dependent attachment controls."
+        onReset={resetTasks}
+        divided
+      >
         <ToggleRow
           label="Time Tracking"
           description="Enable time tracking on tasks"
@@ -143,7 +160,9 @@ export function TasksTab() {
             value={
               settings.tasks?.defaultPriority ?? DEFAULT_FEATURE_SETTINGS.tasks.defaultPriority
             }
-            onChange={(value) => value && update('defaultPriority', value)}
+            onChange={(value) =>
+              value && update('defaultPriority', value as TaskBehaviorSettings['defaultPriority'])
+            }
             data={[
               { value: 'low', label: 'Low' },
               { value: 'medium', label: 'Medium' },
@@ -156,13 +175,15 @@ export function TasksTab() {
             w={128}
           />
         </SettingRow>
-      </div>
+      </SettingsSection>
 
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Markdown" onReset={resetMarkdown} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <div className="divide-y">
+      <SettingsSection
+        id="task-markdown"
+        title="Markdown"
+        description="Formatting behavior for task descriptions and comments."
+        onReset={resetMarkdown}
+        divided
+      >
         <ToggleRow
           label="Enable Markdown"
           description="Use Markdown formatting in task descriptions and comments"
@@ -180,7 +201,7 @@ export function TasksTab() {
           }
           onCheckedChange={(v) => updateMarkdown('enableCodeHighlighting', v)}
         />
-      </div>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

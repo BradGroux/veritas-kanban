@@ -38,6 +38,7 @@ import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
 import { PRODUCT_MODE_DEFINITIONS, productModeDefinition } from '@/lib/product-modes';
+import { SettingRow, SettingsHelpText, SettingsPage, SettingsSection } from '../shared';
 
 const PRODUCT_MODE_OPTIONS = PRODUCT_MODE_DEFINITIONS.map((mode) => ({
   value: mode.id,
@@ -58,38 +59,44 @@ export function GeneralTab() {
   );
 
   return (
-    <div className="space-y-6">
+    <SettingsPage
+      title="General"
+      description="Personalize the app, choose its working mode, and connect the repositories and agents used by default."
+    >
       {/* Appearance */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">Appearance</h3>
-        <div className="flex items-center justify-between py-2 px-3 rounded-md border bg-card">
-          <div className="flex items-center gap-3">
+      <SettingsSection
+        id="general-appearance"
+        title="Appearance"
+        description="Theme preference for this browser or desktop app."
+      >
+        <SettingRow
+          label="Dark mode"
+          description={theme === 'dark' ? 'Dark theme active' : 'Light theme active'}
+        >
+          <div className="flex items-center justify-end gap-3">
             {theme === 'dark' ? (
               <Moon className="h-4 w-4 text-muted-foreground" />
             ) : (
               <Sun className="h-4 w-4 text-muted-foreground" />
             )}
-            <div>
-              <div className="font-medium text-sm">Dark Mode</div>
-              <div className="text-xs text-muted-foreground">
-                {theme === 'dark' ? 'Dark theme active' : 'Light theme active'}
-              </div>
-            </div>
+            <Switch
+              checked={theme === 'dark'}
+              onChange={(event) => setTheme(event.currentTarget.checked ? 'dark' : 'light')}
+              aria-label="Toggle dark mode"
+              className="flex min-h-8 items-center"
+              size="sm"
+            />
           </div>
-          <Switch
-            checked={theme === 'dark'}
-            onChange={(event) => setTheme(event.currentTarget.checked ? 'dark' : 'light')}
-            aria-label="Toggle dark mode"
-            className="flex min-h-8 items-center"
-            size="sm"
-          />
-        </div>
-      </div>
+        </SettingRow>
+      </SettingsSection>
 
       {/* Product Mode */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">Product Mode</h3>
-        <div className="rounded-md border p-4 bg-card space-y-4">
+      <SettingsSection
+        id="general-product-mode"
+        title="Product mode"
+        description="Prioritize the surfaces and shortcuts that match the way you work."
+      >
+        <div className="space-y-4">
           <div
             data-testid="product-mode-layout"
             className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
@@ -131,12 +138,15 @@ export function GeneralTab() {
             <ModeDetail label="Shortcuts" items={activeProductMode.commandShortcuts} />
           </SimpleGrid>
         </div>
-      </div>
+      </SettingsSection>
 
       {/* User Preferences */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">User Preferences</h3>
-        <div className="rounded-md border p-4 bg-card space-y-3">
+      <SettingsSection
+        id="general-user-preferences"
+        title="User preferences"
+        description="Identity used in collaborative surfaces."
+      >
+        <div className="space-y-3">
           <div className="grid gap-2">
             <TextInput
               id="human-display-name"
@@ -154,19 +164,21 @@ export function GeneralTab() {
               placeholder="Human"
               maw={320}
             />
-            <p className="text-xs text-muted-foreground">
+            <SettingsHelpText>
               How your messages appear in Squad Chat. Shows as "{localDisplayName} (Human)" in the
               chat.
-            </p>
+            </SettingsHelpText>
           </div>
         </div>
-      </div>
+      </SettingsSection>
 
       {/* Repositories */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Git Repositories</h3>
-          {!showAddForm && (
+      <SettingsSection
+        id="general-repositories"
+        title="Git repositories"
+        description="Repositories available for task worktrees and source operations."
+        actions={
+          !showAddForm ? (
             <Button
               variant="outline"
               size="xs"
@@ -175,8 +187,9 @@ export function GeneralTab() {
             >
               Add Repo
             </Button>
-          )}
-        </div>
+          ) : undefined
+        }
+      >
         {showAddForm && <AddRepoForm onClose={() => setShowAddForm(false)} />}
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading...</div>
@@ -191,11 +204,14 @@ export function GeneralTab() {
             ))}
           </div>
         )}
-      </div>
+      </SettingsSection>
 
       {/* Default Agent */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">Default Agent</h3>
+      <SettingsSection
+        id="general-default-agent"
+        title="Default agent"
+        description="Agent selected when a task does not specify one."
+      >
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading...</div>
         ) : (
@@ -211,8 +227,8 @@ export function GeneralTab() {
               ))}
           </div>
         )}
-      </div>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
 

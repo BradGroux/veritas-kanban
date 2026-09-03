@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
-import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { SETTINGS_NAVIGATION_GROUPS, SettingsDialog } from '@/components/settings/SettingsDialog';
 import { renderWithProviders } from './test-utils';
 
 const mocks = vi.hoisted(() => ({
   debouncedUpdate: vi.fn(),
   hasPermission: vi.fn(),
   toast: vi.fn(),
+  productMode: { selectedMode: 'advanced' as string },
 }));
 
 vi.mock('@/hooks/useFeatureSettings', () => ({
@@ -22,6 +23,7 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
       docFreshness: {},
       archive: {},
       sharedResources: {},
+      productMode: mocks.productMode,
     },
   }),
   useDebouncedFeatureUpdate: () => ({ debouncedUpdate: mocks.debouncedUpdate }),
@@ -98,6 +100,7 @@ vi.mock('@/components/settings/tabs/MultiUserTab', () => ({
 describe('SettingsDialog Mantine shell', () => {
   beforeEach(() => {
     mocks.hasPermission.mockReturnValue(true);
+    mocks.productMode.selectedMode = 'advanced';
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
@@ -115,6 +118,42 @@ describe('SettingsDialog Mantine shell', () => {
     expect(baseElement.querySelector('.mantine-Button-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
+  });
+
+  it('groups every destination exactly once and separates destructive actions', async () => {
+    const { baseElement } = renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+
+    await screen.findByText('General settings loaded');
+    const tabIds = SETTINGS_NAVIGATION_GROUPS.flatMap((group) => group.tabs.map((tab) => tab.id));
+    expect(tabIds).toHaveLength(20);
+    expect(new Set(tabIds).size).toBe(20);
+    expect(baseElement.querySelectorAll('[data-settings-nav-group]')).toHaveLength(5);
+    expect(baseElement.querySelector('[data-settings-actions="routine"]')).not.toBeNull();
+    expect(baseElement.querySelector('[data-settings-actions="danger"]')).not.toBeNull();
+  });
+
+  it('keeps advanced destinations visible but de-emphasized in Board Only mode', async () => {
+    mocks.productMode.selectedMode = 'board-only';
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+
+    await screen.findByText('General settings loaded');
+    expect(screen.getByText('Board Only')).toBeDefined();
+    expect(
+      screen.getByRole('tab', { name: 'Board' }).getAttribute('data-board-only-priority')
+    ).toBe('primary');
+    expect(
+      screen.getByRole('tab', { name: 'Agents' }).getAttribute('data-board-only-priority')
+    ).toBe('advanced');
+  });
+
+  it('skips permission-disabled destinations during keyboard navigation', async () => {
+    mocks.hasPermission.mockImplementation((permission: string) => permission !== 'agent:read');
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} defaultTab="agents" />);
+
+    const generalTab = screen.getByRole('tab', { name: 'General' });
+    expect(screen.getByRole('tab', { name: 'Agents' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.keyDown(generalTab, { key: 'ArrowDown' });
+    expect(await screen.findByText('Board settings loaded')).toBeDefined();
   });
 
   it('switches tab content through the Mantine sidebar buttons', async () => {

@@ -1,5 +1,15 @@
 import { useState, useRef, useCallback, lazy, Suspense, useEffect, useMemo } from 'react';
-import { Button, Group, Modal, ScrollArea, Select, Skeleton, Stack, Text } from '@mantine/core';
+import {
+  Badge,
+  Button,
+  Group,
+  Modal,
+  ScrollArea,
+  Select,
+  Skeleton,
+  Stack,
+  Text,
+} from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
@@ -30,7 +40,7 @@ import {
 } from 'lucide-react';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
-import { SettingsErrorBoundary } from './shared';
+import { SettingsActionGroup, SettingsErrorBoundary } from './shared';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
 // Lazy-load tab components
@@ -133,60 +143,109 @@ interface TabDef {
   label: string;
   icon: React.ElementType;
   requiredPermission?: ClientAuthPermission;
+  boardOnlyPrimary?: boolean;
 }
 
-const TABS: TabDef[] = [
-  { id: 'general', label: 'General', icon: Settings2 },
-  { id: 'board', label: 'Board', icon: Layout },
-  { id: 'tasks', label: 'Tasks', icon: ListTodo },
-  { id: 'agents', label: 'Agents', icon: Cpu, requiredPermission: 'agent:read' },
-  { id: 'data', label: 'Data', icon: Database, requiredPermission: 'backup:read' },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'security', label: 'Security', icon: Shield, requiredPermission: 'settings:read' },
-  { id: 'multi-user', label: 'Multi-user', icon: UserCog, requiredPermission: 'workspace:read' },
+interface NavigationGroup {
+  id: 'core' | 'collaboration' | 'automation' | 'governance' | 'system';
+  label: string;
+  tabs: TabDef[];
+}
+
+export const SETTINGS_NAVIGATION_GROUPS: NavigationGroup[] = [
   {
-    id: 'workspace-capabilities',
-    label: 'Workspaces',
-    icon: Network,
-    requiredPermission: 'workspace:read',
+    id: 'core',
+    label: 'Core',
+    tabs: [
+      { id: 'general', label: 'General', icon: Settings2, boardOnlyPrimary: true },
+      { id: 'board', label: 'Board', icon: Layout, boardOnlyPrimary: true },
+      { id: 'tasks', label: 'Tasks', icon: ListTodo, boardOnlyPrimary: true },
+      { id: 'agents', label: 'Agents', icon: Cpu, requiredPermission: 'agent:read' },
+      { id: 'data', label: 'Data', icon: Database, requiredPermission: 'backup:read' },
+    ],
   },
   {
-    id: 'scheduler',
-    label: 'Scheduler',
-    icon: CalendarClock,
-    requiredPermission: 'workflow:read',
+    id: 'collaboration',
+    label: 'Collaboration',
+    tabs: [
+      { id: 'notifications', label: 'Notifications', icon: Bell },
+      {
+        id: 'multi-user',
+        label: 'Multi-user',
+        icon: UserCog,
+        requiredPermission: 'workspace:read',
+      },
+      {
+        id: 'workspace-capabilities',
+        label: 'Workspaces',
+        icon: Network,
+        requiredPermission: 'workspace:read',
+      },
+      { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
+    ],
   },
   {
-    id: 'queue-monitors',
-    label: 'Queues',
-    icon: ListChecks,
-    requiredPermission: 'workflow:read',
+    id: 'automation',
+    label: 'Automation',
+    tabs: [
+      {
+        id: 'scheduler',
+        label: 'Scheduler',
+        icon: CalendarClock,
+        requiredPermission: 'workflow:read',
+      },
+      {
+        id: 'queue-monitors',
+        label: 'Queues',
+        icon: ListChecks,
+        requiredPermission: 'workflow:read',
+      },
+      {
+        id: 'reflections',
+        label: 'Reflections',
+        icon: BrainCircuit,
+        requiredPermission: 'workflow:read',
+      },
+      {
+        id: 'trackers',
+        label: 'Trackers',
+        icon: Waypoints,
+        requiredPermission: 'settings:read',
+      },
+    ],
   },
   {
-    id: 'reflections',
-    label: 'Reflections',
-    icon: BrainCircuit,
-    requiredPermission: 'workflow:read',
+    id: 'governance',
+    label: 'Governance',
+    tabs: [
+      { id: 'security', label: 'Security', icon: Shield, requiredPermission: 'settings:read' },
+      {
+        id: 'tool-policies',
+        label: 'Tool Policies',
+        icon: Lock,
+        requiredPermission: 'policy:read',
+      },
+      {
+        id: 'enforcement',
+        label: 'Enforcement',
+        icon: CheckCircle2,
+        requiredPermission: 'policy:read',
+      },
+      { id: 'shared-resources', label: 'Shared Resources', icon: Boxes },
+      { id: 'doc-freshness', label: 'Doc Freshness', icon: BookOpen },
+    ],
   },
   {
-    id: 'trackers',
-    label: 'Trackers',
-    icon: Waypoints,
-    requiredPermission: 'settings:read',
+    id: 'system',
+    label: 'System',
+    tabs: [
+      { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
+      { id: 'manage', label: 'Manage', icon: Archive, requiredPermission: 'backup:read' },
+    ],
   },
-  { id: 'maintenance', label: 'Maintenance', icon: Wrench, requiredPermission: 'backup:read' },
-  { id: 'delegation', label: 'Delegation', icon: Plane, requiredPermission: 'agent:read' },
-  { id: 'tool-policies', label: 'Tool Policies', icon: Lock, requiredPermission: 'policy:read' },
-  {
-    id: 'enforcement',
-    label: 'Enforcement',
-    icon: CheckCircle2,
-    requiredPermission: 'policy:read',
-  },
-  { id: 'shared-resources', label: 'Shared Resources', icon: Boxes },
-  { id: 'doc-freshness', label: 'Doc Freshness', icon: BookOpen },
-  { id: 'manage', label: 'Manage', icon: Archive, requiredPermission: 'backup:read' },
 ];
+
+const TABS = SETTINGS_NAVIGATION_GROUPS.flatMap((group) => group.tabs);
 
 // ============ Settings Dialog Props ============
 
@@ -201,19 +260,24 @@ interface SettingsDialogProps {
 export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const { hasPermission } = useIdentity();
+  const { settings: currentSettings } = useFeatureSettings();
   const canWriteSettings = hasPermission('settings:write');
   const canUseTab = useCallback(
     (tab: TabDef) => !tab.requiredPermission || hasPermission(tab.requiredPermission),
     [hasPermission]
   );
+  const isBoardOnly = currentSettings.productMode?.selectedMode === 'board-only';
   const mobileTabOptions = useMemo(
     () =>
-      TABS.map((tab) => ({
-        value: tab.id,
-        label: tab.label,
-        disabled: !canUseTab(tab),
+      SETTINGS_NAVIGATION_GROUPS.map((group) => ({
+        group: group.label,
+        items: group.tabs.map((tab) => ({
+          value: tab.id,
+          label: `${tab.label}${isBoardOnly && !tab.boardOnlyPrimary ? ' · Advanced' : ''}`,
+          disabled: !canUseTab(tab),
+        })),
       })),
-    [canUseTab]
+    [canUseTab, isBoardOnly]
   );
 
   // Set active tab when defaultTab changes
@@ -230,7 +294,6 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       setActiveTab(TABS.find(canUseTab)?.id ?? 'general');
     }
   }, [activeTab, canUseTab]);
-  const { settings: currentSettings } = useFeatureSettings();
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -251,6 +314,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   useEffect(() => {
     if (contentAreaRef.current) {
       contentAreaRef.current.focus();
+      contentAreaRef.current.scrollIntoView({ block: 'start' });
     }
   }, [activeTab]);
 
@@ -522,7 +586,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       opened={open}
       onClose={() => onOpenChange(false)}
       title={<span className="sr-only">Settings</span>}
-      size={800}
+      size={1040}
       padding={0}
       centered
       trapFocus
@@ -545,9 +609,21 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           onKeyDown={handleDialogKeyDown}
         >
           {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
-          <div className="hidden min-h-0 w-48 flex-col border-r bg-muted/30 py-4 sm:flex">
+          <div className="hidden min-h-0 w-56 flex-col border-r bg-muted/25 py-4 sm:flex">
             <div className="px-4 pb-3">
-              <h2 className="text-sm font-semibold">Settings</h2>
+              <Group gap="xs">
+                <h2 className="text-sm font-semibold">Settings</h2>
+                {isBoardOnly && (
+                  <Badge size="xs" variant="light" color="cyan">
+                    Board Only
+                  </Badge>
+                )}
+              </Group>
+              <Text size="xs" c="dimmed" mt={4}>
+                {isBoardOnly
+                  ? 'Board essentials first. Advanced settings remain available.'
+                  : 'Workspace configuration and governance.'}
+              </Text>
             </div>
             <nav
               className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pr-1"
@@ -555,41 +631,78 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
               aria-orientation="vertical"
               onKeyDown={handleKeyDown}
             >
-              <Stack gap={4}>
-                {TABS.map((tab, index) => {
-                  const Icon = tab.icon;
-                  const allowed = canUseTab(tab);
-                  const active = activeTab === tab.id;
-                  return (
-                    <Button
-                      key={tab.id}
-                      id={`tab-${tab.id}`}
-                      ref={index === 0 ? firstTabButtonRef : undefined}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      aria-controls="settings-tab-content"
-                      tabIndex={active ? 0 : -1}
-                      onClick={() => setActiveTab(tab.id)}
-                      disabled={!allowed}
-                      title={allowed ? tab.label : `${tab.requiredPermission} permission required`}
-                      variant={active ? 'light' : 'subtle'}
-                      color={active ? 'violet' : 'gray'}
+              <Stack gap="sm">
+                {SETTINGS_NAVIGATION_GROUPS.map((group) => (
+                  <div
+                    key={group.id}
+                    role="group"
+                    aria-labelledby={`settings-group-${group.id}`}
+                    data-settings-nav-group={group.id}
+                  >
+                    <Text
+                      id={`settings-group-${group.id}`}
                       size="xs"
-                      radius="md"
-                      fullWidth
-                      justify="flex-start"
-                      leftSection={<Icon className="h-4 w-4 flex-shrink-0" />}
+                      c="dimmed"
+                      fw={700}
+                      tt="uppercase"
+                      px="xs"
+                      mb={3}
                     >
-                      {tab.label}
-                    </Button>
-                  );
-                })}
+                      {group.label}
+                    </Text>
+                    <Stack gap={2}>
+                      {group.tabs.map((tab) => {
+                        const Icon = tab.icon;
+                        const allowed = canUseTab(tab);
+                        const active = activeTab === tab.id;
+                        const advancedInBoardOnly = isBoardOnly && !tab.boardOnlyPrimary;
+                        return (
+                          <Button
+                            key={tab.id}
+                            id={`tab-${tab.id}`}
+                            ref={tab.id === 'general' ? firstTabButtonRef : undefined}
+                            type="button"
+                            role="tab"
+                            aria-label={tab.label}
+                            aria-selected={active}
+                            aria-controls="settings-tab-content"
+                            tabIndex={active ? 0 : -1}
+                            onClick={() => setActiveTab(tab.id)}
+                            disabled={!allowed}
+                            title={
+                              allowed ? tab.label : `${tab.requiredPermission} permission required`
+                            }
+                            variant={active ? 'light' : 'subtle'}
+                            color={active ? 'violet' : 'gray'}
+                            size="xs"
+                            radius="md"
+                            fullWidth
+                            justify="flex-start"
+                            leftSection={<Icon className="h-4 w-4 flex-shrink-0" />}
+                            data-board-only-priority={advancedInBoardOnly ? 'advanced' : 'primary'}
+                          >
+                            <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                              <span className="truncate">{tab.label}</span>
+                              {advancedInBoardOnly && (
+                                <span
+                                  className="rounded bg-muted px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground"
+                                  aria-hidden="true"
+                                >
+                                  Advanced
+                                </span>
+                              )}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </Stack>
+                  </div>
+                ))}
               </Stack>
             </nav>
 
             {/* Import/Export/Reset */}
-            <Stack gap={4} className="mt-auto shrink-0 border-t px-3 pt-3 pb-6">
+            <Stack gap="sm" className="mt-auto shrink-0 border-t px-3 pt-3 pb-6">
               <input
                 ref={settingsFileInputRef}
                 type="file"
@@ -598,46 +711,52 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 className="hidden"
                 aria-label="Import settings file"
               />
-              <Button
-                type="button"
-                onClick={handleExportSettings}
-                aria-label="Export settings as JSON file"
-                variant="subtle"
-                color="gray"
-                size="xs"
-                fullWidth
-                justify="flex-start"
-                leftSection={<Download className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
-              >
-                Export Settings
-              </Button>
-              <Button
-                type="button"
-                onClick={() => settingsFileInputRef.current?.click()}
-                disabled={!canWriteSettings}
-                aria-label="Import settings from JSON file"
-                variant="subtle"
-                color="gray"
-                size="xs"
-                fullWidth
-                justify="flex-start"
-                leftSection={<Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
-              >
-                Import Settings
-              </Button>
-              <Button
-                type="button"
-                disabled={!canWriteSettings}
-                variant="subtle"
-                color="red"
-                size="xs"
-                fullWidth
-                justify="flex-start"
-                leftSection={<RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />}
-                onClick={() => setResetAllOpen(true)}
-              >
-                Reset All
-              </Button>
+              <SettingsActionGroup label="Transfer">
+                <Button
+                  type="button"
+                  onClick={handleExportSettings}
+                  aria-label="Export settings as JSON file"
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <Download className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                  }
+                >
+                  Export Settings
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => settingsFileInputRef.current?.click()}
+                  disabled={!canWriteSettings}
+                  aria-label="Import settings from JSON file"
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={<Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
+                >
+                  Import Settings
+                </Button>
+              </SettingsActionGroup>
+              <SettingsActionGroup label="Danger zone" tone="danger">
+                <Button
+                  type="button"
+                  disabled={!canWriteSettings}
+                  variant="subtle"
+                  color="red"
+                  size="xs"
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={<RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />}
+                  onClick={() => setResetAllOpen(true)}
+                >
+                  Reset All
+                </Button>
+              </SettingsActionGroup>
             </Stack>
           </div>
 
@@ -662,7 +781,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
               <div
                 id="settings-tab-content"
                 ref={contentAreaRef}
-                className="px-4 py-4 focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 sm:px-6"
+                className="mx-auto w-full max-w-3xl px-4 py-4 focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 sm:px-6 sm:py-6"
                 role="tabpanel"
                 tabIndex={-1}
                 aria-labelledby={`tab-${activeTab}`}
