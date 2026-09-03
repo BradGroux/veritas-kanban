@@ -53,11 +53,13 @@ test.describe('Settings', () => {
 
     await dialog.getByRole('tab', { name: 'Maintenance' }).click();
 
-    await expect(dialog.getByText('Maintenance Center')).toBeVisible({ timeout: 5_000 });
-    await expect(dialog.getByText('Health')).toBeVisible();
-    await expect(dialog.getByText('Storage Usage')).toBeVisible();
-    await expect(dialog.getByText('Cleanup Preview').first()).toBeVisible();
-    await expect(dialog.getByText('Backup and Restore')).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Maintenance', exact: true })).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(dialog.getByText('Health', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Storage Usage', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Cleanup Preview', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Backup and Restore' })).toBeVisible();
     await expect(dialog.getByLabel('Redacted log tail')).toBeVisible();
   });
 
@@ -75,7 +77,9 @@ test.describe('Settings', () => {
     await dialog.getByRole('tab', { name: 'Board' }).click();
 
     // The Board tab should show display options
-    await expect(dialog.locator('text=Board & Display')).toBeVisible({ timeout: 3_000 });
+    await expect(dialog.getByRole('heading', { name: 'Board and display' })).toBeVisible({
+      timeout: 3_000,
+    });
 
     // Verify a setting exists — "Show Dashboard" toggle
     await expect(dialog.getByText('Show Dashboard').first()).toBeVisible();
