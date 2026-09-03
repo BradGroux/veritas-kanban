@@ -55,6 +55,10 @@ function serializeForm(values: TemplateFormValues): string {
 }
 
 export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateEditorDialogProps) {
+  const categoryRef = useRef<HTMLInputElement>(null);
+  const typeRef = useRef<HTMLInputElement>(null);
+  const priorityRef = useRef<HTMLInputElement>(null);
+  const agentRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<string>('');
@@ -182,7 +186,21 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
       };
 
       if (template) {
-        await updateTemplate.mutateAsync({ id: template.id, input });
+        await updateTemplate.mutateAsync({
+          id: template.id,
+          input: {
+            ...input,
+            description: input.description ?? null,
+            category: input.category ?? null,
+            taskDefaults: {
+              type: input.taskDefaults.type ?? null,
+              priority: input.taskDefaults.priority ?? null,
+              project: input.taskDefaults.project ?? null,
+              agent: input.taskDefaults.agent ?? null,
+              descriptionTemplate: input.taskDefaults.descriptionTemplate ?? null,
+            },
+          },
+        });
         toast({
           title: 'Success',
           description: `Template "${name}" updated successfully.`,
@@ -276,6 +294,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                 <Select
                   id="category"
                   label="Category"
+                  ref={categoryRef}
+                  onClear={() => categoryRef.current?.focus()}
+                  clearable
+                  clearButtonProps={{
+                    'aria-label': 'Clear category',
+                    'aria-hidden': false,
+                    tabIndex: 0,
+                  }}
                   disabled={isLoading}
                   value={category || null}
                   onChange={(value) => setCategory(value ?? '')}
@@ -303,6 +329,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                   <Select
                     id="type"
                     label="Default Type"
+                    ref={typeRef}
+                    onClear={() => typeRef.current?.focus()}
+                    clearable
+                    clearButtonProps={{
+                      'aria-label': 'Clear default type',
+                      'aria-hidden': false,
+                      tabIndex: 0,
+                    }}
                     disabled={isLoading}
                     value={type || null}
                     onChange={(value) => setType(value ?? '')}
@@ -325,6 +359,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                   <Select
                     id="priority"
                     label="Default Priority"
+                    ref={priorityRef}
+                    onClear={() => priorityRef.current?.focus()}
+                    clearable
+                    clearButtonProps={{
+                      'aria-label': 'Clear default priority',
+                      'aria-hidden': false,
+                      tabIndex: 0,
+                    }}
                     disabled={isLoading}
                     value={priority || null}
                     onChange={(value) => setPriority((value as TaskPriority | null) ?? '')}
@@ -346,6 +388,14 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                   <Select
                     id="agent"
                     label="Default Agent"
+                    ref={agentRef}
+                    onClear={() => agentRef.current?.focus()}
+                    clearable
+                    clearButtonProps={{
+                      'aria-label': 'Clear default agent',
+                      'aria-hidden': false,
+                      tabIndex: 0,
+                    }}
                     disabled={isLoading}
                     value={agent || null}
                     onChange={(value) => setAgent((value as AgentType | null) ?? '')}
