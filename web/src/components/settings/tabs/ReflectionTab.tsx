@@ -1,4 +1,6 @@
-import { Badge, Button, Group, Loader, Paper, Stack, Text, Tooltip } from '@mantine/core';
+import { UiAction, UiPill, semanticToneForLegacyColor } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
+import { Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, GitMerge, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import type { ReflectionCandidate, ReflectionPromotionTarget } from '@veritas-kanban/shared';
@@ -9,21 +11,6 @@ import { SettingsPage, SettingsSection } from '../shared';
 
 const REFLECTIONS_QUERY_KEY = ['reflections', 'settings'] as const;
 const REVIEWER = 'operator';
-
-function categoryColor(category: ReflectionCandidate['category']): string {
-  switch (category) {
-    case 'session':
-      return 'blue';
-    case 'agent':
-      return 'violet';
-    case 'team':
-      return 'green';
-    case 'policy':
-      return 'red';
-    case 'template':
-      return 'yellow';
-  }
-}
 
 function statusColor(status: ReflectionCandidate['status']): string {
   switch (status) {
@@ -131,15 +118,13 @@ export function ReflectionTab() {
       description="Review corrections before they become durable lessons, policies, profiles, or templates."
       actions={
         <Tooltip label="Refresh reflections">
-          <Button
-            size="xs"
-            variant="subtle"
-            color="gray"
+          <UiAction
+            variant="quiet"
             leftSection={<RefreshCw className="h-3.5 w-3.5" />}
             onClick={() => reflectionsQuery.refetch()}
           >
             Refresh
-          </Button>
+          </UiAction>
         </Tooltip>
       }
     >
@@ -149,24 +134,25 @@ export function ReflectionTab() {
       >
         <Stack gap="lg">
           <Group gap="xs">
-            <Badge variant="light" color="yellow">
+            <UiPill kind="status" tone="warning">
               {pendingCount} pending
-            </Badge>
-            <Badge variant="light" color={duplicateGroups.length > 0 ? 'orange' : 'gray'}>
+            </UiPill>
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(duplicateGroups.length > 0 ? 'orange' : 'gray')}
+            >
               {duplicateGroups.length} duplicate groups
-            </Badge>
-            <Badge variant="light" color="blue">
-              {candidates.length} loaded
-            </Badge>
+            </UiPill>
+            <UiPill kind="count">{candidates.length} loaded</UiPill>
           </Group>
 
           <Stack gap="sm">
             {candidates.length === 0 ? (
-              <Paper className="border border-dashed p-4 text-center" radius="md">
+              <SettingsGroup empty className="text-center">
                 <Text size="sm" c="dimmed">
                   No reflection candidates are waiting for review.
                 </Text>
-              </Paper>
+              </SettingsGroup>
             ) : (
               candidates.map((candidate) => (
                 <ReflectionCandidateItem
@@ -218,7 +204,7 @@ function ReflectionCandidateItem({
   const isMergeable = canReview && candidate.duplicateCount > 1 && !!candidate.duplicateOf;
 
   return (
-    <Paper className="border bg-card p-4" radius="md">
+    <SettingsGroup>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start" gap="md">
           <Stack gap={4} className="min-w-0 flex-1">
@@ -226,16 +212,17 @@ function ReflectionCandidateItem({
               <Text size="sm" fw={600} lineClamp={2}>
                 {candidate.summary}
               </Text>
-              <Badge size="xs" color={statusColor(candidate.status)} variant="light">
+              <UiPill
+                kind="status"
+                tone={semanticToneForLegacyColor(statusColor(candidate.status))}
+              >
                 {candidate.status}
-              </Badge>
-              <Badge size="xs" color={categoryColor(candidate.category)} variant="light">
-                {candidate.category}
-              </Badge>
+              </UiPill>
+              <UiPill>{candidate.category}</UiPill>
               {candidate.duplicateCount > 1 && (
-                <Badge size="xs" color="orange" variant="light">
+                <UiPill kind="status" tone="warning">
                   {candidate.duplicateCount} duplicates
-                </Badge>
+                </UiPill>
               )}
             </Group>
             <Text size="xs" c="dimmed">
@@ -243,10 +230,8 @@ function ReflectionCandidateItem({
             </Text>
           </Stack>
           <Group gap="xs">
-            <Button
-              size="xs"
-              variant="light"
-              color="green"
+            <UiAction
+              variant="secondary"
               disabled={!canAcceptHere || busy}
               title={
                 requiresTypedPromotion
@@ -257,37 +242,31 @@ function ReflectionCandidateItem({
               onClick={onAccept}
             >
               {requiresTypedPromotion ? 'Typed review' : 'Accept'}
-            </Button>
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
+            </UiAction>
+            <UiAction
+              variant="quiet"
               disabled={!isMergeable || busy}
               leftSection={<GitMerge className="h-3.5 w-3.5" />}
               onClick={onMerge}
             >
               Merge
-            </Button>
-            <Button
-              size="xs"
-              variant="subtle"
-              color="red"
+            </UiAction>
+            <UiAction
+              variant="destructive"
               disabled={!canReview || busy}
               leftSection={<XCircle className="h-3.5 w-3.5" />}
               onClick={onReject}
             >
               Reject
-            </Button>
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
+            </UiAction>
+            <UiAction
+              variant="destructive"
               disabled={!canWrite || candidate.status === 'deleted' || busy}
               leftSection={<Trash2 className="h-3.5 w-3.5" />}
               onClick={onDelete}
             >
               Delete
-            </Button>
+            </UiAction>
           </Group>
         </Group>
 
@@ -336,7 +315,7 @@ function ReflectionCandidateItem({
           </Text>
         )}
       </Stack>
-    </Paper>
+    </SettingsGroup>
   );
 }
 

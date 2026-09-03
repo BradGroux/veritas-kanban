@@ -1,16 +1,7 @@
+import { UiAction, UiPill, UiIconAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Select,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { Group, Modal, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import {
   type TaskTemplate,
   useCreateTemplate,
@@ -78,7 +69,7 @@ export function AddTemplateForm({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 border rounded-lg p-4 bg-muted/30">
+    <form onSubmit={handleSubmit} className="settings-form space-y-4">
       <div className="flex items-center gap-2 text-sm font-medium">
         <FileText className="h-4 w-4" /> Add Template
       </div>
@@ -170,17 +161,16 @@ export function AddTemplateForm({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" radius="md" onClick={onClose}>
+        <UiAction variant="secondary" type="button" onClick={onClose}>
           Cancel
-        </Button>
-        <Button
+        </UiAction>
+        <UiAction
+          variant="primary"
           type="submit"
-          size="sm"
-          radius="md"
           disabled={!name.trim() || createTemplate.isPending}
         >
           {createTemplate.isPending ? 'Creating...' : 'Create Template'}
-        </Button>
+        </UiAction>
       </div>
     </form>
   );
@@ -202,7 +192,7 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
     .join(' • ');
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-md border bg-card">
+    <SettingsGroup className="flex items-center justify-between py-2 px-3">
       <div className="flex items-center gap-3">
         <FileText className="h-4 w-4 text-muted-foreground" />
         <div className="flex-1">
@@ -211,14 +201,14 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
               {template.name}
             </Text>
             {template.category && (
-              <Badge variant="light" color="gray" size="xs">
+              <UiPill>
                 {getCategoryIcon(template.category)} {getCategoryLabel(template.category)}
-              </Badge>
+              </UiPill>
             )}
             {isLaunchDraft && (
-              <Badge variant="light" color="yellow" size="xs">
+              <UiPill kind="status" tone="warning">
                 draft
-              </Badge>
+              </UiPill>
             )}
           </div>
           <Text size="xs" c="dimmed">
@@ -228,12 +218,9 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
       </div>
       <Group gap="xs">
         {isLaunchDraft && (
-          <ActionIcon
+          <UiIconAction
+            variant="quiet"
             type="button"
-            variant="subtle"
-            color="green"
-            size="sm"
-            radius="md"
             aria-label={`Activate ${template.name}`}
             loading={updateTemplate.isPending}
             onClick={() => {
@@ -250,19 +237,16 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
             }}
           >
             <CheckCircle2 className="h-4 w-4" />
-          </ActionIcon>
+          </UiIconAction>
         )}
-        <ActionIcon
+        <UiIconAction
+          variant="destructive"
           type="button"
-          variant="subtle"
-          color="red"
-          size="sm"
-          radius="md"
           aria-label={`Delete ${template.name}`}
           onClick={() => setDeleteOpen(true)}
         >
           <Trash2 className="h-4 w-4" />
-        </ActionIcon>
+        </UiIconAction>
       </Group>
       <Modal
         opened={deleteOpen}
@@ -275,21 +259,21 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
             This will delete "{template.name}".
           </Text>
           <Group justify="flex-end">
-            <Button variant="subtle" color="gray" onClick={() => setDeleteOpen(false)}>
+            <UiAction variant="quiet" onClick={() => setDeleteOpen(false)}>
               Cancel
-            </Button>
-            <Button
-              color="red"
+            </UiAction>
+            <UiAction
+              variant="destructive"
               onClick={() => {
                 deleteTemplate.mutate(template.id);
                 setDeleteOpen(false);
               }}
             >
               Delete
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>
-    </div>
+    </SettingsGroup>
   );
 }

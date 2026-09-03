@@ -9,6 +9,8 @@ export {
   SettingsErrorText,
   SettingsFieldGrid,
   SettingsHelpText,
+  SettingsGroup,
+  SettingsNotice,
   SettingsLocalNav,
   SettingsPage,
   SettingsSection,

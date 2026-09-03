@@ -49,6 +49,23 @@ Example: `<UiPill kind="status" tone="blocked">Blocked</UiPill>`. Brand accent b
 
 The light/dark palette is specified in `web/src/theme/ui-contract.ts`; CSS custom properties render it. Automated tests require every foreground/background pair to meet WCAG AA 4.5:1 and check CSS parity. Status must also have a readable label or icon. Chart series, task classification stamps, and capacity bars may retain their documented data colors: those distinguish data, not unrelated page chrome. Activity titles remain neutral; its pills carry status.
 
+## Settings hierarchy
+
+All Settings destinations use `SettingsPage` for the page heading and description, `SettingsSection` for a named card, and `SettingsGroup` for subordinate content. Field rows use `SettingRow`, `ToggleRow`, or `NumberRow`: one neutral row with consistent label/help spacing and a shared control column. Sections use 12px padding at compact widths and 16px otherwise; groups use 12px. The control column ranges from 160px to 224px on wider screens; selectors fill it and numeric controls use 112px plus their unit. Compact rows stack naturally. Inline forms use the borderless `settings-form` spacing treatment inside their group, not a new colored card.
+
+`SettingsGroup` tracks the surrounding settings depth through component boundaries: outer card, inset subgroup, then borderless groups. Empty states and `SettingsNotice` also respect this two-border limit. An empty state keeps its spacing and explanation even when its boundary is omitted. Notices remain labeled semantic surfaces without adding a third border. Normal guidance uses neutral notice treatment; success, warning, error, and blocked tones describe actual state, never a destination, category, profile type, or count alone.
+
+```tsx
+<SettingsSection title="Providers">
+  <SettingsGroup>
+    <SettingsNotice tone="warning">Provider executable is unavailable.</SettingsNotice>
+    <ToggleRow label="Enabled" checked={enabled} onCheckedChange={setEnabled} />
+  </SettingsGroup>
+</SettingsSection>
+```
+
+Feature names are the entire Settings navigation label. Core destinations appear first through grouping, without Advanced badges or option suffixes. Selected destinations use the shared selection tone; local section links use neutral secondary actions with native anchor and keyboard behavior. Transfer and Danger Zone actions remain separate from destination navigation and pinned on wider screens; the compact header exposes them through the labeled Settings actions menu. Reset All opens confirmation; the confirmed reset uses the destructive action role. Never hide routine actions just because the sidebar is hidden.
+
 ## Adoption and verification
 
 Activity, Templates, Workflows, Operations/Admission, Evidence, Time, Drift, Decisions, Scoring, Policies, Settings shared sections/actions, and task workspace actions adopt this vocabulary. Existing board classification styling remains governed by the board color contract in `globals.css`. Feature-specific forms and overlay layout are separate audit issues, not exemptions from this contract.

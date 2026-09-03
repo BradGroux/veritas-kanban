@@ -1,4 +1,5 @@
-import { ActionIcon, Button, Group, Select, TextInput } from '@mantine/core';
+import { UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
+import { Group, Select, TextInput } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import {
   DEFAULT_FEATURE_SETTINGS,
@@ -191,16 +192,15 @@ export function BoardTab() {
               <div className="text-sm font-medium">Board Columns</div>
               <div className="text-xs text-muted-foreground">Visible task statuses and order</div>
             </div>
-            <Button
+            <UiAction
+              variant="secondary"
               type="button"
-              variant="light"
-              size="xs"
               leftSection={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
               onClick={addColumn}
               disabled={columns.length >= 12}
             >
               Add
-            </Button>
+            </UiAction>
           </Group>
           <div className="space-y-2">
             {columns.map((column, index) => (
@@ -228,16 +228,14 @@ export function BoardTab() {
                   size="xs"
                   maxLength={50}
                 />
-                <ActionIcon
+                <UiIconAction
+                  variant="destructive"
                   aria-label={`Remove ${column.title}`}
-                  variant="subtle"
-                  color="red"
-                  size="sm"
                   onClick={() => removeColumn(index)}
                   disabled={columns.length <= 1}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </ActionIcon>
+                </UiIconAction>
               </div>
             ))}
           </div>

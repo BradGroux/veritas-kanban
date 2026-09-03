@@ -1,6 +1,7 @@
+import { UiAction, UiHeading } from '@/components/ui/UiVocabulary';
 import { useState } from 'react';
 import type { ManagedListItem } from '@veritas-kanban/shared';
-import { Button, TextInput } from '@mantine/core';
+import { TextInput } from '@mantine/core';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortableList } from '@/hooks/useSortableList';
@@ -68,7 +69,7 @@ export function ManagedListManager<T extends ManagedListItem>({
 
   return (
     <div className="space-y-2">
-      {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      {title && <UiHeading order={3}>{title}</UiHeading>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext
@@ -105,14 +106,13 @@ export function ManagedListManager<T extends ManagedListItem>({
           radius="md"
           className="flex-1"
         />
-        <Button
-          size="xs"
-          radius="md"
+        <UiAction
+          variant="primary"
           onClick={handleCreate}
           disabled={!newItemLabel.trim() || isCreating}
         >
           Add
-        </Button>
+        </UiAction>
       </div>
     </div>
   );

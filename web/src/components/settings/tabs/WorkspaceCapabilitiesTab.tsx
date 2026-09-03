@@ -1,18 +1,7 @@
+import { UiAction, UiPill, semanticToneForLegacyColor } from '@/components/ui/UiVocabulary';
+import { SettingsNotice, SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Loader,
-  Paper,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { Group, Loader, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { RefreshCw, SendHorizonal } from 'lucide-react';
 import type { TaskPriority } from '@veritas-kanban/shared';
 import { useIdentity } from '@/hooks/useIdentity';
@@ -156,15 +145,13 @@ export function WorkspaceCapabilitiesTab() {
       title="Workspaces"
       description="Discover trusted workspace capabilities and delegate governed work across them."
       actions={
-        <Button
-          size="xs"
-          variant="subtle"
-          color="gray"
+        <UiAction
+          variant="quiet"
           onClick={() => discoveryQuery.refetch()}
           leftSection={<RefreshCw className="h-3.5 w-3.5" />}
         >
           Refresh
-        </Button>
+        </UiAction>
       }
     >
       <SettingsSection
@@ -173,13 +160,13 @@ export function WorkspaceCapabilitiesTab() {
       >
         <Stack gap="lg">
           {!discovery?.local && (
-            <Alert color="yellow" variant="light">
+            <SettingsNotice tone="warning">
               No local workspace capability manifest is configured.
-            </Alert>
+            </SettingsNotice>
           )}
 
           {discovery?.local && (
-            <Paper className="border bg-card p-4" radius="md">
+            <SettingsGroup>
               <Stack gap="sm">
                 <Group justify="space-between" align="flex-start">
                   <Stack gap={2}>
@@ -190,9 +177,12 @@ export function WorkspaceCapabilitiesTab() {
                       {discovery.local.workspaceId}
                     </Text>
                   </Stack>
-                  <Badge color={discovery.local.enabled ? 'green' : 'gray'} variant="light">
+                  <UiPill
+                    kind="status"
+                    tone={semanticToneForLegacyColor(discovery.local.enabled ? 'green' : 'gray')}
+                  >
                     {discovery.local.enabled ? 'Enabled' : 'Disabled'}
-                  </Badge>
+                  </UiPill>
                 </Group>
                 <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
                   {discovery.local.capabilities.map((capability) => (
@@ -200,7 +190,7 @@ export function WorkspaceCapabilitiesTab() {
                   ))}
                 </SimpleGrid>
               </Stack>
-            </Paper>
+            </SettingsGroup>
           )}
 
           <Stack gap="sm">
@@ -208,15 +198,15 @@ export function WorkspaceCapabilitiesTab() {
               Trusted Workspaces
             </Text>
             {trusted.length === 0 ? (
-              <Paper className="border border-dashed p-4 text-center" radius="md">
+              <SettingsGroup empty className="text-center">
                 <Text size="sm" c="dimmed">
                   No trusted workspace manifests registered.
                 </Text>
-              </Paper>
+              </SettingsGroup>
             ) : (
               <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
                 {trusted.map((workspace) => (
-                  <Paper key={workspace.workspaceId} className="border bg-card p-4" radius="md">
+                  <SettingsGroup key={workspace.workspaceId}>
                     <Stack gap="xs">
                       <Group justify="space-between" align="flex-start">
                         <Stack gap={2}>
@@ -227,21 +217,24 @@ export function WorkspaceCapabilitiesTab() {
                             {workspace.workspaceId}
                           </Text>
                         </Stack>
-                        <Badge color={workspace.enabled ? 'green' : 'gray'} variant="light">
+                        <UiPill
+                          kind="status"
+                          tone={semanticToneForLegacyColor(workspace.enabled ? 'green' : 'gray')}
+                        >
                           {workspace.enabled ? 'Trusted' : 'Disabled'}
-                        </Badge>
+                        </UiPill>
                       </Group>
                       {workspace.capabilities.map((capability) => (
                         <CapabilityCard key={capability.id} capability={capability} compact />
                       ))}
                     </Stack>
-                  </Paper>
+                  </SettingsGroup>
                 ))}
               </SimpleGrid>
             )}
           </Stack>
 
-          <Paper className="border bg-card p-4" radius="md">
+          <SettingsGroup>
             <Stack gap="md">
               <Group gap="xs">
                 <SendHorizonal className="h-4 w-4 text-muted-foreground" />
@@ -320,16 +313,17 @@ export function WorkspaceCapabilitiesTab() {
                 </SimpleGrid>
               )}
               <Group justify="flex-end">
-                <Button
+                <UiAction
+                  variant="primary"
                   onClick={handleSubmit}
                   disabled={!canSubmit || intake.isPending}
                   leftSection={<SendHorizonal className="h-4 w-4" />}
                 >
                   Create Intake
-                </Button>
+                </UiAction>
               </Group>
             </Stack>
-          </Paper>
+          </SettingsGroup>
 
           <Stack gap="sm">
             <Text size="sm" fw={600}>
@@ -340,15 +334,15 @@ export function WorkspaceCapabilitiesTab() {
                 Loading delegations...
               </Text>
             ) : (delegationsQuery.data ?? []).length === 0 ? (
-              <Paper className="border border-dashed p-4 text-center" radius="md">
+              <SettingsGroup empty className="text-center">
                 <Text size="sm" c="dimmed">
                   No delegated work recorded.
                 </Text>
-              </Paper>
+              </SettingsGroup>
             ) : (
               <Stack gap="xs">
                 {(delegationsQuery.data ?? []).slice(0, 5).map((record) => (
-                  <Paper key={record.id} className="border bg-card p-3" radius="md">
+                  <SettingsGroup key={record.id}>
                     <Group justify="space-between" align="flex-start" wrap="nowrap">
                       <Stack gap={2} className="min-w-0">
                         <Text size="sm" fw={500} className="truncate">
@@ -360,11 +354,11 @@ export function WorkspaceCapabilitiesTab() {
                           {record.target.workspaceId}
                         </Text>
                       </Stack>
-                      <Badge variant="light" color={record.status === 'blocked' ? 'red' : 'blue'}>
+                      <UiPill kind="status" tone={record.status === 'blocked' ? 'blocked' : 'info'}>
                         {record.latestState ?? record.status}
-                      </Badge>
+                      </UiPill>
                     </Group>
-                  </Paper>
+                  </SettingsGroup>
                 ))}
               </Stack>
             )}
@@ -389,25 +383,18 @@ function CapabilityCard({
   compact?: boolean;
 }) {
   return (
-    <Paper
-      className={compact ? 'border bg-background/40 p-3' : 'border bg-background/40 p-4'}
-      radius="md"
-    >
+    <SettingsGroup p={compact ? 'sm' : 'md'}>
       <Stack gap={6}>
         <Group gap="xs" justify="space-between" align="center">
           <Text size="sm" fw={600}>
             {capability.name}
           </Text>
-          <Badge variant="light" color="gray">
-            {capability.id}
-          </Badge>
+          <UiPill>{capability.id}</UiPill>
         </Group>
         <Group gap={6}>
           {(capability.acceptedTaskTypes.length > 0 ? capability.acceptedTaskTypes : ['any']).map(
             (taskType) => (
-              <Badge key={taskType} size="sm" variant="outline">
-                {taskType}
-              </Badge>
+              <UiPill key={taskType}>{taskType}</UiPill>
             )
           )}
         </Group>
@@ -417,6 +404,6 @@ function CapabilityCard({
           </Text>
         )}
       </Stack>
-    </Paper>
+    </SettingsGroup>
   );
 }

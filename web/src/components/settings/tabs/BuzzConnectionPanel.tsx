@@ -1,14 +1,6 @@
-import {
-  Badge,
-  Button,
-  Code,
-  Group,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { UiPill, semanticToneForLegacyColor, UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
+import { Code, Group, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -221,7 +213,7 @@ export function BuzzConnectionPanel() {
         Verify Buzz relay identity, NIP-98 authentication, membership, and read capability without
         sending a message
       </p>
-      <Paper withBorder radius="md" p="sm">
+      <SettingsGroup>
         <Stack gap="sm">
           <Group justify="space-between" gap="sm" align="flex-start">
             <div>
@@ -233,9 +225,12 @@ export function BuzzConnectionPanel() {
                   'Save a reference-only connection to enable compatibility diagnostics.'}
               </Text>
             </div>
-            <Badge color={healthColor(effectiveHealth?.status)} variant="light" tt="none">
+            <UiPill
+              kind="status"
+              tone={semanticToneForLegacyColor(healthColor(effectiveHealth?.status))}
+            >
               {effectiveHealth?.status ?? (adapter ? 'not checked' : 'not configured')}
-            </Badge>
+            </UiPill>
           </Group>
 
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
@@ -326,7 +321,7 @@ export function BuzzConnectionPanel() {
             onCheckedChange={(value) => update('allowPrivateNetwork', value)}
           />
 
-          <Paper withBorder radius="sm" p="xs">
+          <SettingsGroup>
             <Text size="xs" fw={600} mb={6}>
               Compatibility chain
             </Text>
@@ -336,25 +331,23 @@ export function BuzzConnectionPanel() {
               aria-label="Buzz compatibility verification chain"
             >
               {verificationSteps.map(([label, state]) => (
-                <Paper key={label} withBorder radius="xs" p={6}>
+                <SettingsGroup key={label}>
                   <Text size="xs" fw={600}>
                     {label}
                   </Text>
-                  <Badge
-                    color={verificationColor(state)}
-                    variant="light"
-                    size="xs"
-                    tt="none"
+                  <UiPill
+                    kind="status"
+                    tone={semanticToneForLegacyColor(verificationColor(state))}
                     mt={3}
                   >
                     {state ?? 'unverified'}
-                  </Badge>
-                </Paper>
+                  </UiPill>
+                </SettingsGroup>
               ))}
             </SimpleGrid>
-          </Paper>
+          </SettingsGroup>
 
-          <Paper withBorder radius="sm" p="xs">
+          <SettingsGroup>
             <Text size="xs" fw={600} mb={6}>
               Runtime and delivery
             </Text>
@@ -403,10 +396,9 @@ export function BuzzConnectionPanel() {
                     <Text size="xs" truncate>
                       {delivery.operation}: {delivery.detail ?? delivery.error ?? 'recorded'}
                     </Text>
-                    <Badge
-                      size="xs"
-                      variant="light"
-                      color={
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(
                         delivery.status === 'success'
                           ? 'green'
                           : delivery.status === 'delivery_unknown'
@@ -414,18 +406,17 @@ export function BuzzConnectionPanel() {
                             : delivery.status === 'failed' || delivery.status === 'blocked'
                               ? 'red'
                               : 'gray'
-                      }
-                      tt="none"
+                      )}
                     >
                       {delivery.status}
-                    </Badge>
+                    </UiPill>
                   </Group>
                 ))}
               </Stack>
             )}
-          </Paper>
+          </SettingsGroup>
 
-          <Paper withBorder radius="sm" p="xs">
+          <SettingsGroup>
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={4}>
               <Text size="xs">
                 Signing reference:{' '}
@@ -482,32 +473,33 @@ export function BuzzConnectionPanel() {
                   .join(', ')}
               </Text>
             ) : null}
-          </Paper>
+          </SettingsGroup>
 
           <Group justify="flex-end" gap="xs">
-            <Button
+            <UiAction
+              variant="secondary"
               type="button"
-              size="xs"
-              variant="light"
-              color="gray"
               onClick={() => test.mutate()}
               disabled={!adapter || test.isPending || save.isPending}
             >
               Test Connection
-            </Button>
-            <Button
+            </UiAction>
+            <UiAction
+              variant="destructive"
               type="button"
-              size="xs"
-              variant="light"
-              color="red"
               onClick={() => disconnect.mutate()}
               disabled={!adapter || disconnect.isPending}
             >
               Disable
-            </Button>
-            <Button type="button" size="xs" onClick={() => save.mutate()} disabled={save.isPending}>
+            </UiAction>
+            <UiAction
+              variant="primary"
+              type="button"
+              onClick={() => save.mutate()}
+              disabled={save.isPending}
+            >
               Save Buzz
-            </Button>
+            </UiAction>
           </Group>
           {error && (
             <Text size="xs" c="red">
@@ -515,7 +507,7 @@ export function BuzzConnectionPanel() {
             </Text>
           )}
         </Stack>
-      </Paper>
+      </SettingsGroup>
     </div>
   );
 }

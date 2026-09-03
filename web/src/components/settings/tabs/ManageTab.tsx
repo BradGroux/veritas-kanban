@@ -1,5 +1,7 @@
+import { UiIconAction, UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useRef, useState } from 'react';
-import { ActionIcon, Button, Select, Text, TextInput } from '@mantine/core';
+import { Select, Text, TextInput } from '@mantine/core';
 import { useConfig } from '@/hooks/useConfig';
 import { useTemplates, useCreateTemplate } from '@/hooks/useTemplates';
 import {
@@ -117,7 +119,7 @@ export function ManageTab() {
         title="Task Types"
         description="Configure the labels, icons, colors, and ordering available to tasks."
       >
-        <div className="border rounded-md p-3">
+        <SettingsGroup>
           <ManagedListManager<TaskTypeConfig>
             title=""
             items={taskTypesManager.items}
@@ -184,14 +186,14 @@ export function ManageTab() {
             )}
             newItemDefaults={{ icon: 'Code', colorToken: 'neutral' }}
           />
-        </div>
+        </SettingsGroup>
       </SettingsSection>
 
       <SettingsSection
         title="Projects"
         description="Configure project metadata, colors, and ordering."
       >
-        <div className="border rounded-md p-3">
+        <SettingsGroup>
           <ManagedListManager<ProjectConfig>
             title=""
             items={projectsManager.items}
@@ -243,14 +245,14 @@ export function ManageTab() {
             )}
             newItemDefaults={{ description: '', color: 'bg-blue-500/20' }}
           />
-        </div>
+        </SettingsGroup>
       </SettingsSection>
 
       <SettingsSection
         title="Sprints"
         description="Configure sprint labels, descriptions, and ordering."
       >
-        <div className="border rounded-md p-3">
+        <SettingsGroup>
           <ManagedListManager<SprintConfig>
             title=""
             items={sprintsManager.items}
@@ -278,7 +280,7 @@ export function ManageTab() {
             )}
             newItemDefaults={{ description: '' }}
           />
-        </div>
+        </SettingsGroup>
       </SettingsSection>
 
       <SettingsSection
@@ -288,59 +290,50 @@ export function ManageTab() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <ActionIcon
+              <UiIconAction
+                variant="quiet"
                 type="button"
-                variant="subtle"
-                color="gray"
-                size="sm"
-                radius="md"
                 aria-label="Toggle template guide"
                 onClick={() => setShowTemplateHelp(!showTemplateHelp)}
               >
                 <HelpCircle className="h-4 w-4" />
-              </ActionIcon>
+              </UiIconAction>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
+              <UiAction
+                variant="secondary"
                 type="button"
-                variant="outline"
-                size="xs"
-                radius="md"
                 leftSection={<Upload className="h-4 w-4" />}
                 onClick={handleImportClick}
               >
                 Import
-              </Button>
+              </UiAction>
               {templates && templates.length > 0 && (
-                <Button
+                <UiAction
+                  variant="secondary"
                   type="button"
-                  variant="outline"
-                  size="xs"
-                  radius="md"
                   leftSection={<Download className="h-4 w-4" />}
                   onClick={handleExportTemplates}
                 >
                   Export
-                </Button>
+                </UiAction>
               )}
               {!showAddTemplateForm && (
-                <Button
+                <UiAction
+                  variant="secondary"
                   type="button"
-                  variant="outline"
-                  size="xs"
-                  radius="md"
                   leftSection={<Plus className="h-4 w-4" />}
                   aria-label="Add template"
                   onClick={() => setShowAddTemplateForm(true)}
                 >
                   Add
-                </Button>
+                </UiAction>
               )}
             </div>
           </div>
 
           {showTemplateHelp && (
-            <div className="p-3 rounded-md bg-muted/50 border border-muted-foreground/20 text-sm space-y-3">
+            <SettingsGroup className="text-sm space-y-3">
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                 <div className="space-y-2">
@@ -364,7 +357,7 @@ export function ManageTab() {
                   </div>
                 </div>
               </div>
-            </div>
+            </SettingsGroup>
           )}
 
           <input
@@ -380,9 +373,9 @@ export function ManageTab() {
           {templatesLoading ? (
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : !templates || templates.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-4 text-center border rounded-md border-dashed">
+            <SettingsGroup empty className="text-sm text-muted-foreground py-4 text-center">
               No templates created.
-            </div>
+            </SettingsGroup>
           ) : (
             <div className="space-y-2">
               {templates.map((template) => (

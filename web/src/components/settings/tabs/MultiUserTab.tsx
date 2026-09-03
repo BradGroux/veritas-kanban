@@ -1,6 +1,13 @@
+import {
+  UiPill,
+  UiIconAction,
+  UiAction,
+  semanticToneForLegacyColor,
+} from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ActionIcon, Badge, Button, Checkbox, Select, TextInput } from '@mantine/core';
+import { Checkbox, Select, TextInput } from '@mantine/core';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -180,10 +187,10 @@ function permissionLabel(permission: ClientAuthPermission) {
 
 function PermissionEmptyState({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+    <SettingsGroup empty className="flex items-start gap-2 text-sm text-muted-foreground">
       <Shield className="mt-0.5 h-4 w-4" aria-hidden="true" />
       <span>{message}</span>
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -530,13 +537,13 @@ export function MultiUserTab() {
 
   if (error) {
     return (
-      <div className="flex items-start gap-2 rounded-md border border-destructive/40 p-3 text-sm">
+      <SettingsGroup className="flex items-start gap-2 text-sm">
         <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" aria-hidden="true" />
         <div>
           <div className="font-medium text-destructive">Unable to load identity data</div>
           <div className="text-muted-foreground">{error.message}</div>
         </div>
-      </div>
+      </SettingsGroup>
     );
   }
 
@@ -565,16 +572,12 @@ export function MultiUserTab() {
         title="Workspace"
         description="Choose the active workspace and review your current access role."
       >
-        <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_auto]">
+        <SettingsGroup className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="truncate font-medium">{activeWorkspace.name}</div>
-              <Badge variant="light" color="gray" className="capitalize">
-                {activeMembership.role}
-              </Badge>
-              <Badge variant="outline" color="gray" className="capitalize">
-                {activeWorkspace.mode}
-              </Badge>
+              <UiPill className="capitalize">{activeMembership.role}</UiPill>
+              <UiPill className="capitalize">{activeWorkspace.mode}</UiPill>
             </div>
             <div className="text-sm text-muted-foreground">
               {activeWorkspace.description ?? 'Workspace access is active.'}
@@ -593,7 +596,7 @@ export function MultiUserTab() {
             size="sm"
             radius="md"
           />
-        </div>
+        </SettingsGroup>
       </SettingsSection>
 
       <SettingsSection
@@ -606,7 +609,7 @@ export function MultiUserTab() {
         ) : members.length === 0 ? (
           <PermissionEmptyState message="No active members were returned for this workspace." />
         ) : (
-          <div className="overflow-hidden rounded-md border">
+          <SettingsGroup className="overflow-hidden">
             <table className="w-full text-sm">
               <thead className="hidden bg-muted/50 text-xs uppercase text-muted-foreground sm:table-header-group">
                 <tr>
@@ -654,12 +657,9 @@ export function MultiUserTab() {
                         <span>{formatDate(member.joinedAt)}</span>
                       </td>
                       <td className="flex justify-end sm:table-cell sm:px-3 sm:py-2 sm:text-right">
-                        <ActionIcon
+                        <UiIconAction
+                          variant="destructive"
                           type="button"
-                          variant="subtle"
-                          color="red"
-                          size="sm"
-                          radius="md"
                           onClick={() => void handleRemoveMember(member)}
                           disabled={!canEditMember || isSelf}
                           aria-label={`Remove ${memberName(member)}`}
@@ -672,14 +672,14 @@ export function MultiUserTab() {
                           }
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        </ActionIcon>
+                        </UiIconAction>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
+          </SettingsGroup>
         )}
       </SettingsSection>
 
@@ -693,7 +693,7 @@ export function MultiUserTab() {
         ) : (
           <div className="space-y-3">
             <form
-              className="grid gap-3 rounded-md border p-3 sm:grid-cols-2"
+              className="settings-form grid gap-3 sm:grid-cols-2"
               onSubmit={handleCreateInvitation}
             >
               <TextInput
@@ -730,20 +730,20 @@ export function MultiUserTab() {
                 radius="md"
               />
               <div className="flex items-end sm:col-span-2 sm:justify-end">
-                <Button
+                <UiAction
+                  variant="primary"
                   type="submit"
                   disabled={createInvitation.isPending}
                   className="w-full sm:w-auto"
-                  radius="md"
                   leftSection={<MailPlus className="h-4 w-4" aria-hidden="true" />}
                 >
                   Send
-                </Button>
+                </UiAction>
               </div>
             </form>
 
             {createdToken && (
-              <div className="grid gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3">
+              <SettingsGroup className="grid gap-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                   One-time invitation token
@@ -757,18 +757,16 @@ export function MultiUserTab() {
                     size="sm"
                     radius="md"
                   />
-                  <ActionIcon
+                  <UiIconAction
+                    variant="secondary"
                     type="button"
-                    variant="outline"
                     onClick={() => void handleCopyToken()}
                     aria-label="Copy invitation token"
-                    size="lg"
-                    radius="md"
                   >
                     <Clipboard className="h-4 w-4" aria-hidden="true" />
-                  </ActionIcon>
+                  </UiIconAction>
                 </div>
-              </div>
+              </SettingsGroup>
             )}
 
             {invitationsQuery.isLoading ? (
@@ -781,38 +779,33 @@ export function MultiUserTab() {
                   const status = invitationStatus(invitation);
                   const canRevoke = status.label === 'Pending';
                   return (
-                    <div
+                    <SettingsGroup
                       key={invitation.id}
-                      className="flex items-center justify-between gap-3 rounded-md border p-3"
+                      className="flex items-center justify-between gap-3"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate font-medium">
                             {invitation.email ?? invitation.id}
                           </span>
-                          <Badge variant={status.variant} color={status.color}>
+                          <UiPill kind="status" tone={semanticToneForLegacyColor(status.color)}>
                             {status.label}
-                          </Badge>
-                          <Badge variant="outline" color="gray">
-                            {ROLE_LABELS[invitation.role]}
-                          </Badge>
+                          </UiPill>
+                          <UiPill>{ROLE_LABELS[invitation.role]}</UiPill>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Expires {formatDate(invitation.expiresAt)}
                         </div>
                       </div>
-                      <Button
+                      <UiAction
+                        variant="destructive"
                         type="button"
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        radius="md"
                         onClick={() => void handleRevokeInvitation(invitation)}
                         disabled={!canRevoke || revokeInvitation.isPending}
                       >
                         Revoke
-                      </Button>
-                    </div>
+                      </UiAction>
+                    </SettingsGroup>
                   );
                 })}
               </div>
@@ -831,7 +824,7 @@ export function MultiUserTab() {
           <PermissionEmptyState message="Owner or admin permission is required to pair and revoke trusted devices." />
         ) : (
           <div className="space-y-3">
-            <form className="grid gap-3 rounded-md border p-3" onSubmit={handleCreatePairingCode}>
+            <form className="settings-form grid gap-3" onSubmit={handleCreatePairingCode}>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <TextInput
                   id="device-name"
@@ -889,9 +882,9 @@ export function MultiUserTab() {
                 <div className="text-sm font-medium">Capabilities</div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {selectableDeviceCapabilities.map((capability) => (
-                    <div
+                    <SettingsGroup
                       key={capability.value}
-                      className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
+                      className="flex items-center gap-2 px-2.5 py-2 text-xs"
                     >
                       <Checkbox
                         checked={deviceCapabilities.includes(capability.value)}
@@ -904,7 +897,7 @@ export function MultiUserTab() {
                         label={<span>{capability.label}</span>}
                         radius="sm"
                       />
-                    </div>
+                    </SettingsGroup>
                   ))}
                 </div>
               </div>
@@ -912,9 +905,9 @@ export function MultiUserTab() {
                 <div className="text-sm font-medium">Scopes</div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {selectableDeviceScopes.map((permission) => (
-                    <div
+                    <SettingsGroup
                       key={permission}
-                      className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
+                      className="flex items-center gap-2 px-2.5 py-2 text-xs"
                     >
                       <Checkbox
                         checked={deviceScopes.includes(permission)}
@@ -924,12 +917,13 @@ export function MultiUserTab() {
                         label={<span className="font-mono">{permissionLabel(permission)}</span>}
                         radius="sm"
                       />
-                    </div>
+                    </SettingsGroup>
                   ))}
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button
+                <UiAction
+                  variant="primary"
                   type="submit"
                   disabled={
                     createPairingCode.isPending ||
@@ -937,16 +931,15 @@ export function MultiUserTab() {
                     deviceScopes.length === 0
                   }
                   className="w-full sm:w-auto"
-                  radius="md"
                   leftSection={<QrCode className="h-4 w-4" aria-hidden="true" />}
                 >
                   Pair
-                </Button>
+                </UiAction>
               </div>
             </form>
 
             {createdPairingCode && (
-              <div className="grid gap-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3">
+              <SettingsGroup className="grid gap-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                   One-time pairing code
@@ -960,16 +953,14 @@ export function MultiUserTab() {
                     radius="md"
                     aria-label="Pairing code"
                   />
-                  <ActionIcon
+                  <UiIconAction
+                    variant="secondary"
                     type="button"
-                    variant="outline"
                     onClick={() => void handleCopyPairingCode()}
                     aria-label="Copy pairing code"
-                    size="lg"
-                    radius="md"
                   >
                     <Clipboard className="h-4 w-4" aria-hidden="true" />
-                  </ActionIcon>
+                  </UiIconAction>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                   <TextInput
@@ -980,21 +971,19 @@ export function MultiUserTab() {
                     radius="md"
                     aria-label="Pairing link"
                   />
-                  <ActionIcon
+                  <UiIconAction
+                    variant="secondary"
                     type="button"
-                    variant="outline"
                     onClick={() => void handleCopyPairingLink()}
                     aria-label="Copy pairing link"
-                    size="lg"
-                    radius="md"
                   >
                     <Clipboard className="h-4 w-4" aria-hidden="true" />
-                  </ActionIcon>
+                  </UiIconAction>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Expires {formatDate(createdPairingCode.pairing.expiresAt)}
                 </div>
-              </div>
+              </SettingsGroup>
             )}
 
             {deviceSessionsQuery.isLoading ? (
@@ -1007,20 +996,16 @@ export function MultiUserTab() {
                   const status = deviceSessionStatus(session);
                   const canRevoke = status.label !== 'Revoked' && status.label !== 'Expired';
                   return (
-                    <div key={session.id} className="rounded-md border p-3">
+                    <SettingsGroup key={session.id}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="truncate font-medium">{session.deviceName}</span>
-                            <Badge variant={status.variant} color={status.color}>
+                            <UiPill kind="status" tone={semanticToneForLegacyColor(status.color)}>
                               {status.label}
-                            </Badge>
-                            <Badge variant="outline" color="gray">
-                              {ROLE_LABELS[session.role]}
-                            </Badge>
-                            <Badge variant="outline" color="gray" className="font-mono">
-                              {session.tokenPrefix}...
-                            </Badge>
+                            </UiPill>
+                            <UiPill>{ROLE_LABELS[session.role]}</UiPill>
+                            <UiPill className="font-mono">{session.tokenPrefix}...</UiPill>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {session.clientMode} · Last seen {formatDate(session.lastSeenAt)} ·
@@ -1040,57 +1025,41 @@ export function MultiUserTab() {
                           )}
                         </div>
                         <div className="flex items-center gap-1">
-                          <ActionIcon
+                          <UiIconAction
+                            variant="quiet"
                             type="button"
-                            variant="subtle"
-                            color="gray"
-                            size="sm"
-                            radius="md"
                             onClick={() => void handleTestDeviceSession(session)}
                             disabled={!canRevoke || testDeviceSession.isPending}
                             aria-label={`Test ${session.deviceName}`}
                             title="Test device session"
                           >
                             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                          </ActionIcon>
-                          <ActionIcon
+                          </UiIconAction>
+                          <UiIconAction
+                            variant="destructive"
                             type="button"
-                            variant="subtle"
-                            color="red"
-                            size="sm"
-                            radius="md"
                             onClick={() => void handleRevokeDeviceSession(session)}
                             disabled={!canRevoke || revokeDeviceSession.isPending}
                             aria-label={`Revoke ${session.deviceName}`}
                             title="Revoke device session"
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          </ActionIcon>
+                          </UiIconAction>
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {session.capabilities.map((capability) => (
-                          <Badge
-                            key={capability}
-                            variant="light"
-                            color="gray"
-                            className="font-mono text-[11px]"
-                          >
+                          <UiPill key={capability} className="font-mono text-[11px]">
                             {capability}
-                          </Badge>
+                          </UiPill>
                         ))}
                         {session.scopes.map((scope) => (
-                          <Badge
-                            key={scope}
-                            variant="outline"
-                            color="gray"
-                            className="font-mono text-[11px]"
-                          >
+                          <UiPill key={scope} className="font-mono text-[11px]">
                             {scope}
-                          </Badge>
+                          </UiPill>
                         ))}
                       </div>
-                    </div>
+                    </SettingsGroup>
                   );
                 })}
               </div>
@@ -1105,7 +1074,7 @@ export function MultiUserTab() {
         description="Review the current authentication context and manage scoped API tokens."
         tone="advanced"
       >
-        <div className="space-y-3 rounded-md border p-3">
+        <SettingsGroup className="space-y-3">
           <div className="grid gap-2 text-sm sm:grid-cols-3">
             <div>
               <div className="text-xs uppercase text-muted-foreground">Auth method</div>
@@ -1122,26 +1091,19 @@ export function MultiUserTab() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {(authContext?.permissions ?? []).slice(0, 10).map((permission) => (
-              <Badge
-                key={permission}
-                variant="outline"
-                color="gray"
-                className="font-mono text-[11px]"
-              >
+              <UiPill key={permission} className="font-mono text-[11px]">
                 {permission}
-              </Badge>
+              </UiPill>
             ))}
             {(authContext?.permissions?.length ?? 0) > 10 && (
-              <Badge variant="light" color="gray">
-                +{(authContext?.permissions?.length ?? 0) - 10}
-              </Badge>
+              <UiPill>+{(authContext?.permissions?.length ?? 0) - 10}</UiPill>
             )}
           </div>
           {!canManageApiTokens ? (
             <PermissionEmptyState message="Owner or admin permission is required to create and manage scoped API tokens." />
           ) : (
             <div className="space-y-3">
-              <form className="grid gap-3 rounded-md border p-3" onSubmit={handleCreateApiToken}>
+              <form className="settings-form grid gap-3" onSubmit={handleCreateApiToken}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <TextInput
                     id="api-token-name"
@@ -1167,9 +1129,9 @@ export function MultiUserTab() {
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {selectableTokenScopes.map((permission) => {
                       return (
-                        <div
+                        <SettingsGroup
                           key={permission}
-                          className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
+                          className="flex items-center gap-2 px-2.5 py-2 text-xs"
                         >
                           <Checkbox
                             checked={apiTokenScopes.includes(permission)}
@@ -1179,13 +1141,14 @@ export function MultiUserTab() {
                             label={<span className="font-mono">{permissionLabel(permission)}</span>}
                             radius="sm"
                           />
-                        </div>
+                        </SettingsGroup>
                       );
                     })}
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button
+                  <UiAction
+                    variant="primary"
                     type="submit"
                     disabled={
                       createApiToken.isPending ||
@@ -1193,16 +1156,15 @@ export function MultiUserTab() {
                       apiTokenScopes.length === 0
                     }
                     className="w-full sm:w-auto"
-                    radius="md"
                     leftSection={<KeyRound className="h-4 w-4" aria-hidden="true" />}
                   >
                     Create
-                  </Button>
+                  </UiAction>
                 </div>
               </form>
 
               {createdApiTokenSecret && (
-                <div className="grid gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3">
+                <SettingsGroup className="grid gap-2">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                     One-time API token
@@ -1216,18 +1178,16 @@ export function MultiUserTab() {
                       size="sm"
                       radius="md"
                     />
-                    <ActionIcon
+                    <UiIconAction
+                      variant="secondary"
                       type="button"
-                      variant="outline"
                       onClick={() => void handleCopyApiToken()}
                       aria-label="Copy API token"
-                      size="lg"
-                      radius="md"
                     >
                       <Clipboard className="h-4 w-4" aria-hidden="true" />
-                    </ActionIcon>
+                    </UiIconAction>
                   </div>
-                </div>
+                </SettingsGroup>
               )}
 
               {apiTokensQuery.isLoading ? (
@@ -1240,17 +1200,15 @@ export function MultiUserTab() {
                     const status = tokenStatus(token);
                     const isActive = status.label === 'Active';
                     return (
-                      <div key={token.id} className="rounded-md border p-3">
+                      <SettingsGroup key={token.id}>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="truncate font-medium">{token.name}</span>
-                              <Badge variant={status.variant} color={status.color}>
+                              <UiPill kind="status" tone={semanticToneForLegacyColor(status.color)}>
                                 {status.label}
-                              </Badge>
-                              <Badge variant="outline" color="gray" className="font-mono">
-                                {token.tokenPrefix}...
-                              </Badge>
+                              </UiPill>
+                              <UiPill className="font-mono">{token.tokenPrefix}...</UiPill>
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Created {formatDate(token.createdAt)} · Last used{' '}
@@ -1258,54 +1216,43 @@ export function MultiUserTab() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            <ActionIcon
+                            <UiIconAction
+                              variant="quiet"
                               type="button"
-                              variant="subtle"
-                              color="gray"
-                              size="sm"
-                              radius="md"
                               onClick={() => void handleRotateApiToken(token)}
                               disabled={rotateApiToken.isPending}
                               aria-label={`Rotate ${token.name}`}
                               title="Rotate token"
                             >
                               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                            </ActionIcon>
-                            <ActionIcon
+                            </UiIconAction>
+                            <UiIconAction
+                              variant="destructive"
                               type="button"
-                              variant="subtle"
-                              color="red"
-                              size="sm"
-                              radius="md"
                               onClick={() => void handleRevokeApiToken(token)}
                               disabled={!isActive || revokeApiToken.isPending}
                               aria-label={`Revoke ${token.name}`}
                               title="Revoke token"
                             >
                               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            </ActionIcon>
+                            </UiIconAction>
                           </div>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {token.scopes.map((scope) => (
-                            <Badge
-                              key={scope}
-                              variant="outline"
-                              color="gray"
-                              className="font-mono text-[11px]"
-                            >
+                            <UiPill key={scope} className="font-mono text-[11px]">
                               {scope}
-                            </Badge>
+                            </UiPill>
                           ))}
                         </div>
-                      </div>
+                      </SettingsGroup>
                     );
                   })}
                 </div>
               )}
             </div>
           )}
-        </div>
+        </SettingsGroup>
       </SettingsSection>
     </SettingsPage>
   );

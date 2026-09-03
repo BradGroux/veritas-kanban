@@ -1,6 +1,8 @@
+import { UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Button, Group, Modal, PasswordInput, Stack, Text } from '@mantine/core';
+import { Group, Modal, PasswordInput, Stack, Text } from '@mantine/core';
 import { Eye, EyeOff, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { authApi } from '@/lib/api/auth';
@@ -138,14 +140,15 @@ export function SecurityTab() {
             )}
           </div>
 
-          <Button
+          <UiAction
+            variant="primary"
             onClick={handleChangePassword}
             disabled={!canChange || isChanging}
             fullWidth
             leftSection={changeSuccess ? <Check className="w-4 h-4" /> : undefined}
           >
             {isChanging ? 'Changing...' : changeSuccess ? 'Password Changed' : 'Change Password'}
-          </Button>
+          </UiAction>
         </div>
       </SettingsSection>
 
@@ -154,7 +157,7 @@ export function SecurityTab() {
         description="Clear the password and recovery key, then require first-run setup again."
         tone="danger"
       >
-        <div className="p-4 border border-destructive/20 rounded-lg bg-destructive/5 space-y-3">
+        <SettingsGroup className="space-y-3">
           <div>
             <p className="font-medium text-sm">Reset Security Settings</p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -164,9 +167,9 @@ export function SecurityTab() {
             </p>
           </div>
 
-          <Button color="red" size="sm" onClick={() => setResetOpen(true)}>
+          <UiAction variant="destructive" onClick={() => setResetOpen(true)}>
             Reset All Security
-          </Button>
+          </UiAction>
           <Modal
             opened={resetOpen}
             onClose={() => setResetOpen(false)}
@@ -179,11 +182,11 @@ export function SecurityTab() {
                 need to set up a new password on the next page load.
               </Text>
               <Group justify="flex-end">
-                <Button variant="subtle" color="gray" onClick={() => setResetOpen(false)}>
+                <UiAction variant="quiet" onClick={() => setResetOpen(false)}>
                   Cancel
-                </Button>
-                <Button
-                  color="red"
+                </UiAction>
+                <UiAction
+                  variant="destructive"
                   onClick={async () => {
                     // Call the reset endpoint
                     try {
@@ -202,11 +205,11 @@ export function SecurityTab() {
                   }}
                 >
                   Reset Everything
-                </Button>
+                </UiAction>
               </Group>
             </Stack>
           </Modal>
-        </div>
+        </SettingsGroup>
       </SettingsSection>
     </SettingsPage>
   );

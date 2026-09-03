@@ -1,16 +1,14 @@
+import { UiPill, semanticToneForLegacyColor, UiAction } from '@/components/ui/UiVocabulary';
+import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 import { useEffect, useMemo, useState } from 'react';
 import type { ElementType } from 'react';
 import {
-  Alert,
-  Badge,
-  Button,
   Checkbox,
   Code,
   Group,
   Loader,
   Modal,
   NumberInput,
-  Paper,
   Progress,
   Select,
   SimpleGrid,
@@ -77,7 +75,7 @@ function SummaryMetric({
   icon: ElementType;
 }) {
   return (
-    <Paper withBorder radius="md" p="sm">
+    <SettingsGroup>
       <Group gap="sm" wrap="nowrap">
         <Icon className="h-4 w-4 text-muted-foreground" />
         <div>
@@ -89,7 +87,7 @@ function SummaryMetric({
           </Text>
         </div>
       </Group>
-    </Paper>
+    </SettingsGroup>
   );
 }
 
@@ -97,19 +95,19 @@ function HealthCheckList({ checks }: { checks: MaintenanceHealthCheck[] }) {
   return (
     <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
       {checks.map((check) => (
-        <Paper key={check.id} withBorder radius="md" p="sm">
+        <SettingsGroup key={check.id}>
           <Group justify="space-between" gap="sm">
             <Text size="sm" fw={600}>
               {check.label}
             </Text>
-            <Badge color={HEALTH_COLORS[check.state]} variant="light">
+            <UiPill kind="status" tone={semanticToneForLegacyColor(HEALTH_COLORS[check.state])}>
               {check.state}
-            </Badge>
+            </UiPill>
           </Group>
           <Text size="xs" c="dimmed" mt={4}>
             {check.detail}
           </Text>
-        </Paper>
+        </SettingsGroup>
       ))}
     </SimpleGrid>
   );
@@ -142,12 +140,14 @@ function StorageTable({ categories }: { categories: MaintenanceStorageCategory[]
               <Table.Td>{category.itemCount}</Table.Td>
               <Table.Td>{formatBytes(category.bytes)}</Table.Td>
               <Table.Td>
-                <Badge
-                  color={category.cleanupEligibleCount > 0 ? 'yellow' : 'gray'}
-                  variant="light"
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(
+                    category.cleanupEligibleCount > 0 ? 'yellow' : 'gray'
+                  )}
                 >
                   {category.cleanupEligibleCount}
-                </Badge>
+                </UiPill>
               </Table.Td>
               <Table.Td>{formatDate(category.lastUsedAt)}</Table.Td>
             </Table.Tr>
@@ -170,16 +170,19 @@ function CleanupPreviewList({ items }: { items: MaintenanceCleanupPreviewItem[] 
   return (
     <Stack gap="xs">
       {items.slice(0, 8).map((item) => (
-        <Paper key={item.id} withBorder radius="md" p="sm">
+        <SettingsGroup key={item.id}>
           <Group justify="space-between" align="flex-start" gap="sm">
             <div>
               <Group gap="xs">
                 <Text size="sm" fw={600}>
                   {item.label}
                 </Text>
-                <Badge color={item.cleanupEligible ? 'yellow' : 'gray'} variant="light">
+                <UiPill
+                  kind="status"
+                  tone={semanticToneForLegacyColor(item.cleanupEligible ? 'yellow' : 'gray')}
+                >
                   {item.category}
-                </Badge>
+                </UiPill>
               </Group>
               <Text size="xs" c="dimmed">
                 {item.retainedReason}
@@ -189,7 +192,7 @@ function CleanupPreviewList({ items }: { items: MaintenanceCleanupPreviewItem[] 
               {formatBytes(item.estimatedBytes)}
             </Text>
           </Group>
-        </Paper>
+        </SettingsGroup>
       ))}
     </Stack>
   );
@@ -297,9 +300,9 @@ export function MaintenanceTab() {
 
   if (summaryQuery.isError || !summary) {
     return (
-      <Alert color="red" title="Maintenance unavailable">
+      <SettingsNotice tone="error" title="Maintenance unavailable">
         {summaryQuery.error instanceof Error ? summaryQuery.error.message : 'Failed to load state'}
-      </Alert>
+      </SettingsNotice>
     );
   }
 
@@ -321,25 +324,24 @@ export function MaintenanceTab() {
       actions={
         <Group gap="xs">
           <Tooltip label="Refresh maintenance state">
-            <Button
+            <UiAction
+              variant="secondary"
               type="button"
-              size="xs"
-              variant="light"
               leftSection={<RefreshCcw className="h-4 w-4" />}
               onClick={() => summaryQuery.refetch()}
             >
               Refresh
-            </Button>
+            </UiAction>
           </Tooltip>
-          <Button
+          <UiAction
+            variant="primary"
             type="button"
-            size="xs"
             leftSection={<FileArchive className="h-4 w-4" />}
             loading={debugBundle.isPending}
             onClick={() => debugBundle.mutate()}
           >
             Debug Bundle
-          </Button>
+          </UiAction>
         </Group>
       }
     >
@@ -394,7 +396,7 @@ export function MaintenanceTab() {
             <Text size="sm" fw={700}>
               Storage Usage
             </Text>
-            <Badge variant="light">{formatBytes(summary.storage.totalBytes)}</Badge>
+            <UiPill>{formatBytes(summary.storage.totalBytes)}</UiPill>
           </Group>
           <StorageTable categories={summary.storage.categories} />
         </div>
@@ -406,16 +408,14 @@ export function MaintenanceTab() {
         description={`${formatBytes(cleanupBytes)} across ${summary.cleanupPreview.items.length} previewed items. Review retained reasons before taking action.`}
         tone="danger"
         actions={
-          <Button
+          <UiAction
+            variant="secondary"
             type="button"
-            size="xs"
-            color="red"
-            variant="outline"
             leftSection={<Trash2 className="h-4 w-4" />}
             onClick={() => setCleanupOpen(true)}
           >
             Review Cleanup
-          </Button>
+          </UiAction>
         }
       >
         <Stack gap="sm">
@@ -452,14 +452,14 @@ export function MaintenanceTab() {
               max={500}
               className="w-full"
             />
-            <Button
+            <UiAction
+              variant="secondary"
               type="button"
-              variant="light"
               leftSection={<RefreshCcw className="h-4 w-4" />}
               onClick={() => logQuery.refetch()}
             >
               Tail
-            </Button>
+            </UiAction>
           </div>
           <Textarea
             aria-label="Redacted log tail"
@@ -497,7 +497,8 @@ export function MaintenanceTab() {
               onChange={(event) => setWorkspaceId(event.currentTarget.value)}
               placeholder="Optional workspace ID"
             />
-            <Button
+            <UiAction
+              variant="primary"
               type="button"
               leftSection={<Database className="h-4 w-4" />}
               loading={exportSqlite.isPending}
@@ -511,7 +512,7 @@ export function MaintenanceTab() {
               }
             >
               Export Backup
-            </Button>
+            </UiAction>
           </Stack>
           <Stack gap="xs">
             <TextInput
@@ -525,9 +526,9 @@ export function MaintenanceTab() {
               checked={replaceExisting}
               onChange={(event) => setReplaceExisting(event.currentTarget.checked)}
             />
-            <Button
+            <UiAction
+              variant="secondary"
               type="button"
-              variant="outline"
               leftSection={<Wrench className="h-4 w-4" />}
               loading={importSqlite.isPending}
               disabled={!sqlitePath || !bundleDir}
@@ -540,7 +541,7 @@ export function MaintenanceTab() {
               }
             >
               Import Backup
-            </Button>
+            </UiAction>
             {lastBackupResult && <Code block>{lastBackupResult}</Code>}
           </Stack>
         </SimpleGrid>
@@ -553,7 +554,7 @@ export function MaintenanceTab() {
       >
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
           {summary.lifecycle.map((entry) => (
-            <Paper key={entry.id} withBorder radius="md" p="sm">
+            <SettingsGroup key={entry.id}>
               <Group justify="space-between" align="flex-start">
                 <div>
                   <Text size="sm" fw={600}>
@@ -564,12 +565,24 @@ export function MaintenanceTab() {
                   </Text>
                 </div>
                 <Group gap={4}>
-                  {entry.containsSecrets && <Badge color="red">Secrets</Badge>}
-                  {entry.containsPrivatePaths && <Badge color="yellow">Paths</Badge>}
-                  {entry.containsGeneratedContent && <Badge color="blue">Generated</Badge>}
+                  {entry.containsSecrets && (
+                    <UiPill kind="status" tone="error">
+                      Secrets
+                    </UiPill>
+                  )}
+                  {entry.containsPrivatePaths && (
+                    <UiPill kind="status" tone="warning">
+                      Paths
+                    </UiPill>
+                  )}
+                  {entry.containsGeneratedContent && (
+                    <UiPill kind="status" tone="info">
+                      Generated
+                    </UiPill>
+                  )}
                 </Group>
               </Group>
-            </Paper>
+            </SettingsGroup>
           ))}
         </SimpleGrid>
       </SettingsSection>
@@ -592,12 +605,12 @@ export function MaintenanceTab() {
             placeholder="Type DELETE"
           />
           <Group justify="flex-end">
-            <Button variant="subtle" color="gray" onClick={() => setCleanupOpen(false)}>
+            <UiAction variant="quiet" onClick={() => setCleanupOpen(false)}>
               Close
-            </Button>
-            <Button color="red" disabled={!cleanupEnabled}>
+            </UiAction>
+            <UiAction variant="destructive" disabled={!cleanupEnabled}>
               Delete Previewed Items
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>

@@ -1,20 +1,12 @@
+import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
 import { useState, useRef, useCallback, lazy, Suspense, useEffect, useMemo } from 'react';
-import {
-  Badge,
-  Button,
-  Group,
-  Modal,
-  ScrollArea,
-  Select,
-  Skeleton,
-  Stack,
-  Text,
-} from '@mantine/core';
+import { Group, Menu, Modal, ScrollArea, Select, Skeleton, Stack, Text } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
 import {
   Settings2,
+  MoreHorizontal,
   Layout,
   ListTodo,
   ListChecks,
@@ -143,7 +135,6 @@ interface TabDef {
   label: string;
   icon: React.ElementType;
   requiredPermission?: ClientAuthPermission;
-  boardOnlyPrimary?: boolean;
 }
 
 interface NavigationGroup {
@@ -157,9 +148,9 @@ export const SETTINGS_NAVIGATION_GROUPS: NavigationGroup[] = [
     id: 'core',
     label: 'Core',
     tabs: [
-      { id: 'general', label: 'General', icon: Settings2, boardOnlyPrimary: true },
-      { id: 'board', label: 'Board', icon: Layout, boardOnlyPrimary: true },
-      { id: 'tasks', label: 'Tasks', icon: ListTodo, boardOnlyPrimary: true },
+      { id: 'general', label: 'General', icon: Settings2 },
+      { id: 'board', label: 'Board', icon: Layout },
+      { id: 'tasks', label: 'Tasks', icon: ListTodo },
       { id: 'agents', label: 'Agents', icon: Cpu, requiredPermission: 'agent:read' },
       { id: 'data', label: 'Data', icon: Database, requiredPermission: 'backup:read' },
     ],
@@ -273,11 +264,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
         group: group.label,
         items: group.tabs.map((tab) => ({
           value: tab.id,
-          label: `${tab.label}${isBoardOnly && !tab.boardOnlyPrimary ? ' · Advanced' : ''}`,
+          label: tab.label,
           disabled: !canUseTab(tab),
         })),
       })),
-    [canUseTab, isBoardOnly]
+    [canUseTab]
   );
 
   // Set active tab when defaultTab changes
@@ -300,6 +291,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const firstTabButtonRef = useRef<HTMLButtonElement>(null);
+  const keyboardTabChange = useRef(false);
   const [resetAllOpen, setResetAllOpen] = useState(false);
 
   // Focus first tab when dialog opens
@@ -313,7 +305,12 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   // Focus content area when switching tabs
   useEffect(() => {
     if (contentAreaRef.current) {
-      contentAreaRef.current.focus();
+      if (keyboardTabChange.current) {
+        dialogContentRef.current?.querySelector<HTMLButtonElement>(`#tab-${activeTab}`)?.focus();
+        keyboardTabChange.current = false;
+      } else {
+        contentAreaRef.current.focus();
+      }
       contentAreaRef.current.scrollIntoView({ block: 'start' });
     }
   }, [activeTab]);
@@ -416,10 +413,12 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       const currentIndex = availableTabs.findIndex((t) => t.id === activeTab);
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
+        keyboardTabChange.current = true;
         const next = (currentIndex + 1) % availableTabs.length;
         setActiveTab(availableTabs[next].id);
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         e.preventDefault();
+        keyboardTabChange.current = true;
         const prev = (currentIndex - 1 + availableTabs.length) % availableTabs.length;
         setActiveTab(availableTabs[prev].id);
       }
@@ -590,11 +589,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           <Text component="span" size="sm" fw={600}>
             Settings
           </Text>
-          {isBoardOnly && (
-            <Badge size="xs" variant="light" color="cyan">
-              Board Only
-            </Badge>
-          )}
+          {isBoardOnly && <UiPill>Board Only</UiPill>}
         </Group>
       }
       size={1040}
@@ -621,12 +616,10 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           onKeyDown={handleDialogKeyDown}
         >
           {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
-          <div className="hidden min-h-0 w-56 flex-col border-r bg-muted/25 py-4 sm:flex">
+          <div className="hidden min-h-0 w-56 shrink-0 flex-col border-r bg-muted/25 py-4 sm:flex">
             <div className="px-4 pb-3">
               <Text size="xs" c="dimmed" mt={4}>
-                {isBoardOnly
-                  ? 'Board essentials first. Advanced settings remain available.'
-                  : 'Workspace configuration and governance.'}
+                Workspace preferences and controls.
               </Text>
             </div>
             <nav
@@ -659,9 +652,10 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                         const Icon = tab.icon;
                         const allowed = canUseTab(tab);
                         const active = activeTab === tab.id;
-                        const advancedInBoardOnly = isBoardOnly && !tab.boardOnlyPrimary;
                         return (
-                          <Button
+                          <UiAction
+                            variant="quiet"
+                            className="settings-nav-action"
                             key={tab.id}
                             id={`tab-${tab.id}`}
                             ref={tab.id === 'general' ? firstTabButtonRef : undefined}
@@ -676,27 +670,12 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                             title={
                               allowed ? tab.label : `${tab.requiredPermission} permission required`
                             }
-                            variant={active ? 'light' : 'subtle'}
-                            color={active ? 'violet' : 'gray'}
-                            size="xs"
-                            radius="md"
                             fullWidth
                             justify="flex-start"
                             leftSection={<Icon className="h-4 w-4 flex-shrink-0" />}
-                            data-board-only-priority={advancedInBoardOnly ? 'advanced' : 'primary'}
                           >
-                            <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                              <span className="truncate">{tab.label}</span>
-                              {advancedInBoardOnly && (
-                                <span
-                                  className="rounded bg-muted px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground"
-                                  aria-hidden="true"
-                                >
-                                  Advanced
-                                </span>
-                              )}
-                            </span>
-                          </Button>
+                            <span className="min-w-0 whitespace-normal text-left">{tab.label}</span>
+                          </UiAction>
                         );
                       })}
                     </Stack>
@@ -716,13 +695,11 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 aria-label="Import settings file"
               />
               <SettingsActionGroup label="Transfer">
-                <Button
+                <UiAction
+                  variant="quiet"
                   type="button"
                   onClick={handleExportSettings}
                   aria-label="Export settings as JSON file"
-                  variant="subtle"
-                  color="gray"
-                  size="xs"
                   fullWidth
                   justify="flex-start"
                   leftSection={
@@ -730,43 +707,42 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                   }
                 >
                   Export Settings
-                </Button>
-                <Button
+                </UiAction>
+                <UiAction
+                  variant="quiet"
                   type="button"
                   onClick={() => settingsFileInputRef.current?.click()}
                   disabled={!canWriteSettings}
                   aria-label="Import settings from JSON file"
-                  variant="subtle"
-                  color="gray"
-                  size="xs"
                   fullWidth
                   justify="flex-start"
                   leftSection={<Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
                 >
                   Import Settings
-                </Button>
+                </UiAction>
               </SettingsActionGroup>
               <SettingsActionGroup label="Danger zone" tone="danger">
-                <Button
+                <UiAction
+                  variant="quiet"
                   type="button"
                   disabled={!canWriteSettings}
-                  variant="subtle"
-                  color="red"
-                  size="xs"
                   fullWidth
                   justify="flex-start"
                   leftSection={<RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />}
                   onClick={() => setResetAllOpen(true)}
                 >
                   Reset All
-                </Button>
+                </UiAction>
               </SettingsActionGroup>
             </Stack>
           </div>
 
           {/* Content */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div data-settings-mobile-header className="shrink-0 border-b px-4 py-3 sm:hidden">
+            <div
+              data-settings-mobile-header
+              className="flex items-center gap-2 shrink-0 border-b px-4 py-3 sm:hidden"
+            >
               <Select
                 value={activeTab}
                 onChange={(value) => {
@@ -776,9 +752,39 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 aria-label="Select settings section"
                 size="sm"
                 checkIconPosition="right"
-                className="mt-3 w-full"
+                className="min-w-0 flex-1 w-full"
                 styles={{ input: { minHeight: '2.75rem' } }}
               />
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <UiIconAction aria-label="Settings actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </UiIconAction>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Transfer</Menu.Label>
+                  <Menu.Item leftSection={<Download size={16} />} onClick={handleExportSettings}>
+                    Export Settings
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<Upload size={16} />}
+                    disabled={!canWriteSettings}
+                    onClick={() => settingsFileInputRef.current?.click()}
+                  >
+                    Import Settings
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Label>Danger zone</Menu.Label>
+                  <Menu.Item
+                    color="red"
+                    leftSection={<RotateCcw size={16} />}
+                    disabled={!canWriteSettings}
+                    onClick={() => setResetAllOpen(true)}
+                  >
+                    Reset All
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
             </div>
             <ScrollArea className="flex-1 min-h-0">
               <div
@@ -807,12 +813,12 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             This cannot be undone.
           </Text>
           <Group justify="flex-end">
-            <Button variant="subtle" color="gray" onClick={() => setResetAllOpen(false)}>
+            <UiAction variant="quiet" onClick={() => setResetAllOpen(false)}>
               Cancel
-            </Button>
-            <Button color="red" onClick={handleResetAll}>
+            </UiAction>
+            <UiAction variant="destructive" onClick={handleResetAll}>
               Reset Everything
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>

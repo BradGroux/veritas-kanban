@@ -1,12 +1,15 @@
+import {
+  UiPill,
+  semanticToneForLegacyColor,
+  UiIconAction,
+  UiAction,
+} from '@/components/ui/UiVocabulary';
+import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useMemo, useState } from 'react';
 import {
-  ActionIcon,
-  Badge,
-  Button,
   Group,
   Loader,
   Modal,
-  Paper,
   SimpleGrid,
   Stack,
   Table,
@@ -74,15 +77,11 @@ function CapabilityBadges({ values }: { values: SkillCapabilityId[] }) {
   return (
     <Group gap={4}>
       {values.slice(0, 3).map((value) => (
-        <Badge key={value} size="xs" variant="light" color="blue">
+        <UiPill kind="status" tone="info" key={value}>
           {value}
-        </Badge>
+        </UiPill>
       ))}
-      {values.length > 3 && (
-        <Badge size="xs" variant="light" color="gray">
-          +{values.length - 3}
-        </Badge>
-      )}
+      {values.length > 3 && <UiPill>+{values.length - 3}</UiPill>}
     </Group>
   );
 }
@@ -169,25 +168,24 @@ export function SkillRiskDashboardPanel() {
   };
 
   return (
-    <Paper withBorder radius="md" p="md">
+    <SettingsGroup>
       <Stack gap="md">
         <Group justify="space-between" gap="sm">
           <Group gap="xs">
             <ShieldAlert className="h-4 w-4 text-muted-foreground" />
             <Text fw={600}>Skill Risk Dashboard</Text>
-            <Badge color={inventory?.totals.blocked ? 'red' : 'green'} variant="light">
+            <UiPill kind="status" tone={inventory?.totals.blocked ? 'blocked' : 'success'}>
               {inventory?.totals.blocked ?? 0} blocked
-            </Badge>
+            </UiPill>
           </Group>
           <Tooltip label="Refresh skill risk inventory">
-            <ActionIcon
-              variant="subtle"
-              color="gray"
+            <UiIconAction
+              variant="quiet"
               aria-label="Refresh skill risk inventory"
               onClick={() => inventoryQuery.refetch()}
             >
               {inventoryQuery.isFetching ? <Loader size="xs" /> : <RefreshCw className="h-4 w-4" />}
-            </ActionIcon>
+            </UiIconAction>
           </Tooltip>
         </Group>
 
@@ -205,24 +203,22 @@ export function SkillRiskDashboardPanel() {
         ) : (
           <>
             <SimpleGrid cols={{ base: 2, md: 5 }} spacing="xs">
-              <Badge variant="light" color="gray">
-                {inventory.totals.skills} skills
-              </Badge>
-              <Badge variant="light" color="red">
+              <UiPill>{inventory.totals.skills} skills</UiPill>
+              <UiPill kind="status" tone={inventory.totals.blocked ? 'blocked' : 'neutral'}>
                 {inventory.totals.blocked} blocked
-              </Badge>
-              <Badge variant="light" color="yellow">
+              </UiPill>
+              <UiPill kind="status" tone="warning">
                 {inventory.totals.warnings} warnings
-              </Badge>
-              <Badge variant="light" color="orange">
+              </UiPill>
+              <UiPill kind="status" tone="warning">
                 {inventory.totals.unscanned} unscanned
-              </Badge>
-              <Badge variant="light" color="blue">
+              </UiPill>
+              <UiPill kind="status" tone="info">
                 {inventory.totals.exceptions} exceptions
-              </Badge>
+              </UiPill>
             </SimpleGrid>
 
-            <Table striped highlightOnHover withTableBorder>
+            <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Skill</Table.Th>
@@ -244,23 +240,25 @@ export function SkillRiskDashboardPanel() {
                         v{item.version} · {item.sourcePath}
                       </Text>
                       {item.remediationTaskId && (
-                        <Badge size="xs" color="blue" variant="light">
+                        <UiPill kind="status" tone="info">
                           task {item.remediationTaskId}
-                        </Badge>
+                        </UiPill>
                       )}
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4}>
-                        <Badge
-                          color={item.scanStatus === 'scanned' ? 'green' : 'orange'}
-                          variant="light"
+                        <UiPill
+                          kind="status"
+                          tone={semanticToneForLegacyColor(
+                            item.scanStatus === 'scanned' ? 'green' : 'orange'
+                          )}
                         >
                           {item.scanStatus}
-                        </Badge>
+                        </UiPill>
                         {item.changedFiles.length > 0 && (
-                          <Badge color="yellow" variant="light" size="xs">
+                          <UiPill kind="status" tone="warning">
                             changed
-                          </Badge>
+                          </UiPill>
                         )}
                       </Group>
                       <Text size="xs" c="dimmed">
@@ -268,9 +266,12 @@ export function SkillRiskDashboardPanel() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={SEVERITY_COLORS[item.severity]} variant="light">
+                      <UiPill
+                        kind="status"
+                        tone={semanticToneForLegacyColor(SEVERITY_COLORS[item.severity])}
+                      >
                         {item.severity}
-                      </Badge>
+                      </UiPill>
                       <Text size="xs" c="dimmed">
                         score {item.riskScore} · {item.findingCount} findings
                       </Text>
@@ -292,9 +293,16 @@ export function SkillRiskDashboardPanel() {
                       </Stack>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={DECISION_COLORS[item.installDecision]} variant="light">
+                      <UiPill
+                        kind="status"
+                        tone={
+                          item.installDecision === 'block'
+                            ? 'blocked'
+                            : semanticToneForLegacyColor(DECISION_COLORS[item.installDecision])
+                        }
+                      >
                         {item.installDecision}
-                      </Badge>
+                      </UiPill>
                       <Text size="xs" c="dimmed">
                         {item.exception
                           ? `${item.exception.owner} until ${formatDate(item.exception.expiresAt)}`
@@ -303,24 +311,21 @@ export function SkillRiskDashboardPanel() {
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
-                        <Button
-                          size="xs"
-                          variant="light"
+                        <UiAction
+                          variant="secondary"
                           leftSection={<ClipboardList className="h-3.5 w-3.5" />}
                           loading={createTask.isPending}
                           onClick={() => handleCreateTask(item)}
                         >
                           Task
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="subtle"
-                          color={item.installDecision === 'block' ? 'red' : 'gray'}
+                        </UiAction>
+                        <UiAction
+                          variant="quiet"
                           leftSection={<AlertTriangle className="h-3.5 w-3.5" />}
                           onClick={() => openException(item)}
                         >
                           Exception
-                        </Button>
+                        </UiAction>
                       </Group>
                     </Table.Td>
                   </Table.Tr>
@@ -357,15 +362,19 @@ export function SkillRiskDashboardPanel() {
             placeholder="Why this skill is allowed temporarily"
           />
           <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => setExceptionSkill(null)}>
+            <UiAction variant="quiet" onClick={() => setExceptionSkill(null)}>
               Cancel
-            </Button>
-            <Button loading={createException.isPending} onClick={handleCreateException}>
+            </UiAction>
+            <UiAction
+              variant="primary"
+              loading={createException.isPending}
+              onClick={handleCreateException}
+            >
               Save Exception
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
       </Modal>
-    </Paper>
+    </SettingsGroup>
   );
 }

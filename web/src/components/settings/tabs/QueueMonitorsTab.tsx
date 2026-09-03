@@ -1,16 +1,7 @@
+import { UiAction, UiPill, semanticToneForLegacyColor } from '@/components/ui/UiVocabulary';
+import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Loader,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Text,
-  Tooltip,
-} from '@mantine/core';
+import { Group, Loader, SimpleGrid, Stack, Text, Tooltip } from '@mantine/core';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -88,15 +79,13 @@ export function QueueMonitorsTab() {
       description="Monitor governed queue intake, eligibility decisions, and recent processing events."
       actions={
         <Tooltip label="Refresh queue monitors">
-          <Button
-            size="xs"
-            variant="subtle"
-            color="gray"
+          <UiAction
+            variant="quiet"
             leftSection={<RefreshCw className="h-3.5 w-3.5" />}
             onClick={() => monitorsQuery.refetch()}
           >
             Refresh
-          </Button>
+          </UiAction>
         </Tooltip>
       }
     >
@@ -117,14 +106,14 @@ export function QueueMonitorsTab() {
 
           <Stack gap="sm">
             {monitors.length === 0 ? (
-              <Paper className="border border-dashed p-4 text-center" radius="md">
+              <SettingsGroup empty className="text-center">
                 <Text size="sm" c="dimmed">
                   No queue monitors are configured.
                 </Text>
-              </Paper>
+              </SettingsGroup>
             ) : (
               monitors.map((monitor) => (
-                <Paper key={monitor.id} className="border bg-card p-4" radius="md">
+                <SettingsGroup key={monitor.id}>
                   <Stack gap="sm">
                     <Group justify="space-between" align="flex-start">
                       <Stack gap={2}>
@@ -132,9 +121,7 @@ export function QueueMonitorsTab() {
                           <Text size="sm" fw={600}>
                             {monitor.name}
                           </Text>
-                          <Badge size="xs" color="blue" variant="light">
-                            {monitor.mode}
-                          </Badge>
+                          <UiPill>{monitor.mode}</UiPill>
                           <HealthBadge monitor={monitor} />
                         </Group>
                         <Text size="xs" c="dimmed" lineClamp={2}>
@@ -142,20 +129,16 @@ export function QueueMonitorsTab() {
                         </Text>
                       </Stack>
                       <Group gap="xs">
-                        <Button
-                          size="xs"
-                          variant="subtle"
-                          color="gray"
+                        <UiAction
+                          variant="quiet"
                           disabled={explain.isPending || !monitor.actions.canExplain}
                           leftSection={<Search className="h-3.5 w-3.5" />}
                           onClick={() => explainMonitor(monitor.id)}
                         >
                           Explain
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="gray"
+                        </UiAction>
+                        <UiAction
+                          variant="secondary"
                           disabled={!canExecute || run.isPending || !monitor.actions.canRun}
                           leftSection={<Play className="h-3.5 w-3.5" />}
                           onClick={() =>
@@ -163,12 +146,10 @@ export function QueueMonitorsTab() {
                           }
                         >
                           Run
-                        </Button>
+                        </UiAction>
                         {monitor.enabled ? (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="gray"
+                          <UiAction
+                            variant="quiet"
                             disabled={!canWrite || pause.isPending || !monitor.actions.canPause}
                             leftSection={<Pause className="h-3.5 w-3.5" />}
                             onClick={() =>
@@ -176,12 +157,10 @@ export function QueueMonitorsTab() {
                             }
                           >
                             Pause
-                          </Button>
+                          </UiAction>
                         ) : (
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            color="gray"
+                          <UiAction
+                            variant="quiet"
                             disabled={!canWrite || resume.isPending || !monitor.actions.canResume}
                             leftSection={<RotateCw className="h-3.5 w-3.5" />}
                             onClick={() =>
@@ -189,7 +168,7 @@ export function QueueMonitorsTab() {
                             }
                           >
                             Resume
-                          </Button>
+                          </UiAction>
                         )}
                       </Group>
                     </Group>
@@ -205,16 +184,12 @@ export function QueueMonitorsTab() {
                     </SimpleGrid>
 
                     {monitor.actionItem && (
-                      <Alert
-                        color="yellow"
-                        variant="light"
-                        icon={<AlertTriangle className="h-4 w-4" />}
-                      >
+                      <SettingsNotice tone="warning" icon={<AlertTriangle className="h-4 w-4" />}>
                         <Text size="xs" fw={600}>
                           {monitor.actionItem.summary}
                         </Text>
                         <Text size="xs">{monitor.actionItem.remediation}</Text>
-                      </Alert>
+                      </SettingsNotice>
                     )}
 
                     {monitor.lastSummary && (
@@ -223,22 +198,20 @@ export function QueueMonitorsTab() {
                       </Text>
                     )}
                   </Stack>
-                </Paper>
+                </SettingsGroup>
               ))
             )}
           </Stack>
 
           {packet && (
-            <Paper className="border bg-card p-4" radius="md">
+            <SettingsGroup>
               <Stack gap="sm">
                 <Group gap="xs">
                   <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                   <Text size="sm" fw={600}>
                     Latest Candidate Packet
                   </Text>
-                  <Badge size="xs" variant="light">
-                    {packet.candidates.length} candidates
-                  </Badge>
+                  <UiPill>{packet.candidates.length} candidates</UiPill>
                 </Group>
                 {packet.selected ? (
                   <Stack gap={2}>
@@ -268,7 +241,7 @@ export function QueueMonitorsTab() {
                   </Stack>
                 )}
               </Stack>
-            </Paper>
+            </SettingsGroup>
           )}
 
           {events.length > 0 && (
@@ -291,9 +264,12 @@ export function QueueMonitorsTab() {
                         {event.monitorId} · {formatDate(event.createdAt)}
                       </Text>
                     </Stack>
-                    <Badge size="xs" color={statusColor(event.status)} variant="light">
+                    <UiPill
+                      kind="status"
+                      tone={semanticToneForLegacyColor(statusColor(event.status))}
+                    >
                       {event.status}
-                    </Badge>
+                    </UiPill>
                   </Group>
                 ))}
               </Stack>
@@ -307,14 +283,14 @@ export function QueueMonitorsTab() {
 
 function SummaryStat({ label, value }: { label: string; value: number }) {
   return (
-    <Paper className="border bg-card p-3" radius="md">
+    <SettingsGroup>
       <Text size="xs" c="dimmed">
         {label}
       </Text>
       <Text size="lg" fw={700}>
         {value}
       </Text>
-    </Paper>
+    </SettingsGroup>
   );
 }
 
@@ -333,9 +309,9 @@ function Meta({ label, value }: { label: string; value: string }) {
 
 function HealthBadge({ monitor }: { monitor: QueueMonitorSnapshot }) {
   return (
-    <Badge size="xs" color={healthColor(monitor.health)} variant="light">
+    <UiPill kind="status" tone={semanticToneForLegacyColor(healthColor(monitor.health))}>
       {monitor.health}
-    </Badge>
+    </UiPill>
   );
 }
 

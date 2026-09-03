@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { SETTINGS_NAVIGATION_GROUPS, SettingsDialog } from '@/components/settings/SettingsDialog';
 import { renderWithProviders } from './test-utils';
 
@@ -138,18 +138,15 @@ describe('SettingsDialog Mantine shell', () => {
     expect(baseElement.querySelector('[data-settings-actions="danger"]')).not.toBeNull();
   });
 
-  it('keeps advanced destinations visible but de-emphasized in Board Only mode', async () => {
+  it('keeps grouped destinations visible without Advanced labels in Board Only mode', async () => {
     mocks.productMode.selectedMode = 'board-only';
     renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
 
     await screen.findByText('General settings loaded');
     expect(screen.getByText('Board Only')).toBeDefined();
-    expect(
-      screen.getByRole('tab', { name: 'Board' }).getAttribute('data-board-only-priority')
-    ).toBe('primary');
-    expect(
-      screen.getByRole('tab', { name: 'Agents' }).getAttribute('data-board-only-priority')
-    ).toBe('advanced');
+    expect(screen.getByRole('tab', { name: 'Board' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Agents' })).toBeDefined();
+    expect(screen.queryAllByText(/advanced/i)).toHaveLength(0);
   });
 
   it('skips permission-disabled destinations during keyboard navigation', async () => {
@@ -169,6 +166,18 @@ describe('SettingsDialog Mantine shell', () => {
 
     expect(await screen.findByText('Board settings loaded')).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Board' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('exposes transfer and reset confirmation through compact actions', async () => {
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    await screen.findByText('General settings loaded');
+    fireEvent.click(screen.getByRole('button', { name: 'Settings actions' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'Export Settings' })).toBeDefined();
+    expect(within(menu).getByRole('menuitem', { name: 'Import Settings' })).toBeDefined();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Reset All' }));
+    expect(await screen.findByRole('dialog', { name: 'Reset all settings?' })).toBeDefined();
+    expect(mocks.debouncedUpdate).not.toHaveBeenCalled();
   });
 
   it('keeps compact section navigation in the mobile header flow', async () => {
