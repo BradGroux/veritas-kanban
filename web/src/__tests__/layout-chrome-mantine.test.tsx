@@ -281,6 +281,7 @@ describe('layout chrome Mantine migration', () => {
       .getByRole('button', { name: 'Refresh page' })
       .querySelector('img[src="/icons/pwa-icon-192.png"]');
     expect(brandIcon).toBeDefined();
+    expect(document.querySelector('header h1')).toBeNull();
   });
 
   it.each(['right', 'bottom'] as const)(

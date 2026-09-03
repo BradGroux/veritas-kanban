@@ -393,10 +393,12 @@ export function Header() {
               title="Refresh page"
             >
               <VeritasMark />
-              <Text component="h1" size="sm" fw={700} lh={1.1} m={0} className="hidden sm:block">
-                <span className="block">Veritas</span>
-                <span className="block text-xs font-medium text-muted-foreground">Kanban</span>
-              </Text>
+              {!isDesktopClient && (
+                <Text component="h1" size="sm" fw={700} lh={1.1} m={0} className="hidden sm:block">
+                  <span className="block">Veritas</span>
+                  <span className="block text-xs font-medium text-muted-foreground">Kanban</span>
+                </Text>
+              )}
             </Box>
             {!isCompactHeader && (
               <>
