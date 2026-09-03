@@ -184,11 +184,16 @@ export function CommandPalette() {
     );
   }, [commands, query]);
 
+  const visibleCommands = useMemo(
+    () => (query.trim() ? filtered : filtered.filter((command) => !command.disabledReason)),
+    [filtered, query]
+  );
+
   // Group by category
   const grouped = useMemo(() => {
     const groups: { category: string; items: CommandItem[] }[] = [];
     const seen = new Set<string>();
-    for (const cmd of filtered) {
+    for (const cmd of visibleCommands) {
       if (!seen.has(cmd.category)) {
         seen.add(cmd.category);
         groups.push({ category: cmd.category, items: [] });
@@ -199,10 +204,12 @@ export function CommandPalette() {
       }
     }
     return groups;
-  }, [filtered]);
+  }, [visibleCommands]);
 
   const orderedCommands = useMemo(() => grouped.flatMap((group) => group.items), [grouped]);
-  const unavailableCount = filtered.filter((command) => command.disabledReason).length;
+  const unavailableCount = commands.filter((command) => command.disabledReason).length;
+  const availableCount = commands.length - unavailableCount;
+  const selectedCommand = orderedCommands[selectedIndex];
 
   // Reset on open/close
   useEffect(() => {
@@ -295,22 +302,56 @@ export function CommandPalette() {
       <Modal
         opened={open}
         onClose={() => setOpen(false)}
-        size={600}
+        size={680}
         padding={0}
         title={<span className="sr-only">Command palette</span>}
         withCloseButton={false}
-        classNames={{ content: 'overflow-hidden', header: 'sr-only', body: 'p-0' }}
+        classNames={{
+          content: 'overflow-hidden border border-border shadow-2xl',
+          header: 'sr-only',
+          body: 'p-0',
+        }}
       >
         <Box
           onKeyDown={handleKeyDown}
-          className="flex h-[min(42rem,calc(100dvh-7rem))] min-h-0 flex-col"
+          className="flex h-[min(34rem,calc(100dvh-6rem))] min-h-0 flex-col"
           data-testid="command-palette-surface"
         >
           <Text component="p" className="sr-only">
             Search and run board actions, navigation commands, and shortcuts.
           </Text>
 
-          <Group gap="sm" px="md" className="border-b" wrap="nowrap">
+          <Box px="md" py="sm" className="border-b bg-muted/15">
+            <Group justify="space-between" gap="sm" mb={8} wrap="nowrap">
+              <Group gap="sm" wrap="nowrap">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary text-white shadow-sm">
+                  <Keyboard className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <Text
+                    component="p"
+                    size="xs"
+                    fw={700}
+                    tt="uppercase"
+                    c="dimmed"
+                    className="tracking-[0.12em]"
+                  >
+                    Command center
+                  </Text>
+                  <Text component="p" size="sm" fw={600}>
+                    Run a command
+                  </Text>
+                </div>
+              </Group>
+              <Group gap={6} wrap="nowrap">
+                <Text size="xs" c="dimmed" className="hidden sm:block">
+                  Close
+                </Text>
+                <Kbd className="h-5 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                  ESC
+                </Kbd>
+              </Group>
+            </Group>
             <TextInput
               ref={inputRef}
               value={query}
@@ -325,23 +366,49 @@ export function CommandPalette() {
                   ? `command-${orderedCommands[selectedIndex].id}`
                   : undefined
               }
-              variant="unstyled"
+              variant="filled"
               leftSection={<Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-              className="min-w-0 flex-1"
+              className="min-w-0"
               classNames={{
-                input: 'h-12 bg-transparent text-sm placeholder:text-muted-foreground',
+                input:
+                  'h-11 border border-border bg-background text-sm shadow-sm placeholder:text-muted-foreground focus:border-primary',
               }}
             />
-            <Kbd className="hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
-              ESC
-            </Kbd>
-          </Group>
+          </Box>
+
+          {selectedCommand && (
+            <Group
+              justify="space-between"
+              gap="sm"
+              px="md"
+              py={8}
+              wrap="nowrap"
+              className="border-b bg-primary/5"
+              data-testid="active-command-summary"
+            >
+              <Group gap="xs" wrap="nowrap" className="min-w-0">
+                <Text size="xs" fw={700} c="primary" tt="uppercase" className="tracking-wider">
+                  Ready
+                </Text>
+                <Text size="sm" fw={600} truncate>
+                  {selectedCommand.label}
+                </Text>
+              </Group>
+              <Group gap={6} wrap="nowrap" className="shrink-0">
+                <Text size="xs" c="dimmed">
+                  {selectedCommand.category}
+                </Text>
+                <Kbd className="hidden sm:inline-flex">Enter</Kbd>
+              </Group>
+            </Group>
+          )}
 
           <Box className="relative min-h-0 flex-1">
             <ScrollArea
               viewportRef={listRef}
               h="100%"
-              p="xs"
+              px="sm"
+              py="xs"
               type="always"
               scrollbarSize={8}
               viewportProps={{
@@ -349,24 +416,27 @@ export function CommandPalette() {
                 onScroll: updateScrollCues,
               }}
             >
-              {filtered.length === 0 ? (
+              {visibleCommands.length === 0 ? (
                 <Text ta="center" py="xl" size="sm" c="dimmed">
                   No commands found
                 </Text>
               ) : (
                 grouped.map((group) => (
-                  <Box key={group.category}>
-                    <Text
-                      px="xs"
-                      py={6}
-                      size="xs"
-                      fw={600}
-                      c="dimmed"
-                      tt="uppercase"
-                      className="tracking-wider"
-                    >
-                      {group.category}
-                    </Text>
+                  <Box key={group.category} pb={4}>
+                    <Group justify="space-between" gap="xs" px="xs" py={6} wrap="nowrap">
+                      <Text
+                        size="xs"
+                        fw={700}
+                        c="dimmed"
+                        tt="uppercase"
+                        className="tracking-[0.12em]"
+                      >
+                        {group.category}
+                      </Text>
+                      <Text size="xs" c="dimmed" aria-hidden="true">
+                        {group.items.length}
+                      </Text>
+                    </Group>
                     <Stack gap={2}>
                       {group.items.map((cmd) => {
                         flatIndex++;
@@ -385,13 +455,18 @@ export function CommandPalette() {
                             aria-disabled={Boolean(cmd.disabledReason)}
                             aria-describedby={disabledDescriptionId}
                             className={cn(
-                              'flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                              'flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                               cmd.disabledReason
-                                ? 'cursor-not-allowed bg-muted/20 text-muted-foreground'
+                                ? 'cursor-not-allowed border border-dashed border-border/70 bg-muted/15 text-muted-foreground'
                                 : isSelected
-                                  ? 'bg-primary/10 text-primary'
+                                  ? 'bg-primary text-white shadow-sm'
                                   : 'text-foreground hover:bg-muted/50'
                             )}
+                            style={
+                              isSelected && !cmd.disabledReason
+                                ? { backgroundColor: 'var(--primary)', color: 'white' }
+                                : undefined
+                            }
                             onClick={() => runCommand(cmd)}
                             onFocus={() => !cmd.disabledReason && setSelectedIndex(idx)}
                             onMouseEnter={() => !cmd.disabledReason && setSelectedIndex(idx)}
@@ -399,7 +474,7 @@ export function CommandPalette() {
                             <span
                               className={cn(
                                 'shrink-0',
-                                isSelected ? 'text-primary' : 'text-muted-foreground'
+                                isSelected ? 'text-white' : 'text-muted-foreground'
                               )}
                             >
                               {cmd.iconNode}
@@ -416,7 +491,14 @@ export function CommandPalette() {
                               )}
                             </span>
                             {cmd.shortcut && (
-                              <Kbd className="ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
+                              <Kbd
+                                className={cn(
+                                  'ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-mono text-[10px] sm:inline-flex',
+                                  isSelected
+                                    ? 'border-white/30 bg-white/15 text-white'
+                                    : 'bg-muted text-muted-foreground'
+                                )}
+                              >
                                 {cmd.shortcut}
                               </Kbd>
                             )}
@@ -428,20 +510,6 @@ export function CommandPalette() {
                 ))
               )}
             </ScrollArea>
-            {canScrollUp && (
-              <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent"
-                aria-hidden="true"
-                data-testid="commands-above-cue"
-              />
-            )}
-            {canScrollDown && (
-              <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background to-transparent"
-                aria-hidden="true"
-                data-testid="commands-below-cue"
-              />
-            )}
           </Box>
 
           <Group
@@ -453,8 +521,9 @@ export function CommandPalette() {
             className="shrink-0 border-t bg-muted/20"
           >
             <Text size="xs" c="dimmed">
-              {filtered.length} command{filtered.length === 1 ? '' : 's'}
-              {unavailableCount > 0 ? ` · ${unavailableCount} unavailable` : ''}
+              {query.trim()
+                ? `${visibleCommands.length} result${visibleCommands.length === 1 ? '' : 's'}`
+                : `${availableCount} ready · ${unavailableCount} unavailable`}
             </Text>
             <Text size="xs" c="dimmed" aria-live="polite">
               {canScrollUp && canScrollDown
