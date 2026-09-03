@@ -189,7 +189,8 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
 
         <Group gap="xs" wrap="wrap">
           <Button
-            variant="light"
+            variant="filled"
+            color="veritas"
             size="sm"
             onClick={() => void query.refetch()}
             leftSection={
@@ -200,6 +201,7 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
           </Button>
           <Button
             variant="light"
+            color="veritas"
             size="sm"
             onClick={exportCsv}
             disabled={!includedBlocks.length}
@@ -209,6 +211,7 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
           </Button>
           <Button
             variant="light"
+            color="veritas"
             size="sm"
             onClick={exportMarkdown}
             disabled={!includedBlocks.length}

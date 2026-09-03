@@ -221,7 +221,8 @@ export function OperationsDigestPage({
 
         <Group gap="xs" wrap="wrap">
           <Button
-            variant="light"
+            variant="filled"
+            color="veritas"
             size="sm"
             onClick={() => void refresh()}
             leftSection={<RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />}
@@ -230,6 +231,7 @@ export function OperationsDigestPage({
           </Button>
           <Button
             variant="light"
+            color="veritas"
             size="sm"
             onClick={() => void copyMarkdown()}
             disabled={!markdown}
@@ -239,6 +241,7 @@ export function OperationsDigestPage({
           </Button>
           <Button
             variant="light"
+            color="veritas"
             size="sm"
             onClick={exportMarkdown}
             disabled={!markdown}
@@ -248,6 +251,7 @@ export function OperationsDigestPage({
           </Button>
           <Button
             variant="light"
+            color="veritas"
             size="sm"
             onClick={exportJson}
             disabled={!digest}

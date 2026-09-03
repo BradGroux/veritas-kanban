@@ -519,7 +519,7 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
               </p>
             </div>
           </div>
-          <Button onClick={openCreateDialog}>
+          <Button variant="filled" color="veritas" size="sm" onClick={openCreateDialog}>
             <Plus className="mr-2 h-4 w-4" />
             New Policy
           </Button>

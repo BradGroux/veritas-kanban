@@ -163,6 +163,10 @@ describe('TimeBreakdownPage', () => {
     renderWithProviders(<TimeBreakdownPage onBack={vi.fn()} onTaskClick={onTaskClick} />);
 
     expect(screen.getByRole('heading', { name: 'Time Breakdowns' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Generate' }).getAttribute('data-variant')).toBe(
+      'filled'
+    );
+    expect(screen.getByRole('button', { name: 'CSV' }).getAttribute('data-variant')).toBe('light');
     expect(screen.getAllByText('Explicit').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Inferred').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Ambiguous').length).toBeGreaterThan(0);

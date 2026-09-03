@@ -72,7 +72,7 @@ export function DesktopLeftSidebar() {
                 className={cn(
                   'desktop-no-drag flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors',
                   active
-                    ? 'bg-primary/15 text-primary'
+                    ? 'bg-primary text-white shadow-sm hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                   !leftRailOpen && 'justify-center px-0'
                 )}

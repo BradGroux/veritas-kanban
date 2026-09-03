@@ -256,7 +256,8 @@ export function EvidenceTimelinePanel({
 
         <Group gap="xs" wrap="wrap">
           <Button
-            variant="light"
+            variant="filled"
+            color="veritas"
             size="sm"
             onClick={() => void query.refetch()}
             leftSection={
