@@ -1,0 +1,1293 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Veritas Kanban task workspace prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #0c0e13;
+        --surface: #12151d;
+        --surface-raised: #181c26;
+        --surface-soft: #202532;
+        --line: #2c3240;
+        --line-strong: #3c4456;
+        --text: #f2f4f8;
+        --muted: #9aa3b5;
+        --faint: #697286;
+        --violet: #8b5cf6;
+        --violet-soft: #2b2147;
+        --red: #f87171;
+        --red-soft: #3a1c24;
+        --amber: #fbbf24;
+        --amber-soft: #352a13;
+        --green: #4ade80;
+        --green-soft: #173523;
+        --blue: #60a5fa;
+        --blue-soft: #172d4d;
+        --shadow: 0 24px 80px rgb(0 0 0 / 0.45);
+        --radius: 12px;
+        --font-size: 15px;
+      }
+
+      html[data-theme='light'] {
+        color-scheme: light;
+        --canvas: #e9ebf0;
+        --surface: #fbfbfd;
+        --surface-raised: #ffffff;
+        --surface-soft: #f1f3f7;
+        --line: #d9dde6;
+        --line-strong: #c3c9d5;
+        --text: #191c24;
+        --muted: #596174;
+        --faint: #7a8396;
+        --violet: #6840c6;
+        --violet-soft: #eee8ff;
+        --red: #b42338;
+        --red-soft: #fff0f1;
+        --amber: #9a6700;
+        --amber-soft: #fff6d8;
+        --green: #217a3c;
+        --green-soft: #e8f7ec;
+        --blue: #2463a8;
+        --blue-soft: #e9f2ff;
+        --shadow: 0 24px 72px rgb(30 36 50 / 0.2);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        font-family:
+          Roboto,
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        font-size: var(--font-size);
+        background: var(--canvas);
+        color: var(--text);
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+
+      button,
+      select {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      button:focus-visible,
+      select:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--violet) 68%, transparent);
+        outline-offset: 2px;
+      }
+
+      .app-header {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        min-height: 58px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        padding: 10px 18px;
+      }
+
+      .brand {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 11px;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--violet) 45%, var(--line));
+        border-radius: 10px;
+        background: var(--violet-soft);
+        color: var(--violet);
+        font-weight: 900;
+      }
+
+      .brand strong,
+      .brand span {
+        display: block;
+      }
+
+      .brand strong {
+        font-size: 0.9rem;
+        letter-spacing: 0.01em;
+      }
+
+      .brand span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .prototype-controls,
+      .control-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .prototype-controls {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .control-label {
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--surface-soft);
+        padding: 2px;
+      }
+
+      .segmented button,
+      .icon-button {
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        padding: 6px 9px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .segmented button[aria-pressed='true'] {
+        background: var(--surface-raised);
+        box-shadow: 0 1px 4px rgb(0 0 0 / 0.15);
+        color: var(--text);
+      }
+
+      .icon-button {
+        min-width: 34px;
+        border: 1px solid var(--line);
+      }
+
+      .board {
+        position: absolute;
+        inset: 58px 0 0;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(180px, 1fr));
+        gap: 14px;
+        overflow: hidden;
+        padding: 24px;
+        opacity: 0.48;
+      }
+
+      .column {
+        min-height: 0;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--surface) 72%, transparent);
+        padding: 14px;
+      }
+
+      .column-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 13px;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .task-card {
+        min-height: 112px;
+        margin-bottom: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface-raised);
+        padding: 12px;
+      }
+
+      .task-card::before,
+      .task-card::after {
+        display: block;
+        border-radius: 10px;
+        background: var(--line);
+        content: '';
+      }
+
+      .task-card::before {
+        width: 68%;
+        height: 9px;
+        margin-bottom: 12px;
+      }
+
+      .task-card::after {
+        width: 92%;
+        height: 34px;
+        opacity: 0.55;
+      }
+
+      .scrim {
+        position: fixed;
+        inset: 58px 0 0;
+        background: rgb(2 4 8 / 0.54);
+      }
+
+      .workspace {
+        position: fixed;
+        z-index: 3;
+        top: 58px;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        width: min(52vw, 940px);
+        min-width: 650px;
+        flex-direction: column;
+        border-left: 1px solid var(--line-strong);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .workspace.expanded {
+        top: 0;
+        width: 100vw;
+        min-width: 0;
+        border-left: 0;
+      }
+
+      .workspace-header {
+        flex: 0 0 auto;
+        border-bottom: 1px solid var(--line);
+        padding: 17px 20px 15px;
+      }
+
+      .header-top,
+      .title-row,
+      .task-actions,
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .header-top,
+      .title-row {
+        justify-content: space-between;
+      }
+
+      .task-kind {
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        min-width: 0;
+        margin: 8px 0 0;
+        overflow: hidden;
+        font-size: 1.3rem;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: transparent;
+        padding: 7px 11px;
+        color: var(--text);
+        font-size: 0.82rem;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .button:hover {
+        border-color: var(--violet);
+        background: var(--violet-soft);
+      }
+
+      .button.primary {
+        border-color: var(--violet);
+        background: var(--violet);
+        color: white;
+      }
+
+      .button.quiet {
+        border-color: transparent;
+        color: var(--muted);
+      }
+
+      .workspace-body {
+        display: grid;
+        min-height: 0;
+        flex: 1 1 auto;
+        grid-template-columns: 152px minmax(0, 1fr);
+      }
+
+      .mode-rail {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+        gap: 5px;
+        border-right: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface-soft) 34%, var(--surface));
+        padding: 15px 10px;
+      }
+
+      .mode-rail button {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        align-items: center;
+        gap: 7px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        padding: 10px 9px;
+        color: var(--muted);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .mode-rail button[aria-selected='true'] {
+        background: var(--violet-soft);
+        color: var(--text);
+      }
+
+      .mode-index {
+        color: var(--faint);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.68rem;
+      }
+
+      .mode-rail button[aria-selected='true'] .mode-index {
+        color: var(--violet);
+      }
+
+      .mode-select-wrap {
+        display: none;
+        border-bottom: 1px solid var(--line);
+        padding: 12px 16px;
+      }
+
+      .mode-select-wrap label {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 650;
+      }
+
+      .mode-select-wrap select {
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--surface-raised);
+        padding: 9px 10px;
+        color: var(--text);
+      }
+
+      .workspace[data-nav='horizontal'] .workspace-body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .workspace[data-nav='horizontal'] .mode-rail {
+        display: grid;
+        flex: 0 0 auto;
+        grid-template-columns: repeat(5, 1fr);
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 8px 14px;
+      }
+
+      .workspace[data-nav='horizontal'] .mode-rail button {
+        display: flex;
+        justify-content: center;
+        text-align: center;
+      }
+
+      .content {
+        min-width: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 20px;
+      }
+
+      .content-inner {
+        width: min(100%, 760px);
+        margin: 0 auto;
+      }
+
+      .mode-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .eyebrow {
+        margin-bottom: 5px;
+        color: var(--violet);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h2 {
+        margin-bottom: 5px;
+        font-size: 1.35rem;
+      }
+
+      h3 {
+        margin-bottom: 4px;
+        font-size: 0.92rem;
+      }
+
+      .description,
+      .card p,
+      .subtle {
+        color: var(--muted);
+        line-height: 1.48;
+      }
+
+      .description {
+        max-width: 620px;
+        margin-bottom: 0;
+        font-size: 0.86rem;
+      }
+
+      .state-switcher {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 15px;
+      }
+
+      .state-switcher button {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: transparent;
+        padding: 5px 9px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        cursor: pointer;
+      }
+
+      .state-switcher button[aria-pressed='true'] {
+        border-color: var(--violet);
+        background: var(--violet-soft);
+        color: var(--text);
+      }
+
+      .hero-status {
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        background: var(--surface-raised);
+        padding: 18px;
+      }
+
+      .hero-status::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: var(--status-color, var(--violet));
+        content: '';
+      }
+
+      .hero-status[data-tone='red'] {
+        --status-color: var(--red);
+      }
+
+      .hero-status[data-tone='amber'] {
+        --status-color: var(--amber);
+      }
+
+      .hero-status[data-tone='green'] {
+        --status-color: var(--green);
+      }
+
+      .hero-status[data-tone='blue'] {
+        --status-color: var(--blue);
+      }
+
+      .hero-status .status-line {
+        align-items: flex-start;
+        justify-content: space-between;
+      }
+
+      .status-name {
+        font-size: 1.12rem;
+        font-weight: 780;
+      }
+
+      .status-owner {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.66rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hero-status p {
+        margin: 10px 0 15px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 9px;
+        margin-bottom: 14px;
+      }
+
+      .status-tile,
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface-raised);
+      }
+
+      .status-tile {
+        min-width: 0;
+        padding: 11px;
+      }
+
+      .status-tile strong,
+      .status-tile span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .status-tile strong {
+        margin-top: 4px;
+        font-size: 0.82rem;
+      }
+
+      .status-tile span:last-child {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      .card {
+        margin-bottom: 11px;
+        padding: 15px;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .card p {
+        margin-bottom: 0;
+        font-size: 0.82rem;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: var(--surface-soft);
+        padding: 4px 7px;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.63rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .badge.red {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .badge.amber {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .badge.green {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .badge.blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .local-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 14px;
+      }
+
+      .local-nav button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        padding: 7px 8px;
+        color: var(--muted);
+        font-size: 0.78rem;
+        cursor: pointer;
+      }
+
+      .local-nav button[aria-current='page'] {
+        border-bottom-color: var(--violet);
+        color: var(--text);
+      }
+
+      .rows {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface-raised);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        min-height: 62px;
+        border-bottom: 1px solid var(--line);
+        padding: 12px 14px;
+      }
+
+      .row:last-child {
+        border-bottom: 0;
+      }
+
+      .row strong,
+      .row span {
+        display: block;
+      }
+
+      .row strong {
+        font-size: 0.84rem;
+      }
+
+      .row span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      details {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface-raised);
+      }
+
+      summary {
+        padding: 12px 14px;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+
+      details div {
+        border-top: 1px solid var(--line);
+        padding: 12px 14px;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.7rem;
+        line-height: 1.6;
+      }
+
+      .prototype-note {
+        position: fixed;
+        z-index: 4;
+        left: 18px;
+        bottom: 16px;
+        width: min(360px, calc(100vw - 36px));
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: var(--surface-raised);
+        box-shadow: 0 12px 38px rgb(0 0 0 / 0.24);
+        padding: 12px 14px;
+        color: var(--muted);
+        font-size: 0.75rem;
+        line-height: 1.45;
+      }
+
+      .prototype-note strong {
+        color: var(--text);
+      }
+
+      @media (max-width: 920px) {
+        .prototype-controls .control-group:first-child {
+          display: none;
+        }
+
+        .workspace {
+          width: min(100vw, 720px);
+          min-width: 0;
+        }
+
+        .prototype-note {
+          display: none;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .app-header {
+          min-height: 54px;
+          padding: 8px 11px;
+        }
+
+        .brand span,
+        .control-label,
+        #text-size {
+          display: none;
+        }
+
+        .board,
+        .scrim {
+          top: 54px;
+        }
+
+        .workspace {
+          top: 54px;
+        }
+
+        .workspace.expanded {
+          top: 0;
+        }
+
+        .workspace-header {
+          padding: 14px 15px 12px;
+        }
+
+        .title-row {
+          align-items: flex-start;
+        }
+
+        .task-actions .button:not(.primary),
+        .task-actions .icon-button {
+          display: none;
+        }
+
+        h1 {
+          white-space: normal;
+        }
+
+        .workspace-body,
+        .workspace[data-nav='horizontal'] .workspace-body {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .mode-rail,
+        .workspace[data-nav='horizontal'] .mode-rail {
+          display: none;
+        }
+
+        .mode-select-wrap {
+          display: block;
+        }
+
+        .content {
+          padding: 16px;
+        }
+
+        .mode-header {
+          display: block;
+        }
+
+        .status-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .content-inner {
+          animation: content-in 150ms ease-out;
+        }
+      }
+
+      @keyframes content-in {
+        from {
+          opacity: 0.72;
+          transform: translateY(3px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">V</div>
+        <div>
+          <strong>Task workspace</strong>
+          <span>Interactive IA prototype · #1334</span>
+        </div>
+      </div>
+      <div class="prototype-controls" aria-label="Prototype controls">
+        <div class="control-group">
+          <span class="control-label">Navigation</span>
+          <div class="segmented" aria-label="Navigation variant">
+            <button type="button" data-nav-choice="vertical" aria-pressed="true">Vertical</button>
+            <button type="button" data-nav-choice="horizontal" aria-pressed="false">Top</button>
+          </div>
+        </div>
+        <button class="icon-button" id="text-size" type="button" aria-label="Increase text size">
+          A+
+        </button>
+        <button class="icon-button" id="theme" type="button" aria-label="Switch to light theme">
+          ◐
+        </button>
+      </div>
+    </header>
+
+    <div class="board" aria-hidden="true">
+      <section class="column">
+        <div class="column-head">Backlog <span>8</span></div>
+        <div class="task-card"></div>
+        <div class="task-card"></div>
+      </section>
+      <section class="column">
+        <div class="column-head">Ready <span>3</span></div>
+        <div class="task-card"></div>
+        <div class="task-card"></div>
+      </section>
+      <section class="column">
+        <div class="column-head">In progress <span>2</span></div>
+        <div class="task-card"></div>
+      </section>
+      <section class="column">
+        <div class="column-head">Review <span>1</span></div>
+        <div class="task-card"></div>
+      </section>
+    </div>
+    <div class="scrim" aria-hidden="true"></div>
+
+    <main
+      class="workspace"
+      id="workspace"
+      data-nav="vertical"
+      aria-label="Task workspace prototype"
+    >
+      <header class="workspace-header">
+        <div class="header-top">
+          <span class="task-kind">Code task · VERITAS-1299</span>
+          <span class="badge" id="save-state">All changes saved</span>
+        </div>
+        <div class="title-row">
+          <h1>Redesign task detail into a progressive workspace</h1>
+          <div class="task-actions">
+            <button class="button quiet" type="button">Chat</button>
+            <button class="button" id="expand" type="button">Expand</button>
+            <button class="icon-button" type="button" aria-label="More task actions">•••</button>
+            <button class="icon-button" type="button" aria-label="Close task workspace">×</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="mode-select-wrap">
+        <label for="mode-select">Task workspace mode</label>
+        <select id="mode-select">
+          <option value="overview">Overview</option>
+          <option value="plan">Plan</option>
+          <option value="run">Run</option>
+          <option value="results">Results</option>
+          <option value="history">History</option>
+        </select>
+      </div>
+
+      <div class="workspace-body">
+        <nav class="mode-rail" aria-label="Task workspace modes">
+          <button type="button" data-mode="overview" aria-selected="true">
+            <span class="mode-index">01</span><span>Overview</span>
+          </button>
+          <button type="button" data-mode="plan" aria-selected="false">
+            <span class="mode-index">02</span><span>Plan</span>
+          </button>
+          <button type="button" data-mode="run" aria-selected="false">
+            <span class="mode-index">03</span><span>Run</span>
+          </button>
+          <button type="button" data-mode="results" aria-selected="false">
+            <span class="mode-index">04</span><span>Results</span>
+          </button>
+          <button type="button" data-mode="history" aria-selected="false">
+            <span class="mode-index">05</span><span>History</span>
+          </button>
+        </nav>
+
+        <section class="content" aria-live="polite">
+          <div class="content-inner" id="content"></div>
+        </section>
+      </div>
+    </main>
+
+    <aside class="prototype-note">
+      <strong>Review focus:</strong> compare stable vertical wayfinding with the compact top
+      variant, then change lifecycle state. The content hierarchy should change while the five
+      primary modes remain predictable.
+    </aside>
+
+    <script>
+      const lifecycleStates = {
+        new: {
+          label: 'New',
+          tone: 'amber',
+          status: 'Not ready',
+          detail:
+            'The objective is present, but acceptance criteria and an execution path are still missing.',
+          action: 'Complete task details',
+          readiness: ['3 of 7 ready', 'Acceptance criteria missing'],
+          attempt: ['No attempt', 'Nothing has run'],
+          outcome: ['No results', 'Expected at this stage'],
+          card: [
+            'First missing requirement',
+            'Add measurable acceptance criteria before choosing an agent or workflow.',
+          ],
+        },
+        ready: {
+          label: 'Ready',
+          tone: 'green',
+          status: 'Ready to run',
+          detail:
+            'Required context, repository access, worktree, and verification steps are available.',
+          action: 'Start run',
+          readiness: ['7 of 7 ready', 'All required gates passed'],
+          attempt: ['No active attempt', 'Execution can begin'],
+          outcome: ['Awaiting work', 'No output expected yet'],
+          card: [
+            'Execution path',
+            'Codex CLI · local worktree · approval required for external actions.',
+          ],
+        },
+        active: {
+          label: 'Active',
+          tone: 'blue',
+          status: 'In progress',
+          detail:
+            'An agent is implementing the workspace shell. The event stream is healthy and the current step is recent.',
+          action: 'Monitor active run',
+          readiness: ['Ready', 'Launch gates passed'],
+          attempt: ['Attempt running', '12m 41s elapsed'],
+          outcome: ['Work in progress', '3 files changed'],
+          card: [
+            'Current step',
+            'Running focused task-detail component tests after updating the navigation translator.',
+          ],
+        },
+        blocked: {
+          label: 'Blocked',
+          tone: 'red',
+          status: 'Blocked',
+          detail:
+            'The selected host cannot enforce the required run-access boundary. Work should not start until the launch path changes.',
+          action: 'Resolve blocker',
+          readiness: ['4 of 8 ready', 'Run access unavailable'],
+          attempt: ['Attempt failed', 'Stopped before dispatch'],
+          outcome: ['No reviewable change', 'Failure evidence captured'],
+          card: [
+            'Required recovery',
+            'Select an enforceable ACP host or remove the explicit phase only with an approved scope change.',
+          ],
+        },
+        failed: {
+          label: 'Failed',
+          tone: 'red',
+          status: 'Attempt failed',
+          detail:
+            'The latest attempt exited after a deterministic test failure. The task remains in progress and the event stream is connected.',
+          action: 'Review failure',
+          readiness: ['Ready', 'Task gates remain valid'],
+          attempt: ['Attempt failed', 'Exit code 1 · 18m'],
+          outcome: ['Partial change', '2 files preserved'],
+          card: [
+            'Failure summary',
+            'The History deep-link assertion still targets a removed legacy tab label.',
+          ],
+        },
+        review: {
+          label: 'Review',
+          tone: 'amber',
+          status: 'Ready for review',
+          detail:
+            'Implementation is complete. One reviewer decision and the final verification checklist remain.',
+          action: 'Review changes',
+          readiness: ['Execution complete', 'Verification 5 of 6'],
+          attempt: ['Attempt complete', '23m · 1,842 tokens'],
+          outcome: ['12 files changed', '1 open finding'],
+          card: [
+            'Review focus',
+            'Confirm legacy deep links open the mapped mode and local destination without losing attempt context.',
+          ],
+        },
+        done: {
+          label: 'Done',
+          tone: 'green',
+          status: 'Done',
+          detail:
+            'The change is merged, required checks passed, and the completion packet is ready for handoff.',
+          action: 'Review handoff',
+          readiness: ['Complete', 'All checks passed'],
+          attempt: ['Attempt complete', 'Merged in PR #1402'],
+          outcome: ['Handoff verified', '4 deliverables · 9 evidence items'],
+          card: [
+            'Completion packet',
+            'Summary, verification, pull request, screenshots, and follow-up ownership are recorded.',
+          ],
+        },
+      };
+
+      const modeContent = {
+        plan: {
+          description:
+            'Prepare the objective, work breakdown, supporting context, and acceptance path.',
+          sections: ['Details', 'Progress', 'Observations', 'Dependencies', 'Attachments'],
+          rows: [
+            ['Objective and scope', 'Task title, description, type, project, priority'],
+            ['Acceptance path', 'Subtasks, verification steps, blockers, dependencies'],
+            ['Supporting context', 'Observations and attachments'],
+          ],
+          action: 'Apply template',
+        },
+        run: {
+          description:
+            'Start, monitor, and recover execution without mixing task state with transport state.',
+          sections: ['Session', 'Workflow', 'Run access', 'Source', 'Live activity'],
+          rows: [
+            ['Agent session', 'Provider, model, current step, elapsed time, safe controls'],
+            [
+              'Run access',
+              'Actionable summary first; launch and phase evidence disclosed on demand',
+            ],
+            ['Source context', 'Repository, worktree, branch, preview'],
+          ],
+          action: 'Open workflow',
+        },
+        results: {
+          description:
+            'Inspect output, changes, review decisions, verification, and durable evidence.',
+          sections: ['Work Products', 'Changes', 'Review', 'Verification', 'Evidence'],
+          rows: [
+            ['Review readiness', '12 files changed · 5 of 6 checks · 1 open finding'],
+            ['Work products', '2 artifacts · 1 deliverable ready for handoff'],
+            ['Evidence', '9 causal records linked to this task'],
+          ],
+          action: 'Review changes',
+        },
+        history: {
+          description:
+            'Trace attempts and events over time without displacing the current execution summary.',
+          sections: ['Timeline', 'Attempts', 'Events', 'Metrics'],
+          rows: [
+            ['Attempt 03 · failed', '18m · selected from causal event evt_0142'],
+            ['Attempt 02 · interrupted', '7m · operator interruption'],
+            ['Attempt 01 · complete', '14m · 1,104 tokens'],
+          ],
+          action: 'Export timeline',
+        },
+      };
+
+      const content = document.querySelector('#content');
+      const workspace = document.querySelector('#workspace');
+      const modeSelect = document.querySelector('#mode-select');
+      let activeMode = 'overview';
+      let activeState = 'blocked';
+      let largeText = false;
+
+      function stateButtons() {
+        return `<div class="state-switcher" aria-label="Representative task state">
+          ${Object.entries(lifecycleStates)
+            .map(
+              ([key, item]) =>
+                `<button type="button" data-state="${key}" aria-pressed="${key === activeState}">${item.label}</button>`
+            )
+            .join('')}
+        </div>`;
+      }
+
+      function renderOverview() {
+        const state = lifecycleStates[activeState];
+        content.innerHTML = `
+          <div class="mode-header">
+            <div><div class="eyebrow">Overview · state aware</div><h2>What needs attention now?</h2><p class="description">The task state owns the page. Supporting signals explain it without competing with it.</p></div>
+          </div>
+          ${stateButtons()}
+          <section class="hero-status" data-tone="${state.tone}" aria-labelledby="dominant-status">
+            <div class="status-line"><div><span class="status-owner">Task state</span><div class="status-name" id="dominant-status">${state.status}</div></div><span class="badge ${state.tone}">${state.label}</span></div>
+            <p>${state.detail}</p>
+            <button class="button primary" type="button">${state.action}</button>
+          </section>
+          <div class="status-grid" aria-label="Supporting task status">
+            <article class="status-tile"><span class="status-owner">Readiness</span><strong>${state.readiness[0]}</strong><span>${state.readiness[1]}</span></article>
+            <article class="status-tile"><span class="status-owner">Latest attempt</span><strong>${state.attempt[0]}</strong><span>${state.attempt[1]}</span></article>
+            <article class="status-tile"><span class="status-owner">Results</span><strong>${state.outcome[0]}</strong><span>${state.outcome[1]}</span></article>
+          </div>
+          <section class="card"><div class="card-head"><div><h3>${state.card[0]}</h3><p>${state.card[1]}</p></div><span class="badge">Decision relevant</span></div></section>
+          <details><summary>Technical run and governance evidence</summary><div>launch manifest · phase authority · provider runtime · admission reservation<br />Available for diagnosis; collapsed while the recovery decision is clear.</div></details>`;
+        bindStateButtons();
+      }
+
+      function renderMode(mode) {
+        const data = modeContent[mode];
+        content.innerHTML = `
+          <div class="mode-header"><div><div class="eyebrow">${mode}</div><h2>${mode[0].toUpperCase() + mode.slice(1)}</h2><p class="description">${data.description}</p></div><button class="button" type="button">${data.action}</button></div>
+          <nav class="local-nav" aria-label="${mode} sections">${data.sections
+            .map(
+              (section, index) =>
+                `<button type="button" aria-current="${index === 0 ? 'page' : 'false'}">${section}</button>`
+            )
+            .join('')}</nav>
+          <div class="rows">${data.rows
+            .map(
+              ([title, detail], index) =>
+                `<div class="row"><div><strong>${title}</strong><span>${detail}</span></div><span class="badge ${index === 0 ? 'blue' : ''}">${index === 0 ? 'Current' : 'Available'}</span></div>`
+            )
+            .join('')}</div>
+          <details style="margin-top:11px"><summary>Specialist details</summary><div>Mode-owned diagnostics and rare actions appear here. Existing permissions and authoritative data sources remain unchanged.</div></details>`;
+        bindLocalNav();
+      }
+
+      function bindStateButtons() {
+        document.querySelectorAll('[data-state]').forEach((button) => {
+          button.addEventListener('click', () => {
+            activeState = button.dataset.state;
+            renderOverview();
+          });
+        });
+      }
+
+      function bindLocalNav() {
+        document.querySelectorAll('.local-nav button').forEach((button) => {
+          button.addEventListener('click', () => {
+            document
+              .querySelectorAll('.local-nav button')
+              .forEach((item) => item.setAttribute('aria-current', 'false'));
+            button.setAttribute('aria-current', 'page');
+          });
+        });
+      }
+
+      function setMode(mode) {
+        activeMode = mode;
+        modeSelect.value = mode;
+        document
+          .querySelectorAll('[data-mode]')
+          .forEach((button) =>
+            button.setAttribute('aria-selected', String(button.dataset.mode === mode))
+          );
+        if (mode === 'overview') renderOverview();
+        else renderMode(mode);
+      }
+
+      document
+        .querySelectorAll('[data-mode]')
+        .forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
+      modeSelect.addEventListener('change', () => setMode(modeSelect.value));
+
+      document.querySelectorAll('[data-nav-choice]').forEach((button) => {
+        button.addEventListener('click', () => {
+          workspace.dataset.nav = button.dataset.navChoice;
+          document
+            .querySelectorAll('[data-nav-choice]')
+            .forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        });
+      });
+
+      document.querySelector('#theme').addEventListener('click', (event) => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        event.currentTarget.setAttribute(
+          'aria-label',
+          `Switch to ${next === 'dark' ? 'light' : 'dark'} theme`
+        );
+      });
+
+      document.querySelector('#text-size').addEventListener('click', (event) => {
+        largeText = !largeText;
+        document.documentElement.style.setProperty('--font-size', largeText ? '18px' : '15px');
+        event.currentTarget.textContent = largeText ? 'A' : 'A+';
+        event.currentTarget.setAttribute(
+          'aria-label',
+          largeText ? 'Use standard text size' : 'Increase text size'
+        );
+      });
+
+      document.querySelector('#expand').addEventListener('click', (event) => {
+        workspace.classList.toggle('expanded');
+        event.currentTarget.textContent = workspace.classList.contains('expanded')
+          ? 'Drawer'
+          : 'Expand';
+      });
+
+      setMode(activeMode);
+    </script>
+  </body>
+</html>
