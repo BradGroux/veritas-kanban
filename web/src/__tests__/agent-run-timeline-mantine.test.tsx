@@ -506,7 +506,11 @@ describe('agent run timeline Mantine surface', () => {
       />
     );
 
-    expect(screen.getByText('Run Timeline')).toBeDefined();
+    expect(screen.getByText('Attempt Timeline')).toBeDefined();
+    expect(screen.getByText('Latest attempt')).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Attempt' }).getAttribute('value')).toBe(
+      'Latest | attempt-1 | complete'
+    );
     expect(screen.getByText('Stored replay')).toBeDefined();
     expect(screen.getByText('command.completed')).toBeDefined();
     expect(screen.getByText('stream.stdout')).toBeDefined();
@@ -536,6 +540,29 @@ describe('agent run timeline Mantine surface', () => {
     await user.click(screen.getByRole('button', { name: 'Work Products' }));
 
     expect(mocks.onOpenTab).toHaveBeenCalledWith('work-products');
+  });
+
+  it('distinguishes an earlier attempt from the latest task execution', () => {
+    const taskWithHistory = createMockTask({
+      ...task,
+      attempt: {
+        id: 'attempt-current',
+        agent: 'veritas',
+        status: 'running',
+        started: '2026-06-01T11:00:00.000Z',
+      },
+      attempts: task.attempt ? [task.attempt] : [],
+    });
+
+    renderWithProviders(
+      <AgentRunTimelinePanel task={taskWithHistory} initialAttemptId="attempt-1" />
+    );
+
+    expect(screen.getByText('Historical attempt')).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Attempt' }).getAttribute('value')).toBe(
+      'Historical | attempt-1 | completed'
+    );
+    expect(screen.queryByText(/live polling/)).toBeNull();
   });
 
   it('highlights a deep-linked telemetry event', () => {
