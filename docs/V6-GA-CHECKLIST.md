@@ -1,13 +1,27 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist contains the completed stable-release gate for Veritas Kanban
-6.1.4 and retains the completed 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
+This checklist contains the active stable-release gate for Veritas Kanban
+6.1.5 and retains the completed 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
 Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-09-02 for Veritas Kanban 6.1.4.
+Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release candidate.
 
-## 6.1.4 Release Gate
+## 6.1.5 Release Gate
+
+- [x] Starting issues #1295-#1302 have an evidence-backed completed disposition through focused merged work.
+- [x] Starting dependency PRs #1303-#1306 were reviewed and superseded by focused merged PRs #1311-#1313.
+- [x] Settings tracker #1297 and task-workspace tracker #1299 were completed through linked, independently reviewed child issues and PRs.
+- [x] Public documentation excludes internal prompts, raw audits, handoffs, and working notes, and CI classifies every tracked Markdown file (#1350, #1353).
+- [x] The integrated current-main candidate builds all seven workspaces, packages a launchable macOS arm64 app, and exposes the completed Settings and task-workspace UI.
+- [x] Current desktop and mobile screenshots, GIFs, social previews, and demo video were regenerated from an isolated public-safe 6.1.5 workspace with `pnpm docs:capture-media`.
+- [x] The native About panel identifies the MIT license and Digital Meld copyright holder, uses concise build metadata, and reports the current 6.1.5 application version.
+- [ ] Release PR passes the authoritative `ci:full` matrix and merges with all maintained package metadata at 6.1.5.
+- [ ] Annotated tag `v6.1.5` peels to the release merge, and the live GitHub release body exactly matches `docs/releases/v6.1.5.md`.
+- [ ] Desktop Release publishes verified signed/notarized 6.1.5 DMG and ZIP assets, blockmaps, checksum sidecars, and updater metadata.
+- [ ] Homebrew cask reports 6.1.5 with the verified published ZIP checksum.
+
+## Historical 6.1.4 Completed Release Gate
 
 - [x] Release tracker [#1307](https://github.com/BradGroux/veritas-kanban/issues/1307) and publication-boundary fix [#1308](https://github.com/BradGroux/veritas-kanban/pull/1308) are merged with focused security regression evidence.
 - [x] Root, shared, server, web, CLI, MCP, desktop, and lockfile package metadata are exactly 6.1.4.

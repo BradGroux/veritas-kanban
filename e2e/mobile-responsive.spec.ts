@@ -97,8 +97,8 @@ test.describe('mobile responsive flows', () => {
     const statusPersisted = page.waitForResponse((response) => {
       const request = response.request();
       return (
-        request.method() === 'PATCH' &&
-        new URL(response.url()).pathname === `/api/tasks/${testTaskId}` &&
+        request.method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/tasks/${testTaskId}/move` &&
         response.ok()
       );
     });
@@ -116,7 +116,10 @@ test.describe('mobile responsive flows', () => {
     const detailBox = await detail.boundingBox();
     expect(detailBox?.width ?? 0).toBeLessThanOrEqual(page.viewportSize()!.width);
 
-    await detail.getByRole('tab', { name: 'Review', exact: true }).click();
+    await detail.getByRole('combobox', { name: 'Task workspace mode' }).click();
+    await page.getByRole('option', { name: 'Results' }).click();
+    await detail.getByRole('combobox', { name: 'Results section' }).click();
+    await page.getByRole('option', { name: 'Review' }).click();
     await detail.getByRole('button', { name: 'Request Changes' }).click();
     await detail.getByPlaceholder('Describe the changes needed...').fill('Mobile review works.');
     await detail.getByRole('button', { name: 'Submit Changes Requested' }).click();
@@ -124,14 +127,17 @@ test.describe('mobile responsive flows', () => {
       detail.locator('p:visible', { hasText: 'Mobile review works.' }).first()
     ).toBeVisible();
 
-    await detail.getByRole('tab', { name: 'Details' }).click();
+    await detail.getByRole('combobox', { name: 'Task workspace mode' }).click();
+    await page.getByRole('option', { name: 'Plan' }).click();
+    await detail.getByRole('combobox', { name: 'Plan section' }).click();
+    await page.getByRole('option', { name: 'Details' }).click();
     await detail.getByPlaceholder(/Add a comment/).fill('Mobile comment submitted.');
     await detail.getByRole('button', { name: 'Add Comment' }).click();
     await expect(
       detail.locator('p:visible', { hasText: 'Mobile comment submitted.' }).first()
     ).toBeVisible();
 
-    await detail.getByRole('button', { name: 'Close task details' }).click();
+    await detail.getByRole('button', { name: 'Close task workspace' }).click();
     await expect(detail).not.toBeVisible();
 
     const mobileNotificationsButton = page.getByRole('button', { name: 'Mobile notifications' });
@@ -183,8 +189,8 @@ test.describe('mobile responsive flows', () => {
     testTaskId = (task as { id: string }).id;
 
     let returnedConflict = false;
-    await page.route(`**/api/tasks/${testTaskId}`, async (route) => {
-      if (!returnedConflict && route.request().method() === 'PATCH') {
+    await page.route(`**/api/tasks/${testTaskId}/move`, async (route) => {
+      if (!returnedConflict && route.request().method() === 'POST') {
         returnedConflict = true;
         await route.fulfill({
           status: 409,
@@ -212,12 +218,12 @@ test.describe('mobile responsive flows', () => {
     });
     await statusSelect.click();
     await page.getByRole('option', { name: 'Blocked' }).click();
-    await expect(page.getByText('Task changed elsewhere')).toBeVisible();
+    await expect(page.getByText('Move not saved')).toBeVisible();
 
     await page.getByText(taskTitle).first().click();
     const detail = page.getByTestId('task-detail-panel');
     await expect(detail).toBeVisible();
-    await detail.getByRole('button', { name: 'Close task details' }).click();
+    await detail.getByRole('button', { name: 'Close task workspace' }).click();
     await expect(detail).not.toBeVisible();
 
     const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' });

@@ -1,6 +1,6 @@
 # Veritas Kanban v6 Agent Runtime Control Plane
 
-This document defines the supported v6.1.4 architecture for executable agent
+This document defines the v6.1.5 release-candidate architecture for executable agent
 harnesses and Buzz integration. It is the version-level composition of the
 individual contract documents for
 [ACP](ACP-PROVIDER-V1.md),
@@ -9,7 +9,7 @@ individual contract documents for
 [tool control](TOOL-CONTROL-PLANE-V1.md), and
 [runtime hooks](RUNTIME-HOOK-V1.md).
 
-Documentation freshness: 2026-09-02 for Veritas Kanban 6.1.4.
+Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release candidate.
 
 ## Authority Model
 

@@ -77,6 +77,16 @@ function platformLabel(platform: NodeJS.Platform): string {
   return platform;
 }
 
+function aboutArchitectureLabel(info: DesktopAppInfo): string {
+  if (info.platform === 'darwin' && info.arch === 'arm64') return 'Apple silicon';
+  if (info.platform === 'darwin' && info.arch === 'x64') return 'Intel';
+  return info.arch;
+}
+
+function titleCase(value: string): string {
+  return value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
 export function formatDesktopVersionInfo(info: DesktopAppInfo): string {
   const lines = [`${info.name} ${info.version}`];
   if (info.buildIdentity) {
@@ -92,11 +102,19 @@ export function formatDesktopVersionInfo(info: DesktopAppInfo): string {
 }
 
 export function createDesktopAboutPanelOptions(info: DesktopAppInfo) {
-  const supportLines = formatDesktopVersionInfo(info).split('\n').slice(1);
+  const displayedBuild = info.buildIdentity?.slice(0, 12);
+  const platformSummary = `${platformLabel(info.platform)} ${info.osVersion} · ${aboutArchitectureLabel(info)}`;
   return {
     applicationName: info.name,
     applicationVersion: info.version,
-    version: info.buildIdentity ? `Build ${info.buildIdentity}` : `Channel ${info.channel}`,
-    credits: supportLines.join('\n'),
+    version: displayedBuild ? `Build ${displayedBuild}` : `${titleCase(info.channel)} channel`,
+    copyright: 'MIT License · © 2026 Digital Meld',
+    credits: [
+      'Local-first task management and agent orchestration',
+      '',
+      `${titleCase(info.channel)} channel · ${platformSummary}`,
+      '',
+      'github.com/BradGroux/veritas-kanban',
+    ].join('\n'),
   };
 }

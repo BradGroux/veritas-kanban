@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/server",
-  "version": "6.1.4",
+  "version": "6.1.5",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
-    "test": "VERITAS_DISABLE_WATCHERS=1 vitest run --maxWorkers=4",
+    "test": "LOG_LEVEL=silent VERITAS_DISABLE_WATCHERS=1 vitest run --maxWorkers=4",
     "test:watch": "vitest",
     "clean": "rm -rf dist",
     "reset-password": "tsx src/scripts/reset-password.ts"

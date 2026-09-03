@@ -3,7 +3,7 @@
 Complete feature reference for Veritas Kanban, including the v6 release surfaces. Every feature, every API endpoint, every configuration option.
 
 For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different).
-For current release screenshots and retained v5 shell captures, see the
+For current release screenshots and GIFs captured from 6.1.5, see the
 [v6 Visual Tour](V6-VISUAL-TOUR.md). For troubleshooting, see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -89,15 +89,15 @@ For current release screenshots and retained v5 shell captures, see the
 
 The Kanban board is the central interface — a drag-and-drop workspace that reflects your project's state in real time.
 
-![v5 board to workflow tour](assets/v5/v5-board-to-workflow.gif)
+![6.1.5 board to task-workspace tour](assets/v6.1.5/board-to-workspace.gif)
 
-| Desktop shell                                       | Board overview                                        |
-| --------------------------------------------------- | ----------------------------------------------------- |
-| ![v5 desktop shell](assets/v5/v5-desktop-shell.png) | ![v5 board overview](assets/v5/v5-board-overview.png) |
+| Settings navigation                                      | Board overview                                   |
+| -------------------------------------------------------- | ------------------------------------------------ |
+| ![6.1.5 settings](assets/v6.1.5/settings-navigation.png) | ![6.1.5 board](assets/v6.1.5/board-overview.png) |
 
-| Workbench panel                                         | Mobile/PWA board                                          |
-| ------------------------------------------------------- | --------------------------------------------------------- |
-| ![v5 Workbench panel](assets/v5/v5-workbench-panel.png) | ![v5 mobile PWA board](assets/v5/v5-mobile-pwa-board.png) |
+| Workbench panel                                       | Mobile/PWA board                                      |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| ![6.1.5 Workbench](assets/v6.1.5/workbench-panel.png) | ![6.1.5 mobile board](assets/v6.1.5/mobile-board.png) |
 
 - **Kanban columns** — Four default columns for compatibility: To Do, In Progress, Blocked, Done; board columns and the default create status can be customized in Settings -> Board & Display
 - **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; keyboard users press Space to pick up or drop, use spatial arrow-key movement across populated or empty columns, and press Escape to cancel; custom collision detection (pointerWithin + rectIntersection fallback) supports pointer and keyboard moves; tooltips are suppressed during drag; local state provides real-time column updates
@@ -105,11 +105,11 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Task CRUD** — Create, read, update, and delete tasks through the UI or API
 - **Create task dialog** — Quick-create with title, type, priority, project, sprint, and description
 
-  ![Task work view](assets/v5/v5-task-work-view.png)
+  ![Task workspace](assets/v6.1.5/task-workspace.png)
 
 - **Progressive task workspace** — A quick drawer and full-width expanded presentation share Overview, Plan, Run, Results, and History navigation without losing the selected section, attempt, event, edits, scroll position, or board focus
 
-  ![Task details panel](assets/v5/v5-task-work-view.png)
+  ![Task workspace details](assets/v6.1.5/task-workspace.png)
 
 - **Task types** — Configurable type system with icons and color-coded card borders (code, research, content, automation, and custom types)
 - **Priority levels** — Low, medium, and high with visual indicators on cards
@@ -278,9 +278,9 @@ Integrated git workflow from branch creation to merge.
 
 First-class support for autonomous coding agents.
 
-![Task workflow demo](assets/v5/v5-task-work-view.png)
+![Task workspace demo](assets/v6.1.5/task-workspace.png)
 
-![Agent provider settings](assets/v5/v5-agent-providers.png)
+![Agent provider settings](assets/v6.1.5/agent-providers.png)
 
 - **Agent orchestration** — Start, stop, and monitor AI agents on code tasks from the UI or API
 - **Multi-agent support** — Ships with Codex CLI, Codex SDK, Codex app-server, Codex Cloud, Hermes Agent, Claude Code, a generic ACP stdio provider, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
@@ -631,9 +631,9 @@ Automated staleness detection for project documentation with real-time tracking 
 
 Real-time agent-to-agent communication channel for multi-agent collaboration. Shipped in v2.0. Optional for first-run setup.
 
-| Threaded Squad Chat coordination                                                 | Human reply adapter settings                                                          |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| ![v5 Squad Chat coordination](assets/v5/v5-squad-chat-threaded-coordination.png) | ![v5 Squad Chat human reply adapter](assets/v5/v5-squad-chat-human-reply-adapter.png) |
+| Threaded Squad Chat coordination                               | Human reply adapter settings                                                      |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| ![6.1.5 Squad Chat coordination](assets/v6.1.5/squad-chat.png) | ![6.1.5 notification and reply adapters](assets/v6.1.5/notification-adapters.png) |
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
 - **Resizable Workbench dock** — Board Chat and Squad Chat share one dock that defaults Right, optionally moves to Bottom, isolates chat scrolling, and keeps Close, Escape, Back, and Reset Layout recovery available
@@ -2083,7 +2083,7 @@ Optimizations spanning server, frontend, and data lifecycle.
 
 Modular settings system with focused, permission-aware sections.
 
-![v5 Maintenance Center settings surface](assets/v5/v5-maintenance-center.png)
+![6.1.5 Maintenance Center settings surface](assets/v6.1.5/maintenance-center.png)
 
 The Maintenance API and CLI include governed SQLite journal conversion:
 non-mutating previews, admin scheduling, restart-time exclusive execution,

@@ -28,12 +28,12 @@ A working board is not the same as agent-ready or external wake/delivery-ready. 
 
 ## Prerequisites (30 seconds)
 
-| What              | Command            | Notes                                                                   |
-| ----------------- | ------------------ | ----------------------------------------------------------------------- |
-| Node.js           | `node -v`          | Requires **22.22.1+**. Install via Volta/nvm if older.                  |
-| pnpm              | `pnpm -v`          | Use the repository-pinned **11.1.1** release.                          |
-| Git               | `git --version`    | Requires **2.38+**.                                                     |
-| (Optional) Docker | `docker --version` | Needed only if you prefer containers.                                   |
+| What              | Command            | Notes                                                  |
+| ----------------- | ------------------ | ------------------------------------------------------ |
+| Node.js           | `node -v`          | Requires **22.22.1+**. Install via Volta/nvm if older. |
+| pnpm              | `pnpm -v`          | Use the repository-pinned **11.1.1** release.          |
+| Git               | `git --version`    | Requires **2.38+**.                                    |
+| (Optional) Docker | `docker --version` | Needed only if you prefer containers.                  |
 
 That's it. No database, no extra services.
 
@@ -106,7 +106,7 @@ pnpm dev
 
 Web boots on **3000**, API on **3001**. First boot seeds demo tasks so you have something to look at.
 
-![Dev stack running with dummy v5 tasks](assets/v5/v5-board-overview.png)
+![Dev stack running with public-safe 6.1.5 tasks](assets/v6.1.5/board-overview.png)
 
 ### 4. Run the in-app setup
 
@@ -128,7 +128,7 @@ Visit [http://localhost:3000](http://localhost:3000) → follow the onboarding f
 4. Hit **Create** and watch it appear in **Todo**.
 5. Drag it to **In Progress** to feel the flow.
 
-![Creating and reviewing a task in the v5 task detail drawer](assets/v5/v5-task-work-view.png)
+![Reviewing a task in the 6.1.5 progressive task workspace](assets/v6.1.5/task-workspace.png)
 
 > Need a clean slate? Remove the example tasks: `rm tasks/active/task_example_*.md`
 
@@ -164,7 +164,7 @@ vk list --status todo
 
 CLI commands fully mirror the API and are the fastest way to script agent workflows. Write commands need `VK_API_KEY` unless localhost bypass grants an `agent` or `admin` role.
 
-![Board to workflow tour with dummy v5 tasks](assets/v5/v5-board-to-workflow.gif)
+![Board to task-workspace tour with dummy 6.1.5 tasks](assets/v6.1.5/board-to-workspace.gif)
 
 ---
 
@@ -201,7 +201,7 @@ This section is optional. Agents interact through HTTP + WebSocket; nothing is h
    - Check `.veritas-kanban/logs/agents.log` for run details
    - Confirm UI Agent Status indicator flips back to **Idle**
 
-![Agent-ready task detail view](assets/v5/v5-task-work-view.png)
+![Agent-ready task workspace](assets/v6.1.5/task-workspace.png)
 
 > **Automation tip:** Keep a `prompts/` folder (see below) so agents get consistent instructions for sprint planning, reviews, research, etc.
 

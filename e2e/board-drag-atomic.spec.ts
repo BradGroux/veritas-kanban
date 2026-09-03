@@ -329,7 +329,11 @@ test.describe('Atomic board drag', () => {
     await page.goto('/');
     await page.getByLabel('Search tasks').fill('Atomic keyboard source');
     await page.getByLabel('Search tasks').blur();
+    const movingCard = page.locator(`[data-task-id="${movingId}"]`);
+    await expect(movingCard).toBeVisible();
+    await expect(page.locator('[data-task-id]')).toHaveCount(1);
     await page.keyboard.press('j');
+    await expect(movingCard).toHaveAttribute('data-selected', 'true');
     await page.keyboard.press('3');
 
     await expect(

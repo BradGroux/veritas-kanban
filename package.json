@@ -1,6 +1,6 @@
 {
   "name": "veritas-kanban",
-  "version": "6.1.4",
+  "version": "6.1.5",
   "private": true,
   "description": "Local-first task management and AI agent orchestration platform",
   "author": "Brad Groux <brad@digitalmeld.io>",
@@ -69,6 +69,7 @@
     "seed": "bash scripts/seed.sh",
     "prepare": "node scripts/prepare-husky.mjs",
     "demo": "docker compose -f demo/docker-compose.demo.yml up --build",
+    "docs:capture-media": "DOCS_MEDIA_CAPTURE=1 LOG_LEVEL=silent playwright test e2e/docs-media-capture.spec.ts --project=chromium --reporter=line && node scripts/build-docs-media-gifs.mjs",
     "desktop:smoke:mac:local": "node scripts/check-desktop-local-packaging-smoke.mjs"
   },
   "devDependencies": {
