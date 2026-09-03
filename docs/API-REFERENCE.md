@@ -5384,6 +5384,19 @@ These endpoints follow the same auth/error patterns documented above:
 
 ---
 
+### Clearing optional template fields
+
+`PATCH /api/templates/:id` preserves omitted fields. Send explicit JSON `null` to clear `description`, `category`, or individual `taskDefaults` fields (`type`, `priority`, `project`, `descriptionTemplate`, `agent`). Cleared fields are omitted from subsequent GET responses in both file and SQLite storage; unrelated defaults remain unchanged.
+
+```json
+{
+  "description": null,
+  "taskDefaults": { "project": null, "agent": null }
+}
+```
+
+The required name and the `taskDefaults` container cannot be null. Creation continues to use omitted optional fields rather than null. Existing clients that omit fields keep their current patch behavior.
+
 ## v4.0 API Reference
 
 ### User Feedback (`/api/feedback`)

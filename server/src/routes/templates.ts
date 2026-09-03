@@ -91,15 +91,15 @@ const createTemplateSchema = z.object({
 
 const updateTemplateSchema = z.object({
   name: z.string().min(1).optional(),
-  description: z.string().optional(),
-  category: z.string().optional(),
+  description: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
   taskDefaults: z
     .object({
-      type: z.string().optional(),
-      priority: z.enum(['low', 'medium', 'high']).optional(),
-      project: z.string().optional(),
-      descriptionTemplate: z.string().optional(),
-      agent: z.string().min(1).max(80).optional(),
+      type: z.string().nullable().optional(),
+      priority: z.enum(['low', 'medium', 'high']).nullable().optional(),
+      project: z.string().nullable().optional(),
+      descriptionTemplate: z.string().nullable().optional(),
+      agent: z.string().min(1).max(80).nullable().optional(),
     })
     .optional(),
   subtaskTemplates: z.array(subtaskTemplateSchema).optional(),
