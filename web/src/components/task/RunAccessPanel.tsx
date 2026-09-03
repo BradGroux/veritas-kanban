@@ -126,9 +126,9 @@ export function RunAccessPanel({ taskId, attemptId, live = false }: RunAccessPan
               <ShieldCheck className="h-4 w-4" aria-hidden="true" />
               <Text fw={700}>Run Access</Text>
               <Badge color={STATUS_COLOR[summary.status]} variant="light">
-                {summary.status}
+                Access: {summary.status}
               </Badge>
-              <Badge variant="outline">{phaseLabel}</Badge>
+              <Badge variant="outline">Phase: {phaseLabel}</Badge>
             </Group>
             <Text size="xs" c="dimmed" mt={4}>
               Attempt {summary.identity.attemptId} · sequence {summary.version.sequence} ·{' '}
@@ -253,7 +253,7 @@ export function RunAccessPanel({ taskId, attemptId, live = false }: RunAccessPan
             </Accordion.Panel>
           </Accordion.Item>
           <Accordion.Item value="sources">
-            <Accordion.Control>Evidence sources</Accordion.Control>
+            <Accordion.Control>Diagnostics: evidence sources</Accordion.Control>
             <Accordion.Panel>
               <Stack gap={4}>
                 {summary.sources.map((source) => (

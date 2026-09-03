@@ -65,6 +65,14 @@ const attemptStatusIcons: Record<AttemptStatus, React.ReactNode> = {
   failed: <XCircle className="h-3 w-3 text-red-500" />,
 };
 
+const attemptStatusColors: Record<AttemptStatus | 'idle', string> = {
+  idle: 'gray',
+  pending: 'gray',
+  running: 'blue',
+  complete: 'green',
+  failed: 'red',
+};
+
 export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const { data: config } = useConfig();
   const {
@@ -220,6 +228,9 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   // The polled status is authoritative once it settles. While a realtime start
   // signal refreshes a stale idle snapshot, preserve the stream's running state.
   const isAgentRunning = agentStatus?.running === true || (isAgentStatusFetching && isRunning);
+  const currentAttemptStatus: AttemptStatus | 'idle' = isAgentRunning
+    ? 'running'
+    : (task.attempt?.status ?? 'idle');
   const canStart = canControlAgent && task.git?.worktreePath && !isAgentRunning;
   const stopControl = agentStatus?.controls?.controls.find((control) => control.action === 'stop');
   const messageControl = agentStatus?.controls?.controls.find(
@@ -271,22 +282,23 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
         <Group justify="space-between">
           <Group gap="xs">
             <Bot className="h-4 w-4 text-muted-foreground" />
-            <Text size="sm" c="dimmed">
-              AI Agent
+            <Text size="sm" fw={600}>
+              Agent activity
             </Text>
           </Group>
-          <Group gap="xs">
-            {isConnected ? (
-              <Wifi className="h-3 w-3 text-green-500" />
-            ) : (
-              <WifiOff className="h-3 w-3 text-muted-foreground" />
-            )}
-            {isAgentRunning && (
-              <Text component="span" size="xs" c="green" className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                Running
-              </Text>
-            )}
+          <Group gap="xs" wrap="wrap">
+            <Badge
+              color={isConnected ? 'green' : 'gray'}
+              variant="light"
+              leftSection={
+                isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />
+              }
+            >
+              Transport: {isConnected ? 'connected' : 'disconnected'}
+            </Badge>
+            <Badge color={attemptStatusColors[currentAttemptStatus]} variant="light">
+              Attempt: {currentAttemptStatus}
+            </Badge>
           </Group>
         </Group>
 
