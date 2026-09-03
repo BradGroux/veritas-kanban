@@ -62,7 +62,7 @@ test.describe('Task Status Change', () => {
     await expect(detailPanel.getByText('Saving...')).not.toBeVisible({ timeout: 5_000 });
 
     // Close the detail panel
-    await detailPanel.getByRole('button', { name: 'Close task details' }).click();
+    await detailPanel.getByRole('button', { name: 'Close task workspace' }).click();
     await expect(detailPanel).not.toBeVisible({ timeout: 3_000 });
 
     // Wait for the task to move to the In Progress column
@@ -118,7 +118,7 @@ test.describe('Task Status Change', () => {
     await expect(detailPanel.getByText('Saving...')).not.toBeVisible({ timeout: 5_000 });
 
     // Close panel
-    await detailPanel.getByRole('button', { name: 'Close task details' }).click();
+    await detailPanel.getByRole('button', { name: 'Close task workspace' }).click();
     await expect(detailPanel).not.toBeVisible({ timeout: 3_000 });
 
     // Verify the task moved to Done

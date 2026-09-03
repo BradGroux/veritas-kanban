@@ -1,10 +1,32 @@
-# Veritas Kanban 6.1.4 Release Notes
+# Veritas Kanban 6.1.5 Release Notes
 
-Veritas Kanban 6.1.4 is a focused security patch that binds pull-request publication to the managed task worktree and its captured Git state. It also updates the patched `fast-uri` override to 3.1.6. This release adds no API or database schema change and remains compatible with valid 6.1.3 workspaces.
+Veritas Kanban 6.1.5 publishes the integrated backlog completed after the 6.1.4 security patch. It includes the redesigned Settings and task workspaces, atomic board moves, clearer conflict recovery, accurate memory-pressure status, corrected chat toggles, Command+K and board-color improvements, reviewed dependency updates, and the public documentation boundary.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.4 is the supported stable v6 release after its annotated tag, signed assets, updater metadata, and Homebrew cask were published and verified.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.4 remains the supported stable v6 release until 6.1.5 completes its annotated tag, signed asset, updater metadata, and Homebrew verification.
 
-## 6.1.4 Security And Compatibility
+## 6.1.5 Integrated Backlog Outcomes
+
+| Issue or tracker | Operational outcome                                                                                          | Pull requests                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| #1295            | Command+K layout, scrolling, keyboard navigation, and focus recovery                                         | #1318                                           |
+| #1296            | Active Board Chat and Squad Chat controls now toggle closed as well as open or switch                        | #1317                                           |
+| #1297            | Grouped Settings navigation and shared layouts across all twenty destinations                                | #1321, #1323, #1325, #1327, #1329, #1331, #1333 |
+| #1298            | Memory pressure uses real process and host limits instead of ordinary V8 heap reservation                    | #1316                                           |
+| #1299            | Progressive Overview, Plan, Run, Results, and History task workspace with an expanded presentation           | #1342-#1349                                     |
+| #1300            | Conflict notifications retain distinct events while adding task, action, revision, and recovery context      | #1315                                           |
+| #1301            | Semantic board color replaces generic edge highlighting across supported interaction and responsive states   | #1319                                           |
+| #1302            | Cross-column moves persist status and order atomically and reconcile after partial failure                   | #1314                                           |
+| #1303-#1306      | Dependency proposals were reviewed and superseded by focused CodeQL, compatible dependency, and Electron PRs | #1311-#1313                                     |
+| #1350            | Public docs exclude internal working artifacts and CI validates the publication boundary                     | #1353, #1355                                    |
+| #1351            | Concurrent health probes use collision-safe temporary paths                                                  | #1352                                           |
+
+The UI work changes the named Settings, task-workspace, board, palette, and chat interactions. It retains the existing Mantine and Tailwind component system and is not an app-wide visual rebrand.
+
+Maintained screenshots, desktop and mobile GIFs, social previews, and the demo video now show the integrated 6.1.5 interface. They are generated from an isolated workspace containing only public-safe dummy tasks with `pnpm docs:capture-media`.
+
+The public REST API remains `v1`. Version 6.1.5 adds no SQLite migration and remains compatible with valid 6.1.4 workspaces. The repository-publication security boundary and patched `fast-uri` override shipped in 6.1.4 remain in place.
+
+## Historical 6.1.4 Security And Compatibility
 
 Repository publication accepts only canonical Git branch names and requires durable authority for the exact task, managed worktree, configured repository and origin, source and base branches, and captured commit. Pushes publish the captured commit through isolated Git transport and fail closed when authority is absent, stale, or mismatched. Existing valid hierarchical branch names remain supported, and existing remote task branches may advance only by safe fast-forward.
 
@@ -76,13 +98,13 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.4 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.4). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+After publication, manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.5 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
-The public REST API remains `v1`, and 6.1.4 adds no database migration. Version 6.1.3 introduced SQLite migration 34 for governed work-product artifact storage and indexes. Upgrading directly from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
+The public REST API remains `v1`, and 6.1.5 adds no database migration. Version 6.1.3 introduced SQLite migration 34 for governed work-product artifact storage and indexes. Upgrading directly from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
 
-Rollback from 6.1.4 to the complete 6.1.3 application bundle does not require a schema rollback. For rollback to 6.1.2 or earlier, stop every writer and restore the matching complete stopped-writer backup. Never copy an older database over a running instance.
+Rollback from 6.1.5 to the complete 6.1.4 application bundle does not require a schema rollback. For rollback to 6.1.2 or earlier, stop every writer and restore the matching complete stopped-writer backup. Never copy an older database over a running instance.
 
 ## Known Limitations
 

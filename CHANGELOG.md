@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.5] - 2026-09-03
+
+Veritas Kanban 6.1.5 publishes the integrated backlog completed after the
+6.1.4 security patch, including the redesigned Settings and task workspaces,
+board reliability and interaction fixes, dependency updates, and a public
+documentation boundary.
+
+### Added
+
+- Replaced thirteen peer task-detail tabs with progressive Overview, Plan,
+  Run, Results, and History modes, state-aware next actions, consolidated
+  status hierarchy, focused diagnostics, and an expanded workspace (#1299,
+  #1342-#1349).
+
+### Changed
+
+- Grouped all twenty Settings destinations by workflow and migrated every page
+  to shared page, section, row, field-grid, status, navigation, and danger-zone
+  contracts (#1297, #1321, #1323, #1325, #1327, #1329, #1331, #1333).
+- Improved Command+K viewport containment, scrolling, result density, keyboard
+  navigation, and focus recovery (#1295, #1318).
+- Replaced generic board edge highlighting with a semantic color language that
+  remains legible across themes, interaction states, and compact layouts
+  (#1301, #1319).
+- Aligned CodeQL action pins, refreshed the compatible production dependency
+  set, and upgraded the desktop runtime to Electron 44 (#1303-#1306,
+  #1311-#1313).
+- Separated public product, operator, contributor, architecture, release,
+  runtime, and test documentation from internal prompts, audits, handoffs, and
+  working notes. CI now classifies every tracked Markdown file and validates
+  local links (#1350, #1353-#1355).
+- Refreshed the maintained screenshots, desktop and mobile GIFs, social preview,
+  and demo video from an isolated public-safe 6.1.5 workspace. The complete
+  media set is reproducible with `pnpm docs:capture-media`.
+
+### Fixed
+
+- Made cross-column task moves atomic across status and ordering persistence,
+  with rollback and authoritative reconciliation after partial failure (#1302,
+  #1314).
+- Deduplicated task-conflict notifications while preserving distinct conflicts
+  and adding task, action, revision, and recovery context (#1300, #1315).
+- Classified memory pressure against real process and host limits instead of
+  ordinary V8 heap reservation (#1298, #1316).
+- Made active Board Chat and Squad Chat header controls true toggles while
+  preserving switching, keyboard, compact-layout, and restored-state behavior
+  (#1296, #1317).
+- Isolated concurrent health-probe storage checks so simultaneous requests
+  cannot collide on the same temporary path and report a false failure (#1351,
+  #1352).
+
+### Security and compatibility
+
+- Retains the repository-publication boundary shipped in 6.1.4 and the patched
+  `fast-uri` 3.1.6 override.
+- The public REST API remains `v1`, and 6.1.5 adds no SQLite migration. Valid
+  6.1.4 workspaces remain compatible.
+- All maintained packages move together to 6.1.5. The macOS application bundles
+  the matching server and web renderer and publishes through the existing
+  signed/notarized arm64 channel.
+
 ## [6.1.4] - 2026-09-02
 
 Veritas Kanban 6.1.4 is a focused security release that binds repository
@@ -2632,7 +2693,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.4...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.5...HEAD
+[6.1.5]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.4...v6.1.5
 [6.1.4]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.3...v6.1.4
 [6.1.3]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.2...v6.1.3
 [6.1.2]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.1...v6.1.2

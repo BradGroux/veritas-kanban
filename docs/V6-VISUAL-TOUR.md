@@ -1,14 +1,36 @@
 # Veritas Kanban v6 Visual Tour
 
-This tour points to release-safe v6 runtime views for provider support, Buzz
-integration, approvals, and run evidence. The general board, desktop shell,
-Workbench, Squad Chat, Maintenance, and mobile/PWA layouts remain represented
-by the retained [v5 Visual Tour](V5-VISUAL-TOUR.md) and its dummy-data assets.
+This tour presents release-safe 6.1.5 views of the board, progressive task
+workspace, grouped Settings, provider support, communication surfaces,
+Maintenance, Command+K, Workbench, and mobile layout. The historical
+[v5 Visual Tour](V5-VISUAL-TOUR.md) retains its own versioned media.
 
-Documentation freshness: 2026-07-24 for Veritas Kanban 6.0.2. The retained
-screenshots cover the unchanged v6 provider and Buzz surfaces; 6.0.2 Chat
-recovery and native version information are documented in the release notes
-and evidence packet.
+Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release
+candidate. Every image below was generated from the integrated 6.1.5 source
+with isolated dummy data.
+
+## Board And Task Workspace
+
+The board uses the current semantic column states, compact task cards, shared
+desktop shell, and Workbench affordance. Opening a task replaces the former
+peer-tab drawer with progressive Overview, Plan, Run, Results, and History
+modes.
+
+![6.1.5 board overview with release-safe tasks](assets/v6.1.5/board-overview.png)
+
+![6.1.5 progressive task workspace](assets/v6.1.5/task-workspace.png)
+
+![6.1.5 board, task workspace, grouped Settings, providers, and Command+K tour](assets/v6.1.5/board-to-workspace.gif)
+
+## Grouped Settings And Command Palette
+
+Settings groups all twenty destinations under Core, Collaboration, Automation,
+Governance, and System while keeping transfer and danger-zone actions separate.
+Command+K uses the same current shell and remains bounded to the viewport.
+
+![6.1.5 grouped Settings navigation](assets/v6.1.5/settings-navigation.png)
+
+![6.1.5 Command+K palette](assets/v6.1.5/command-palette.png)
 
 ## Provider Support
 
@@ -21,7 +43,7 @@ diagnostics, dispatch, and telemetry.
 The release capture must use dummy profile names and contain no login state,
 environment values, provider output, private paths, or credentials.
 
-![v6 provider settings with Buzz, Grok Build, Codex, Claude Code, and GitHub Copilot profiles](assets/v6-provider-settings.jpeg)
+![6.1.5 provider settings with current grouped navigation](assets/v6.1.5/agent-providers.png)
 
 Expected visible behavior:
 
@@ -40,7 +62,7 @@ URLs, public identity, environment-variable references, compatibility facets,
 one-channel mappings, definition preview/import, trigger rules, and bounded
 audit state.
 
-![v6 Buzz connection settings and fail-closed compatibility chain](assets/v6-buzz-connection.jpeg)
+![6.1.5 communication health, Buzz, and reply-adapter settings](assets/v6.1.5/notification-adapters.png)
 
 Expected visible behavior:
 
@@ -73,28 +95,29 @@ Expected visible behavior:
 - mobile-safe questions remain separate from filesystem, command, network,
   permission, and MCP approval.
 
-## Retained v5 Shell Views
+## Workbench, Squad Chat, Maintenance, And Mobile
 
-The v6 harness work does not replace the established board, desktop shell,
-Workbench, Squad Chat, Maintenance, or mobile/PWA layout. These release-safe
-dummy captures remain applicable:
-
-| Surface                            | Retained capture                                                 |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| Board to workflow                  | ![Board to workflow](assets/v5/v5-board-to-workflow.gif)         |
-| Desktop shell                      | ![Desktop shell](assets/v5/v5-desktop-shell.png)                 |
-| Agent provider settings foundation | ![Agent provider settings](assets/v5/v5-agent-providers.png)     |
-| Workbench                          | ![Workbench](assets/v5/v5-workbench-panel.png)                   |
-| Squad Chat                         | ![Squad Chat](assets/v5/v5-squad-chat-threaded-coordination.png) |
-| Task work view                     | ![Task work view](assets/v5/v5-task-work-view.png)               |
-| Maintenance                        | ![Maintenance](assets/v5/v5-maintenance-center.png)              |
+| Surface            | Current 6.1.5 capture                                             |
+| ------------------ | ----------------------------------------------------------------- |
+| Workbench          | ![Workbench](assets/v6.1.5/workbench-panel.png)                   |
+| Squad Chat         | ![Squad Chat](assets/v6.1.5/squad-chat.png)                       |
+| Maintenance        | ![Maintenance](assets/v6.1.5/maintenance-center.png)              |
+| Mobile board       | ![Mobile board](assets/v6.1.5/mobile-board.png)                   |
+| Mobile task        | ![Mobile task workspace](assets/v6.1.5/mobile-task-workspace.png) |
+| Mobile Settings    | ![Mobile Settings](assets/v6.1.5/mobile-settings.png)             |
+| Mobile guided tour | ![Mobile flow](assets/v6.1.5/mobile-flow.gif)                     |
 
 ## Capture Rules
 
-Before publication, retain only verified v6 screenshots captured from an
-isolated runtime without private data. If a state cannot be safely produced,
-retain the text contract and record the missing visual evidence in the release
-packet rather than fabricating a screenshot.
+Run `pnpm docs:capture-media` to recreate the maintained 6.1.5 PNG and GIF set
+from an isolated Playwright runtime. The capture uses public dummy tasks,
+cleans them after the run, and builds the GIFs from the reviewed screenshots.
+It requires `ffmpeg` on `PATH`.
+
+Before publication, retain only verified screenshots captured from an isolated
+runtime without private data. If a state cannot be safely produced, retain the
+text contract and record the missing visual evidence in the release packet
+rather than fabricating a screenshot.
 
 Capture desktop dark/light and compact widths where the state materially
 changes. Verify keyboard focus, labels, contrast, and recoverable error copy.
