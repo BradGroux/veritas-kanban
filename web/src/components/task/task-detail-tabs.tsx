@@ -73,8 +73,13 @@ const RunWorkflowPanel = lazy(() =>
 const TaskMetricsPanel = lazy(() =>
   import('./TaskMetricsPanel').then((mod) => ({ default: mod.TaskMetricsPanel }))
 );
-const WorkProductsSection = lazy(() =>
-  import('./WorkProductsSection').then((mod) => ({ default: mod.WorkProductsSection }))
+const TaskResultsProductsSection = lazy(() =>
+  import('./TaskResultsProductsSection').then((mod) => ({
+    default: mod.TaskResultsProductsSection,
+  }))
+);
+const VerificationSection = lazy(() =>
+  import('./VerificationSection').then((mod) => ({ default: mod.VerificationSection }))
 );
 
 export type {
@@ -164,7 +169,7 @@ const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) 
     />
   ),
   progress: ({ task }) => <ProgressTab task={task} />,
-  'work-products': ({ task }) => <WorkProductsSection taskId={task.id} />,
+  'work-products': ({ task }) => <TaskResultsProductsSection task={task} />,
   observations: ({ task, addObservation, deleteObservation }) => (
     <ObservationsSection
       task={task}
@@ -232,6 +237,7 @@ const TAB_RENDERERS: Record<TaskDetailTabId, (context: TaskDetailRenderContext) 
       onMergeComplete={onClose}
     />
   ),
+  verification: ({ task }) => <VerificationSection task={task} />,
   metrics: ({ task }) => <TaskMetricsPanel task={task} />,
 };
 

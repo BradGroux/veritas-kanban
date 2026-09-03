@@ -79,6 +79,7 @@ export type TaskWorkViewTarget =
   | 'timeline'
   | 'changes'
   | 'review'
+  | 'verification'
   | 'metrics';
 
 interface TaskWorkViewProps {
@@ -213,7 +214,7 @@ export function getTaskOverviewComposition(
         title: 'Verification required',
         detail: 'Execution finished with verification steps still unchecked.',
         color: 'yellow',
-        action: { label: 'Complete verification', target: 'details' },
+        action: { label: 'Complete verification', target: 'verification' },
       };
     }
 

@@ -10,6 +10,7 @@ export type TaskDetailTabId =
   | 'access'
   | 'git'
   | 'agent'
+  | 'verification'
   | 'timeline'
   | 'evidence'
   | 'changes'
@@ -103,8 +104,8 @@ export const TASK_WORKSPACE_MODE_METADATA: readonly TaskWorkspaceModeMetadata[] 
   {
     id: 'results',
     label: 'Results',
-    description: 'Work products, changes, review decisions, and evidence.',
-    sections: ['work-products', 'evidence', 'changes', 'review'],
+    description: 'Work products, changes, review decisions, verification, and evidence.',
+    sections: ['work-products', 'changes', 'review', 'verification', 'evidence'],
   },
   {
     id: 'history',
@@ -191,6 +192,12 @@ export const TASK_DETAIL_TAB_METADATA: readonly TaskDetailTabMetadata[] = [
     icon: 'Bot',
     fallbackTitle: 'Agent panel failed to load',
     isVisible: ({ isCodeTask }) => isCodeTask,
+  },
+  {
+    id: 'verification',
+    label: 'Verification',
+    icon: 'ShieldCheck',
+    fallbackTitle: 'Verification section failed to load',
   },
   {
     id: 'timeline',

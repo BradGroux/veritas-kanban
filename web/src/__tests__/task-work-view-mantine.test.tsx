@@ -201,6 +201,24 @@ describe('task work view Mantine surface', () => {
     expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
   });
 
+  it('routes incomplete outcome verification directly into Results', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-verification-handoff',
+      status: 'in-progress',
+      type: 'feature',
+      attempt: { id: 'attempt-complete', agent: 'codex', status: 'complete' },
+      verificationSteps: [
+        { id: 'verify-results', description: 'Confirm release output', checked: false },
+      ],
+    });
+
+    renderWorkView(task);
+
+    await user.click(screen.getByRole('button', { name: 'Complete verification' }));
+    expect(mocks.onOpenTab).toHaveBeenCalledWith('verification');
+  });
+
   it('links live execution, code review, handoff, and work products from the Work view', async () => {
     const user = userEvent.setup();
     mocks.useTaskWorkProducts.mockReturnValue({ data: [product], isLoading: false });
