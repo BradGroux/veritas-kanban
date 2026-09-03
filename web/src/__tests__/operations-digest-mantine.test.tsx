@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { OperationsDigestPage } from '@/components/digest/OperationsDigestPage';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { renderWithProviders } from './test-utils';
 import type { AgentOperationsDigest, ScheduledDeliverable } from '@/lib/api';
 
@@ -34,10 +35,8 @@ vi.mock('@/hooks/useOperationsDigest', () => ({
   useRecordOperationsDigestSnapshot: mocks.useRecordOperationsDigestSnapshot,
 }));
 
-vi.mock('@/components/ui/MarkdownRenderer', () => ({
-  MarkdownRenderer: ({ content }: { content: string }) => (
-    <div data-testid="markdown">{content}</div>
-  ),
+vi.mock('@/hooks/useFeatureSettings', () => ({
+  useFeatureSettings: () => ({ settings: { markdown: { enableCodeHighlighting: false } } }),
 }));
 
 vi.mock('@/components/digest/AdmissionQueuePanel', () => ({
@@ -330,7 +329,7 @@ describe('OperationsDigestPage', () => {
       screen.getByRole('button', { name: /Tasks grouped under unknown repository: 1/i })
     ).toBeDefined();
     expect(screen.getByText('Completed in window')).toBeDefined();
-    expect(screen.getByTestId('markdown').textContent).toContain('Agent Operations Digest');
+    expect(screen.getByRole('heading', { name: 'Agent Operations Digest' })).toBeDefined();
     expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThan(4);
     expect(container.querySelector('[data-slot="button"]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Refresh' }).getAttribute('data-variant')).toBe(
@@ -343,6 +342,41 @@ describe('OperationsDigestPage', () => {
     await user.click(screen.getByRole('button', { name: /Active: 1/i }));
 
     expect(onTaskClick).toHaveBeenCalledWith('task_active');
+  });
+
+  it('nests populated briefing headings without changing source or copied Markdown', async () => {
+    const user = userEvent.setup();
+    const markdown =
+      '# Agent Operations Digest\n\n## Summary\n\n### Work\n\n#### Detail\n\n##### Deep\n\n###### Deepest\n\n```md\n# Literal code\n```';
+    mocks.useOperationsDigestMarkdown.mockReturnValue({ data: { isEmpty: false, markdown } });
+    renderWithProviders(<OperationsDigestPage onBack={vi.fn()} />);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 2, name: 'Rendered Briefing' })).toBeDefined();
+    for (const [name, level] of [
+      ['Agent Operations Digest', 3],
+      ['Summary', 4],
+      ['Work', 5],
+      ['Detail', 6],
+      ['Deep', 6],
+      ['Deepest', 6],
+    ] as const) {
+      expect(screen.getByRole('heading', { level, name })).toBeDefined();
+    }
+    expect(
+      (screen.getByRole('textbox', { name: 'Operations digest markdown' }) as HTMLTextAreaElement)
+        .value
+    ).toBe(markdown);
+    expect(screen.getByText('# Literal code')).toBeDefined();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText');
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenCalledWith(markdown);
+  });
+
+  it('keeps standalone Markdown heading levels unchanged', () => {
+    renderWithProviders(<MarkdownRenderer content={'# Document\n\n## Section\n\n### Detail'} />);
+    expect(screen.getByRole('heading', { name: 'Document', level: 1 })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Section', level: 2 })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Detail', level: 3 })).toBeDefined();
   });
 
   it('passes repo and cwd filters into digest queries', async () => {

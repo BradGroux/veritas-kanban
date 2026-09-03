@@ -483,7 +483,7 @@ export function OperationsDigestPage({
               </UiHeading>
               <UiPill>{formatDateTime(digest?.generatedAt)}</UiPill>
             </div>
-            <MarkdownRenderer content={markdown} className="text-sm" />
+            <MarkdownRenderer content={markdown} className="text-sm" headingStartLevel={3} />
           </UiSurface>
         ) : null}
       </div>
