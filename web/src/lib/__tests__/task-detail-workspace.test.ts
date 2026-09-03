@@ -1,0 +1,86 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  getAvailableTaskDetailTabMetadata,
+  getAvailableTaskWorkspaceModeMetadata,
+  getTaskWorkspaceDestination,
+  resolveTaskDetailNavigationTab,
+  TASK_DETAIL_TAB_METADATA,
+  TASK_WORKSPACE_MODE_METADATA,
+  type TaskDetailTabId,
+} from '@/lib/task-detail-tabs';
+
+describe('task workspace navigation', () => {
+  it('maps every legacy task-detail tab to one reviewed mode and section', () => {
+    const expected: Record<TaskDetailTabId, string> = {
+      work: 'overview',
+      details: 'plan',
+      progress: 'plan',
+      'work-products': 'results',
+      observations: 'plan',
+      attachments: 'plan',
+      git: 'run',
+      agent: 'run',
+      timeline: 'history',
+      evidence: 'results',
+      changes: 'results',
+      review: 'results',
+      metrics: 'history',
+    };
+
+    for (const tab of TASK_DETAIL_TAB_METADATA) {
+      expect(getTaskWorkspaceDestination(tab.id)).toEqual({
+        mode: expected[tab.id],
+        section: tab.id,
+      });
+    }
+
+    expect(TASK_WORKSPACE_MODE_METADATA.map((mode) => mode.id)).toEqual([
+      'overview',
+      'plan',
+      'run',
+      'results',
+      'history',
+    ]);
+  });
+
+  it('keeps unavailable task surfaces out of mode selection', () => {
+    const tabs = getAvailableTaskDetailTabMetadata({
+      isCodeTask: false,
+      hasWorktree: false,
+      attachmentsEnabled: false,
+    });
+    const modes = getAvailableTaskWorkspaceModeMetadata(tabs);
+
+    expect(modes.find((mode) => mode.id === 'run')?.disabled).toBe(true);
+    expect(modes.filter((mode) => !mode.disabled).map((mode) => mode.id)).toEqual([
+      'overview',
+      'plan',
+      'results',
+      'history',
+    ]);
+  });
+
+  it('resolves legacy and versioned deep links through the same availability rules', () => {
+    const tabs = getAvailableTaskDetailTabMetadata({
+      isCodeTask: true,
+      hasWorktree: false,
+      attachmentsEnabled: true,
+    });
+
+    expect(resolveTaskDetailNavigationTab({ tab: 'timeline' }, tabs)).toBe('timeline');
+    expect(
+      resolveTaskDetailNavigationTab(
+        { workspace: { version: 1, mode: 'results', section: 'evidence' } },
+        tabs
+      )
+    ).toBe('evidence');
+    expect(
+      resolveTaskDetailNavigationTab(
+        { workspace: { version: 1, mode: 'results', section: 'changes' } },
+        tabs
+      )
+    ).toBe('work-products');
+    expect(resolveTaskDetailNavigationTab({ tab: 'changes' }, tabs)).toBeNull();
+  });
+});

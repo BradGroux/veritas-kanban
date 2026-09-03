@@ -13,8 +13,17 @@ export type TaskDetailTabId =
   | 'review'
   | 'metrics';
 
+export type TaskWorkspaceModeId = 'overview' | 'plan' | 'run' | 'results' | 'history';
+
+export interface TaskWorkspaceNavigationTarget {
+  version: 1;
+  mode: TaskWorkspaceModeId;
+  section?: TaskDetailTabId;
+}
+
 export interface TaskDetailNavigationTarget {
   tab?: TaskDetailTabId;
+  workspace?: TaskWorkspaceNavigationTarget;
   timelineAttemptId?: string | null;
   timelineEventId?: string | null;
 }
@@ -48,6 +57,65 @@ export interface TaskDetailTabMetadata {
 }
 
 export type AvailableTaskDetailTabMetadata = TaskDetailTabMetadata & { disabled: boolean };
+
+export interface TaskWorkspaceModeMetadata {
+  id: TaskWorkspaceModeId;
+  label: string;
+  description: string;
+  sections: readonly TaskDetailTabId[];
+}
+
+export type AvailableTaskWorkspaceModeMetadata = TaskWorkspaceModeMetadata & {
+  disabled: boolean;
+};
+
+export interface TaskWorkspaceDestination {
+  mode: TaskWorkspaceModeId;
+  section: TaskDetailTabId;
+}
+
+export const TASK_WORKSPACE_MODE_METADATA: readonly TaskWorkspaceModeMetadata[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    description: 'Current state, readiness, and the next useful action.',
+    sections: ['work'],
+  },
+  {
+    id: 'plan',
+    label: 'Plan',
+    description: 'Task details, progress, observations, and supporting context.',
+    sections: ['details', 'progress', 'observations', 'attachments'],
+  },
+  {
+    id: 'run',
+    label: 'Run',
+    description: 'Agent session, workflow controls, and source context.',
+    sections: ['git', 'agent'],
+  },
+  {
+    id: 'results',
+    label: 'Results',
+    description: 'Work products, changes, review decisions, and evidence.',
+    sections: ['work-products', 'evidence', 'changes', 'review'],
+  },
+  {
+    id: 'history',
+    label: 'History',
+    description: 'Attempt timeline and task-level metrics.',
+    sections: ['timeline', 'metrics'],
+  },
+];
+
+const TASK_WORKSPACE_MODES_BY_ID = new Map(
+  TASK_WORKSPACE_MODE_METADATA.map((mode) => [mode.id, mode])
+);
+
+const TASK_WORKSPACE_DESTINATIONS = new Map<TaskDetailTabId, TaskWorkspaceDestination>(
+  TASK_WORKSPACE_MODE_METADATA.flatMap((mode) =>
+    mode.sections.map((section) => [section, { mode: mode.id, section }] as const)
+  )
+);
 
 export const TASK_DETAIL_TAB_METADATA: readonly TaskDetailTabMetadata[] = [
   {
@@ -138,6 +206,12 @@ export function isTaskDetailTabId(value: string | null | undefined): value is Ta
   return Boolean(value && TASK_DETAIL_TAB_IDS.has(value as TaskDetailTabId));
 }
 
+export function isTaskWorkspaceModeId(
+  value: string | null | undefined
+): value is TaskWorkspaceModeId {
+  return Boolean(value && TASK_WORKSPACE_MODES_BY_ID.has(value as TaskWorkspaceModeId));
+}
+
 export function getAvailableTaskDetailTabMetadata(
   context: TaskDetailAvailabilityContext
 ): AvailableTaskDetailTabMetadata[] {
@@ -162,4 +236,50 @@ export function getFallbackTaskDetailTabId(
   const detailsTab = tabs.find((tab) => tab.id === 'details' && !tab.disabled);
   if (detailsTab) return detailsTab.id;
   return tabs.find((tab) => !tab.disabled)?.id ?? 'details';
+}
+
+export function getTaskWorkspaceDestination(tabId: TaskDetailTabId): TaskWorkspaceDestination {
+  return TASK_WORKSPACE_DESTINATIONS.get(tabId) ?? { mode: 'plan', section: 'details' };
+}
+
+export function getAvailableTaskWorkspaceModeMetadata(
+  tabs: readonly AvailableTaskDetailTabMetadata[]
+): AvailableTaskWorkspaceModeMetadata[] {
+  return TASK_WORKSPACE_MODE_METADATA.map((mode) => ({
+    ...mode,
+    disabled: !mode.sections.some((section) => isTaskDetailTabAvailable(tabs, section)),
+  }));
+}
+
+export function getTaskWorkspaceModeTabId(
+  tabs: readonly AvailableTaskDetailTabMetadata[],
+  modeId: TaskWorkspaceModeId,
+  preferredTab?: TaskDetailTabId
+): TaskDetailTabId | null {
+  const mode = TASK_WORKSPACE_MODES_BY_ID.get(modeId);
+  if (!mode) return null;
+  if (
+    preferredTab &&
+    mode.sections.includes(preferredTab) &&
+    isTaskDetailTabAvailable(tabs, preferredTab)
+  ) {
+    return preferredTab;
+  }
+  return mode.sections.find((section) => isTaskDetailTabAvailable(tabs, section)) ?? null;
+}
+
+export function resolveTaskDetailNavigationTab(
+  target: TaskDetailNavigationTarget,
+  tabs: readonly AvailableTaskDetailTabMetadata[]
+): TaskDetailTabId | null {
+  if (target.workspace?.version === 1) {
+    const workspaceTab = getTaskWorkspaceModeTabId(
+      tabs,
+      target.workspace.mode,
+      target.workspace.section
+    );
+    if (workspaceTab) return workspaceTab;
+  }
+  if (target.tab && isTaskDetailTabAvailable(tabs, target.tab)) return target.tab;
+  return null;
 }

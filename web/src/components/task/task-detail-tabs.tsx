@@ -16,9 +16,15 @@ import {
 import type { ObservationType, ReviewComment, ReviewState, Task } from '@veritas-kanban/shared';
 import {
   getAvailableTaskDetailTabMetadata,
+  getAvailableTaskWorkspaceModeMetadata,
   getFallbackTaskDetailTabId,
+  getTaskWorkspaceDestination,
+  getTaskWorkspaceModeTabId,
   isTaskDetailTabAvailable,
   isTaskDetailTabId,
+  isTaskWorkspaceModeId,
+  resolveTaskDetailNavigationTab,
+  TASK_WORKSPACE_MODE_METADATA,
   TASK_DETAIL_TAB_METADATA,
   type AvailableTaskDetailTabMetadata,
   type TaskDetailAvailabilityContext,
@@ -63,8 +69,19 @@ export type {
   TaskDetailAvailabilityContext,
   TaskDetailNavigationTarget,
   TaskDetailTabId,
+  TaskWorkspaceModeId,
 } from '@/lib/task-detail-tabs';
-export { getFallbackTaskDetailTabId, isTaskDetailTabAvailable, isTaskDetailTabId };
+export {
+  getAvailableTaskWorkspaceModeMetadata,
+  getFallbackTaskDetailTabId,
+  getTaskWorkspaceDestination,
+  getTaskWorkspaceModeTabId,
+  isTaskDetailTabAvailable,
+  isTaskDetailTabId,
+  isTaskWorkspaceModeId,
+  resolveTaskDetailNavigationTab,
+  TASK_WORKSPACE_MODE_METADATA,
+};
 
 export interface TaskDetailObservationInput {
   type: ObservationType;
