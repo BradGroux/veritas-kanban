@@ -84,7 +84,7 @@ vi.mock('@/hooks/useTimeTracking', () => ({
 
 vi.mock('@/hooks/useTaskTypes', () => ({
   getTypeIcon: () => () => React.createElement('span', { 'data-testid': 'type-icon' }),
-  getTypeColor: () => 'border-l-violet-500',
+  getTypeColorToken: () => 'violet',
 }));
 
 vi.mock('@/hooks/useProjects', () => ({
@@ -177,7 +177,10 @@ describe('TaskCard', () => {
   it('renders type label', () => {
     const task = createMockTask({ type: 'feature' });
     renderCard(task);
-    expect(screen.getByText('Feature')).toBeDefined();
+    const stamp = screen.getByLabelText('Task type: Feature');
+    expect(stamp.textContent).toContain('Feature');
+    expect(stamp.getAttribute('data-color-token')).toBe('violet');
+    expect(screen.getByRole('article').className).not.toContain('border-l-2');
   });
 
   it('renders project badge when project is set', () => {
@@ -288,10 +291,11 @@ describe('TaskCard', () => {
   });
 
   it('shows blocked badge when isBlocked', () => {
-    const task = createMockTask();
+    const task = createMockTask({ status: 'blocked' });
     renderCard(task, { isBlocked: true, blockerTitles: ['Dependency A'] });
 
     expect(screen.getByText('Blocked')).toBeDefined();
+    expect(screen.getByRole('article').className).toContain('vk-task-card--blocked');
   });
 
   it('shows agent running indicator', () => {
@@ -305,6 +309,39 @@ describe('TaskCard', () => {
     });
     renderCard(task);
     expect(screen.getByText(/Claude running/)).toBeDefined();
+    expect(screen.getByRole('article').className).toContain('vk-task-card--running');
+    expect(screen.getByRole('article').className).not.toContain('shadow-[0_0_15px');
+  });
+
+  it('distinguishes failed, review, and verified semantic signals without color alone', () => {
+    const failedTask = createMockTask({
+      attempt: {
+        id: 'attempt-failed',
+        agent: 'claude-code',
+        status: 'failed',
+        started: '2025-01-01T00:00:00Z',
+      },
+    });
+    const { unmount } = renderCard(failedTask);
+    expect(screen.getByText('Failed')).toBeDefined();
+    expect(screen.getByRole('article').className).toContain('vk-task-card--failed');
+    expect(screen.getByRole('article').getAttribute('aria-label')).toContain(
+      'Latest attempt failed'
+    );
+
+    unmount();
+    renderCard(createMockTask({ status: 'awaiting-review' }));
+    expect(screen.getByText('Awaiting review')).toBeDefined();
+    expect(screen.getByRole('article').className).toContain('vk-task-card--review');
+
+    cleanup();
+    renderCard(
+      createMockTask({
+        verificationSteps: [{ id: 'verify-1', description: 'Feature passes', checked: true }],
+      })
+    );
+    expect(screen.getByText('Verified 1/1')).toBeDefined();
+    expect(screen.getByRole('article').className).toContain('vk-task-card--verified');
   });
 
   it('shows subtask progress', () => {

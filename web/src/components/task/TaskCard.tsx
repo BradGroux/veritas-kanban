@@ -25,10 +25,11 @@ import {
   XCircle,
   Save,
   RotateCcw,
+  Eye,
 } from 'lucide-react';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { formatDuration } from '@/hooks/useTimeTracking';
-import { getTypeIcon, getTypeColor } from '@/hooks/useTaskTypes';
+import { getTypeColorToken, getTypeIcon } from '@/hooks/useTaskTypes';
 import { getProjectColor, getProjectLabel } from '@/hooks/useProjects';
 import { getSprintLabel } from '@/hooks/useSprints';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
@@ -114,6 +115,8 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
     if (pt.attempt?.agent !== nt.attempt?.agent) return false;
     if (pt.blockedReason?.category !== nt.blockedReason?.category) return false;
     if (pt.blockedReason?.note !== nt.blockedReason?.note) return false;
+    if (pt.review?.decision !== nt.review?.decision) return false;
+    if ((pt.reviewComments?.length ?? 0) !== (nt.reviewComments?.length ?? 0)) return false;
     // Subtasks — compare count and completion state
     const pSubs = pt.subtasks || [];
     const nSubs = nt.subtasks || [];
@@ -277,15 +280,20 @@ export const TaskCard = memo(function TaskCard({
   };
 
   const isAgentRunning = task.attempt?.status === 'running';
+  const isAttemptFailed = task.attempt?.status === 'failed';
+  const isBlockedState = isBlocked || task.status === 'blocked';
+  const isAwaitingReview =
+    task.status.toLowerCase().includes('review') ||
+    ((task.reviewComments?.length ?? 0) > 0 && !task.review?.decision);
 
   // Memoize type info
-  const { typeLabel, TypeIconComponent, typeColor } = useMemo(() => {
+  const { typeLabel, TypeIconComponent, typeColorToken } = useMemo(() => {
     const typeConfig = taskTypes.find((t) => t.id === task.type);
     const iconName = typeConfig?.icon || 'Code';
     return {
       typeLabel: typeConfig?.label || task.type,
       TypeIconComponent: getTypeIcon(iconName),
-      typeColor: getTypeColor(taskTypes, task.type),
+      typeColorToken: getTypeColorToken(taskTypes, task.type),
     };
   }, [taskTypes, task.type]);
 
@@ -327,11 +335,10 @@ export const TaskCard = memo(function TaskCard({
     [task]
   );
   const readinessColor = readinessSummary?.ready
-    ? 'bg-green-500/20 text-green-500'
-    : readinessSummary && readinessSummary.percent >= 60
-      ? 'bg-amber-500/20 text-amber-500'
-      : 'bg-red-500/20 text-red-500';
+    ? 'vk-signal-chip--verified'
+    : 'vk-signal-chip--warning';
   const readinessAria = readinessSummary ? `, Readiness: ${readinessSummary.percent}%` : '';
+  const isVerified = allVerificationDone;
 
   // Suppress the outer card tooltip entirely during any drag operation
   const suppressCardTooltip = isDragActive || isDragging || isCurrentlyDragging || tooltipDismissed;
@@ -363,19 +370,23 @@ export const TaskCard = memo(function TaskCard({
         onMouseLeave={() => setTooltipDismissed(false)}
         role="article"
         tabIndex={0}
-        aria-label={`Task: ${task.title}, Priority: ${task.priority}${readinessAria}${isBlocked ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}`}
+        aria-label={`Task: ${task.title}, Type: ${typeLabel}, Priority: ${task.priority}${readinessAria}${isBlockedState ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}${isAttemptFailed ? ', Latest attempt failed' : ''}${isAwaitingReview ? ', Awaiting review' : ''}${isVerified ? ', Verified' : ''}`}
+        data-type-color-token={typeColorToken}
+        data-selected={isSelected ? 'true' : undefined}
+        data-dragging={isDragging || isCurrentlyDragging ? 'true' : undefined}
         className={cn(
-          'group bg-card border border-border rounded-md',
+          'vk-task-card group bg-card border border-border rounded-md',
           dragEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
           isCompact ? 'p-2' : 'p-3',
           'hover:border-muted-foreground/50 hover:bg-card/80 transition-colors',
-          'border-l-2',
-          typeColor,
+          isVerified && 'vk-task-card--verified',
+          isAwaitingReview && 'vk-task-card--review',
+          isAgentRunning && 'vk-task-card--running',
+          isAttemptFailed && 'vk-task-card--failed',
+          isBlockedState && 'vk-task-card--blocked',
           isDragging && 'opacity-50 shadow-lg motion-safe:rotate-2 motion-safe:scale-105',
           isCurrentlyDragging && 'opacity-50',
-          isSelected && 'ring-2 ring-primary border-primary',
-          isAgentRunning &&
-            'ring-2 ring-blue-500/50 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+          isSelected && 'ring-2 ring-primary border-primary'
         )}
       >
         <span className="sr-only">Status: {task.status}</span>
@@ -394,8 +405,13 @@ export const TaskCard = memo(function TaskCard({
               {isChecked && <Check className="h-3 w-3" />}
             </button>
           )}
-          <span className="text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true">
-            {TypeIconComponent && <TypeIconComponent className="h-3.5 w-3.5" />}
+          <span
+            className="vk-task-type-stamp"
+            data-color-token={typeColorToken}
+            aria-label={`Task type: ${typeLabel}`}
+          >
+            {TypeIconComponent && <TypeIconComponent className="h-3.5 w-3.5" aria-hidden="true" />}
+            <span className="truncate">{typeLabel}</span>
           </span>
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-medium leading-tight truncate">{task.title}</h3>
@@ -423,7 +439,7 @@ export const TaskCard = memo(function TaskCard({
                 </div>
               }
             >
-              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 flex items-center gap-1">
+              <span className="vk-signal-chip vk-signal-chip--running">
                 <span className="sr-only">
                   Agent {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is actively
                   running on this task
@@ -432,6 +448,18 @@ export const TaskCard = memo(function TaskCard({
                 {agentNames[task.attempt?.agent || ''] || 'Agent'} running
               </span>
             </Tooltip>
+          )}
+          {isAttemptFailed && (
+            <span className="vk-signal-chip vk-signal-chip--failed">
+              <XCircle className="h-3 w-3" aria-hidden="true" />
+              Failed
+            </span>
+          )}
+          {isAwaitingReview && (
+            <span className="vk-signal-chip vk-signal-chip--review">
+              <Eye className="h-3 w-3" aria-hidden="true" />
+              Awaiting review
+            </span>
           )}
           {isBlocked && (
             <Tooltip
@@ -446,7 +474,7 @@ export const TaskCard = memo(function TaskCard({
                 </div>
               }
             >
-              <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 flex items-center gap-1">
+              <span className="vk-signal-chip vk-signal-chip--blocked">
                 <Ban className="h-3 w-3" />
                 Blocked
               </span>
@@ -527,7 +555,7 @@ export const TaskCard = memo(function TaskCard({
                     </div>
                   }
                 >
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 flex items-center gap-1">
+                  <span className="vk-signal-chip vk-signal-chip--blocked">
                     <BlockedIcon className="h-3 w-3" />
                     {info.shortLabel}
                   </span>
@@ -546,9 +574,6 @@ export const TaskCard = memo(function TaskCard({
               {getSprintLabel(sprints, task.sprint)}
             </span>
           )}
-          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-            {typeLabel}
-          </span>
           {boardSettings.showPriorityIndicators && (
             <span
               className={cn(
@@ -577,12 +602,7 @@ export const TaskCard = memo(function TaskCard({
                 </div>
               }
             >
-              <span
-                className={cn(
-                  'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
-                  readinessColor
-                )}
-              >
+              <span className={cn('vk-signal-chip', readinessColor)}>
                 <ShieldCheck className="h-3 w-3" />
                 {readinessSummary.percent}% ready
               </span>
@@ -642,14 +662,15 @@ export const TaskCard = memo(function TaskCard({
             >
               <span
                 className={cn(
-                  'text-xs px-1.5 py-0.5 rounded flex items-center gap-1',
+                  'vk-signal-chip',
                   !subtaskTotal && 'ml-auto',
                   allVerificationDone
-                    ? 'bg-green-500/20 text-green-500'
+                    ? 'vk-signal-chip--verified'
                     : 'bg-muted text-muted-foreground'
                 )}
               >
                 <ShieldCheck className="h-3 w-3" />
+                {allVerificationDone ? 'Verified ' : ''}
                 {verificationChecked}/{verificationTotal}
               </span>
             </Tooltip>
@@ -709,10 +730,10 @@ export const TaskCard = memo(function TaskCard({
                 >
                   <span
                     className={cn(
-                      'text-xs px-1 py-0.5 rounded flex items-center',
+                      'vk-signal-chip',
                       cardMetrics.lastRunSuccess
-                        ? 'bg-green-500/20 text-green-500'
-                        : 'bg-red-500/20 text-red-500'
+                        ? 'vk-signal-chip--verified'
+                        : 'vk-signal-chip--failed'
                     )}
                   >
                     {cardMetrics.lastRunSuccess ? (

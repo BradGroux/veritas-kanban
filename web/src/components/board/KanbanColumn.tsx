@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { BadgeCheck, Ban, CircleDashed, CircleDot, OctagonAlert, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TaskCard } from '@/components/task/TaskCard';
 import { isTaskBlocked, getTaskBlockers } from '@/hooks/useTasks';
@@ -25,13 +26,24 @@ interface KanbanColumnProps {
   statusOptions?: Array<{ value: TaskStatus; label: string }>;
 }
 
-const columnColors: Record<string, string> = {
-  todo: 'border-t-slate-500',
-  'in-progress': 'border-t-blue-500',
-  blocked: 'border-t-red-500',
-  done: 'border-t-green-500',
-  cancelled: 'border-t-gray-400',
+type StatusTone = 'todo' | 'active' | 'blocked' | 'done' | 'cancelled' | 'review' | 'custom';
+
+const columnStatusPresentation: Record<string, { tone: StatusTone; icon: typeof CircleDot }> = {
+  todo: { tone: 'todo', icon: CircleDashed },
+  'in-progress': { tone: 'active', icon: Play },
+  blocked: { tone: 'blocked', icon: OctagonAlert },
+  done: { tone: 'done', icon: BadgeCheck },
+  cancelled: { tone: 'cancelled', icon: Ban },
 };
+
+function getStatusPresentation(status: string) {
+  return (
+    columnStatusPresentation[status] ?? {
+      tone: status.toLowerCase().includes('review') ? ('review' as const) : ('custom' as const),
+      icon: CircleDot,
+    }
+  );
+}
 
 export function KanbanColumn({
   id,
@@ -51,6 +63,8 @@ export function KanbanColumn({
   const { settings: featureSettings } = useFeatureSettings();
   const { isSelecting, selectedIds, toggleGroup } = useBulkActions();
   const showDoneMetrics = featureSettings.board.showDoneMetrics;
+  const statusPresentation = getStatusPresentation(id);
+  const StatusIcon = statusPresentation.icon;
 
   // Get task IDs for done column to fetch bulk metrics
   const doneTaskIds = useMemo(() => {
@@ -74,10 +88,11 @@ export function KanbanColumn({
       role="region"
       aria-labelledby={`column-heading-${id}`}
       aria-roledescription="kanban column"
+      data-column-status={id}
+      data-drop-target={dragEnabled && isOver ? 'true' : undefined}
       className={cn(
-        'flex flex-col rounded-lg bg-muted/50 border-t-2 transition-colors',
-        columnColors[id] ?? 'border-t-primary',
-        dragEnabled && isOver && 'ring-2 ring-primary/50 bg-muted/70'
+        'vk-kanban-column flex flex-col rounded-lg transition-colors',
+        dragEnabled && isOver && 'vk-kanban-column--drop-target'
       )}
     >
       <div className="flex items-center justify-between px-3 py-2">
@@ -94,17 +109,20 @@ export function KanbanColumn({
               aria-label={`Select all ${title} tasks`}
             />
           )}
-          <h2 id={`column-heading-${id}`} className="text-sm font-medium text-muted-foreground">
-            {title}
-          </h2>
+          <div className="vk-column-status-plate" data-status-tone={statusPresentation.tone}>
+            <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <h2 id={`column-heading-${id}`} className="text-xs font-semibold">
+              {title}
+            </h2>
+            <span
+              className="vk-column-status-count"
+              aria-live="polite"
+              aria-label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}
+            >
+              {tasks.length}
+            </span>
+          </div>
         </div>
-        <span
-          className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full"
-          aria-live="polite"
-          aria-label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}
-        >
-          {tasks.length}
-        </span>
       </div>
 
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>

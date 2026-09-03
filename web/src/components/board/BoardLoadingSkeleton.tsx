@@ -14,13 +14,9 @@ export function BoardLoadingSkeleton({ columns }: BoardLoadingSkeletonProps) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
       {columns.map((column) => (
-        <div
-          key={column.id}
-          className="flex flex-col rounded-lg bg-muted/50 border-t-2 border-t-muted-foreground/20"
-        >
+        <div key={column.id} className="vk-kanban-column flex flex-col rounded-lg">
           <div className="flex items-center justify-between px-3 py-2">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-5 w-6 rounded-full" />
+            <Skeleton className="h-7 w-28 rounded-md" />
           </div>
           <div className="flex-1 p-2 space-y-2 min-h-[calc(100vh-200px)]">
             {[1, 2, 3].map((i) => (
