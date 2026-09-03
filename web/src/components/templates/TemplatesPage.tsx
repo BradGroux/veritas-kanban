@@ -129,7 +129,7 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
               </p>
             </div>
           </div>
-          <Button onClick={handleCreateNew} size="lg">
+          <Button variant="filled" color="veritas" size="sm" onClick={handleCreateNew}>
             <Plus className="h-4 w-4 mr-2" />
             New Template
           </Button>

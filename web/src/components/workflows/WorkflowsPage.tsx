@@ -295,6 +295,9 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
           </Group>
 
           <Button
+            variant="filled"
+            color="veritas"
+            size="sm"
             leftSection={<BarChart3 className="h-4 w-4" />}
             onClick={() => setShowDashboard(true)}
           >

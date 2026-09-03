@@ -6,6 +6,7 @@ import { ViewProvider } from '@/contexts/ViewContext';
 import { KeyboardProvider } from '@/hooks/useKeyboard';
 import { Header } from '@/components/layout/Header';
 import { DesktopBottomPanel } from '@/components/layout/DesktopBottomPanel';
+import { DesktopLeftSidebar } from '@/components/layout/DesktopLeftSidebar';
 import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
@@ -281,6 +282,29 @@ describe('layout chrome Mantine migration', () => {
       .getByRole('button', { name: 'Refresh page' })
       .querySelector('img[src="/icons/pwa-icon-192.png"]');
     expect(brandIcon).toBeDefined();
+  });
+
+  it('uses the filled brand treatment with white text for the active desktop navigation item', () => {
+    Object.defineProperty(window, 'veritasDesktop', {
+      configurable: true,
+      value: { toggleWindowMaximize: vi.fn() },
+    });
+    document.documentElement.dataset.client = 'desktop';
+    window.history.replaceState({}, '', '/drift');
+
+    renderWithProviders(
+      <ViewProvider>
+        <DesktopShellProvider>
+          <DesktopLeftSidebar />
+        </DesktopShellProvider>
+      </ViewProvider>
+    );
+
+    const activeItem = screen.getByRole('button', { name: 'Drift Monitor' });
+    expect(activeItem.getAttribute('aria-current')).toBe('page');
+    expect(activeItem.className).toContain('bg-primary');
+    expect(activeItem.className).toContain('text-white');
+    expect(activeItem.className).not.toContain('bg-primary/15');
   });
 
   it.each(['right', 'bottom'] as const)(

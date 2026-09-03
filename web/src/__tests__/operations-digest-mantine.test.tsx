@@ -333,6 +333,10 @@ describe('OperationsDigestPage', () => {
     expect(screen.getByTestId('markdown').textContent).toContain('Agent Operations Digest');
     expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThan(4);
     expect(container.querySelector('[data-slot="button"]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Refresh' }).getAttribute('data-variant')).toBe(
+      'filled'
+    );
+    expect(screen.getByRole('button', { name: 'Copy' }).getAttribute('data-variant')).toBe('light');
 
     await user.click(screen.getByRole('button', { name: /Active: 1/i }));
 

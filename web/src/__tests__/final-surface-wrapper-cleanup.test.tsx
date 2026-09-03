@@ -151,6 +151,9 @@ describe('final Mantine feature surface cleanup', () => {
     expect(container.querySelector('.mantine-Select-root')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThanOrEqual(3);
     expect(container.querySelectorAll('.mantine-Badge-root').length).toBeGreaterThanOrEqual(3);
+    const newTemplate = screen.getByRole('button', { name: 'New Template' });
+    expect(newTemplate.getAttribute('data-variant')).toBe('filled');
+    expect(newTemplate.getAttribute('data-size')).toBe('sm');
     expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="input"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="select-trigger"]')).toBeNull();

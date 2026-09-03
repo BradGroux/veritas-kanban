@@ -120,6 +120,9 @@ describe('EvidenceTimelinePanel', () => {
     expect(screen.getByText(/Evidence recap for task task_a/i)).toBeDefined();
     expect(screen.getByText('Task created')).toBeDefined();
     expect(screen.getByText('Agent run completed by codex')).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: /Generate Recap/i }).getAttribute('data-variant')
+    ).toBe('filled');
 
     await user.click(screen.getByRole('button', { name: /Open task/i }));
     expect(onTaskClick).toHaveBeenCalledWith('task_a');

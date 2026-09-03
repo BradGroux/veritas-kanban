@@ -381,6 +381,9 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
             ))}
           </div>
           <Button
+            variant="filled"
+            color="veritas"
+            size="sm"
             onClick={() => {
               if (!agentId.trim()) {
                 toast({

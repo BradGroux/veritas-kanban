@@ -492,7 +492,7 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: #6541d5;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -503,7 +503,7 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --destructive: oklch(0.58 0.22 27);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #6541d5;
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
@@ -546,8 +546,8 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  /* VK brand: purple primary accent (HSL 270 50% 40%) */
-  --primary: oklch(0.389 0.15 303.5);
+  /* Keep Tailwind controls on the same bright Veritas shade as Mantine. */
+  --primary: #8d68f8;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -559,7 +559,7 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   /* VK brand: ring matches primary */
-  --ring: oklch(0.389 0.15 303.5);
+  --ring: #8d68f8;
   --chart-1: oklch(0.588 0.158 241.966);
   --chart-2: oklch(0.593 0.127 163.054);
   --chart-3: oklch(0.688 0.153 55.934);
