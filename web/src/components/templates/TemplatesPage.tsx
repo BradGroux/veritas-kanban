@@ -23,13 +23,14 @@ import {
   TextInput,
 } from '@mantine/core';
 import { useTemplates, useDeleteTemplate } from '@/hooks/useTemplates';
-import { ArrowLeft, Plus, Trash2, Eye, Edit2, FileText } from 'lucide-react';
+import { Plus, Trash2, Eye, Edit2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import type { TaskTemplate } from '@/hooks/useTemplates';
 import { getCategoryIcon, getCategoryLabel, TEMPLATE_CATEGORIES } from '@/lib/template-categories';
 import { TemplateEditorDialog } from './TemplateEditorDialog';
 import { TemplatePreviewPanel } from './TemplatePreviewPanel';
 import { cn } from '@/lib/utils';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 interface TemplatesPageProps {
   onBack: () => void;
@@ -108,36 +109,22 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
   };
 
   return (
-    <div className="flex h-screen flex-col gap-4 bg-background">
-      {/* Header */}
-      <div className="border-b bg-card px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ActionIcon
-              type="button"
-              variant="subtle"
-              color="gray"
-              onClick={onBack}
-              aria-label="Back"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </ActionIcon>
-            <div>
-              <h1 className="text-2xl font-bold">Task Templates</h1>
-              <p className="text-sm text-muted-foreground">
-                Create, manage, and organize task templates for your projects
-              </p>
-            </div>
-          </div>
-          <Button variant="filled" color="veritas" size="sm" onClick={handleCreateNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Template
-          </Button>
-        </div>
-      </div>
-
+    <PrimaryPageShell
+      title="Task Templates"
+      subtitle="Create, manage, and organize task templates for your projects"
+      onBack={onBack}
+      width="wide"
+      className="h-full min-h-0"
+      contentClassName="flex min-h-0 flex-col overflow-hidden"
+      actions={
+        <Button variant="filled" color="veritas" size="sm" onClick={handleCreateNew}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Template
+        </Button>
+      }
+    >
       {/* Main Content */}
-      <div className="flex flex-1 gap-4 overflow-hidden px-6 pb-6">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-hidden">
         {/* Templates List */}
         <div className="flex-1 flex flex-col gap-4 min-w-0">
           {/* Filters */}
@@ -340,6 +327,6 @@ export function TemplatesPage({ onBack }: TemplatesPageProps) {
           </Stack>
         )}
       </Modal>
-    </div>
+    </PrimaryPageShell>
   );
 }

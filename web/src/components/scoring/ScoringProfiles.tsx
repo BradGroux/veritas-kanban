@@ -7,15 +7,7 @@ import type {
   ScoringProfile,
 } from '@veritas-kanban/shared';
 import { ArrowLeft, Copy, Plus, Save, Trash2 } from 'lucide-react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Select,
-  Tabs,
-  Textarea,
-  TextInput,
-} from '@mantine/core';
+import { ActionIcon, Badge, Button, Select, Tabs, Textarea, TextInput } from '@mantine/core';
 import { useToast } from '@/hooks/useToast';
 import {
   useCreateScoringProfile,
@@ -24,6 +16,7 @@ import {
   useScoringProfiles,
   useUpdateScoringProfile,
 } from '@/hooks/useScoring';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 const ScoreExplorer = lazy(() =>
   import('./ScoreExplorer').then((mod) => ({ default: mod.ScoreExplorer }))
@@ -346,60 +339,42 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
   };
 
   return (
-    <div data-testid="scoring-page" className="flex min-h-full flex-col gap-4 bg-background">
-      <div className="border-b bg-card px-3 py-4 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <ActionIcon
-              size={48}
-              miw={48}
-              variant="subtle"
-              onClick={handleBackToBoard}
-              aria-label="Back"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </ActionIcon>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold sm:text-2xl">Agent Output Scoring</h1>
-              <p className="text-sm text-muted-foreground">
-                Manage scoring profiles and inspect evaluation trends over time
-              </p>
-            </div>
-          </div>
-          <div className="flex w-full gap-2 sm:w-auto">
+    <PrimaryPageShell
+      title="Agent Output Scoring"
+      subtitle="Manage scoring profiles and inspect evaluation trends over time"
+      onBack={handleBackToBoard}
+      width="wide"
+      testId="scoring-page"
+      className="h-full min-h-0"
+      contentClassName="min-h-0"
+      actions={
+        <div className="flex w-full gap-2 sm:w-auto">
+          <Button className="flex-1 sm:flex-none" variant="outline" onClick={handleCreateNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Profile
+          </Button>
+          <div
+            data-testid="scoring-save-action"
+            className={mobileView === 'list' ? 'hidden md:block' : 'contents'}
+          >
             <Button
-              h={48}
-              className="flex-1 sm:flex-none"
-              variant="outline"
-              onClick={handleCreateNew}
+              className="w-full flex-1 sm:w-auto sm:flex-none"
+              onClick={handleSave}
+              disabled={
+                !draft.name.trim() ||
+                draftReadOnly ||
+                createProfile.isPending ||
+                updateProfile.isPending
+              }
             >
-              <Plus className="mr-2 h-4 w-4" />
-              New Profile
+              <Save className="mr-2 h-4 w-4" />
+              Save Profile
             </Button>
-            <div
-              data-testid="scoring-save-action"
-              className={mobileView === 'list' ? 'hidden md:block' : 'contents'}
-            >
-              <Button
-                h={48}
-                className="w-full flex-1 sm:w-auto sm:flex-none"
-                onClick={handleSave}
-                disabled={
-                  !draft.name.trim() ||
-                  draftReadOnly ||
-                  createProfile.isPending ||
-                  updateProfile.isPending
-                }
-              >
-                <Save className="mr-2 h-4 w-4" />
-                Save Profile
-              </Button>
-            </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex-1 px-3 pb-3 sm:px-6 sm:pb-6">
+      }
+    >
+      <div className="min-h-0 flex-1">
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
@@ -972,6 +947,6 @@ export function ScoringProfiles({ onBack }: ScoringProfilesProps) {
           </Tabs.Panel>
         </Tabs>
       </div>
-    </div>
+    </PrimaryPageShell>
   );
 }

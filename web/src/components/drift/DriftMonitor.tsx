@@ -6,7 +6,7 @@ import type {
   DriftSeverity,
   DriftTrend,
 } from '@veritas-kanban/shared';
-import { AlertTriangle, ArrowLeft, RefreshCw, ShieldAlert, TrendingUp } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ShieldAlert, TrendingUp } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -27,6 +27,7 @@ import {
 } from '@/hooks/useDrift';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 interface DriftMonitorProps {
   onBack: () => void;
@@ -340,25 +341,56 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
     return { metric: first.metric, trend };
   }, [sortedAlerts]);
 
+  const handleAnalyze = () => {
+    if (!agentId.trim()) {
+      toast({
+        title: 'Agent ID required',
+        description: 'Enter an agent ID to run drift analysis.',
+      });
+      return;
+    }
+
+    analyzeMutation.mutate(agentId, {
+      onSuccess: (result) => {
+        toast({
+          title: 'Drift analysis complete',
+          description: `${result.alerts.length} alert${result.alerts.length === 1 ? '' : 's'} generated for ${result.agentId}.`,
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: 'Analysis failed',
+          description: error instanceof Error ? error.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      },
+    });
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="subtle" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Behavioral Drift Monitor</h1>
-            <p className="text-sm text-muted-foreground">
-              Detects agent deviation across action frequency, duration, cost, tokens, risk, and
-              success rates.
-            </p>
-          </div>
-        </div>
+    <PrimaryPageShell
+      title="Behavioral Drift Monitor"
+      subtitle="Detects agent deviation across action frequency, duration, cost, tokens, risk, and success rates."
+      onBack={onBack}
+      width="wide"
+      actions={
+        <Button
+          variant="filled"
+          color="veritas"
+          size="sm"
+          onClick={handleAnalyze}
+          disabled={analyzeMutation.isPending}
+        >
+          <RefreshCw className={cn('mr-2 h-4 w-4', analyzeMutation.isPending && 'animate-spin')} />
+          Analyze Agent
+        </Button>
+      }
+    >
+      <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-2">
           <TextInput
             placeholder="Agent ID"
+            aria-label="Agent ID"
             value={agentId}
             onChange={(event) => setAgentId(event.target.value)}
             className="w-[180px]"
@@ -380,112 +412,101 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
               </button>
             ))}
           </div>
-          <Button
-            variant="filled"
-            color="veritas"
-            size="sm"
-            onClick={() => {
-              if (!agentId.trim()) {
-                toast({
-                  title: 'Agent ID required',
-                  description: 'Enter an agent ID to run drift analysis.',
-                });
-                return;
-              }
-              analyzeMutation.mutate(agentId, {
-                onSuccess: (result) => {
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <ShieldAlert className="h-4 w-4" />
+              Unacknowledged Critical
+            </div>
+            <div className="text-3xl font-semibold">{topSummary.critical}</div>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <AlertTriangle className="h-4 w-4" />
+              Active Warnings
+            </div>
+            <div className="text-3xl font-semibold">{topSummary.warning}</div>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <TrendingUp className="h-4 w-4" />
+              Latest Direction
+            </div>
+            <div className="text-xl font-semibold">
+              {latestTrend
+                ? `${METRIC_LABELS[latestTrend.metric]} · ${TREND_LABELS[latestTrend.trend]}`
+                : `${topSummary.agents} agents tracked`}
+            </div>
+          </div>
+        </div>
+
+        <DriftChart alerts={sortedAlerts} baselines={baselines} />
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Alerts</h2>
+            <Badge variant="outline" tt="none">
+              {sortedAlerts.length} total
+            </Badge>
+          </div>
+          <AlertsTable
+            alerts={sortedAlerts}
+            isLoading={alertsLoading}
+            acknowledgingId={acknowledgeMutation.variables}
+            onAcknowledge={(id) =>
+              acknowledgeMutation.mutate(id, {
+                onError: (error) =>
                   toast({
-                    title: 'Drift analysis complete',
-                    description: `${result.alerts.length} alert${result.alerts.length === 1 ? '' : 's'} generated for ${result.agentId}.`,
-                  });
-                },
-                onError: (error) => {
-                  toast({
-                    title: 'Analysis failed',
+                    title: 'Failed to acknowledge alert',
                     description: error instanceof Error ? error.message : 'Unknown error',
                     variant: 'destructive',
-                  });
-                },
-              });
-            }}
-            disabled={analyzeMutation.isPending}
-          >
-            <RefreshCw
-              className={cn('mr-2 h-4 w-4', analyzeMutation.isPending && 'animate-spin')}
-            />
-            Analyze Agent
-          </Button>
-        </div>
-      </div>
+                  }),
+              })
+            }
+          />
+        </section>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border bg-card p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-            <ShieldAlert className="h-4 w-4" />
-            Unacknowledged Critical
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Baselines</h2>
+            <Button
+              variant="outline"
+              disabled={!agentId || resetMutation.isPending}
+              onClick={() =>
+                resetMutation.mutate(
+                  { agentId },
+                  {
+                    onSuccess: (result) =>
+                      toast({
+                        title: 'Baselines reset',
+                        description: `${result.deleted} baseline file${result.deleted === 1 ? '' : 's'} removed.`,
+                      }),
+                    onError: (error) =>
+                      toast({
+                        title: 'Reset failed',
+                        description: error instanceof Error ? error.message : 'Unknown error',
+                        variant: 'destructive',
+                      }),
+                  }
+                )
+              }
+            >
+              Reset Agent Baselines
+            </Button>
           </div>
-          <div className="text-3xl font-semibold">{topSummary.critical}</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-            <AlertTriangle className="h-4 w-4" />
-            Active Warnings
-          </div>
-          <div className="text-3xl font-semibold">{topSummary.warning}</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-            <TrendingUp className="h-4 w-4" />
-            Latest Direction
-          </div>
-          <div className="text-xl font-semibold">
-            {latestTrend
-              ? `${METRIC_LABELS[latestTrend.metric]} · ${TREND_LABELS[latestTrend.trend]}`
-              : `${topSummary.agents} agents tracked`}
-          </div>
-        </div>
-      </div>
-
-      <DriftChart alerts={sortedAlerts} baselines={baselines} />
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Alerts</h2>
-          <Badge variant="outline" tt="none">
-            {sortedAlerts.length} total
-          </Badge>
-        </div>
-        <AlertsTable
-          alerts={sortedAlerts}
-          isLoading={alertsLoading}
-          acknowledgingId={acknowledgeMutation.variables}
-          onAcknowledge={(id) =>
-            acknowledgeMutation.mutate(id, {
-              onError: (error) =>
-                toast({
-                  title: 'Failed to acknowledge alert',
-                  description: error instanceof Error ? error.message : 'Unknown error',
-                  variant: 'destructive',
-                }),
-            })
-          }
-        />
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Baselines</h2>
-          <Button
-            variant="outline"
-            disabled={!agentId || resetMutation.isPending}
-            onClick={() =>
+          <BaselineTable
+            baselines={baselines}
+            isLoading={baselinesLoading}
+            resetting={resetMutation.isPending}
+            onReset={(targetAgentId, metric) =>
               resetMutation.mutate(
-                { agentId },
+                { agentId: targetAgentId, metric },
                 {
                   onSuccess: (result) =>
                     toast({
-                      title: 'Baselines reset',
-                      description: `${result.deleted} baseline file${result.deleted === 1 ? '' : 's'} removed.`,
+                      title: 'Baseline reset',
+                      description: `${result.deleted} record${result.deleted === 1 ? '' : 's'} removed.`,
                     }),
                   onError: (error) =>
                     toast({
@@ -496,34 +517,9 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
                 }
               )
             }
-          >
-            Reset Agent Baselines
-          </Button>
-        </div>
-        <BaselineTable
-          baselines={baselines}
-          isLoading={baselinesLoading}
-          resetting={resetMutation.isPending}
-          onReset={(targetAgentId, metric) =>
-            resetMutation.mutate(
-              { agentId: targetAgentId, metric },
-              {
-                onSuccess: (result) =>
-                  toast({
-                    title: 'Baseline reset',
-                    description: `${result.deleted} record${result.deleted === 1 ? '' : 's'} removed.`,
-                  }),
-                onError: (error) =>
-                  toast({
-                    title: 'Reset failed',
-                    description: error instanceof Error ? error.message : 'Unknown error',
-                    variant: 'destructive',
-                  }),
-              }
-            )
-          }
-        />
-      </section>
-    </div>
+          />
+        </section>
+      </div>
+    </PrimaryPageShell>
   );
 }

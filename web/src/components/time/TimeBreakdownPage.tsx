@@ -12,15 +12,7 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Clock,
-  Download,
-  ExternalLink,
-  RefreshCw,
-  Search,
-} from 'lucide-react';
+import { AlertTriangle, Clock, Download, ExternalLink, RefreshCw, Search } from 'lucide-react';
 import { normalizeSafeHref } from '@veritas-kanban/shared';
 import { useProjects } from '@/hooks/useProjects';
 import { normalizeTimeBreakdownFilters, useTimeBreakdown } from '@/hooks/useTimeBreakdowns';
@@ -32,6 +24,7 @@ import type {
   TimeBreakdownSource,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 interface TimeBreakdownPageProps {
   onBack: () => void;
@@ -162,31 +155,17 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <Button variant="subtle" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div className="min-w-0">
-            <Group gap="xs" wrap="wrap">
-              <h1 className="text-2xl font-bold">Time Breakdowns</h1>
-              <Badge
-                variant="light"
-                color="gray"
-                tt="none"
-                leftSection={<Clock className="h-3 w-3" />}
-              >
-                Source-backed
-              </Badge>
-            </Group>
-            <Text size="sm" c="dimmed">
-              Editable explicit, inferred, and ambiguous time blocks with evidence exports.
-            </Text>
-          </div>
-        </div>
-
+    <PrimaryPageShell
+      title="Time Breakdowns"
+      subtitle="Editable explicit, inferred, and ambiguous time blocks with evidence exports."
+      onBack={onBack}
+      width="wide"
+      status={
+        <Badge variant="light" color="gray" tt="none" leftSection={<Clock className="h-3 w-3" />}>
+          Source-backed
+        </Badge>
+      }
+      actions={
         <Group gap="xs" wrap="wrap">
           <Button
             variant="filled"
@@ -220,165 +199,167 @@ export function TimeBreakdownPage({ onBack, onTaskClick }: TimeBreakdownPageProp
             Markdown
           </Button>
         </Group>
-      </div>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <Select
+            value={preset}
+            onChange={(value) => setPreset((value ?? 'weekly') as TimeBreakdownPreset)}
+            data={PRESET_OPTIONS}
+            allowDeselect={false}
+            label="Range"
+          />
+          <Select
+            value={project}
+            onChange={(value) => setProject(value ?? 'all')}
+            data={projectOptions}
+            allowDeselect={false}
+            searchable
+            label="Project"
+          />
+          <TextInput
+            value={taskId}
+            onChange={(event) => setTaskId(event.currentTarget.value)}
+            label="Task ID"
+            placeholder="Any task"
+            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
+          />
+          <TextInput
+            value={repo}
+            onChange={(event) => setRepo(event.currentTarget.value)}
+            label="Repository"
+            placeholder="Any repository"
+            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
+          />
+          <TextInput
+            value={cwd}
+            onChange={(event) => setCwd(event.currentTarget.value)}
+            label="CWD / worktree"
+            placeholder="Any worktree path"
+            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
+          />
+        </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <Select
-          value={preset}
-          onChange={(value) => setPreset((value ?? 'weekly') as TimeBreakdownPreset)}
-          data={PRESET_OPTIONS}
-          allowDeselect={false}
-          label="Range"
-        />
-        <Select
-          value={project}
-          onChange={(value) => setProject(value ?? 'all')}
-          data={projectOptions}
-          allowDeselect={false}
-          searchable
-          label="Project"
-        />
-        <TextInput
-          value={taskId}
-          onChange={(event) => setTaskId(event.currentTarget.value)}
-          label="Task ID"
-          placeholder="Any task"
-          leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-        />
-        <TextInput
-          value={repo}
-          onChange={(event) => setRepo(event.currentTarget.value)}
-          label="Repository"
-          placeholder="Any repository"
-          leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-        />
-        <TextInput
-          value={cwd}
-          onChange={(event) => setCwd(event.currentTarget.value)}
-          label="CWD / worktree"
-          placeholder="Any worktree path"
-          leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-        />
-      </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <TextInput
+            value={actor}
+            onChange={(event) => setActor(event.currentTarget.value)}
+            label="Assignee / agent"
+            placeholder="Any actor"
+            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
+          />
+          {preset === 'custom' ? (
+            <>
+              <TextInput
+                type="datetime-local"
+                value={from}
+                onChange={(event) => setFrom(event.currentTarget.value)}
+                label="From"
+              />
+              <TextInput
+                type="datetime-local"
+                value={to}
+                onChange={(event) => setTo(event.currentTarget.value)}
+                label="To"
+              />
+            </>
+          ) : null}
+          <Select
+            value={String(limit)}
+            onChange={(value) => setLimit(Number(value ?? 200))}
+            data={LIMIT_OPTIONS}
+            allowDeselect={false}
+            label="Evidence window"
+          />
+          <Checkbox
+            checked={includeInferred}
+            onChange={(event) => setIncludeInferred(event.currentTarget.checked)}
+            label="Include inferred time"
+            className="self-end pb-2"
+          />
+        </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <TextInput
-          value={actor}
-          onChange={(event) => setActor(event.currentTarget.value)}
-          label="Assignee / agent"
-          placeholder="Any actor"
-          leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-        />
-        {preset === 'custom' ? (
-          <>
-            <TextInput
-              type="datetime-local"
-              value={from}
-              onChange={(event) => setFrom(event.currentTarget.value)}
-              label="From"
-            />
-            <TextInput
-              type="datetime-local"
-              value={to}
-              onChange={(event) => setTo(event.currentTarget.value)}
-              label="To"
-            />
-          </>
+        {query.error ? (
+          <Alert color="red" variant="light" icon={<AlertTriangle className="h-4 w-4" />}>
+            {(query.error as Error).message || 'Failed to load time breakdown.'}
+          </Alert>
         ) : null}
-        <Select
-          value={String(limit)}
-          onChange={(value) => setLimit(Number(value ?? 200))}
-          data={LIMIT_OPTIONS}
-          allowDeselect={false}
-          label="Evidence window"
-        />
-        <Checkbox
-          checked={includeInferred}
-          onChange={(event) => setIncludeInferred(event.currentTarget.checked)}
-          label="Include inferred time"
-          className="self-end pb-2"
-        />
-      </div>
 
-      {query.error ? (
-        <Alert color="red" variant="light" icon={<AlertTriangle className="h-4 w-4" />}>
-          {(query.error as Error).message || 'Failed to load time breakdown.'}
-        </Alert>
-      ) : null}
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Explicit" value={formatSeconds(totals.explicitSeconds)} tone="green" />
+          <Metric label="Inferred" value={formatSeconds(totals.inferredSeconds)} tone="blue" />
+          <Metric label="Total" value={formatSeconds(totals.totalSeconds)} tone="violet" />
+          <Metric label="Ambiguous" value={String(totals.ambiguousCount)} tone="orange" />
+        </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Explicit" value={formatSeconds(totals.explicitSeconds)} tone="green" />
-        <Metric label="Inferred" value={formatSeconds(totals.inferredSeconds)} tone="blue" />
-        <Metric label="Total" value={formatSeconds(totals.totalSeconds)} tone="violet" />
-        <Metric label="Ambiguous" value={String(totals.ambiguousCount)} tone="orange" />
-      </section>
-
-      <section className="rounded-lg border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold">Client Summary</h2>
-          <Badge variant="light" color="gray" tt="none">
-            Reviewable
-          </Badge>
-        </div>
-        <Textarea
-          value={clientSummary}
-          onChange={(event) => setClientSummary(event.currentTarget.value)}
-          minRows={3}
-          aria-label="Client summary"
-        />
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Editable Draft Blocks</h2>
-            <Text size="sm" c="dimmed">
-              {breakdown
-                ? `${draftBlocks.length} blocks from ${breakdown.period.from.slice(
-                    0,
-                    10
-                  )} to ${breakdown.period.to.slice(0, 10)}`
-                : 'No breakdown generated'}
-            </Text>
+        <section className="rounded-lg border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold">Client Summary</h2>
+            <Badge variant="light" color="gray" tt="none">
+              Reviewable
+            </Badge>
           </div>
-        </div>
+          <Textarea
+            value={clientSummary}
+            onChange={(event) => setClientSummary(event.currentTarget.value)}
+            minRows={3}
+            aria-label="Client summary"
+          />
+        </section>
 
-        {query.isLoading ? (
-          <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-            <Loader size="sm" />
+        <section className="space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Editable Draft Blocks</h2>
+              <Text size="sm" c="dimmed">
+                {breakdown
+                  ? `${draftBlocks.length} blocks from ${breakdown.period.from.slice(
+                      0,
+                      10
+                    )} to ${breakdown.period.to.slice(0, 10)}`
+                  : 'No breakdown generated'}
+              </Text>
+            </div>
           </div>
-        ) : draftBlocks.length ? (
-          (['explicit', 'inferred', 'ambiguous'] as const).map((kind) => {
-            const blocks = draftBlocks.filter((block) => block.kind === kind);
-            if (!blocks.length) return null;
-            return (
-              <div key={kind} className="space-y-3">
-                <Group gap="xs">
-                  <h3 className="text-sm font-semibold">{KIND_LABELS[kind]}</h3>
-                  <Badge variant="light" color={KIND_COLORS[kind]} tt="none">
-                    {blocks.length}
-                  </Badge>
-                </Group>
-                <div className="space-y-3">
-                  {blocks.map((block) => (
-                    <DraftBlockRow
-                      key={block.id}
-                      block={block}
-                      onUpdate={updateBlock}
-                      onOpenSource={() => openSource(block)}
-                    />
-                  ))}
+
+          {query.isLoading ? (
+            <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              <Loader size="sm" />
+            </div>
+          ) : draftBlocks.length ? (
+            (['explicit', 'inferred', 'ambiguous'] as const).map((kind) => {
+              const blocks = draftBlocks.filter((block) => block.kind === kind);
+              if (!blocks.length) return null;
+              return (
+                <div key={kind} className="space-y-3">
+                  <Group gap="xs">
+                    <h3 className="text-sm font-semibold">{KIND_LABELS[kind]}</h3>
+                    <Badge variant="light" color={KIND_COLORS[kind]} tt="none">
+                      {blocks.length}
+                    </Badge>
+                  </Group>
+                  <div className="space-y-3">
+                    {blocks.map((block) => (
+                      <DraftBlockRow
+                        key={block.id}
+                        block={block}
+                        onUpdate={updateBlock}
+                        onOpenSource={() => openSource(block)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-            No time evidence matches the current filters.
-          </div>
-        )}
-      </section>
-    </div>
+              );
+            })
+          ) : (
+            <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              No time evidence matches the current filters.
+            </div>
+          )}
+        </section>
+      </div>
+    </PrimaryPageShell>
   );
 }
 

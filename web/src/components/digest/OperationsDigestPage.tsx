@@ -13,7 +13,6 @@ import {
 import { notifications } from '@mantine/notifications';
 import {
   AlertTriangle,
-  ArrowLeft,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -25,6 +24,7 @@ import {
   Search,
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 import { AdmissionQueuePanel } from '@/components/digest/AdmissionQueuePanel';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
 import { useProjects } from '@/hooks/useProjects';
@@ -193,32 +193,22 @@ export function OperationsDigestPage({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <Button variant="subtle" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div className="min-w-0">
-            <Group gap="xs" wrap="wrap">
-              <h1 className="text-2xl font-bold">Operations Digest</h1>
-              <Badge
-                variant="light"
-                color={digest?.hasActivity ? 'green' : 'gray'}
-                tt="none"
-                leftSection={<ClipboardList className="h-3 w-3" />}
-              >
-                {digest?.hasActivity ? `${digest.totals.groups} active groups` : 'No activity'}
-              </Badge>
-            </Group>
-            <p className="text-sm text-muted-foreground">
-              Deterministic standup and briefing output from agent tasks, runs, tokens, and
-              approvals.
-            </p>
-          </div>
-        </div>
-
+    <PrimaryPageShell
+      title="Operations Digest"
+      subtitle="Deterministic standup and briefing output from agent tasks, runs, tokens, and approvals."
+      onBack={onBack}
+      width="wide"
+      status={
+        <Badge
+          variant="light"
+          color={digest?.hasActivity ? 'green' : 'gray'}
+          tt="none"
+          leftSection={<ClipboardList className="h-3 w-3" />}
+        >
+          {digest?.hasActivity ? `${digest.totals.groups} active groups` : 'No activity'}
+        </Badge>
+      }
+      actions={
         <Group gap="xs" wrap="wrap">
           <Button
             variant="filled"
@@ -260,242 +250,247 @@ export function OperationsDigestPage({
             JSON
           </Button>
         </Group>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-[180px_1fr_1fr] xl:grid-cols-[180px_220px_1fr_1fr_1fr]">
-        <Select
-          value={windowPreset}
-          onChange={(value) => setWindowPreset((value ?? '24') as WindowPreset)}
-          data={WINDOW_OPTIONS}
-          allowDeselect={false}
-          label="Window"
-        />
-        <Select
-          value={project}
-          onChange={(value) => setProject(value ?? 'all')}
-          data={projectOptions}
-          allowDeselect={false}
-          searchable
-          label="Project"
-        />
-        <TextInput
-          value={repo}
-          onChange={(event) => setRepo(event.currentTarget.value)}
-          label="Repository"
-          placeholder="Any repository"
-          leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-        />
-        <TextInput
-          value={cwd}
-          onChange={(event) => setCwd(event.currentTarget.value)}
-          label="CWD / worktree"
-          placeholder="Any worktree path"
-          leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-        />
-      </div>
-
-      {windowPreset === 'custom' && (
-        <div className="grid gap-3 md:grid-cols-2">
-          <TextInput
-            type="datetime-local"
-            value={from}
-            onChange={(event) => setFrom(event.currentTarget.value)}
-            label="From"
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid gap-3 md:grid-cols-[180px_1fr_1fr] xl:grid-cols-[180px_220px_1fr_1fr_1fr]">
+          <Select
+            value={windowPreset}
+            onChange={(value) => setWindowPreset((value ?? '24') as WindowPreset)}
+            data={WINDOW_OPTIONS}
+            allowDeselect={false}
+            label="Window"
+          />
+          <Select
+            value={project}
+            onChange={(value) => setProject(value ?? 'all')}
+            data={projectOptions}
+            allowDeselect={false}
+            searchable
+            label="Project"
           />
           <TextInput
-            type="datetime-local"
-            value={to}
-            onChange={(event) => setTo(event.currentTarget.value)}
-            label="To"
+            value={repo}
+            onChange={(event) => setRepo(event.currentTarget.value)}
+            label="Repository"
+            placeholder="Any repository"
+            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
+          />
+          <TextInput
+            value={cwd}
+            onChange={(event) => setCwd(event.currentTarget.value)}
+            label="CWD / worktree"
+            placeholder="Any worktree path"
+            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
           />
         </div>
-      )}
 
-      {digestQuery.error || markdownQuery.error ? (
-        <Alert color="red" variant="light" icon={<AlertTriangle className="h-4 w-4" />}>
-          {(digestQuery.error as Error | undefined)?.message ||
-            (markdownQuery.error as Error | undefined)?.message ||
-            'Failed to load operations digest.'}
-        </Alert>
-      ) : null}
-
-      <AdmissionQueuePanel onTaskClick={onTaskClick} onWorkflowClick={onWorkflowClick} />
-
-      {digest ? <InventoryReconciliation digest={digest} onOpenSources={openSources} /> : null}
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <Metric
-          label="Active now"
-          value={digest?.totals.active}
-          tone="green"
-          description={digest?.semantics.active}
-        />
-        <Metric
-          label="Blocked now"
-          value={digest?.totals.blocked}
-          tone="orange"
-          description={digest?.semantics.blocked}
-        />
-        <Metric
-          label="Stuck now"
-          value={digest?.totals.stuck}
-          tone="yellow"
-          description={digest?.semantics.stuck}
-        />
-        <Metric
-          label="Completed in window"
-          value={digest?.totals.completed}
-          tone="blue"
-          description={digest?.semantics.completed}
-        />
-        <Metric
-          label="Failed in window"
-          value={digest?.totals.failed}
-          tone="red"
-          description={digest?.semantics.failed}
-        />
-        <Metric label="Open approvals" value={digest?.totals.openApprovals} tone="violet" />
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_380px]">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Source Groups</h2>
-              <p className="text-sm text-muted-foreground">
-                Counts use the same filtered source bundle as the briefing output.
-              </p>
-            </div>
-            <Badge variant="light" color="gray" tt="none">
-              {isLoading ? 'Loading' : `${digest?.groups.length ?? 0} groups`}
-            </Badge>
+        {windowPreset === 'custom' && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextInput
+              type="datetime-local"
+              value={from}
+              onChange={(event) => setFrom(event.currentTarget.value)}
+              label="From"
+            />
+            <TextInput
+              type="datetime-local"
+              value={to}
+              onChange={(event) => setTo(event.currentTarget.value)}
+              label="To"
+            />
           </div>
+        )}
 
-          {isLoading ? (
-            <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-              Loading operations digest...
-            </div>
-          ) : digest?.groups.length ? (
-            digest.groups.map((group) => (
-              <DigestGroupCard key={group.key} group={group} onOpenSources={openSources} />
-            ))
-          ) : (
-            <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-              No operations activity matches the current filters.
-            </div>
-          )}
-        </div>
+        {digestQuery.error || markdownQuery.error ? (
+          <Alert color="red" variant="light" icon={<AlertTriangle className="h-4 w-4" />}>
+            {(digestQuery.error as Error | undefined)?.message ||
+              (markdownQuery.error as Error | undefined)?.message ||
+              'Failed to load operations digest.'}
+          </Alert>
+        ) : null}
 
-        <aside className="space-y-4">
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-start justify-between gap-3">
+        <AdmissionQueuePanel onTaskClick={onTaskClick} onWorkflowClick={onWorkflowClick} />
+
+        {digest ? <InventoryReconciliation digest={digest} onOpenSources={openSources} /> : null}
+
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <Metric
+            label="Active now"
+            value={digest?.totals.active}
+            tone="green"
+            description={digest?.semantics.active}
+          />
+          <Metric
+            label="Blocked now"
+            value={digest?.totals.blocked}
+            tone="orange"
+            description={digest?.semantics.blocked}
+          />
+          <Metric
+            label="Stuck now"
+            value={digest?.totals.stuck}
+            tone="yellow"
+            description={digest?.semantics.stuck}
+          />
+          <Metric
+            label="Completed in window"
+            value={digest?.totals.completed}
+            tone="blue"
+            description={digest?.semantics.completed}
+          />
+          <Metric
+            label="Failed in window"
+            value={digest?.totals.failed}
+            tone="red"
+            description={digest?.semantics.failed}
+          />
+          <Metric label="Open approvals" value={digest?.totals.openApprovals} tone="violet" />
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1fr_380px]">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold">Daily Delivery</h2>
+                <h2 className="text-lg font-semibold">Source Groups</h2>
                 <p className="text-sm text-muted-foreground">
-                  Uses scheduled deliverables for recurring digest records.
-                </p>
-              </div>
-              <Badge
-                variant="light"
-                color={scheduledDeliverable?.enabled ? 'green' : 'gray'}
-                tt="none"
-                leftSection={
-                  scheduledDeliverable ? (
-                    <CheckCircle2 className="h-3 w-3" />
-                  ) : (
-                    <CalendarClock className="h-3 w-3" />
-                  )
-                }
-              >
-                {scheduledDeliverable ? 'Configured' : 'Not scheduled'}
-              </Badge>
-            </div>
-
-            <div className="mt-4 space-y-2 text-sm">
-              {scheduledDeliverable ? (
-                <>
-                  <ScheduleFact label="Name" value={scheduledDeliverable.name} />
-                  <ScheduleFact label="Cadence" value={scheduledDeliverable.scheduleDescription} />
-                  <ScheduleFact
-                    label="Last run"
-                    value={formatDateTime(scheduledDeliverable.lastRunAt)}
-                  />
-                  <ScheduleFact
-                    label="Next run"
-                    value={formatDateTime(scheduledDeliverable.nextRunAt)}
-                  />
-                  <ScheduleFact label="Runs" value={String(scheduledDeliverable.totalRuns)} />
-                </>
-              ) : (
-                <Text size="sm" c="dimmed">
-                  Register the digest as a daily deliverable before recording recurring snapshots.
-                </Text>
-              )}
-            </div>
-
-            <Group mt="md" gap="xs" wrap="wrap">
-              <Button
-                size="sm"
-                variant="light"
-                onClick={() => void ensureDailySchedule()}
-                loading={createSchedule.isPending}
-                disabled={Boolean(scheduledDeliverable)}
-                leftSection={<CalendarClock className="h-4 w-4" />}
-              >
-                Enable Daily
-              </Button>
-              <Button
-                size="sm"
-                variant="light"
-                onClick={() => void recordScheduledSnapshot()}
-                loading={recordSnapshot.isPending}
-                disabled={!scheduledDeliverable || !digest}
-                leftSection={<FileText className="h-4 w-4" />}
-              >
-                Record Snapshot
-              </Button>
-            </Group>
-          </div>
-
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold">Briefing Markdown</h2>
-                <p className="text-sm text-muted-foreground">
-                  Deterministic output for standups and handoff notes.
+                  Counts use the same filtered source bundle as the briefing output.
                 </p>
               </div>
               <Badge variant="light" color="gray" tt="none">
-                {digest?.refresh.narrative === 'deterministic-only' ? 'No LLM' : 'Narrative'}
+                {isLoading ? 'Loading' : `${digest?.groups.length ?? 0} groups`}
               </Badge>
             </div>
 
-            <Textarea
-              mt="md"
-              value={markdown || markdownQuery.data?.message || ''}
-              readOnly
-              minRows={12}
-              aria-label="Operations digest markdown"
-              classNames={{
-                input: 'font-mono text-xs',
-              }}
-            />
+            {isLoading ? (
+              <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+                Loading operations digest...
+              </div>
+            ) : digest?.groups.length ? (
+              digest.groups.map((group) => (
+                <DigestGroupCard key={group.key} group={group} onOpenSources={openSources} />
+              ))
+            ) : (
+              <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+                No operations activity matches the current filters.
+              </div>
+            )}
           </div>
-        </aside>
-      </section>
 
-      {markdown ? (
-        <section className="rounded-lg border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">Rendered Briefing</h2>
-            <Badge variant="light" color="gray" tt="none">
-              {formatDateTime(digest?.generatedAt)}
-            </Badge>
-          </div>
-          <MarkdownRenderer content={markdown} className="text-sm" />
+          <aside className="space-y-4">
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold">Daily Delivery</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Uses scheduled deliverables for recurring digest records.
+                  </p>
+                </div>
+                <Badge
+                  variant="light"
+                  color={scheduledDeliverable?.enabled ? 'green' : 'gray'}
+                  tt="none"
+                  leftSection={
+                    scheduledDeliverable ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <CalendarClock className="h-3 w-3" />
+                    )
+                  }
+                >
+                  {scheduledDeliverable ? 'Configured' : 'Not scheduled'}
+                </Badge>
+              </div>
+
+              <div className="mt-4 space-y-2 text-sm">
+                {scheduledDeliverable ? (
+                  <>
+                    <ScheduleFact label="Name" value={scheduledDeliverable.name} />
+                    <ScheduleFact
+                      label="Cadence"
+                      value={scheduledDeliverable.scheduleDescription}
+                    />
+                    <ScheduleFact
+                      label="Last run"
+                      value={formatDateTime(scheduledDeliverable.lastRunAt)}
+                    />
+                    <ScheduleFact
+                      label="Next run"
+                      value={formatDateTime(scheduledDeliverable.nextRunAt)}
+                    />
+                    <ScheduleFact label="Runs" value={String(scheduledDeliverable.totalRuns)} />
+                  </>
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    Register the digest as a daily deliverable before recording recurring snapshots.
+                  </Text>
+                )}
+              </div>
+
+              <Group mt="md" gap="xs" wrap="wrap">
+                <Button
+                  size="sm"
+                  variant="light"
+                  onClick={() => void ensureDailySchedule()}
+                  loading={createSchedule.isPending}
+                  disabled={Boolean(scheduledDeliverable)}
+                  leftSection={<CalendarClock className="h-4 w-4" />}
+                >
+                  Enable Daily
+                </Button>
+                <Button
+                  size="sm"
+                  variant="light"
+                  onClick={() => void recordScheduledSnapshot()}
+                  loading={recordSnapshot.isPending}
+                  disabled={!scheduledDeliverable || !digest}
+                  leftSection={<FileText className="h-4 w-4" />}
+                >
+                  Record Snapshot
+                </Button>
+              </Group>
+            </div>
+
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold">Briefing Markdown</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Deterministic output for standups and handoff notes.
+                  </p>
+                </div>
+                <Badge variant="light" color="gray" tt="none">
+                  {digest?.refresh.narrative === 'deterministic-only' ? 'No LLM' : 'Narrative'}
+                </Badge>
+              </div>
+
+              <Textarea
+                mt="md"
+                value={markdown || markdownQuery.data?.message || ''}
+                readOnly
+                minRows={12}
+                aria-label="Operations digest markdown"
+                classNames={{
+                  input: 'font-mono text-xs',
+                }}
+              />
+            </div>
+          </aside>
         </section>
-      ) : null}
-    </div>
+
+        {markdown ? (
+          <section className="rounded-lg border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Rendered Briefing</h2>
+              <Badge variant="light" color="gray" tt="none">
+                {formatDateTime(digest?.generatedAt)}
+              </Badge>
+            </div>
+            <MarkdownRenderer content={markdown} className="text-sm" />
+          </section>
+        ) : null}
+      </div>
+    </PrimaryPageShell>
   );
 }
 

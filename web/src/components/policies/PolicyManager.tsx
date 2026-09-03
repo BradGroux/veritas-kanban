@@ -5,15 +5,7 @@ import type {
   PolicyType,
   PolicyResponseAction,
 } from '@veritas-kanban/shared';
-import {
-  ArrowLeft,
-  Edit,
-  ExternalLink,
-  FlaskConical,
-  Plus,
-  ShieldAlert,
-  Trash2,
-} from 'lucide-react';
+import { Edit, ExternalLink, FlaskConical, Plus, Trash2 } from 'lucide-react';
 import {
   ActionIcon,
   Badge,
@@ -34,6 +26,7 @@ import {
   useUpdatePolicy,
 } from '@/hooks/usePolicies';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 interface PolicyManagerProps {
   onBack: () => void;
@@ -501,32 +494,21 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
   ];
 
   return (
-    <div className="flex h-screen flex-col gap-4 bg-background">
-      <div className="border-b bg-card px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <ActionIcon variant="subtle" onClick={onBack} aria-label="Back">
-              <ArrowLeft className="h-4 w-4" />
-            </ActionIcon>
-            <div>
-              <h1 className="flex items-center gap-2 text-2xl font-bold">
-                <ShieldAlert className="h-6 w-6" />
-                Agent Policies
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Guard agent behavior with scoped policies, approval gates, rate limits, and webhook
-                checks.
-              </p>
-            </div>
-          </div>
-          <Button variant="filled" color="veritas" size="sm" onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Policy
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 overflow-hidden px-6 pb-6">
+    <PrimaryPageShell
+      title="Agent Policies"
+      subtitle="Guard agent behavior with scoped policies, approval gates, rate limits, and webhook checks."
+      onBack={onBack}
+      width="wide"
+      className="h-full min-h-0"
+      contentClassName="min-h-0"
+      actions={
+        <Button variant="filled" color="veritas" size="sm" onClick={openCreateDialog}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Policy
+        </Button>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-lg border bg-card p-4">
             <div className="text-sm font-medium">Strict</div>
@@ -1047,6 +1029,6 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
           </Button>
         </Group>
       </Modal>
-    </div>
+    </PrimaryPageShell>
   );
 }
