@@ -24,7 +24,8 @@ In Board Only mode, General, Board, and Tasks are marked as the primary path. Ev
 - `SettingsFieldGrid` arranges related multi-field forms in one or two columns without horizontal scrolling.
 - `SettingsStatusCard` uses labeled neutral, success, warning, or error state. Color is supplemental to the icon, title, and description.
 - `SettingsLocalNav` is reserved for related sections on a long page. It uses in-page anchors, remains horizontally scrollable at narrow widths, and does not promote subsections into global destinations.
-- `SettingsHelpText`, `SettingsErrorText`, `SettingsUnit`, and `SettingsActionGroup` standardize secondary explanation, validation, numeric units, routine transfer actions, and destructive actions.
+- `SettingsHelpText`, `SettingsErrorText`, and `SettingsActionGroup` standardize secondary explanation, validation, routine transfer actions, and destructive actions. `NumberRow` renders numeric units as an input suffix so fields with and without units share both edges. `SettingsUnit` remains available for explanatory unit text outside editable fields.
+- Direct numeric, text, and select controls fill the shared `SettingRow` control column. Avoid local width or size overrides; compact switches and compound controls keep their own intrinsic layout.
 
 All current Settings destinations use the shared page and section contract. General, Board, Tasks, and Data are the reference migrations; Data demonstrates continuous local navigation while simpler pages omit it. Agents uses anchored Providers, Compatibility, Profiles, Health, and Policies workflows. Notifications uses Health, Buzz, Reply Adapters, Delivery, and Preferences. Multi-user uses Workspace, Members, Invitations, Devices, and API Access. Maintenance uses Overview, Cleanup, Logs, Backup/Restore, and Lifecycle. The remaining focused pages use the same hierarchy without adding local navigation where their content does not require it.
 

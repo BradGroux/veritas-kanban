@@ -171,8 +171,6 @@ export function TasksTab() {
             ]}
             aria-label="Default Priority"
             allowDeselect={false}
-            size="xs"
-            w={128}
           />
         </SettingRow>
       </SettingsSection>
