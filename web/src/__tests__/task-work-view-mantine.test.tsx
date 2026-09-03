@@ -3,12 +3,31 @@ import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
+  getTaskOverviewComposition,
   getTaskReadinessChecks,
   shouldDefaultTaskDetailToWork,
   TaskWorkView,
 } from '@/components/task/TaskWorkView';
 import { createMockTask, renderWithProviders } from './test-utils';
 import type { WorkProductPreview } from '@veritas-kanban/shared';
+
+const readyChecks = [
+  {
+    id: 'objective' as const,
+    label: 'Clear objective',
+    passed: true,
+    detail: 'Objective is clear.',
+    severity: 'required' as const,
+  },
+];
+
+const missingChecks = [
+  {
+    ...readyChecks[0],
+    passed: false,
+    detail: 'Add a concrete description of the expected outcome.',
+  },
+];
 
 const mocks = vi.hoisted(() => ({
   onOpenChat: vi.fn(),
@@ -82,6 +101,61 @@ function renderWorkView(task = createMockTask()) {
   );
 }
 
+describe('task Overview composition', () => {
+  it.each([
+    {
+      expected: 'new',
+      task: createMockTask({ status: 'todo' }),
+      checks: missingChecks,
+      options: {},
+    },
+    {
+      expected: 'ready',
+      task: createMockTask({ status: 'todo', type: 'feature' }),
+      checks: readyChecks,
+      options: {},
+    },
+    {
+      expected: 'active',
+      task: createMockTask({ status: 'in-progress' }),
+      checks: readyChecks,
+      options: { activeRun: true },
+    },
+    {
+      expected: 'blocked',
+      task: createMockTask({ status: 'blocked' }),
+      checks: missingChecks,
+      options: {},
+    },
+    {
+      expected: 'failed',
+      task: createMockTask({ status: 'in-progress' }),
+      checks: readyChecks,
+      options: { activeRun: false, effectiveAttemptStatus: 'failed' as const },
+    },
+    {
+      expected: 'review',
+      task: createMockTask({
+        status: 'in-progress',
+        attempt: { id: 'attempt-complete', agent: 'codex', status: 'complete' },
+      }),
+      checks: readyChecks,
+      options: {},
+    },
+    {
+      expected: 'done',
+      task: createMockTask({ status: 'done' }),
+      checks: missingChecks,
+      options: {},
+    },
+  ])(
+    'composes the $expected lifecycle state deterministically',
+    ({ expected, task, checks, options }) => {
+      expect(getTaskOverviewComposition(task, checks, options).state).toBe(expected);
+    }
+  );
+});
+
 describe('task work view Mantine surface', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,7 +177,7 @@ describe('task work view Mantine surface', () => {
     cleanup();
   });
 
-  it('surfaces blockers and missing readiness items in one task work view', () => {
+  it('makes a blocker the dominant state and collapses irrelevant readiness detail', () => {
     const task = createMockTask({
       id: 'task-blocked',
       title: 'Fix',
@@ -118,14 +192,12 @@ describe('task work view Mantine surface', () => {
 
     const { baseElement, container } = renderWorkView(task);
 
-    expect(screen.getByText('Work View')).toBeDefined();
+    expect(screen.getByTestId('task-overview-primary').getAttribute('data-state')).toBe('blocked');
     expect(screen.getByRole('button', { name: 'Resolve blocker' })).toBeDefined();
     expect(screen.getAllByText('Waiting on security review').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Readiness Gate')).toBeDefined();
-    expect(screen.getByText('Clear objective')).toBeDefined();
-    expect(screen.getByText('Add a concrete description of the expected outcome.')).toBeDefined();
+    expect(screen.getByText('What is blocking this task')).toBeDefined();
+    expect(screen.queryByText('Readiness')).toBeNull();
     expect(container.querySelector('.mantine-Paper-root')).toBeDefined();
-    expect(container.querySelector('.mantine-Progress-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="button"]')).toBeNull();
   });
 
@@ -255,13 +327,14 @@ describe('task work view Mantine surface', () => {
     renderWorkView(task);
 
     expect(screen.getByText('Monitor active run')).toBeDefined();
-    expect(screen.getByText('Attempt attempt-1')).toBeDefined();
-    expect(screen.getByText('Activity Console')).toBeDefined();
+    expect(screen.getByText('attempt-1')).toBeDefined();
+    expect(screen.getByTestId('task-overview-primary').getAttribute('data-state')).toBe('active');
+    expect(screen.getByText('Current execution')).toBeDefined();
     expect(screen.getByText('Current step: Running focused tests')).toBeDefined();
     expect(screen.getByText('Installing dependencies')).toBeDefined();
     expect(screen.getByText('1h 30m')).toBeDefined();
     expect(screen.getByText('$0.04')).toBeDefined();
-    expect(screen.getByText('Workflow State')).toBeDefined();
+    expect(screen.getByText('Workflow execution')).toBeDefined();
     expect(screen.getByText('Workflow release-flow v2')).toBeDefined();
     expect(screen.getByText('workflow-run-1')).toBeDefined();
     expect(screen.getByText('build')).toBeDefined();
@@ -274,10 +347,9 @@ describe('task work view Mantine surface', () => {
         .getAttribute('href')
     ).toBe('/runs/run-456');
 
-    await user.click(screen.getByRole('button', { name: 'Open Agent' }));
+    await user.click(screen.getByRole('button', { name: 'Monitor active run' }));
     await user.click(screen.getByRole('button', { name: 'Open Workflow' }));
     await user.click(screen.getByRole('button', { name: 'Work Products' }));
-    await user.click(screen.getByRole('button', { name: 'Workflow' }));
     await user.click(screen.getByRole('button', { name: 'Stop active run' }));
     await user.click(screen.getByRole('button', { name: 'Stop Agent' }));
 
@@ -358,8 +430,8 @@ describe('task work view Mantine surface', () => {
       })
     );
 
-    expect(screen.getAllByText('Failed').length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText('Live')).toBeNull();
+    expect(screen.getByText('Needs recovery')).toBeDefined();
+    expect(screen.getByText('Latest attempt: Failed')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Stop active run' })).toBeNull();
   });
 

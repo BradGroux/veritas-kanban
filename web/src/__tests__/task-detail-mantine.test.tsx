@@ -371,7 +371,7 @@ describe('task detail Mantine migration', () => {
     );
     expect(screen.getByRole('button', { name: 'History' })).toBeDefined();
     expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
-    expect(screen.getByText('Work View')).toBeDefined();
+    expect(screen.getByTestId('task-overview-primary')).toBeDefined();
   });
 
   it('translates legacy and versioned deep links into modes and local sections', async () => {
