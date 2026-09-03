@@ -531,6 +531,18 @@ test.describe('v5 Mantine migration QA gate', () => {
     await page.getByRole('button', { name: 'Command palette' }).click();
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole('textbox', { name: 'Search commands' })).toBeVisible();
+    const selectedCommand = page.locator('[data-command-id="new-task"]');
+    const selectedColors = await selectedCommand.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      const probe = document.createElement('div');
+      probe.style.backgroundColor = 'var(--primary)';
+      document.body.append(probe);
+      const primary = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return { background: styles.backgroundColor, foreground: styles.color, primary };
+    });
+    expect(selectedColors.background).toBe(selectedColors.primary);
+    expect(selectedColors.foreground).toBe('rgb(255, 255, 255)');
     await assertNoLegacyPrimitiveSlots(page);
     await assertVisibleInteractiveControlsHaveNames(page);
     await assertFocusRemainsInsideDialog(page, 'Command palette');

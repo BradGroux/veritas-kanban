@@ -27,7 +27,13 @@ describe('command and shortcut dialogs Mantine migration', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeDefined();
     expect(screen.getByLabelText('Search commands')).toBeDefined();
-    expect(screen.getByText('New Task')).toBeDefined();
+    expect(screen.getByText('Command center')).toBeDefined();
+    expect(screen.getByText('Run a command')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Restart Local Server/ })).toBeNull();
+    expect(screen.getByText(/ready · \d+ unavailable/)).toBeDefined();
+    const selectedCommand = screen.getByRole('button', { name: /New Task/ });
+    expect(selectedCommand.className).toContain('bg-primary');
+    expect(selectedCommand.className).toContain('text-white');
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
