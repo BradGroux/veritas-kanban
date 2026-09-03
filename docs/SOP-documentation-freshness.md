@@ -4,6 +4,8 @@
 
 Keep project documentation current as the codebase evolves.
 
+The public documentation tree contains maintained product, operator, contributor, architecture, security, testing, and release material. Execution goal prompts, one-time handoffs, raw audits, learnings, and scratch files belong in GitHub issues, Veritas tasks, or `.veritas-kanban/internal/` and must not be committed under `docs/`.
+
 ---
 
 ## Why It Matters

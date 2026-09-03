@@ -169,6 +169,9 @@ jobs:
       - name: Check service filesystem boundary
         run: pnpm check:service-filesystem-boundary
 
+      - name: Check public documentation boundary
+        run: pnpm check:public-docs
+
       - name: Build shared (dependency for typecheck)
         run: pnpm --filter @veritas-kanban/shared build
 

@@ -1,6 +1,6 @@
 # v5 Identity, Workspace, and RBAC Model
 
-Status: planned for v5.0-alpha.1
+Status: implemented and maintained in v6
 Issue: [#334](https://github.com/BradGroux/veritas-kanban/issues/334)
 
 ## Purpose

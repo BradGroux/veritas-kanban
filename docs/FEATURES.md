@@ -36,7 +36,6 @@ For current release screenshots and retained v5 shell captures, see the
 - [Squad Chat](#squad-chat)
 - [Agent Registry & Dashboard](#agent-registry--dashboard)
 - [PRD-Driven Development](#prd-driven-autonomous-development)
-- [PRD Traceability & Work-Item Hierarchy](#prd-traceability--work-item-hierarchy) _(design draft)_
 - [Task↔Agent State Sync](#taskagent-state-sync)
 - [Reflection-to-Memory Promotion](#reflection-to-memory-promotion)
 
@@ -441,7 +440,7 @@ Implemented:
 
 Documentation:
 
-- [OpenAI Codex Integration Roadmap](CODEX-INTEGRATION.md)
+- [OpenAI Codex Integration](CODEX-INTEGRATION.md)
 - [SOP: OpenAI Codex Integration](SOP-codex-integration.md)
 - [Codex Workflow Examples](EXAMPLES-codex-workflows.md)
 
@@ -498,21 +497,6 @@ Workspace-level routing metadata for agent teams and delegated work intake. Adde
 - **Settings surfaces** — Settings exposes team roster routing and shared workspace capabilities without requiring hand-edited JSON.
 
 See [API Reference: Team Roster Manifests](API-REFERENCE.md#team-roster-manifests) and [Workspace Capability Discovery](API-REFERENCE.md#workspace-capability-discovery).
-
----
-
-## Veritas Cutover & Hermes Support
-
-v4.3 adds an operating guide for the Veritas cutover model and HermesAgent workflows. The goal is simple: keep Veritas as the board of record, let HermesAgent/Hermes Gateway handle execution routing, and leave durable delivery evidence in GitHub.
-
-- **Authority model** — Veritas is the source of truth for tasks, status, audit trail, QA readiness, and release state. GitHub Issues/PRs/reviews/CI remain the implementation record.
-- **HermesAgent control plane** — HermesAgent/Hermes Gateway is documented as the active routing layer for the Hermes roster, while Mission Control remains display/control only.
-- **Active Hermes roster** — Documents the default roles for Hermes Ops, QA, Rex, Spark, Scout, Bolt, and on-demand Dan support.
-- **QA evidence gate** — Defines the required proof before closing cutover work: test commands, CI state, screenshots when UI behavior changes, linked PRs/issues, and release notes.
-- **GitHub-backed templates** — Adds copy/paste templates for product/spec work, research/revenue intake, approval-gated client work such as Medik8 Cyprus-only changes, and completion comments.
-- **Legacy routing boundary** — Records that Linear is historical-only and OpenClaw `.openclaw`/`:18789` routing should not be used for active Veritas cutover work.
-
-See [Veritas Cutover Operating Guide](VERITAS-CUTOVER.md) and [Agent Registry](AGENT-REGISTRY.md).
 
 ---
 
@@ -718,32 +702,6 @@ Transform product requirements into working code through iterative, quality-gate
 **Avoid for:** Vague requirements, exploratory work, complex architectural decisions, high-risk changes (migrations, auth), research tasks
 
 → [Full guide](features/prd-driven-development.md) — setup, agent execution workflow, complete OAuth2 example walkthrough, configuration tips, troubleshooting
-
----
-
-## PRD Traceability & Work-Item Hierarchy
-
-**Status:** Design Draft — [#773](https://github.com/BradGroux/veritas-kanban/issues/773)
-
-An optional, additive traceability layer that connects work items to PRD requirements, risks,
-decisions, and verification evidence they satisfy. Adds an explicit five-level work-item
-hierarchy (`initiative → epic → story → task → subtask`) and structured fields for human gates,
-stop conditions, and risk disposition. Enables agents to safely select the next unblocked task
-and humans to view requirement/risk coverage without parsing prose.
-
-**Key capabilities (proposed):**
-
-- **Work-item hierarchy** — `parentId` + `workItemLevel` field on tasks; queryable tree via API
-- **Requirement traceability** — `requirementIds[]` maps tasks to PRD sections; coverage report shows gaps
-- **Risk disposition tracking** — `riskIds[]` + `riskDisposition` map; `mitigated/gated/accepted/blocked/deferred/unknown`
-- **Human gates and stop conditions** — Structured fields that block next-safe agent task selection
-- **Next-safe task selection** — `GET /api/tasks?next_safe=true` considers dependencies, gates, and risk state
-- **Coverage and hierarchy APIs** — `GET /api/coverage/requirements`, `/risks`, `/hierarchy`
-- **CLI** — `vk update --parent`, `--level`, `--requirements`, `--risks`; `vk list --next-safe`; `vk coverage`
-
-**All fields are optional. Existing boards continue to work with zero changes.**
-
-→ [Design document](features/prd-traceability.md) — schema, API design, CLI design, migration strategy, acceptance criteria, rollout sequence, and implementation backlog
 
 ---
 
@@ -1366,14 +1324,8 @@ Real-time monitoring for workflow execution.
 
 ### Reference
 
-- **Architecture doc:** `docs/WORKFLOW_ENGINE_ARCHITECTURE.md`
-- **Implementation notes:**
-  - Phase 1: `docs/internal/PHASE1_IMPLEMENTATION_NOTES.md`
-  - Phase 2: `docs/internal/PHASE2_IMPLEMENTATION_NOTES.md`
-  - Phase 3: `docs/internal/PHASE3_IMPLEMENTATION_NOTES.md`
-  - Phase 4: `docs/internal/PHASE4_IMPLEMENTATION_NOTES.md`
-  - Dashboard: `docs/internal/DASHBOARD_IMPLEMENTATION_NOTES.md`
-  - Policies & Sessions: `docs/internal/POLICIES_SESSIONS_IMPLEMENTATION_NOTES.md`
+- **Operator guide:** [Workflow Guide](WORKFLOW-GUIDE.md)
+- **API reference:** [Workflow API](API-WORKFLOWS.md)
 
 ---
 
@@ -2126,10 +2078,6 @@ Optimizations spanning server, frontend, and data lifecycle.
 - **Safe dashboard motion** — Data bars update without animating layout dimensions, dashboard expansion is immediate, and interactive card feedback uses an explicit 150 ms shadow transition with a reduced-motion override
 
 ---
-
-## Guided Tutorials
-
-The click-through tutorial roadmap lives in [Click-through Tutorials Roadmap](CLICK-THROUGH-TUTORIALS.md). It defines the product-native tour registry, runtime, launch surfaces, product-mode filters, accessibility requirements, and first tour sequence for board basics, desktop safety, workflows, and agent work.
 
 ## Settings & Customization
 

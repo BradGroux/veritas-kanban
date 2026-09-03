@@ -1,6 +1,6 @@
 # SQLite Schema and Migration Strategy
 
-Status: planned for v5.0-alpha.1
+Status: implemented and maintained in v6
 
 ## Purpose
 

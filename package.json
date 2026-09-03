@@ -40,6 +40,7 @@
     "check:gitleaks": "node scripts/check-gitleaks.mjs",
     "check:vite-native-config": "pnpm --filter @veritas-kanban/web exec vite build --configLoader native && vitest run --configLoader native web/src/lib/__tests__/client-policy.test.ts",
     "check:pnpm-settings": "node scripts/check-pnpm-settings.mjs",
+    "check:public-docs": "node scripts/check-public-docs.mjs",
     "check:security-artifacts": "node scripts/check-security-artifacts.mjs",
     "check:tracked-ignore": "node --test scripts/check-tracked-ignore.test.mjs && node scripts/check-tracked-ignore.mjs",
     "check:service-filesystem-boundary": "node --test scripts/check-service-filesystem-boundary.test.mjs && node scripts/check-service-filesystem-boundary.mjs",
