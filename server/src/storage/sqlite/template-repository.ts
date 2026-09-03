@@ -5,6 +5,7 @@ import type {
 } from '@veritas-kanban/shared';
 import type { TemplateRepository } from '../interfaces.js';
 import type { SqliteDatabase } from './database.js';
+import { applyTemplateUpdate } from '../../utils/template-update.js';
 
 interface TemplateRow {
   template_json: string;
@@ -63,21 +64,7 @@ export class SqliteTemplateRepository implements TemplateRepository {
     const existing = await this.getTemplate(id);
     if (!existing) return null;
 
-    const updated: TaskTemplate = {
-      ...existing,
-      name: input.name ?? existing.name,
-      description: input.description ?? existing.description,
-      category: input.category ?? existing.category,
-      version: existing.version,
-      taskDefaults: {
-        ...existing.taskDefaults,
-        ...input.taskDefaults,
-      },
-      subtaskTemplates: input.subtaskTemplates ?? existing.subtaskTemplates,
-      blueprint: input.blueprint ?? existing.blueprint,
-      launch: input.launch ?? existing.launch,
-      updated: new Date().toISOString(),
-    };
+    const updated = applyTemplateUpdate(existing, input);
 
     this.upsertTemplate(updated);
     return updated;

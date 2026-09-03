@@ -80,12 +80,19 @@ for (const theme of ['dark', 'light']) {
       });
     }, theme);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.setViewportSize({ width: 1180, height: 760 });
+    await page.setViewportSize({ width: 900, height: 480 });
     await page.goto('/templates');
     await page.evaluate(() => (document.documentElement.style.fontSize = '20px'));
     await page.getByRole('button', { name: 'New Template', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Create New Template', exact: true });
     await expect(dialog).toBeVisible();
+    const name = dialog.getByRole('textbox', { name: 'Template Name' });
+    await expect(name).toBeFocused();
+    const nameBounds = await name.boundingBox();
+    const categoryBounds = await dialog.getByLabel('Category', { exact: true }).boundingBox();
+    expect(nameBounds).not.toBeNull();
+    expect(categoryBounds).not.toBeNull();
+    expect(Math.abs(nameBounds!.width - categoryBounds!.width)).toBeLessThanOrEqual(1);
     const select = async (label: string) => {
       const input = dialog.getByLabel(label, { exact: true });
       await input.click();
@@ -101,17 +108,35 @@ for (const theme of ['dark', 'light']) {
       await expect(input).toBeFocused();
     };
     await select('Category');
-    await dialog.getByRole('tab', { name: 'Task Defaults' }).click();
     for (const label of ['Default Type', 'Default Priority', 'Default Agent']) await select(label);
     const scroll = dialog.getByTestId('template-editor-scroll-region');
+    await dialog
+      .getByRole('textbox', { name: 'Description Template' })
+      .fill(
+        Array.from(
+          { length: 30 },
+          (_, index) => `## Step ${index + 1}\n\n- Verify this outcome`
+        ).join('\n\n')
+      );
     await scroll.evaluate((el) => (el.scrollTop = el.scrollHeight));
     await expect(
       dialog.getByRole('button', { name: 'Create Template', exact: true })
     ).toBeInViewport();
     await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
-    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(760);
-    page.once('dialog', (prompt) => prompt.accept());
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(480);
+    await dialog.getByRole('button', { name: 'Create Template', exact: true }).click();
+    await expect(name).toBeFocused();
+    await expect(name).toBeInViewport();
+    await expect(dialog.getByText('Template name is required')).toBeVisible();
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const discard = page.getByRole('dialog', { name: 'Discard template changes?' });
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: 'Keep editing' }).press('Escape');
+    await expect(discard).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await discard.getByRole('button', { name: 'Discard changes' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('button', { name: 'New Template', exact: true })).toBeFocused();
     await cleanupRoutes(page);
