@@ -5,7 +5,7 @@ import { useCreateTemplate, useUpdateTemplate, type TaskTemplate } from '@/hooks
 import { useTaskTypesManager, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useToast } from '@/hooks/useToast';
 import { TEMPLATE_CATEGORIES, getCategoryIcon } from '@/lib/template-categories';
-import type { TaskPriority, AgentType } from '@veritas-kanban/shared';
+import { TASK_PRIORITIES, type TaskPriority, type AgentType } from '@veritas-kanban/shared';
 import { Loader2 } from 'lucide-react';
 
 interface TemplateEditorDialogProps {
@@ -80,12 +80,10 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
     label: taskType.label,
     icon: taskType.icon,
   }));
-  const priorityOptions = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'urgent', label: 'Urgent' },
-  ];
+  const priorityOptions = TASK_PRIORITIES.map((value) => ({
+    value,
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+  }));
   const agentOptions = [
     { value: 'claude-opus-4', label: 'Claude Opus 4' },
     { value: 'claude-sonnet-4', label: 'Claude Sonnet 4' },

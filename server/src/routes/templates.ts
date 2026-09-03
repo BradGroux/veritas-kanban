@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
+import { TASK_PRIORITIES } from '@veritas-kanban/shared';
 import { TemplateService } from '../services/template-service.js';
 import { getSessionTemplateService } from '../services/session-template-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -21,7 +22,7 @@ const blueprintTaskSchema = z.object({
   title: z.string(),
   taskDefaults: z.object({
     type: z.string().optional(),
-    priority: z.enum(['low', 'medium', 'high']).optional(),
+    priority: z.enum(TASK_PRIORITIES).optional(),
     project: z.string().optional(),
     descriptionTemplate: z.string().optional(),
     agent: z.string().min(1).max(80).optional(),
@@ -79,7 +80,7 @@ const createTemplateSchema = z.object({
   category: z.string().optional(),
   taskDefaults: z.object({
     type: z.string().optional(),
-    priority: z.enum(['low', 'medium', 'high']).optional(),
+    priority: z.enum(TASK_PRIORITIES).optional(),
     project: z.string().optional(),
     descriptionTemplate: z.string().optional(),
     agent: z.string().min(1).max(80).optional(),
@@ -96,7 +97,7 @@ const updateTemplateSchema = z.object({
   taskDefaults: z
     .object({
       type: z.string().optional(),
-      priority: z.enum(['low', 'medium', 'high']).optional(),
+      priority: z.enum(TASK_PRIORITIES).optional(),
       project: z.string().optional(),
       descriptionTemplate: z.string().optional(),
       agent: z.string().min(1).max(80).optional(),
