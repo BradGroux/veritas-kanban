@@ -106,7 +106,7 @@ pnpm dev
 
 Web boots on **3000**, API on **3001**. First boot seeds demo tasks so you have something to look at.
 
-![Dev stack running with public-safe 6.1.5 tasks](assets/v6.1.5/board-overview.png)
+![Dev stack running with public-safe 6.1.6 tasks](assets/v6.1.6/board-overview.png)
 
 ### 4. Run the in-app setup
 
@@ -128,7 +128,7 @@ Visit [http://localhost:3000](http://localhost:3000) → follow the onboarding f
 4. Hit **Create** and watch it appear in **Todo**.
 5. Drag it to **In Progress** to feel the flow.
 
-![Reviewing a task in the 6.1.5 progressive task workspace](assets/v6.1.5/task-workspace.png)
+![Reviewing a task in the 6.1.6 progressive task workspace](assets/v6.1.6/task-workspace.png)
 
 > Need a clean slate? Remove the example tasks: `rm tasks/active/task_example_*.md`
 
@@ -164,7 +164,7 @@ vk list --status todo
 
 CLI commands fully mirror the API and are the fastest way to script agent workflows. Write commands need `VK_API_KEY` unless localhost bypass grants an `agent` or `admin` role.
 
-![Board to task-workspace tour with dummy 6.1.5 tasks](assets/v6.1.5/board-to-workspace.gif)
+![Board to task-workspace tour with dummy 6.1.6 tasks](assets/v6.1.6/board-to-workspace.gif)
 
 ---
 
@@ -201,7 +201,7 @@ This section is optional. Agents interact through HTTP + WebSocket; nothing is h
    - Check `.veritas-kanban/logs/agents.log` for run details
    - Confirm UI Agent Status indicator flips back to **Idle**
 
-![Agent-ready task workspace](assets/v6.1.5/task-workspace.png)
+![Agent-ready task workspace](assets/v6.1.6/task-workspace.png)
 
 > **Automation tip:** Keep a `prompts/` folder (see below) so agents get consistent instructions for sprint planning, reviews, research, etc.
 

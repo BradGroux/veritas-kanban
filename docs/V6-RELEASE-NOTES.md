@@ -1,10 +1,27 @@
-# Veritas Kanban 6.1.5 Release Notes
+# Veritas Kanban 6.1.6 Release Notes
 
-Veritas Kanban 6.1.5 publishes the integrated backlog completed after the 6.1.4 security patch. It includes the redesigned Settings and task workspaces, atomic board moves, clearer conflict recovery, accurate memory-pressure status, corrected chat toggles, Command+K and board-color improvements, reviewed dependency updates, and the public documentation boundary.
+Veritas Kanban 6.1.6 is a focused desktop reliability and interface consistency release. It corrects chat and drag layout overflow, makes consecutive board moves reliable, polishes Settings and Command+K, removes the redundant desktop wordmark, unifies action and selected-navigation styling, refreshes maintained media, and updates vulnerable transitive dependencies.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.5 is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.6 is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
 
-## 6.1.5 Integrated Backlog Outcomes
+## 6.1.6 Desktop Reliability Outcomes
+
+| Issue or tracker | Operational outcome                                                                 | Pull requests |
+| ---------------- | ----------------------------------------------------------------------------------- | ------------- |
+| #1360            | Patched `qs`, `@xmldom/xmldom`, and `postcss-selector-parser` dependency advisories | #1373         |
+| #1361            | Chat and drag interactions remain contained within the desktop app shell            | #1367         |
+| #1362            | Settings has one aligned modal title and close control                              | #1371         |
+| #1363            | Command+K has clearer search, result, selection, and keyboard hierarchy             | #1372         |
+| #1364            | Desktop navigation keeps the icon and removes the redundant product wordmark        | #1370         |
+| #1365            | Consecutive board moves retain the latest task revision instead of failing stale    | #1368         |
+| #1366            | Page actions and selected navigation use one consistent size and color contract     | #1369         |
+| #1374            | Integrated 6.1.6 build, release validation, media, and distribution                 | Release PR    |
+
+The public REST API remains `v1`. Version 6.1.6 adds no SQLite migration and remains compatible with valid 6.1.5 workspaces. Rollback to 6.1.5 uses the complete matching application bundle and does not require a schema rollback.
+
+Maintained screenshots, desktop and mobile GIFs, social previews, and the demo video show the integrated 6.1.6 interface. They are generated from an isolated workspace containing only public-safe dummy tasks with `pnpm docs:capture-media`.
+
+## Historical 6.1.5 Integrated Backlog Outcomes
 
 | Issue or tracker | Operational outcome                                                                                          | Pull requests                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
@@ -100,13 +117,13 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.5 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5). Version 6.1.5 requires macOS 13 Ventura or later. Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.6 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.6). Version 6.1.6 requires macOS 13 Ventura or later. Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
-The public REST API remains `v1`, and 6.1.5 adds no database migration. Version 6.1.3 introduced SQLite migration 34 for governed work-product artifact storage and indexes. Upgrading directly from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
+The public REST API remains `v1`, and 6.1.6 adds no database migration. Version 6.1.3 introduced SQLite migration 34 for governed work-product artifact storage and indexes. Upgrading directly from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
 
-Rollback from 6.1.5 to the complete 6.1.4 application bundle does not require a schema rollback. For rollback to 6.1.2 or earlier, stop every writer and restore the matching complete stopped-writer backup. Never copy an older database over a running instance.
+Rollback from 6.1.6 to the complete 6.1.5 application bundle does not require a schema rollback. For rollback to 6.1.2 or earlier, stop every writer and restore the matching complete stopped-writer backup. Never copy an older database over a running instance.
 
 ## Known Limitations
 

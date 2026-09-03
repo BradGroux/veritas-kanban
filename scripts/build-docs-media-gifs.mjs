@@ -5,7 +5,7 @@ import { copyFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const assets = resolve(root, 'docs/assets/v6.1.5');
+const assets = resolve(root, 'docs/assets/v6.1.6');
 
 function buildGif({ inputs, output, width, seconds }) {
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];

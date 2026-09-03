@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.6] - 2026-09-03
+
+Veritas Kanban 6.1.6 is a focused desktop reliability and interface consistency release based on issues found while exercising the compiled 6.1.5 macOS app.
+
+### Changed
+
+- Removed the redundant desktop wordmark while keeping the Veritas icon, aligned the Settings title and close control, and redesigned Command+K for clearer search, result hierarchy, selection, and keyboard guidance (#1362-#1364, #1370-#1372).
+- Standardized primary action sizing and purple treatment across feature pages, made the selected sidebar icon and label white on the brighter primary background, and aligned New Template with other page actions (#1366, #1369).
+- Refreshed maintained screenshots, desktop and mobile GIFs, social previews, and the demo video from a public-safe 6.1.6 workspace (#1374).
+
+### Fixed
+
+- Contained the app shell during chat-dock and drag interactions so the renderer no longer leaves a large blank region below the desktop UI (#1361, #1367).
+- Refreshed and retained the latest task revision after board mutations so consecutive valid card moves no longer fail as stale (#1365, #1368).
+
+### Security and compatibility
+
+- Updated patched transitive releases for `qs`, `@xmldom/xmldom`, and `postcss-selector-parser`; production and complete dependency audits report no known vulnerabilities (#1360, #1373).
+- The public REST API remains `v1`, and 6.1.6 adds no SQLite migration. Valid 6.1.5 workspaces remain compatible.
+- All maintained packages move together to 6.1.6. The macOS application bundles the matching server and web renderer and publishes through the signed/notarized arm64 channel.
+
 ## [6.1.5] - 2026-09-03
 
 Veritas Kanban 6.1.5 publishes the integrated backlog completed after the
@@ -2695,7 +2716,8 @@ Veritas Kanban is an AI-native project management board built for developers and
 
 _Built by [Digital Meld](https://digitalmeld.io) — AI-driven enterprise automation._
 
-[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.5...HEAD
+[unreleased]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.6...HEAD
+[6.1.6]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.5...v6.1.6
 [6.1.5]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.4...v6.1.5
 [6.1.4]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.3...v6.1.4
 [6.1.3]: https://github.com/BradGroux/veritas-kanban/compare/v6.1.2...v6.1.3

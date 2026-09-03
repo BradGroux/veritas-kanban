@@ -6,7 +6,7 @@ import { bypassAuth, cleanupRoutes, deleteTask, seedTestTask } from './helpers/a
 test.skip(process.env.DOCS_MEDIA_CAPTURE !== '1', 'Run only for an explicit docs media refresh.');
 test.describe.configure({ mode: 'serial' });
 
-const assetsDir = path.resolve(process.cwd(), 'docs/assets/v6.1.5');
+const assetsDir = path.resolve(process.cwd(), 'docs/assets/v6.1.6');
 const desktopViewport = { width: 1440, height: 1000 };
 const mobileViewport = { width: 390, height: 844 };
 
@@ -21,7 +21,7 @@ async function useDarkTheme(page: Page) {
   });
 }
 
-test('captures public-safe 6.1.5 desktop and mobile documentation media', async ({ page }) => {
+test('captures public-safe 6.1.6 desktop and mobile documentation media', async ({ page }) => {
   test.setTimeout(180_000);
   await mkdir(assetsDir, { recursive: true });
   await bypassAuth(page);
