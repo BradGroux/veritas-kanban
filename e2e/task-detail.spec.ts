@@ -66,7 +66,9 @@ test.describe('Task Detail Panel', () => {
 
     // The details tab should be active by default and show task info
     await expect(detailPanel.getByRole('tab', { name: 'Details' })).toBeVisible();
-    await expect(detailPanel.locator('.mantine-Select-root').first()).toBeVisible();
+    await expect(
+      detailPanel.getByRole('navigation', { name: 'Task workspace modes' })
+    ).toBeVisible();
 
     // The task title should be editable (it's an input in non-readOnly mode)
     const titleInput = detailPanel.locator('input').first();
@@ -93,5 +95,63 @@ test.describe('Task Detail Panel', () => {
     // Press Escape to close
     await page.keyboard.press('Escape');
     await expect(detailPanel).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  test('expanded workspace preserves section, scroll, and board focus', async ({ page }) => {
+    const title = `E2E Expanded Workspace ${Date.now()}`;
+    const task = await seedTestTask(page, {
+      title,
+      description: `Expanded task context\n\n${'Long task detail content. '.repeat(240)}`,
+      type: 'code',
+      status: 'todo',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'feat/e2e-expanded-workspace',
+        baseBranch: 'main',
+        worktreePath: '/tmp/e2e-expanded-workspace',
+      },
+    });
+    testTaskId = (task as { id: string }).id;
+
+    await page.setViewportSize({ width: 1440, height: 820 });
+    await page.goto('/');
+
+    const taskCard = page.getByRole('article', { name: new RegExp(`Task: ${title}`) });
+    await taskCard.focus();
+    await page.keyboard.press('Enter');
+
+    const detail = page.getByTestId('task-detail-panel');
+    await expect(detail).toBeVisible();
+    await detail.getByRole('button', { name: 'Plan' }).click();
+    await detail.getByRole('tab', { name: 'Details' }).click();
+    const scrollRegion = detail.getByTestId('task-detail-scroll-region');
+    await scrollRegion.evaluate((element) => {
+      element.scrollTop = 240;
+    });
+    const initialScroll = await scrollRegion.evaluate((element) => element.scrollTop);
+    expect(initialScroll).toBeGreaterThan(0);
+
+    await detail.getByRole('button', { name: 'Expand task workspace' }).click();
+    await expect(detail).toHaveAttribute('data-presentation', 'expanded');
+    await expect(detail.getByRole('button', { name: 'Plan' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    await expect(detail.getByRole('tab', { name: 'Details' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(await scrollRegion.evaluate((element) => element.scrollTop)).toBe(initialScroll);
+    const expandedBox = await detail.boundingBox();
+    expect(expandedBox?.width ?? 0).toBeGreaterThanOrEqual(1439);
+    expect(await detail.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
+
+    await detail.getByRole('button', { name: 'Exit expanded task workspace' }).click();
+    await expect(detail).toHaveAttribute('data-presentation', 'drawer');
+    expect(await scrollRegion.evaluate((element) => element.scrollTop)).toBe(initialScroll);
+
+    await detail.getByRole('button', { name: 'Close task workspace' }).click();
+    await expect(detail).not.toBeVisible();
+    await expect(taskCard).toBeFocused();
   });
 });

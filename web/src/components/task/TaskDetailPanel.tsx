@@ -30,7 +30,9 @@ import {
   FileCode,
   History,
   LayoutDashboard,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   Monitor,
   PlayCircle,
   X,
@@ -100,6 +102,7 @@ export function TaskDetailPanel({
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [taskChatOpen, setTaskChatOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [timelineAttemptId, setTimelineAttemptId] = useState<string | null>(null);
   const [timelineEventId, setTimelineEventId] = useState<string | null>(null);
   const lastDefaultedTaskIdRef = useRef<string | undefined>(undefined);
@@ -113,6 +116,10 @@ export function TaskDetailPanel({
     if (!open || !activeTaskId) return;
     return registerOpenTaskConflictSurface(activeTaskId);
   }, [activeTaskId, open]);
+
+  useEffect(() => {
+    if (!open) setExpanded(false);
+  }, [open]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -279,8 +286,13 @@ export function TaskDetailPanel({
         <Drawer.Overlay className="veritas-overlay fixed inset-0 z-50" />
         <Drawer.Content
           aria-label={`Task workspace: ${localTask.title}`}
+          data-presentation={expanded ? 'expanded' : 'drawer'}
           data-testid="task-detail-panel"
-          className="veritas-overlay-surface flex h-full min-h-0 max-h-[100dvh] w-[min(100vw,960px)] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg sm:w-[min(92vw,960px)] lg:w-[min(62vw,960px)]"
+          className={`veritas-overlay-surface flex h-full min-h-0 max-h-[100dvh] flex-col overflow-hidden bg-background bg-clip-padding text-sm shadow-lg ${
+            expanded
+              ? '!w-screen !max-w-none border-l-0'
+              : 'w-[min(100vw,960px)] border-l sm:w-[min(92vw,960px)] lg:w-[min(62vw,960px)]'
+          }`}
         >
           <Drawer.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
             <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
@@ -321,6 +333,22 @@ export function TaskDetailPanel({
                     >
                       Chat
                     </Button>
+                    <ActionIcon
+                      aria-label={
+                        expanded ? 'Exit expanded task workspace' : 'Expand task workspace'
+                      }
+                      aria-pressed={expanded}
+                      title={expanded ? 'Exit expanded workspace' : 'Expand workspace'}
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => setExpanded((current) => !current)}
+                    >
+                      {expanded ? (
+                        <Minimize2 className="h-4 w-4" />
+                      ) : (
+                        <Maximize2 className="h-4 w-4" />
+                      )}
+                    </ActionIcon>
                     <ActionIcon
                       aria-label="Close task workspace"
                       variant="subtle"

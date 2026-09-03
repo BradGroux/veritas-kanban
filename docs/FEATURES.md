@@ -108,7 +108,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 
   ![Task work view](assets/v5/v5-task-work-view.png)
 
-- **Task detail panel** — Slide-out sheet with tabbed sections: Details, Git, Agent, Diff, Review, Preview, Attachments, Metrics
+- **Progressive task workspace** — A quick drawer and full-width expanded presentation share Overview, Plan, Run, Results, and History navigation without losing the selected section, attempt, event, edits, scroll position, or board focus
 
   ![Task details panel](assets/v5/v5-task-work-view.png)
 

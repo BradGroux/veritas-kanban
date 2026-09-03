@@ -297,6 +297,48 @@ describe('task detail Mantine migration', () => {
     expect(screen.getByTestId('task-detail-scroll-region')).toBe(scrollRegion);
   });
 
+  it('expands the same workspace surface without losing navigation or scroll context', async () => {
+    const user = userEvent.setup();
+    const task = createMockTask({
+      id: 'task-expanded-workspace',
+      title: 'Inspect an expanded task workspace',
+      type: 'code',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'task-workspace-expanded',
+        baseBranch: 'main',
+        worktreePath: '/tmp/task-workspace-expanded',
+      },
+    });
+    renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
+
+    await user.click(screen.getByRole('button', { name: 'Results' }));
+    await user.click(screen.getByRole('tab', { name: 'Evidence' }));
+    const panel = screen.getByTestId('task-detail-panel');
+    const scrollRegion = screen.getByTestId('task-detail-scroll-region');
+    scrollRegion.scrollTop = 96;
+
+    await user.click(screen.getByRole('button', { name: 'Expand task workspace' }));
+
+    expect(screen.getByTestId('task-detail-panel')).toBe(panel);
+    expect(panel.getAttribute('data-presentation')).toBe('expanded');
+    expect(screen.getByRole('button', { name: 'Results' }).getAttribute('aria-current')).toBe(
+      'page'
+    );
+    expect(screen.getByRole('tab', { name: 'Evidence' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+    expect(scrollRegion.scrollTop).toBe(96);
+    expect(screen.getByRole('button', { name: 'Exit expanded task workspace' })).toBe(
+      document.activeElement
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Exit expanded task workspace' }));
+
+    expect(panel.getAttribute('data-presentation')).toBe('drawer');
+    expect(scrollRegion.scrollTop).toBe(96);
+  });
+
   it('groups outcomes under Results with review readiness before evidence', async () => {
     const user = userEvent.setup();
     const task = createMockTask({
