@@ -57,7 +57,10 @@ describe('tasksApi', () => {
     } as Response);
 
     const result = await tasksApi.list();
-    expect(fetch).toHaveBeenCalledWith('http://test-api/tasks', { credentials: 'include' });
+    expect(fetch).toHaveBeenCalledWith('http://test-api/tasks', {
+      credentials: 'include',
+      cache: 'no-store',
+    });
     expect(result).toHaveLength(2);
     expect(result[0].id).toBe('t1');
   });

@@ -12,7 +12,7 @@ import { API_BASE, apiFetch } from './helpers';
 
 export const tasksApi = {
   list: async (): Promise<Task[]> => {
-    return apiFetch<Task[]>(`${API_BASE}/tasks`);
+    return apiFetch<Task[]>(`${API_BASE}/tasks`, { cache: 'no-store' });
   },
 
   listArchived: async (): Promise<Task[]> => {
