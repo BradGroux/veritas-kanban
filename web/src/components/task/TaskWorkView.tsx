@@ -14,16 +14,11 @@ import {
   SimpleGrid,
   Stack,
   Text,
-  ThemeIcon,
   Tooltip,
 } from '@mantine/core';
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
-  Clock,
-  ClipboardCheck,
-  Coins,
   Download,
   ExternalLink,
   Eye,
@@ -32,16 +27,14 @@ import {
   History,
   MessageSquare,
   PackageCheck,
-  Play,
-  Route,
-  ShieldCheck,
-  Square,
-  Smartphone,
-  Terminal,
   RotateCcw,
-  Workflow,
+  ShieldCheck,
+  Smartphone,
+  Square,
+  Terminal,
   Wifi,
   WifiOff,
+  Workflow,
   XCircle,
 } from 'lucide-react';
 import {
@@ -67,8 +60,8 @@ import {
 } from '@/hooks/useWorkflowStats';
 import { clientAllowsLocalAgentControls } from '@/lib/client-policy';
 import { API_BASE } from '@/lib/config';
-import { ArtifactPreviewModal } from './ArtifactPreviewModal';
 import { sanitizeText } from '@/lib/sanitize';
+import { ArtifactPreviewModal } from './ArtifactPreviewModal';
 import { RunAccessPanel } from './RunAccessPanel';
 
 export function getTaskReadinessChecks(task: Task, isCodeTask: boolean): TaskReadinessCheck[] {
@@ -97,7 +90,34 @@ interface TaskWorkViewProps {
   onOpenWorkflow: () => void;
 }
 
-const STATUS_COLORS: Record<string, string> = {
+export type TaskOverviewState =
+  'new' | 'ready' | 'active' | 'blocked' | 'failed' | 'review' | 'done' | 'cancelled';
+
+export interface TaskOverviewComposition {
+  state: TaskOverviewState;
+  title: string;
+  detail: string;
+  color: string;
+  action: {
+    label: string;
+    target: TaskWorkViewTarget | 'workflow' | 'chat';
+  };
+}
+
+interface TaskOverviewCompositionOptions {
+  activeRun?: boolean;
+  effectiveAttemptStatus?: TaskAttempt['status'];
+}
+
+const TASK_STATUS_LABELS: Record<string, string> = {
+  blocked: 'Blocked',
+  cancelled: 'Cancelled',
+  done: 'Done',
+  'in-progress': 'In progress',
+  todo: 'To do',
+};
+
+const TASK_STATUS_COLORS: Record<string, string> = {
   blocked: 'red',
   cancelled: 'gray',
   done: 'green',
@@ -105,15 +125,135 @@ const STATUS_COLORS: Record<string, string> = {
   todo: 'gray',
 };
 
-function formatDate(value?: string): string {
-  if (!value) return 'Not recorded';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not recorded';
+/**
+ * Composes the Overview's single dominant state from authoritative task data.
+ * Attempt and review outcomes remain separately labelled so they are not
+ * misrepresented as task lifecycle values.
+ */
+export function getTaskOverviewComposition(
+  task: Task,
+  readinessChecks: TaskReadinessCheck[],
+  options: TaskOverviewCompositionOptions = {}
+): TaskOverviewComposition {
+  const activeRun =
+    options.activeRun ?? (task.attempt?.status === 'running' || task.attempt?.status === 'pending');
+  const attemptStatus = options.effectiveAttemptStatus ?? task.attempt?.status;
 
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
+  if (task.status === 'blocked') {
+    return {
+      state: 'blocked',
+      title: 'Blocked',
+      detail: task.blockedReason?.note || 'This task has an unresolved blocker.',
+      color: 'red',
+      action: { label: 'Resolve blocker', target: 'details' },
+    };
+  }
+
+  if (task.status === 'cancelled') {
+    return {
+      state: 'cancelled',
+      title: 'Cancelled',
+      detail: 'This task is closed without a completion handoff.',
+      color: 'gray',
+      action: { label: 'Review task', target: 'details' },
+    };
+  }
+
+  if (task.status === 'done') {
+    return {
+      state: 'done',
+      title: 'Done',
+      detail: 'Execution is complete. Confirm the handoff and retained evidence.',
+      color: 'green',
+      action: { label: 'Review handoff', target: 'work-products' },
+    };
+  }
+
+  if (activeRun) {
+    return {
+      state: 'active',
+      title: 'Run in progress',
+      detail: 'An execution attempt is active. Monitor its current step before intervening.',
+      color: 'blue',
+      action: { label: 'Monitor active run', target: 'agent' },
+    };
+  }
+
+  if (attemptStatus === 'failed') {
+    return {
+      state: 'failed',
+      title: 'Needs recovery',
+      detail: 'The latest attempt failed. Inspect its evidence before retrying.',
+      color: 'red',
+      action: { label: 'Inspect failed run', target: 'agent' },
+    };
+  }
+
+  const hasReviewSignal = Boolean(
+    task.review || task.reviewComments?.length || attemptStatus === 'complete'
+  );
+  if (hasReviewSignal) {
+    const needsChanges =
+      task.review?.decision === 'changes-requested' || task.review?.decision === 'rejected';
+    const hasUncheckedVerification = task.verificationSteps?.some((step) => !step.checked);
+
+    if (needsChanges) {
+      return {
+        state: 'review',
+        title: 'Changes requested',
+        detail: task.review?.summary || 'Review requires follow-up before handoff.',
+        color: 'yellow',
+        action: { label: 'Address review decision', target: 'review' },
+      };
+    }
+
+    if (hasUncheckedVerification) {
+      return {
+        state: 'review',
+        title: 'Verification required',
+        detail: 'Execution finished with verification steps still unchecked.',
+        color: 'yellow',
+        action: { label: 'Complete verification', target: 'details' },
+      };
+    }
+
+    return {
+      state: 'review',
+      title: task.review?.decision === 'approved' ? 'Approved for handoff' : 'Ready for review',
+      detail: 'Execution has an outcome ready for review and handoff.',
+      color: task.review?.decision === 'approved' ? 'green' : 'violet',
+      action: { label: 'Review outcome', target: 'review' },
+    };
+  }
+
+  const missingReadiness = readinessChecks.find((check) => !check.passed);
+  if (missingReadiness) {
+    return {
+      state: 'new',
+      title: 'Needs preparation',
+      detail: missingReadiness.detail,
+      color: 'yellow',
+      action: { label: 'Fix readiness', target: 'details' },
+    };
+  }
+
+  if (task.type === 'code' && !task.git?.worktreePath) {
+    return {
+      state: 'ready',
+      title: 'Ready to prepare',
+      detail: 'The task is defined. Prepare its isolated worktree before execution.',
+      color: 'teal',
+      action: { label: 'Prepare worktree', target: 'git' },
+    };
+  }
+
+  return {
+    state: 'ready',
+    title: 'Ready to run',
+    detail: 'The task has enough context and verification intent to begin execution.',
+    color: 'teal',
+    action: { label: 'Start execution', target: 'agent' },
+  };
 }
 
 function formatDurationMs(value?: number): string {
@@ -181,79 +321,6 @@ function getAttemptColor(status?: TaskAttempt['status']): string {
   }
 }
 
-function getNextAction(
-  task: Task,
-  readinessChecks: TaskReadinessCheck[]
-): {
-  label: string;
-  detail: string;
-  target: TaskWorkViewTarget | 'workflow' | 'chat';
-} {
-  if (task.status === 'blocked') {
-    return {
-      label: 'Resolve blocker',
-      detail: task.blockedReason?.note || 'Review the blocker details before starting execution.',
-      target: 'details',
-    };
-  }
-
-  const missingReadiness = readinessChecks.find((check) => !check.passed);
-  if (missingReadiness) {
-    return {
-      label: 'Fix readiness',
-      detail: missingReadiness.detail,
-      target: 'details',
-    };
-  }
-
-  if (task.attempt?.status === 'running' || task.attempt?.status === 'pending') {
-    return {
-      label: 'Monitor active run',
-      detail: 'An agent attempt is active. Watch the live session before changing task state.',
-      target: 'agent',
-    };
-  }
-
-  if (task.type === 'code' && !task.git?.worktreePath) {
-    return {
-      label: 'Prepare worktree',
-      detail: 'Create a worktree before starting the agent.',
-      target: 'git',
-    };
-  }
-
-  const uncheckedVerification = task.verificationSteps?.some((step) => !step.checked);
-  if (uncheckedVerification) {
-    return {
-      label: 'Complete verification',
-      detail: 'There are unchecked verification steps.',
-      target: 'details',
-    };
-  }
-
-  if (task.review?.decision === 'changes-requested' || task.review?.decision === 'rejected') {
-    return {
-      label: 'Address review decision',
-      detail: task.review.summary || 'Review requires follow-up before handoff.',
-      target: 'review',
-    };
-  }
-
-  if (task.status === 'done') {
-    return {
-      label: 'Review handoff',
-      detail: 'Task is marked done. Confirm work products and completion evidence.',
-      target: 'work-products',
-    };
-  }
-
-  return {
-    label: 'Start or continue execution',
-    detail: 'Task is ready enough to start the agent or workflow.',
-    target: 'agent',
-  };
-}
-
 function getVerificationSummary(task: Task): { complete: number; total: number } {
   const steps = task.verificationSteps ?? [];
   return {
@@ -278,8 +345,6 @@ function getWorkflowStatusColor(status?: WorkflowRunStatus): string {
       return 'green';
     case 'failed':
       return 'red';
-    case 'pending':
-      return 'gray';
     default:
       return 'gray';
   }
@@ -307,15 +372,6 @@ function workflowRunMatchesTask(run: WorkflowRun, taskId: string): boolean {
   return run.taskId === taskId || contextTaskId === taskId;
 }
 
-function getWorkflowDurationMs(run?: WorkflowRun): number | undefined {
-  if (!run?.startedAt) return undefined;
-  const start = new Date(run.startedAt).getTime();
-  if (Number.isNaN(start)) return undefined;
-  const end = run.completedAt ? new Date(run.completedAt).getTime() : Date.now();
-  if (Number.isNaN(end) || end < start) return undefined;
-  return end - start;
-}
-
 function getWorkflowProgress(run?: WorkflowRun): {
   complete: number;
   total: number;
@@ -324,11 +380,7 @@ function getWorkflowProgress(run?: WorkflowRun): {
   const steps = run?.steps ?? [];
   const total = steps.length;
   const complete = steps.filter((step) => step.status === 'completed').length;
-  return {
-    complete,
-    total,
-    percent: total > 0 ? Math.round((complete / total) * 100) : 0,
-  };
+  return { complete, total, percent: total > 0 ? Math.round((complete / total) * 100) : 0 };
 }
 
 function workflowRunSortWeight(status: WorkflowRunStatus): number {
@@ -382,8 +434,8 @@ export function TaskWorkView({
     isFetching: isAgentStatusFetching,
   } = useAgentStatus(task.id);
   const { outputs, isConnected, isRunning } = useAgentStream(task.id, agentStatus?.attemptId);
-  const { data: activeWorkflowRuns = [], isLoading: activeWorkflowRunsLoading } = useActiveRuns();
-  const { data: recentWorkflowRuns = [], isLoading: recentWorkflowRunsLoading } = useRecentRuns();
+  const { data: activeWorkflowRuns = [] } = useActiveRuns();
+  const { data: recentWorkflowRuns = [] } = useRecentRuns();
   const stopAgent = useStopAgent();
   const { authContext, hasPermission } = useIdentity();
   const canControlAgents =
@@ -392,11 +444,6 @@ export function TaskWorkView({
     () => evaluateTaskReadiness(task, { isCodeTask }),
     [task, isCodeTask]
   );
-  const readinessChecks = readinessSummary.checks;
-  const passedReadiness = readinessSummary.passed;
-  const readinessPercent = readinessSummary.percent;
-  const nextAction = getNextAction(task, readinessChecks);
-  const verification = getVerificationSummary(task);
   const latestWorkProducts = workProducts.slice(0, 3);
   const latestOutputs = outputs.slice(-6);
   const taskAttemptActive =
@@ -406,6 +453,10 @@ export function TaskWorkView({
     ((agentStatus === undefined || isAgentStatusFetching) && (isRunning || taskAttemptActive));
   const effectiveAttemptStatus =
     !activeRun && taskAttemptActive ? ('failed' as const) : task.attempt?.status;
+  const overview = getTaskOverviewComposition(task, readinessSummary.checks, {
+    activeRun,
+    effectiveAttemptStatus,
+  });
   const retryableRun = effectiveAttemptStatus === 'failed' || effectiveAttemptStatus === 'complete';
   const stopControl = agentStatus?.controls?.controls.find((control) => control.action === 'stop');
   const canStop =
@@ -418,9 +469,8 @@ export function TaskWorkView({
         : undefined) ??
     stopControl?.reason ??
     'Validated stop capability evidence is not available for this run.';
+  const verification = getVerificationSummary(task);
   const attemptDuration = getAttemptDurationMs(task.attempt);
-  const trackedTime = formatTrackedSeconds(task.timeTracking?.totalSeconds);
-  const runCost = formatCost(task.actualCost);
   const taskWorkflowRuns = useMemo(() => {
     const byId = new Map<string, WorkflowRun>();
     for (const run of [...activeWorkflowRuns, ...recentWorkflowRuns]) {
@@ -430,38 +480,44 @@ export function TaskWorkView({
   }, [activeWorkflowRuns, recentWorkflowRuns, task.id]);
   const workflowRun = taskWorkflowRuns[0];
   const workflowProgress = getWorkflowProgress(workflowRun);
-  const workflowDuration = getWorkflowDurationMs(workflowRun);
-  const workflowLoading = activeWorkflowRunsLoading || recentWorkflowRunsLoading;
   const nextActionRestricted =
-    nextAction.target === 'agent' || (nextAction.target === 'git' && !canControlAgents);
-  const effectiveNextAction =
+    overview.action.target === 'agent' || (overview.action.target === 'git' && !canControlAgents);
+  const effectiveAction =
     nextActionRestricted && !canControlAgents
       ? {
           label: isCodeTask ? 'Review timeline' : 'Review details',
-          detail:
-            'This client can review task state, comments, gates, and run history. Agent execution is unavailable for this client mode.',
           target: isCodeTask ? ('timeline' as const) : ('details' as const),
         }
-      : nextAction;
+      : overview.action;
   const currentStep =
     latestOutputs.length > 0
       ? sanitizeText(latestOutputs[latestOutputs.length - 1].content).slice(0, 180)
       : activeRun
         ? 'Waiting for agent output.'
-        : task.attempt?.status === 'failed'
-          ? 'Last run failed. Open Agent to inspect logs or start another attempt.'
+        : effectiveAttemptStatus === 'failed'
+          ? 'The latest run failed. Inspect its timeline before retrying.'
           : 'No live output is available.';
+  const showReadiness = overview.state === 'new' || overview.state === 'ready';
+  const showReviewHandoff = Boolean(
+    overview.state === 'review' ||
+    overview.state === 'done' ||
+    task.review ||
+    task.reviewComments?.length ||
+    task.deliverables?.length ||
+    task.attachments?.length ||
+    workProducts.length
+  );
 
   const openNextAction = () => {
-    if (effectiveNextAction.target === 'workflow') {
+    if (effectiveAction.target === 'workflow') {
       onOpenWorkflow();
       return;
     }
-    if (effectiveNextAction.target === 'chat') {
+    if (effectiveAction.target === 'chat') {
       onOpenChat();
       return;
     }
-    onOpenTab(effectiveNextAction.target);
+    onOpenTab(effectiveAction.target);
   };
 
   const handleStopAgent = () => {
@@ -473,28 +529,39 @@ export function TaskWorkView({
   return (
     <>
       <Stack gap="md">
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="flex-start" gap="md" wrap="nowrap">
-            <div className="min-w-0">
+        <Paper
+          withBorder
+          p={{ base: 'md', sm: 'lg' }}
+          radius="md"
+          data-testid="task-overview-primary"
+          data-state={overview.state}
+          className="border-l-4"
+          style={{ borderLeftColor: `var(--mantine-color-${overview.color}-6)` }}
+        >
+          <Group justify="space-between" align="flex-start" gap="lg" wrap="wrap">
+            <Stack gap={6} className="min-w-0 flex-1">
               <Group gap="xs" wrap="wrap">
-                <ThemeIcon size="sm" radius="xl" variant="light">
-                  <Route className="h-4 w-4" />
-                </ThemeIcon>
-                <Text fw={700}>Work View</Text>
-                <Badge color={STATUS_COLORS[task.status] ?? 'gray'} variant="light">
-                  {task.status}
-                </Badge>
-                <Badge color={readinessPercent === 100 ? 'green' : 'yellow'} variant="outline">
-                  {readinessPercent}% ready
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+                  Task state
+                </Text>
+                <Badge
+                  color={TASK_STATUS_COLORS[task.status] ?? 'gray'}
+                  variant="outline"
+                  aria-label={`Task lifecycle ${TASK_STATUS_LABELS[task.status] ?? task.status}`}
+                >
+                  {TASK_STATUS_LABELS[task.status] ?? task.status}
                 </Badge>
               </Group>
-              <Text size="sm" c="dimmed" mt={6}>
-                {effectiveNextAction.detail}
+              <Text component="h2" size="xl" fw={750} lh={1.2}>
+                {overview.title}
               </Text>
-            </div>
+              <Text size="sm" c="dimmed" maw={680}>
+                {overview.detail}
+              </Text>
+            </Stack>
             {!readOnly && (
-              <Button size="xs" onClick={openNextAction}>
-                {effectiveNextAction.label}
+              <Button onClick={openNextAction} data-testid="task-overview-primary-action">
+                {effectiveAction.label}
               </Button>
             )}
           </Group>
@@ -507,485 +574,320 @@ export function TaskWorkView({
           </Alert>
         )}
 
-        {task.attempt?.id && (
-          <RunAccessPanel
-            taskId={task.id}
-            attemptId={task.attempt.id}
-            live={task.attempt.status === 'running'}
-          />
+        {overview.state === 'blocked' && (
+          <Alert
+            color="red"
+            title="What is blocking this task"
+            icon={<AlertTriangle className="h-4 w-4" />}
+          >
+            <Stack gap="xs">
+              <Text size="sm">
+                {task.blockedReason?.note || 'The task is blocked without a recorded explanation.'}
+              </Text>
+              {(task.blockedBy?.length ?? 0) > 0 && (
+                <Text size="xs" c="dimmed">
+                  {task.blockedBy?.length} blocking task link
+                  {task.blockedBy?.length === 1 ? '' : 's'} recorded.
+                </Text>
+              )}
+            </Stack>
+          </Alert>
         )}
 
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <Paper withBorder p="md" radius="md">
-            <Stack gap="xs">
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="xs">
-                  <Bot className="h-4 w-4 text-muted-foreground" />
-                  <Text fw={600} size="sm">
-                    Live Session
+        {(task.attempt || activeRun) && (
+          <Paper withBorder p="md" radius="md" aria-label="Current execution">
+            <Stack gap="sm">
+              <Group justify="space-between" align="flex-start" gap="sm" wrap="wrap">
+                <Stack gap={4} className="min-w-0">
+                  <Group gap="xs" wrap="wrap">
+                    <Terminal className="h-4 w-4 text-muted-foreground" />
+                    <Text fw={650}>Current execution</Text>
+                    <Badge color={getAttemptColor(effectiveAttemptStatus)} variant="light">
+                      Latest attempt: {formatAttemptStatus(effectiveAttemptStatus)}
+                    </Badge>
+                  </Group>
+                  <Text size="sm" fw={600}>
+                    Current step: {currentStep}
                   </Text>
+                  <Group gap="xs" wrap="wrap">
+                    <Text size="xs" c="dimmed">
+                      Attempt <Code>{agentStatus?.attemptId || task.attempt?.id || 'none'}</Code>
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {isConnected ? (
+                        <Wifi className="mr-1 inline h-3 w-3 text-green-500" />
+                      ) : (
+                        <WifiOff className="mr-1 inline h-3 w-3" />
+                      )}
+                      Event stream {isConnected ? 'connected' : 'disconnected'}
+                    </Text>
+                  </Group>
+                </Stack>
+                <Group gap="xs" wrap="wrap">
+                  {activeRun && !readOnly && canControlAgents && (
+                    <Button
+                      size="compact-xs"
+                      color="red"
+                      variant="light"
+                      leftSection={<Square className="h-3 w-3" />}
+                      loading={stopAgent.isPending}
+                      onClick={() => setStopConfirmOpen(true)}
+                      disabled={!canStop}
+                      aria-label={
+                        canStop ? 'Stop active run' : `Stop active run unavailable: ${stopReason}`
+                      }
+                      title={canStop ? 'Stop active run' : stopReason}
+                    >
+                      Stop
+                    </Button>
+                  )}
+                  {retryableRun && !activeRun && !readOnly && canControlAgents && (
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      leftSection={<RotateCcw className="h-3 w-3" />}
+                      onClick={() => onOpenTab('agent')}
+                    >
+                      Retry in Agent
+                    </Button>
+                  )}
+                  {task.attempt?.id && (
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      leftSection={<History className="h-3 w-3" />}
+                      onClick={() => onOpenTab('timeline')}
+                    >
+                      Timeline
+                    </Button>
+                  )}
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    leftSection={<MessageSquare className="h-3 w-3" />}
+                    onClick={onOpenChat}
+                  >
+                    Chat
+                  </Button>
                 </Group>
-                <Badge color={getAttemptColor(effectiveAttemptStatus)} variant="light">
-                  {formatAttemptStatus(effectiveAttemptStatus)}
-                </Badge>
               </Group>
-              {task.attempt ? (
+
+              <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
+                <div className="rounded-md border border-border p-3">
+                  <Text size="xs" c="dimmed">
+                    Duration
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {formatDurationMs(attemptDuration)}
+                  </Text>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <Text size="xs" c="dimmed">
+                    Tracked time
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {formatTrackedSeconds(task.timeTracking?.totalSeconds)}
+                  </Text>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <Text size="xs" c="dimmed">
+                    Cost
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {formatCost(task.actualCost)}
+                  </Text>
+                </div>
+              </SimpleGrid>
+
+              {latestOutputs.length > 0 && (
+                <details className="rounded-md border border-border">
+                  <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+                    Recent run output ({outputs.length} events)
+                  </summary>
+                  <ScrollArea h={180} type="auto">
+                    <Stack
+                      gap={4}
+                      className="bg-zinc-950 p-3 font-mono text-xs text-zinc-200"
+                      aria-live="polite"
+                    >
+                      {latestOutputs.map((output, index) => (
+                        <Text
+                          key={`${output.timestamp}:${index}`}
+                          component="pre"
+                          size="xs"
+                          c={
+                            output.type === 'stderr'
+                              ? 'red.3'
+                              : output.type === 'system'
+                                ? 'yellow.3'
+                                : 'gray.2'
+                          }
+                          className="m-0 whitespace-pre-wrap break-words font-mono"
+                        >
+                          {output.type === 'stdin' ? 'You: ' : ''}
+                          {sanitizeText(output.content)}
+                        </Text>
+                      ))}
+                    </Stack>
+                  </ScrollArea>
+                </details>
+              )}
+            </Stack>
+          </Paper>
+        )}
+
+        {workflowRun && (
+          <Paper withBorder p="md" radius="md" aria-label="Workflow execution">
+            <Stack gap="sm">
+              <Group justify="space-between" align="flex-start" gap="sm" wrap="wrap">
                 <Stack gap={4}>
+                  <Group gap="xs" wrap="wrap">
+                    <Workflow className="h-4 w-4 text-muted-foreground" />
+                    <Text fw={650}>Workflow execution</Text>
+                    <Badge color={getWorkflowStatusColor(workflowRun.status)} variant="light">
+                      {getWorkflowStatusLabel(workflowRun.status)}
+                    </Badge>
+                  </Group>
                   <Text size="xs" c="dimmed">
-                    Attempt {task.attempt.id}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {task.attempt.agent}
-                    {task.attempt.model ? ` | ${task.attempt.model}` : ''}
-                    {task.attempt.provider ? ` | ${task.attempt.provider}` : ''}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Started {formatDate(task.attempt.started)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Duration {formatDurationMs(attemptDuration)}
+                    Workflow {workflowRun.workflowId} v{workflowRun.workflowVersion}
                   </Text>
                 </Stack>
-              ) : (
-                <Text size="sm" c="dimmed">
-                  No agent attempt has been started for this task.
-                </Text>
-              )}
-              <Group gap="xs" mt="xs">
-                {canControlAgents && (
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    leftSection={<Play className="h-3 w-3" />}
-                    onClick={() => onOpenTab('agent')}
-                  >
-                    Open Agent
-                  </Button>
-                )}
-                {isCodeTask && (
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    leftSection={<History className="h-3 w-3" />}
-                    onClick={() => onOpenTab('timeline')}
-                  >
-                    Timeline
-                  </Button>
-                )}
-                {retryableRun && canControlAgents && (
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    leftSection={<RotateCcw className="h-3 w-3" />}
-                    onClick={() => onOpenTab('agent')}
-                  >
-                    Retry
-                  </Button>
-                )}
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  leftSection={<MessageSquare className="h-3 w-3" />}
-                  onClick={onOpenChat}
-                >
-                  Chat
+                <Button size="compact-xs" variant="light" onClick={onOpenWorkflow}>
+                  Open Workflow
                 </Button>
               </Group>
-            </Stack>
-          </Paper>
-
-          <Paper withBorder p="md" radius="md">
-            <Stack gap="xs">
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="xs">
-                  <GitBranch className="h-4 w-4 text-muted-foreground" />
-                  <Text fw={600} size="sm">
-                    Code and Review
-                  </Text>
-                </Group>
-                <Badge
-                  color={task.git?.worktreePath ? 'green' : task.git?.repo ? 'yellow' : 'gray'}
-                  variant="light"
-                >
-                  {task.git?.worktreePath
-                    ? 'worktree ready'
-                    : task.git?.repo
-                      ? 'repo set'
-                      : 'not set'}
+              <Group gap="xs" wrap="wrap">
+                <Badge variant="outline" className="font-mono">
+                  {workflowRun.id}
                 </Badge>
-              </Group>
-              <Text size="xs" c="dimmed">
-                Repo: {task.git?.repo || 'Not configured'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Branch: {task.git?.branch || task.git?.baseBranch || 'Not configured'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Review: {getReviewLabel(task)}
-              </Text>
-              <Group gap="xs" mt="xs">
-                {isCodeTask && (
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    leftSection={<GitBranch className="h-3 w-3" />}
-                    onClick={() => onOpenTab('git')}
-                  >
-                    Git
-                  </Button>
-                )}
-                {isCodeTask && (
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    leftSection={<ClipboardCheck className="h-3 w-3" />}
-                    onClick={() => onOpenTab('review')}
-                  >
-                    Review
-                  </Button>
-                )}
-              </Group>
-            </Stack>
-          </Paper>
-        </SimpleGrid>
-
-        <Paper withBorder p="md" radius="md">
-          <Stack gap="sm">
-            <Group justify="space-between" align="flex-start" gap="sm">
-              <div className="min-w-0">
-                <Group gap="xs" wrap="wrap">
-                  <Terminal className="h-4 w-4 text-muted-foreground" />
-                  <Text fw={600}>Activity Console</Text>
-                  <Badge
-                    color={activeRun ? 'blue' : getAttemptColor(effectiveAttemptStatus)}
-                    variant="light"
-                  >
-                    {activeRun ? 'Live' : formatAttemptStatus(effectiveAttemptStatus)}
+                {workflowRun.currentStep && (
+                  <Badge variant="light" color="blue">
+                    {workflowRun.currentStep}
                   </Badge>
-                  {isConnected ? (
-                    <Wifi className="h-3 w-3 text-green-500" />
-                  ) : (
-                    <WifiOff className="h-3 w-3 text-muted-foreground" />
-                  )}
-                  <Badge color={isConnected ? 'green' : 'gray'} variant="outline">
-                    {isConnected ? 'Connected' : 'Disconnected'}
-                  </Badge>
-                </Group>
-                <Text size="xs" c="dimmed" mt={4}>
-                  Attempt <Code>{agentStatus?.attemptId || task.attempt?.id || 'none'}</Code>
-                </Text>
-              </div>
-              <Group gap="xs" wrap="wrap" justify="flex-end">
-                {activeRun && !readOnly && canControlAgents && (
-                  <Button
-                    size="compact-xs"
-                    color="red"
-                    variant="light"
-                    leftSection={<Square className="h-3 w-3" />}
-                    loading={stopAgent.isPending}
-                    onClick={() => setStopConfirmOpen(true)}
-                    disabled={!canStop}
-                    aria-label={
-                      canStop ? 'Stop active run' : `Stop active run unavailable: ${stopReason}`
-                    }
-                    title={canStop ? 'Stop active run' : stopReason}
-                  >
-                    Stop
-                  </Button>
                 )}
-                {retryableRun && !activeRun && !readOnly && canControlAgents && (
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    leftSection={<RotateCcw className="h-3 w-3" />}
-                    onClick={() => onOpenTab('agent')}
-                  >
-                    Retry in Agent
-                  </Button>
-                )}
-                {task.attempt?.id && (
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    leftSection={<History className="h-3 w-3" />}
-                    onClick={() => onOpenTab('timeline')}
-                  >
-                    Timeline
-                  </Button>
-                )}
-              </Group>
-            </Group>
-
-            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
-              <div className="rounded-md border border-border p-3">
-                <Group gap="xs" wrap="nowrap">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <Text size="xs" c="dimmed">
-                      Run duration
-                    </Text>
-                    <Text size="sm" fw={600}>
-                      {formatDurationMs(attemptDuration)}
-                    </Text>
-                  </div>
-                </Group>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <Group gap="xs" wrap="nowrap">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <Text size="xs" c="dimmed">
-                      Tracked time
-                    </Text>
-                    <Text size="sm" fw={600}>
-                      {trackedTime}
-                    </Text>
-                  </div>
-                </Group>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <Group gap="xs" wrap="nowrap">
-                  <Coins className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <Text size="xs" c="dimmed">
-                      Cost
-                    </Text>
-                    <Text size="sm" fw={600}>
-                      {runCost}
-                    </Text>
-                  </div>
-                </Group>
-              </div>
-            </SimpleGrid>
-
-            <div className="overflow-hidden rounded-md border border-border">
-              <Group justify="space-between" className="border-b bg-card px-3 py-2" wrap="nowrap">
-                <Text size="xs" c="dimmed" truncate>
-                  Current step: {currentStep}
-                </Text>
-                <Badge size="xs" variant="outline">
-                  {outputs.length} events
-                </Badge>
-              </Group>
-              <ScrollArea h={180} type="auto">
-                <Stack
-                  gap={4}
-                  className="bg-zinc-950 p-3 font-mono text-xs text-zinc-200"
-                  aria-live="polite"
-                >
-                  {latestOutputs.length > 0 ? (
-                    latestOutputs.map((output, index) => (
-                      <Text
-                        key={`${output.timestamp}:${index}`}
-                        component="pre"
-                        size="xs"
-                        c={
-                          output.type === 'stderr'
-                            ? 'red.3'
-                            : output.type === 'system'
-                              ? 'yellow.3'
-                              : 'gray.2'
-                        }
-                        className="m-0 whitespace-pre-wrap break-words font-mono"
-                      >
-                        {output.type === 'stdin' ? 'You: ' : ''}
-                        {sanitizeText(output.content)}
-                      </Text>
-                    ))
-                  ) : (
-                    <Text size="xs" c="gray.5" className="font-mono">
-                      {activeRun
-                        ? 'Waiting for output...'
-                        : 'Live output will appear here when an agent runs.'}
-                    </Text>
-                  )}
-                </Stack>
-              </ScrollArea>
-            </div>
-          </Stack>
-        </Paper>
-
-        <Paper withBorder p="md" radius="md">
-          <Stack gap="sm">
-            <Group justify="space-between" align="flex-start" gap="sm">
-              <div className="min-w-0">
-                <Group gap="xs" wrap="wrap">
-                  <Workflow className="h-4 w-4 text-muted-foreground" />
-                  <Text fw={600}>Workflow State</Text>
-                  <Badge color={getWorkflowStatusColor(workflowRun?.status)} variant="light">
-                    {getWorkflowStatusLabel(workflowRun?.status)}
-                  </Badge>
-                </Group>
-                <Text size="xs" c="dimmed" mt={4}>
-                  {workflowRun
-                    ? workflowRun.automation
-                      ? `Automation ${workflowRun.automation.automationVersionId} · Workflow ${workflowRun.workflowId} v${workflowRun.workflowVersion}`
-                      : `Workflow ${workflowRun.workflowId} v${workflowRun.workflowVersion}`
-                    : 'No workflow run has been recorded for this task.'}
-                </Text>
-              </div>
-              <Button
-                size="compact-xs"
-                variant="light"
-                leftSection={<Workflow className="h-3 w-3" />}
-                onClick={onOpenWorkflow}
-              >
-                Open Workflow
-              </Button>
-            </Group>
-
-            {workflowLoading ? (
-              <Group gap="xs">
-                <Loader size="xs" />
                 <Text size="xs" c="dimmed">
-                  Loading workflow state...
+                  Steps {workflowProgress.complete}/{workflowProgress.total}
                 </Text>
               </Group>
-            ) : workflowRun ? (
-              <Stack gap="xs">
-                <Group gap="xs" wrap="wrap">
-                  <Badge variant="outline" className="font-mono">
-                    {workflowRun.id}
-                  </Badge>
-                  {workflowRun.currentStep && (
-                    <Badge variant="light" color="blue">
-                      {workflowRun.currentStep}
-                    </Badge>
-                  )}
-                  {workflowRun.automation && (
-                    <Badge variant="light" color="violet" className="font-mono">
-                      automation v{workflowRun.automation.automationVersion}
-                    </Badge>
-                  )}
-                </Group>
-                <Group gap="md" wrap="wrap">
-                  <Text size="xs" c="dimmed">
-                    Steps {workflowProgress.complete}/{workflowProgress.total}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Duration {formatDurationMs(workflowDuration)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Started {formatDate(workflowRun.startedAt)}
-                  </Text>
-                </Group>
-                <Progress
-                  value={workflowProgress.percent}
-                  color={getWorkflowStatusColor(workflowRun.status)}
-                />
-                {workflowRun.error && (
-                  <Alert color="red" icon={<AlertTriangle className="h-4 w-4" />}>
-                    {workflowRun.error}
-                  </Alert>
-                )}
-              </Stack>
-            ) : (
-              <Text size="sm" c="dimmed">
-                Open Workflow to start a recipe or inspect available workflow runs.
-              </Text>
-            )}
-          </Stack>
-        </Paper>
-
-        <Paper withBorder p="md" radius="md">
-          <Stack gap="sm">
-            <Group justify="space-between" align="center" wrap="nowrap">
-              <Group gap="xs">
-                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                <Text fw={600}>Readiness Gate</Text>
-              </Group>
-              <Text size="xs" c="dimmed">
-                {passedReadiness}/{readinessChecks.length} checks
-              </Text>
-            </Group>
-            <Progress
-              value={readinessPercent}
-              color={readinessPercent === 100 ? 'green' : 'yellow'}
-            />
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-              {readinessChecks.map((check) => (
-                <Group key={check.id} gap="xs" align="flex-start" wrap="nowrap">
-                  {check.passed ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-                  ) : (
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
-                  )}
-                  <div className="min-w-0">
-                    <Text size="sm" fw={500}>
-                      {check.label}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {check.detail}
-                    </Text>
-                  </div>
-                </Group>
-              ))}
-            </SimpleGrid>
-          </Stack>
-        </Paper>
-
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <Paper withBorder p="md" radius="md">
-            <Stack gap="xs">
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="xs">
-                  <PackageCheck className="h-4 w-4 text-muted-foreground" />
-                  <Text fw={600} size="sm">
-                    Handoff
-                  </Text>
-                </Group>
-                <Badge variant="light" color={verification.total ? 'blue' : 'gray'}>
-                  {verification.complete}/{verification.total} verified
-                </Badge>
-              </Group>
-              <Text size="xs" c="dimmed">
-                Deliverables: {task.deliverables?.length ?? 0}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Attachments: {task.attachments?.length ?? 0}
-              </Text>
-              {task.qaGate?.required && (
-                <Alert
-                  color={task.qaGate.passed ? 'green' : 'yellow'}
-                  icon={<AlertTriangle className="h-4 w-4" />}
-                >
-                  QA gate {task.qaGate.passed ? 'passed' : 'is required before completion'}.
+              <Progress
+                value={workflowProgress.percent}
+                color={getWorkflowStatusColor(workflowRun.status)}
+              />
+              {workflowRun.error && (
+                <Alert color="red" icon={<AlertTriangle className="h-4 w-4" />}>
+                  {workflowRun.error}
                 </Alert>
               )}
-              <Group gap="xs" mt="xs">
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  leftSection={<PackageCheck className="h-3 w-3" />}
-                  onClick={() => onOpenTab('work-products')}
-                >
-                  Work Products
-                </Button>
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  leftSection={<Workflow className="h-3 w-3" />}
-                  onClick={onOpenWorkflow}
-                >
-                  Workflow
-                </Button>
-              </Group>
             </Stack>
           </Paper>
+        )}
 
-          <Paper withBorder p="md" radius="md">
-            <Stack gap="xs">
-              <Group justify="space-between" wrap="nowrap">
+        {showReadiness && (
+          <Paper withBorder p="md" radius="md" aria-label="Readiness">
+            <Stack gap="sm">
+              <Group justify="space-between" align="center" wrap="nowrap">
                 <Group gap="xs">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <Text fw={600} size="sm">
-                    Work Products
-                  </Text>
+                  <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  <Text fw={650}>Readiness</Text>
                 </Group>
-                <Badge variant="light" color="gray">
-                  {workProducts.length}
+                <Badge color={readinessSummary.ready ? 'green' : 'yellow'} variant="light">
+                  {readinessSummary.passed}/{readinessSummary.total} checks
                 </Badge>
               </Group>
+              <Progress
+                value={readinessSummary.percent}
+                color={readinessSummary.ready ? 'green' : 'yellow'}
+              />
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+                {readinessSummary.checks.map((check) => (
+                  <Group key={check.id} gap="xs" align="flex-start" wrap="nowrap">
+                    {check.passed ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                    ) : (
+                      <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                    )}
+                    <div className="min-w-0">
+                      <Text size="sm" fw={500}>
+                        {check.label}
+                      </Text>
+                      {!check.passed && (
+                        <Text size="xs" c="dimmed">
+                          {check.detail}
+                        </Text>
+                      )}
+                    </div>
+                  </Group>
+                ))}
+              </SimpleGrid>
+            </Stack>
+          </Paper>
+        )}
+
+        {showReviewHandoff && (
+          <Paper withBorder p="md" radius="md" aria-label="Review and handoff">
+            <Stack gap="sm">
+              <Group justify="space-between" align="flex-start" gap="sm" wrap="wrap">
+                <Group gap="xs" wrap="wrap">
+                  <PackageCheck className="h-4 w-4 text-muted-foreground" />
+                  <Text fw={650}>Review and handoff</Text>
+                  {task.review?.decision && (
+                    <Badge
+                      color={task.review.decision === 'approved' ? 'green' : 'yellow'}
+                      variant="light"
+                    >
+                      Review: {getReviewLabel(task)}
+                    </Badge>
+                  )}
+                </Group>
+                <Group gap="xs">
+                  {isCodeTask && (
+                    <Button size="compact-xs" variant="light" onClick={() => onOpenTab('review')}>
+                      Review
+                    </Button>
+                  )}
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={() => onOpenTab('work-products')}
+                  >
+                    Work Products
+                  </Button>
+                </Group>
+              </Group>
+
+              <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
+                <div className="rounded-md border border-border p-3">
+                  <Text size="xs" c="dimmed">
+                    Verification
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {verification.complete}/{verification.total} complete
+                  </Text>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <Text size="xs" c="dimmed">
+                    Deliverables
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {task.deliverables?.length ?? 0}
+                  </Text>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <Text size="xs" c="dimmed">
+                    Saved work products
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {workProducts.length}
+                  </Text>
+                </div>
+              </SimpleGrid>
+
+              {task.qaGate?.required && !task.qaGate.passed && (
+                <Alert color="yellow" icon={<AlertTriangle className="h-4 w-4" />}>
+                  QA gate is required before completion.
+                </Alert>
+              )}
+
               {workProductsLoading ? (
                 <Group gap="xs">
                   <Loader size="xs" />
@@ -995,6 +897,12 @@ export function TaskWorkView({
                 </Group>
               ) : latestWorkProducts.length > 0 ? (
                 <Stack gap={6}>
+                  <Group gap="xs">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <Text size="sm" fw={600}>
+                      Latest work products
+                    </Text>
+                  </Group>
                   {latestWorkProducts.map((product) => {
                     const sourceLink = product.sourceLinks?.find((link) =>
                       normalizeSafeHref(link.href)
@@ -1005,6 +913,7 @@ export function TaskWorkView({
                       product.artifact?.state === 'available'
                         ? `${API_BASE}/work-products/${encodeURIComponent(product.id)}/artifact/download?version=${product.version}`
                         : undefined;
+
                     return (
                       <Group key={product.id} gap="xs" wrap="nowrap" align="flex-start">
                         <History className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
@@ -1067,14 +976,68 @@ export function TaskWorkView({
                     );
                   })}
                 </Stack>
-              ) : (
-                <Text size="sm" c="dimmed">
-                  Reports, checklists, completion packets, and evidence summaries will appear here.
-                </Text>
-              )}
+              ) : null}
             </Stack>
           </Paper>
-        </SimpleGrid>
+        )}
+
+        {task.attempt?.id && (
+          <details className="rounded-md border border-border bg-card">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+              Technical run and governance evidence
+            </summary>
+            <div className="border-t border-border p-3">
+              <RunAccessPanel
+                taskId={task.id}
+                attemptId={task.attempt.id}
+                live={task.attempt.status === 'running'}
+              />
+            </div>
+          </details>
+        )}
+
+        {isCodeTask && overview.state === 'ready' && (
+          <Paper withBorder p="md" radius="md">
+            <Group justify="space-between" gap="sm" wrap="wrap">
+              <Group gap="xs">
+                <GitBranch className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Text size="sm" fw={600}>
+                    Repository context
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {task.git?.repo || 'Repository not configured'} |{' '}
+                    {task.git?.branch || task.git?.baseBranch || 'Branch not configured'}
+                  </Text>
+                </div>
+              </Group>
+              <Button size="compact-xs" variant="subtle" onClick={() => onOpenTab('git')}>
+                Open Git
+              </Button>
+            </Group>
+          </Paper>
+        )}
+
+        {!isCodeTask && !workflowRun && overview.state === 'ready' && (
+          <Paper withBorder p="md" radius="md">
+            <Group justify="space-between" gap="sm" wrap="wrap">
+              <Group gap="xs">
+                <Workflow className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Text size="sm" fw={600}>
+                    Workflow
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Start a recipe or inspect the workflows available to this task.
+                  </Text>
+                </div>
+              </Group>
+              <Button size="compact-xs" variant="subtle" onClick={onOpenWorkflow}>
+                Open Workflow
+              </Button>
+            </Group>
+          </Paper>
+        )}
       </Stack>
 
       <ArtifactPreviewModal
