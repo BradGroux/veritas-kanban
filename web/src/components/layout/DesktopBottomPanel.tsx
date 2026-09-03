@@ -1,4 +1,5 @@
 import {
+  Activity,
   lazy,
   Suspense,
   useRef,
@@ -35,11 +36,17 @@ const PANEL_OPTIONS = [
 ] satisfies Array<{ label: string; value: DesktopBottomPanelId }>;
 
 export function DesktopBottomPanel() {
-  const { bottomPanel, rightPanelWidth, setRightPanelWidth, openBottomPanel, closeBottomPanel } =
-    useDesktopShell();
+  const {
+    isDesktopClient,
+    bottomPanel,
+    rightPanelWidth,
+    setRightPanelWidth,
+    openBottomPanel,
+    closeBottomPanel,
+  } = useDesktopShell();
   const dragStateRef = useRef<{ startPosition: number; startSize: number } | null>(null);
 
-  if (!bottomPanel) return null;
+  if (!isDesktopClient) return null;
 
   const resizeBy = (delta: number) => {
     setRightPanelWidth(rightPanelWidth + delta);
@@ -93,10 +100,12 @@ export function DesktopBottomPanel() {
       id="workbench-right-dock"
       className="workbench-chat-dock workbench-chat-dock--right bg-card"
       aria-label="Workbench right dock"
+      hidden={!bottomPanel}
       data-dock-position="right"
       style={
         {
           '--workbench-right-panel-width': `${rightPanelWidth}px`,
+          display: bottomPanel ? undefined : 'none',
         } as CSSProperties
       }
     >
@@ -143,7 +152,7 @@ export function DesktopBottomPanel() {
         <Group wrap="nowrap">
           <SegmentedControl
             size="xs"
-            value={bottomPanel}
+            value={bottomPanel ?? 'board-chat'}
             onChange={(value) => openBottomPanel(value as DesktopBottomPanelId)}
             data={PANEL_OPTIONS}
             aria-label="Chat channel"
@@ -158,15 +167,21 @@ export function DesktopBottomPanel() {
             </div>
           }
         >
-          {bottomPanel === 'board-chat' ? (
-            <ChatPanel open onOpenChange={(open) => !open && closeBottomPanel()} variant="inline" />
-          ) : (
-            <SquadChatPanel
-              open
+          {/* Preserve drafts/session state while suspending hidden channel effects. */}
+          <Activity mode={bottomPanel === 'board-chat' ? 'visible' : 'hidden'}>
+            <ChatPanel
+              open={bottomPanel === 'board-chat'}
               onOpenChange={(open) => !open && closeBottomPanel()}
               variant="inline"
             />
-          )}
+          </Activity>
+          <Activity mode={bottomPanel === 'squad-chat' ? 'visible' : 'hidden'}>
+            <SquadChatPanel
+              open={bottomPanel === 'squad-chat'}
+              onOpenChange={(open) => !open && closeBottomPanel()}
+              variant="inline"
+            />
+          </Activity>
         </Suspense>
       </div>
     </section>

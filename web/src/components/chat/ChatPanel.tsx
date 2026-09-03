@@ -55,7 +55,7 @@ export function ChatPanel({
   const { data: task } = useTask(taskId || '');
   const { data: sessions = [] } = useChatSessions();
   const { data: session } = useChatSession(currentSessionId);
-  const { mutate: sendChatMessage, isPending } = useSendChatMessage();
+  const { mutateAsync: sendChatMessage, isPending } = useSendChatMessage();
   const { mutate: deleteChatSession } = useDeleteChatSession();
   const { streamingMessage } = useChatStream(currentSessionId);
 
@@ -90,22 +90,21 @@ export function ChatPanel({
   const handleSend = () => {
     if (!message.trim() || isPending) return;
 
-    sendChatMessage(
-      {
-        sessionId: currentSessionId,
-        taskId,
-        message: message.trim(),
-        mode,
+    // Promise completion survives Activity hiding/unsubscribing this channel.
+    void sendChatMessage({
+      sessionId: currentSessionId,
+      taskId,
+      message: message.trim(),
+      mode,
+    }).then(
+      (response) => {
+        setCurrentSessionId(response.sessionId);
+        setMessage((current) => (current === message ? '' : current));
+        setShouldAutoScroll(true);
+        // Re-focus the input so user can keep typing
+        requestAnimationFrame(() => inputRef.current?.focus());
       },
-      {
-        onSuccess: (response) => {
-          setCurrentSessionId(response.sessionId);
-          setMessage('');
-          setShouldAutoScroll(true);
-          // Re-focus the input so user can keep typing
-          requestAnimationFrame(() => inputRef.current?.focus());
-        },
-      }
+      () => undefined // Retain the draft when sending fails.
     );
   };
 

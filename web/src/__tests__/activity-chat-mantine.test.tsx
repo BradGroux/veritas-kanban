@@ -188,7 +188,7 @@ describe('activity and chat Mantine migration', () => {
       isPending: false,
     });
     mocks.useSendChatMessage.mockReturnValue({
-      mutate: mocks.sendChatMessage,
+      mutateAsync: mocks.sendChatMessage,
       isPending: false,
     });
     mocks.useSquadMessages.mockReturnValue({
@@ -204,7 +204,7 @@ describe('activity and chat Mantine migration', () => {
       isLoading: false,
     });
     mocks.useSendSquadMessage.mockReturnValue({
-      mutate: mocks.sendSquadMessage,
+      mutateAsync: mocks.sendSquadMessage,
       isPending: false,
     });
     mocks.useSquadSearch.mockReturnValue({

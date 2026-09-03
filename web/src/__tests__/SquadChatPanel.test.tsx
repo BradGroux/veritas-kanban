@@ -18,7 +18,7 @@ vi.mock('@/hooks/useChat', () => ({
   useAddSquadReaction: () => ({ mutate: mocks.addReaction, isPending: false }),
   useMarkSquadRead: () => ({ mutate: mocks.markRead, isPending: false }),
   useSquadMessages: mocks.useSquadMessages,
-  useSendSquadMessage: () => ({ mutate: mocks.sendSquadMessage, isPending: false }),
+  useSendSquadMessage: () => ({ mutateAsync: mocks.sendSquadMessage, isPending: false }),
   useSquadSearch: mocks.useSquadSearch,
   useSquadStream: () => ({ newMessage: null }),
   useSquadUnread: mocks.useSquadUnread,
@@ -65,6 +65,7 @@ describe('SquadChatPanel', () => {
     mocks.addReaction.mockReset();
     mocks.markRead.mockReset();
     mocks.sendSquadMessage.mockReset();
+    mocks.sendSquadMessage.mockResolvedValue({ id: 'sent' });
     mocks.updateMessageState.mockReset();
     mocks.useSquadMessages.mockReturnValue({ data: [], isLoading: false });
     mocks.useSquadSearch.mockReturnValue({ data: { query: '', results: [] } });
@@ -151,8 +152,7 @@ describe('SquadChatPanel', () => {
         agent: 'Human',
         message: 'Checking now',
         replyToId: 'msg_root',
-      }),
-      expect.any(Object)
+      })
     );
 
     await user.click(screen.getAllByLabelText('Pin message')[0]);

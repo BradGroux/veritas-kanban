@@ -173,6 +173,23 @@ describe('desktop shell recovery', () => {
     expect(screen.getByLabelText('bottom panel').textContent).toBe('board-chat');
   });
 
+  it('keeps only one auxiliary surface open when compact sidebars are reopened', async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+    await user.click(screen.getByRole('button', { name: 'Open left rail' }));
+    expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
+    expect(screen.getByLabelText('left rail').textContent).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Open right rail' }));
+    expect(screen.getByLabelText('left rail').textContent).toBe('false');
+    expect(screen.getByLabelText('right rail').textContent).toBe('true');
+  });
+
   it('resets the complete desktop layout from the native recovery command', async () => {
     const user = userEvent.setup();
 

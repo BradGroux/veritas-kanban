@@ -288,6 +288,7 @@ html:not([data-client='desktop']) .desktop-workbench-container {
 }
 
 html[data-client='desktop'] .desktop-workbench-container {
+  position: relative;
   display: flex;
   min-height: 0;
   min-width: 0;
@@ -334,6 +335,17 @@ html[data-client='desktop'] .workbench-chat-dock--right {
   max-width: min(max(280px, calc(100vw - 520px)), 640px);
   flex: 0 0 var(--workbench-right-panel-width, 420px);
   border-left: 1px solid var(--border);
+}
+
+/* Reopening chat in a compact window must not consume the Board's remaining width. */
+@media (width < 1280px) {
+  html[data-client='desktop'] .workbench-chat-dock--right {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 30;
+    max-width: calc(100% - 48px);
+    box-shadow: -8px 0 24px rgb(0 0 0 / 16%);
+  }
 }
 
 .workbench-chat-dock-resizer {
