@@ -2,7 +2,7 @@
 
 Veritas Kanban 6.1.5 publishes the integrated backlog completed after the 6.1.4 security patch. It includes the redesigned Settings and task workspaces, atomic board moves, clearer conflict recovery, accurate memory-pressure status, corrected chat toggles, Command+K and board-color improvements, reviewed dependency updates, and the public documentation boundary.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.4 remains the supported stable v6 release until 6.1.5 completes its annotated tag, signed asset, updater metadata, and Homebrew verification.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.5 is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
 
 ## 6.1.5 Integrated Backlog Outcomes
 
@@ -100,7 +100,7 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-After publication, manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.5 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.5 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.5). Version 6.1.5 requires macOS 13 Ventura or later. Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 

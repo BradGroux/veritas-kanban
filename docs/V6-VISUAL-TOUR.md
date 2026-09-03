@@ -5,8 +5,8 @@ workspace, grouped Settings, provider support, communication surfaces,
 Maintenance, Command+K, Workbench, and mobile layout. The historical
 [v5 Visual Tour](V5-VISUAL-TOUR.md) retains its own versioned media.
 
-Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release
-candidate. Every image below was generated from the integrated 6.1.5 source
+Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.5 stable
+release. Every image below was generated from the integrated 6.1.5 source
 with isolated dummy data.
 
 ## Board And Task Workspace
