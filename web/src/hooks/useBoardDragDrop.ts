@@ -166,6 +166,9 @@ export function useBoardDragDrop({
   // Local copy of tasksByStatus that updates in real-time during drag.
   // null = not dragging, use server state; non-null = mid-drag, use local state
   const [dragState, setDragState] = useState<Record<string, Task[]> | null>(null);
+  // Sensor events can arrive before React renders. Drops must use the latest
+  // projection, not the state captured by the previous render's callback.
+  const dragStateRef = useRef<Record<string, Task[]> | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const columnIds = useMemo(() => columns.map((column) => column.id), [columns]);
   const keyboardCoordinateGetter = useMemo(
@@ -255,6 +258,7 @@ export function useBoardDragDrop({
   const clearDragState = useCallback(
     (taskId: string | null) => {
       setActiveTask(null);
+      dragStateRef.current = null;
       setDragState(null);
       setIsMovePending(false);
       activeIdRef.current = null;
@@ -300,7 +304,8 @@ export function useBoardDragDrop({
         setActiveTask(task);
         activeIdRef.current = event.active.id as string;
         // Snapshot current server state into local drag state
-        setDragState({ ...tasksByStatus });
+        dragStateRef.current = { ...tasksByStatus };
+        setDragState(dragStateRef.current);
       }
     },
     [announce, tasks, tasksByStatus]
@@ -316,7 +321,8 @@ export function useBoardDragDrop({
       const overId = over.id as string;
       if (activeId === overId) return;
 
-      setDragState((prev) => {
+      const nextState = (() => {
+        const prev = dragStateRef.current;
         if (!prev) return prev;
 
         const activeColumn = findColumn(activeId, prev);
@@ -370,7 +376,9 @@ export function useBoardDragDrop({
           [activeColumn]: newSource,
           [overColumn]: newDest,
         };
-      });
+      })();
+      dragStateRef.current = nextState;
+      setDragState(nextState);
     },
     [columnIds, findColumn]
   );
@@ -379,7 +387,7 @@ export function useBoardDragDrop({
     async (event: DragEndEvent) => {
       const { active, over } = event;
       if (activeIdRef.current !== active.id) return;
-      const finalState = dragState;
+      const finalState = dragStateRef.current;
       const activeId = active.id as string;
       const originalPosition = describeTaskPosition(activeId, tasksByStatus);
 
@@ -459,7 +467,6 @@ export function useBoardDragDrop({
       clearDragState,
       columns,
       describeTaskPosition,
-      dragState,
       findColumn,
       onMove,
       taskTitle,
