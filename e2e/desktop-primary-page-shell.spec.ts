@@ -1,5 +1,9 @@
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { bypassAuth, cleanupRoutes } from './helpers/auth';
+
+const populatedBriefing =
+  '# Agent Operations Digest\n\n## Summary\n\n### Active work\n\nOne active task.\n';
 
 const primaryRoutes = [
   { name: 'activity', path: '/activity', title: 'Activity' },
@@ -45,8 +49,10 @@ async function assertNoHorizontalOverflow(page: Page) {
 }
 
 async function capture(page: Page, testInfo: TestInfo, route: string, mode: string) {
+  const path = testInfo.outputPath(`primary-page-${route}-${mode}.png`);
+  await page.screenshot({ path, animations: 'disabled', fullPage: false });
   await testInfo.attach(`primary-page-${route}-${mode}.png`, {
-    body: await page.screenshot({ animations: 'disabled', fullPage: false }),
+    path,
     contentType: 'image/png',
   });
 }
@@ -54,6 +60,12 @@ async function capture(page: Page, testInfo: TestInfo, route: string, mode: stri
 test.describe('desktop primary page shell', () => {
   test.beforeEach(async ({ page }) => {
     await bypassAuth(page);
+    await page.route('**/api/digest/operations?*', (route) => {
+      if (new URL(route.request().url()).searchParams.get('format') !== 'markdown') {
+        return route.continue();
+      }
+      return route.fulfill({ json: { isEmpty: false, markdown: populatedBriefing } });
+    });
     await page.route('**/api/v1/system/health', (route) =>
       route.fulfill({
         status: 200,
@@ -109,6 +121,30 @@ test.describe('desktop primary page shell', () => {
         const shell = page.locator('[data-page-shell="primary"]');
         const heading = shell.getByRole('heading', { level: 1, name: route.title, exact: true });
         const back = shell.getByRole('button', { name: 'Back', exact: true });
+        await expect(heading).toBeFocused();
+        if (route.name === 'operations') {
+          await expect(
+            page.getByRole('heading', { name: 'Agent Operations Digest', exact: true })
+          ).toBeAttached();
+          await expect(
+            page.getByRole('heading', { name: 'Rendered Briefing', level: 2 })
+          ).toBeAttached();
+          await expect(
+            page.getByRole('heading', { name: 'Agent Operations Digest', level: 3 })
+          ).toBeAttached();
+          await expect(page.getByRole('heading', { name: 'Summary', level: 4 })).toBeAttached();
+          await expect(page.getByRole('heading', { name: 'Active work', level: 5 })).toBeAttached();
+          await expect(page.getByLabel('Operations digest markdown')).toHaveValue(
+            populatedBriefing
+          );
+          const downloadPromise = page.waitForEvent('download');
+          await page.getByRole('button', { name: 'Markdown', exact: true }).click();
+          const download = await downloadPromise;
+          const file = await download.path();
+          expect(file).not.toBeNull();
+          expect(await readFile(file!, 'utf8')).toBe(populatedBriefing);
+          await heading.focus();
+        }
         await expect(shell).toHaveCount(1);
         await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
         await expect(heading).toBeVisible({ timeout: 15_000 });
@@ -142,6 +178,12 @@ test.describe('desktop primary page shell', () => {
         }
         await assertNoHorizontalOverflow(page);
         await capture(page, testInfo, route.name, mode.name);
+        if (route.name === 'operations') {
+          await page
+            .getByRole('heading', { name: 'Rendered Briefing', level: 2 })
+            .scrollIntoViewIfNeeded();
+          await capture(page, testInfo, 'operations-briefing', mode.name);
+        }
       }
 
       if (regularMetrics.length > 0) {

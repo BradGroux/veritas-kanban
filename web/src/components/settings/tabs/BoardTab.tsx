@@ -168,8 +168,6 @@ export function BoardTab() {
             ]}
             aria-label="Card Density"
             allowDeselect={false}
-            size="xs"
-            w={112}
           />
         </SettingRow>
         <SettingRow
@@ -182,8 +180,6 @@ export function BoardTab() {
             data={columns.map((column) => ({ value: column.id, label: column.title }))}
             aria-label="Default task status"
             allowDeselect={false}
-            size="xs"
-            w={160}
           />
         </SettingRow>
         <div className="py-3">

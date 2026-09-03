@@ -1,0 +1,34 @@
+{
+  "packaged": true,
+  "viewport": {
+    "width": 1180,
+    "height": 760
+  },
+  "boardWidth": 1132,
+  "themes": ["dark", "light"],
+  "enlargedText": "20px",
+  "dockWidth": 320,
+  "checks": [
+    "auto-minimize",
+    "overlay preserves board width",
+    "readable toolbar",
+    "menus inside viewport",
+    "channel and resize draft preservation",
+    "mutually exclusive compact rails",
+    "focus restoration",
+    "no page overflow",
+    "actual macOS fullscreen enter/exit restores compact layout and draft"
+  ],
+  "screenshots": [
+    "auto-minimized-dark.png",
+    "compact-squad-enlarged-dark.png",
+    "filter-menu-dark.png",
+    "sender-menu-dark.png",
+    "compact-board-enlarged-dark.png",
+    "auto-minimized-light.png",
+    "compact-squad-enlarged-light.png",
+    "filter-menu-light.png",
+    "sender-menu-light.png",
+    "compact-board-enlarged-light.png"
+  ]
+}

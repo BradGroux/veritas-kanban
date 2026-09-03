@@ -9,6 +9,8 @@ interface MarkdownRendererProps {
   content: string;
   className?: string;
   artifactSafe?: boolean;
+  /** Heading level for a Markdown h1 when embedded beneath a host section. */
+  headingStartLevel?: 1 | 2 | 3 | 4 | 5 | 6;
 }
 
 const components: Components = {
@@ -65,11 +67,23 @@ export function MarkdownRenderer({
   content,
   className,
   artifactSafe = false,
+  headingStartLevel = 1,
 }: MarkdownRendererProps) {
   const { settings } = useFeatureSettings();
   const enableCodeHighlighting = settings.markdown?.enableCodeHighlighting ?? true;
 
   if (!content) return null;
+
+  const headingTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
+  const embeddedComponents: Components = {
+    ...components,
+    ...Object.fromEntries(
+      headingTags.map((tag, index) => [
+        tag,
+        components[headingTags[Math.min(index + headingStartLevel - 1, 5)]],
+      ])
+    ),
+  };
 
   return (
     <div className={cn('prose prose-sm max-w-none dark:prose-invert', className)}>
@@ -79,11 +93,11 @@ export function MarkdownRenderer({
         components={
           artifactSafe
             ? {
-                ...components,
+                ...embeddedComponents,
                 a: ({ children }) => <span>{children} (external link omitted)</span>,
                 img: ({ alt }) => <span>[image omitted{alt ? `: ${alt}` : ''}]</span>,
               }
-            : components
+            : embeddedComponents
         }
         urlTransform={(url) => {
           if (artifactSafe) return '';

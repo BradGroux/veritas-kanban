@@ -1,7 +1,6 @@
 import { memo, useState, useEffect } from 'react';
 import { NumberInput } from '@mantine/core';
 import { SettingRow } from './SettingRow';
-import { SettingsUnit } from './SettingsLayout';
 
 export const NumberRow = memo(function NumberRow({
   label,
@@ -56,60 +55,56 @@ export const NumberRow = memo(function NumberRow({
 
     return (
       <SettingRow label={label} description={description}>
-        <div className="flex items-center gap-2">
-          <NumberInput
-            aria-label={label}
-            type="text"
-            inputMode="numeric"
-            allowDecimal={false}
-            allowNegative={false}
-            clampBehavior="blur"
-            hideControls
-            value={localValue}
-            onChange={(nextValue) => {
-              const raw = String(nextValue).replace(/[^0-9]/g, '');
-              setLocalValue(maxLength ? raw.slice(0, maxLength) : raw);
-            }}
-            onBlur={handleBlur}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleBlur();
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            min={min}
-            max={max}
-            step={step}
-            maxLength={maxLength ?? 10}
-            className="w-28"
-            styles={{ input: { textAlign: 'right' } }}
-          />
-          {unit && <SettingsUnit>{unit}</SettingsUnit>}
-        </div>
+        <NumberInput
+          aria-label={label}
+          type="text"
+          inputMode="numeric"
+          allowDecimal={false}
+          allowNegative={false}
+          clampBehavior="blur"
+          hideControls
+          value={localValue}
+          onChange={(nextValue) => {
+            const raw = String(nextValue).replace(/[^0-9]/g, '');
+            setLocalValue(raw.slice(0, maxLength ?? 10));
+          }}
+          onBlur={handleBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleBlur();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          min={min}
+          max={max}
+          step={step}
+          suffix={unit ? ` ${unit}` : undefined}
+          valueIsNumericString
+          className="w-full"
+          styles={{ input: { textAlign: 'right' } }}
+        />
       </SettingRow>
     );
   }
 
   return (
     <SettingRow label={label} description={description}>
-      <div className="flex items-center gap-2">
-        <NumberInput
-          aria-label={label}
-          value={value}
-          onChange={(nextValue) => {
-            const v = typeof nextValue === 'number' ? nextValue : parseFloat(nextValue);
-            if (!isNaN(v)) {
-              onChange(clamp(v, -Infinity));
-            }
-          }}
-          min={min}
-          max={max}
-          step={step}
-          className="w-28"
-          styles={{ input: { textAlign: 'right' } }}
-        />
-        {unit && <SettingsUnit>{unit}</SettingsUnit>}
-      </div>
+      <NumberInput
+        aria-label={label}
+        value={value}
+        onChange={(nextValue) => {
+          const v = typeof nextValue === 'number' ? nextValue : parseFloat(nextValue);
+          if (!isNaN(v)) {
+            onChange(clamp(v, -Infinity));
+          }
+        }}
+        min={min}
+        max={max}
+        step={step}
+        suffix={unit ? ` ${unit}` : undefined}
+        className="w-full"
+        styles={{ input: { textAlign: 'right' } }}
+      />
     </SettingRow>
   );
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import {
   SectionHeader,
+  NumberRow,
   SettingRow,
   SettingsActionGroup,
   SettingsErrorText,
@@ -20,6 +21,50 @@ import { renderWithProviders } from './test-utils';
 describe('Settings shared Mantine rows', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('formats units inside numeric fields without including them in saved values', () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <NumberRow
+        label="Size"
+        value={10}
+        onChange={onChange}
+        unit="MB"
+        hideSpinners
+        maxLength={4}
+        min={1}
+        max={9999}
+      />
+    );
+    const input = screen.getByLabelText('Size') as HTMLInputElement;
+    expect(input.value).toBe('10 MB');
+    fireEvent.change(input, { target: { value: '1234 MB' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith(1234);
+    expect(input.value).toBe('1234 MB');
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith(1);
+    expect(input.value).toBe('1 MB');
+  });
+
+  it('keeps decimal values and spinner controls with longer units', () => {
+    const onChange = vi.fn();
+    const { container } = renderWithProviders(
+      <NumberRow
+        label="Budget"
+        value={1.5}
+        onChange={onChange}
+        unit="branches"
+        min={0}
+        step={0.5}
+      />
+    );
+    expect((screen.getByLabelText('Budget') as HTMLInputElement).value).toBe('1.5 branches');
+    expect(container.querySelector('.mantine-NumberInput-controls')).not.toBeNull();
+    fireEvent.change(screen.getByLabelText('Budget'), { target: { value: '2.5 branches' } });
+    expect(onChange).toHaveBeenLastCalledWith(2.5);
   });
 
   it('renders responsive setting rows with a stable control column', () => {
