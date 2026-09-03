@@ -116,7 +116,7 @@ export interface TaskDetailRenderContext extends TaskDetailAvailabilityContext {
   onClose: () => void;
   onRestore?: (taskId: string) => void;
   setActiveTab: (tab: TaskDetailTabId) => void;
-  openTaskChat: () => void;
+  openTaskChat: (invoker?: HTMLElement) => void;
   openWorkflow: () => void;
   setTimelineAttemptId: (attemptId: string | null) => void;
   addObservation: (data: TaskDetailObservationInput) => Promise<void>;

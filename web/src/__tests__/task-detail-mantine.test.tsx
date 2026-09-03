@@ -259,7 +259,9 @@ describe('task detail Mantine migration', () => {
     );
     expect(screen.getByTestId('task-detail-panel').className).toContain('veritas-overlay-surface');
     expect(screen.getByTestId('task-detail-panel').className).toContain('min-h-0');
-    expect(screen.getByTestId('task-workspace-mode-navigation').className).toContain('sm:flex');
+    expect(screen.getByTestId('task-workspace-mode-navigation').className).toContain(
+      'vk-task-workspace-navigation'
+    );
     expect(screen.getByRole('combobox', { name: 'Task workspace mode' })).toBeDefined();
     const scrollRegion = screen.getByTestId('task-detail-scroll-region');
     expect(scrollRegion.className).toContain('min-h-0');

@@ -43,12 +43,14 @@ vi.mock('@/hooks/useConfig', () => ({
 
 describe('SquadChatPanel', () => {
   const originalScrollIntoView = Element.prototype.scrollIntoView;
+  const originalScrollTo = Element.prototype.scrollTo;
   const originalHasPointerCapture = Element.prototype.hasPointerCapture;
   const originalSetPointerCapture = Element.prototype.setPointerCapture;
   const originalReleasePointerCapture = Element.prototype.releasePointerCapture;
 
   beforeAll(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollTo = vi.fn();
     Element.prototype.hasPointerCapture = vi.fn(() => false);
     Element.prototype.setPointerCapture = vi.fn();
     Element.prototype.releasePointerCapture = vi.fn();
@@ -56,6 +58,7 @@ describe('SquadChatPanel', () => {
 
   afterAll(() => {
     Element.prototype.scrollIntoView = originalScrollIntoView;
+    Element.prototype.scrollTo = originalScrollTo;
     Element.prototype.hasPointerCapture = originalHasPointerCapture;
     Element.prototype.setPointerCapture = originalSetPointerCapture;
     Element.prototype.releasePointerCapture = originalReleasePointerCapture;
@@ -81,8 +84,7 @@ describe('SquadChatPanel', () => {
 
     renderWithProviders(<SquadChatPanel open={true} onOpenChange={vi.fn()} />);
 
-    const [filterSelector, senderSelector] = screen.getAllByRole('combobox');
-    expect(filterSelector).toBeDefined();
+    const senderSelector = screen.getByRole('combobox', { name: 'Sending as' });
 
     await user.click(senderSelector);
 
@@ -134,13 +136,15 @@ describe('SquadChatPanel', () => {
 
     renderWithProviders(<SquadChatPanel open={true} onOpenChange={vi.fn()} />);
 
-    expect(screen.getByText('2/1')).toBeDefined();
     expect(screen.getByText('1 reply')).toBeDefined();
 
+    await user.click(screen.getByRole('button', { name: 'Squad filters and actions' }));
+    expect(screen.getByText('2/1')).toBeDefined();
     await user.type(screen.getByLabelText('Search squad chat'), 'review');
     await user.click(screen.getByText('Need @case review'));
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(Element.prototype.scrollTo).toHaveBeenCalled();
 
+    await user.click(screen.getByRole('button', { name: 'Squad filters and actions' }));
     await user.click(screen.getByRole('button', { name: /Mark read/ }));
     expect(mocks.markRead).toHaveBeenCalledWith({ actor: 'Human', messageId: 'msg_reply' });
 

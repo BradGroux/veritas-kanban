@@ -42,7 +42,7 @@ for (const theme of ['dark', 'light']) {
     await expect(squad.getByPlaceholder('Send a message to the squad...')).toHaveValue(
       'Keep this Squad draft'
     );
-    await page.getByRole('button', { name: 'Close right dock' }).click();
+    await page.getByRole('button', { name: 'Close Squad Chat panel' }).click();
     await page.getByRole('button', { name: 'Open Board Chat' }).click();
     await expect(page.getByPlaceholder('Type a message...')).toHaveValue('Keep this Board draft');
     const dock = page.getByRole('region', { name: 'Workbench right dock' });
@@ -64,7 +64,9 @@ for (const theme of ['dark', 'light']) {
         )
     ).toEqual([]);
     for (const name of ['Filter by agent', 'Sending as']) {
-      const selector = squad.getByRole('combobox', { name, exact: true });
+      if (name === 'Filter by agent')
+        await squad.getByRole('button', { name: 'Squad filters and actions' }).click();
+      const selector = page.getByRole('combobox', { name, exact: true });
       await selector.click();
       const menu = page.getByRole('listbox', { name, exact: true });
       await expect(menu).toBeVisible();
@@ -79,6 +81,11 @@ for (const theme of ['dark', 'light']) {
       await selector.press('ArrowDown');
       await selector.press('Enter');
       await expect(dock).toBeVisible();
+      if (name === 'Filter by agent') {
+        await selector.press('Escape');
+        await expect(selector).toBeHidden();
+        await expect(dock).toBeVisible();
+      }
     }
     await page.evaluate(() => (document.documentElement.style.fontSize = ''));
     for (let cycle = 0; cycle < 2; cycle++) {
@@ -124,7 +131,7 @@ for (const theme of ['dark', 'light']) {
         })
         .click();
       await ready;
-      await page.getByRole('button', { name: 'Close right dock' }).click();
+      await page.getByRole('button', { name: /^Close (Board|Squad) Chat panel$/ }).click();
       const responseReceived = page.waitForResponse(
         (response) => response.request() === pending.request()
       );

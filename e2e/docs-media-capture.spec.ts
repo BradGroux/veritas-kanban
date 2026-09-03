@@ -122,7 +122,7 @@ test('captures public-safe 6.1.6 desktop and mobile documentation media', async 
     await page.getByText('Squad Chat', { exact: true }).last().click();
     await expect(page.getByRole('region', { name: 'Squad Chat' })).toBeVisible();
     await capture(page, 'squad-chat.png');
-    await page.getByRole('button', { name: 'Close right dock' }).click();
+    await page.getByRole('button', { name: /^Close (Board|Squad) Chat panel$/ }).click();
 
     await page.setViewportSize(mobileViewport);
     await page.evaluate(() => {
