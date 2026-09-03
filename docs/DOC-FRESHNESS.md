@@ -67,6 +67,7 @@ update the authoritative registry record.
 
 | Date       | Scope                                                                                      | Agent   |
 | ---------- | ------------------------------------------------------------------------------------------ | ------- |
+| 2026-09-02 | v6.1.4 release, install, compatibility, runtime, distribution, and evidence docs           | Release |
 | 2026-08-30 | README; v6.1.3 access, automation, artifacts, provenance, UI, security, and release docs   | Release |
 | 2026-08-24 | README; v6.1.2 audit, storage, provider, CI, security, release, distribution, and SOP docs | Release |
 | 2026-08-22 | v6.1.1 maintenance, dependency, release, upgrade, and evidence docs                        | Release |
