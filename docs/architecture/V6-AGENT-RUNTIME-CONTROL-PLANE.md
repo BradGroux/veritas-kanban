@@ -1,6 +1,6 @@
 # Veritas Kanban v6 Agent Runtime Control Plane
 
-This document defines the supported v6.1.3 architecture for executable agent
+This document defines the supported v6.1.4 architecture for executable agent
 harnesses and Buzz integration. It is the version-level composition of the
 individual contract documents for
 [ACP](ACP-PROVIDER-V1.md),
@@ -9,7 +9,7 @@ individual contract documents for
 [tool control](TOOL-CONTROL-PLANE-V1.md), and
 [runtime hooks](RUNTIME-HOOK-V1.md).
 
-Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
+Documentation freshness: 2026-09-02 for Veritas Kanban 6.1.4.
 
 ## Authority Model
 
@@ -35,7 +35,7 @@ owns signed delivery, not Veritas task or completion state.
 | `codex-app-server`         | OpenAI Codex app-server 0.145.0                                           | Pinned JSON-RPC v2 stdio schemas              | Thread/turn lifecycle, streamed items, exact provider requests, remote control and unsandboxed shell method disabled              |
 | `claude-code`              | Claude Code 2.1.218                                                       | Supervised bare-mode stream-json process      | System-owned arguments, static permissions, credential scrubbing, bounded JSONL, authoritative result required                    |
 | `codex-cli`                | OpenAI Codex CLI                                                          | One-shot JSON process                         | Existing task transport plus v6 launch, tool, credential, event, supervisor, and completion contracts                             |
-| `codex-sdk`                | `@openai/codex-sdk 0.144.3`                                               | In-process SDK stream                         | Existing SDK session transport plus the shared v6 contracts                                                                       |
+| `codex-sdk`                | `@openai/codex-sdk 0.149.0`                                               | In-process SDK stream                         | Existing SDK session transport plus the shared v6 contracts                                                                       |
 | `hermes-cli`               | Hermes Agent v2026.7.7.2                                                  | One-shot process                              | No resume; unsupported conversation controls fail closed                                                                          |
 | `openclaw`                 | OpenClaw v2026.6.11                                                       | Gateway `/tools/invoke`                       | Remote task session with explicit gateway policy and capability evidence                                                          |
 | Buzz communication adapter | Buzz v0.4.24 relay/community                                              | Signed Nostr HTTP and WebSocket               | Channel mapping, replay, identity, definition import, and external workflow-trigger evidence only                                 |

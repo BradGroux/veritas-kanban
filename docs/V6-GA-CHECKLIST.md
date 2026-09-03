@@ -1,13 +1,24 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist contains the active stable-release gate for Veritas Kanban
-6.1.3 and retains the completed 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
+This checklist contains the completed stable-release gate for Veritas Kanban
+6.1.4 and retains the completed 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
 Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
+Documentation freshness: 2026-09-02 for Veritas Kanban 6.1.4.
 
-## 6.1.3 Release Gate
+## 6.1.4 Release Gate
+
+- [x] Release tracker [#1307](https://github.com/BradGroux/veritas-kanban/issues/1307) and publication-boundary fix [#1308](https://github.com/BradGroux/veritas-kanban/pull/1308) are merged with focused security regression evidence.
+- [x] Root, shared, server, web, CLI, MCP, desktop, and lockfile package metadata are exactly 6.1.4.
+- [x] The production dependency audit passes the high-severity threshold with `fast-uri` 3.1.6, and 6.1.4 adds no API or database schema change.
+- [x] Release PR [#1309](https://github.com/BradGroux/veritas-kanban/pull/1309) passed the full release matrix and merged as `36b5529050aeb5cabbbefa8ac90e43f5f02e04d5`.
+- [x] Annotated tag `v6.1.4` peels to the release merge, and the live GitHub release body matches `docs/releases/v6.1.4.md`.
+- [x] Desktop Release run [33672624733](https://github.com/BradGroux/veritas-kanban/actions/runs/33672624733) published the signed/notarized macOS DMG and ZIP, blockmaps, checksum sidecars, and updater metadata.
+- [x] Homebrew tap PR [#55](https://github.com/BradGroux/homebrew-tap/pull/55) merged with cask version 6.1.4 and the verified published ZIP checksum.
+- [x] The coordinated security fix is included in every supported 6.1.4 distribution surface; advisory disclosure remains owner-controlled.
+
+## Historical 6.1.3 Completed Release Gate
 
 - [x] Release tracker #1262 and its implementation dependencies are merged or
       have an evidence-backed disposition; only the final release matrix and
@@ -225,7 +236,7 @@ recorded in the release candidate evidence packet.
 - [x] Codex app-server 0.145.0 passes exact generated schemas, disabled remote
       control, lifecycle, approval, event, completion, and deterministic
       fixtures.
-- [x] Codex CLI and `@openai/codex-sdk 0.144.3` pass their provider-runtime,
+- [x] Codex CLI and `@openai/codex-sdk 0.149.0` pass their provider-runtime,
       launch, tool, event, credential, and completion gates.
 - [x] Claude Code 2.1.218 passes bare-mode launch, permission, environment,
       stream, lifecycle, MCP, event, completion, and deterministic fixtures.

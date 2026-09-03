@@ -1,10 +1,16 @@
-# Veritas Kanban 6.1.3 Release Notes
+# Veritas Kanban 6.1.4 Release Notes
 
-Veritas Kanban 6.1.3 adds governed file artifacts, provenance-aware execution, operator Run Access controls, and recurring automation activation. It also closes the August Apple-design audit and hardens concurrent storage and provider teardown paths. This is a backward-compatible patch release for 6.1.2 with additive REST contracts and one SQLite migration.
+Veritas Kanban 6.1.4 is a focused security patch that binds pull-request publication to the managed task worktree and its captured Git state. It also updates the patched `fast-uri` override to 3.1.6. This release adds no API or database schema change and remains compatible with valid 6.1.3 workspaces.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.3 is the supported stable v6 release after its annotated tag, signed assets, updater metadata, and Homebrew cask are published and verified.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.4 is the supported stable v6 release after its annotated tag, signed assets, updater metadata, and Homebrew cask were published and verified.
 
-## Backlog Outcomes And Traceability
+## 6.1.4 Security And Compatibility
+
+Repository publication accepts only canonical Git branch names and requires durable authority for the exact task, managed worktree, configured repository and origin, source and base branches, and captured commit. Pushes publish the captured commit through isolated Git transport and fail closed when authority is absent, stale, or mismatched. Existing valid hierarchical branch names remain supported, and existing remote task branches may advance only by safe fast-forward.
+
+The public REST API remains `v1`. Version 6.1.4 adds no SQLite migration. Back up the complete stopped-writer workspace before upgrading and retain the backup until the upgraded runtime is accepted.
+
+## Historical 6.1.3 Backlog Outcomes And Traceability
 
 | Issue                                                            | Operational outcome                                 | Pull request |
 | ---------------------------------------------------------------- | --------------------------------------------------- | ------------ |
@@ -70,13 +76,13 @@ For a first installation:
 brew install --cask bradgroux/tap/veritas-kanban
 ```
 
-Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.3 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.3). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
+Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.4 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.4). Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
 ## Breaking Changes And Migration Warnings
 
-The public REST API remains `v1`, and the new routes and schemas are additive. SQLite migration 34 creates governed work-product artifact storage and indexes. Upgrading from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
+The public REST API remains `v1`, and 6.1.4 adds no database migration. Version 6.1.3 introduced SQLite migration 34 for governed work-product artifact storage and indexes. Upgrading directly from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
 
-Rollback is restore-first. Stop every writer, reinstall 6.1.2 only when using an unmigrated workspace, and otherwise restore the complete stopped-writer 6.1.2 backup. Never copy an older database over a running instance.
+Rollback from 6.1.4 to the complete 6.1.3 application bundle does not require a schema rollback. For rollback to 6.1.2 or earlier, stop every writer and restore the matching complete stopped-writer backup. Never copy an older database over a running instance.
 
 ## Known Limitations
 

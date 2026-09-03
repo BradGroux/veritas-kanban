@@ -1,15 +1,15 @@
 # Veritas Kanban v6 Upgrade, Install, Remote, And Admin Guide
 
-This is the release-facing operator guide for Veritas Kanban 6.1.3. The
+This is the release-facing operator guide for Veritas Kanban 6.1.4. The
 detailed provider commands live in [Agent Providers](AGENT-PROVIDERS.md), the
 machine-readable support contract is summarized in
 [Harness Compatibility](HARNESS-COMPATIBILITY.md), and Buzz relay setup lives
 in [Buzz Integration](BUZZ-INTEGRATION.md).
 
-Documentation freshness: 2026-08-30 for Veritas Kanban 6.1.3.
+Documentation freshness: 2026-09-02 for Veritas Kanban 6.1.4.
 
-Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.1.3
-is the supported stable v6 release and supersedes 6.1.2.
+Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.1.4
+is the supported stable v6 release and supersedes 6.1.3.
 
 ## Fresh Mac Desktop Install
 
@@ -21,8 +21,8 @@ brew install --cask veritas-kanban
 ```
 
 Manual installation uses
-`Veritas-Kanban-6.1.3-mac-arm64.zip` from the
-[v6.1.3 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.3).
+`Veritas-Kanban-6.1.4-mac-arm64.zip` from the
+[v6.1.4 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.4).
 Move `Veritas Kanban.app` into `/Applications`, launch it normally, and verify
 Settings -> Maintenance before enabling an agent or external integration.
 
@@ -30,7 +30,7 @@ For a new board:
 
 1. Choose Board Only unless agent execution is required immediately.
 2. Create the local admin password and retain the recovery key securely.
-3. Confirm `/api/health` reports version 6.1.3.
+3. Confirm `/api/health` reports version 6.1.4.
 4. Create a governed backup before adding external credentials or relay
    mappings.
 
@@ -58,14 +58,14 @@ equivalent v5.2.5 self-hosted workspace.
    preferred port are stopped before copying data.
 5. Preserve the complete workspace, not only the SQLite file. Keep the backup
    through release acceptance.
-6. Install v6.1.3 without replacing the workspace.
+6. Install v6.1.4 without replacing the workspace.
 7. Launch with the same profile. If setup appears for a populated database,
    choose **Use Existing Data**. Do not rerun file migration or restore over the
    populated database.
 8. Wait for the exact-version readiness gate:
 
    ```bash
-   EXPECTED_VERSION=6.1.3
+   EXPECTED_VERSION=6.1.4
    pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
    ```
 
@@ -82,7 +82,7 @@ The public API remains `v1`. v6 adds provider, approval, lifecycle, tool,
 credential, compatibility, Buzz, and conformance records without requiring a
 new API mount.
 
-Veritas Kanban 6.1.3 adds SQLite migration 34 for governed work-product
+Veritas Kanban 6.1.4 adds no database migration. Veritas Kanban 6.1.3 added SQLite migration 34 for governed work-product
 artifacts. Upgrading from 6.1.2 creates the artifact table and indexes without
 rewriting existing work-product rows. Runtime-path normalization can still move
 legacy files into the configured canonical data root. Keep the stopped-writer
@@ -138,7 +138,7 @@ flow, then enable its built-in profile in Settings -> Agents.
 | Buzz Agent           | Build/install Buzz v0.4.24 `buzz-agent`; verify ACP identity `buzz-agent 0.1.0`.                     | `ANTHROPIC_API_KEY`, `OPENAI_COMPAT_API_KEY`, or `DATABRICKS_TOKEN`.                                                      | Disabled; no resume; only the system-owned `veritas-run` MCP bridge.                                                                           |
 | Grok Build           | Install v0.2.111; run `grok --version`.                                                              | Existing `GROK_HOME`, `XAI_API_KEY`, `GROK_CODE_XAI_API_KEY`, or `GROK_DEPLOYMENT_KEY`.                                   | Disabled; dedicated `agent --no-leader ... stdio`; restrictive policy only.                                                                    |
 | Codex CLI/app-server | Install the reviewed Codex CLI; run `codex login status`. App-server certification requires 0.145.0. | Existing Codex login or `OPENAI_API_KEY` where supported.                                                                 | Workspace-write task sandbox; app-server plugins, apps, hooks, browser/computer tools, remote control, and unsandboxed shell command disabled. |
-| Codex SDK            | Installed with Veritas as `@openai/codex-sdk 0.144.3`.                                               | Existing Codex login or `OPENAI_API_KEY`.                                                                                 | Shared manifest, sandbox, tool, event, and completion controls.                                                                                |
+| Codex SDK            | Installed with Veritas as `@openai/codex-sdk 0.149.0`.                                               | Existing Codex login or `OPENAI_API_KEY`.                                                                                 | Shared manifest, sandbox, tool, event, and completion controls.                                                                                |
 | Claude Code          | Install 2.1.218; run `claude --version` and `claude auth status`.                                    | `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, Foundry, bounded Bedrock keys, or explicit Vertex credential file reference. | Disabled; `--bare`, `dontAsk`, strict MCP, credential scrubbing; no permission bypass.                                                         |
 | GitHub Copilot CLI   | Install v1.0.74; run `copilot --version` and provider login.                                         | `COPILOT_GITHUB_TOKEN`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BEARER_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN`.       | Disabled; ACP public preview, remote/plugins/custom instructions/experimental features off.                                                    |
 | Hermes Agent         | Install v2026.7.7.2; run `hermes --version`.                                                         | `HERMES_API_KEY` or the documented model-provider key.                                                                    | Disabled; one-shot scripted execution.                                                                                                         |

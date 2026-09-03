@@ -1,17 +1,42 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the active Veritas Kanban 6.1.3 backlog release candidate and
-retains historical evidence for the completed 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
+This packet records the completed Veritas Kanban 6.1.4 security release and
+retains historical evidence for the completed 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.3 is the supported stable v6 release. Do not use 6.0.0 for
+Veritas Kanban 6.1.4 is the supported stable v6 release. Do not use 6.0.0 for
 installation or upgrade validation.
 
-Documentation freshness: 2026-08-30 for the published Veritas Kanban 6.1.3 release.
+Documentation freshness: 2026-09-02 for the published Veritas Kanban 6.1.4 release.
 
-## 6.1.3 Backlog Release Candidate
+## 6.1.4 Security Release
+
+| Field                     | Value                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Release version           | 6.1.4                                                                                                                       |
+| Release tracker           | [#1307](https://github.com/BradGroux/veritas-kanban/issues/1307)                                                            |
+| Security implementation   | [PR #1308](https://github.com/BradGroux/veritas-kanban/pull/1308), merged as `82bab7fb91e97bdbc675d060bcd2c6abdfef3b51`     |
+| Release implementation    | [PR #1309](https://github.com/BradGroux/veritas-kanban/pull/1309), merged as `36b5529050aeb5cabbbefa8ac90e43f5f02e04d5`     |
+| Version and compatibility | All maintained packages are 6.1.4; REST API remains `v1`; no database migration; valid 6.1.3 workspaces remain compatible   |
+| Security disposition      | The coordinated fix is included in every supported 6.1.4 distribution surface; advisory disclosure remains owner-controlled |
+
+The full release CI run [33671382853](https://github.com/BradGroux/veritas-kanban/actions/runs/33671382853) passed build, lint/typecheck, workspace units, changed tests, critical-path coverage, security audit, CodeQL, gitleaks, Playwright, k6, the Docker runtime contract, and unsigned macOS, Linux, and Windows desktop artifacts. The annotated tag object `fed62cfac3386a3d9c59b2a3befa101e3d5cd19a` peels to the exact release merge `36b5529050aeb5cabbbefa8ac90e43f5f02e04d5`.
+
+The [v6.1.4 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.4) was published on 2026-09-02 with a live body matching `docs/releases/v6.1.4.md`. Desktop Release run [33672624733](https://github.com/BradGroux/veritas-kanban/actions/runs/33672624733) completed successfully and published these maintained macOS assets:
+
+| Asset                                         |              Size | SHA-256                                                            |
+| --------------------------------------------- | ----------------: | ------------------------------------------------------------------ |
+| `Veritas-Kanban-6.1.4-mac-arm64.dmg`          | 272,002,960 bytes | `712af00b95d952b6c5b46642cff19b88d134fe7fe520ebe530bd580cb30dd83a` |
+| `Veritas-Kanban-6.1.4-mac-arm64.zip`          | 276,323,390 bytes | `83eb0dd50116058b975f22de2d96a5583a7a3cda6e2be6266e897ca895ff0672` |
+| `Veritas-Kanban-6.1.4-mac-arm64.dmg.blockmap` |     282,204 bytes | `5dd2dd49c89d978e22c094bd48b893fbb81b5f0b101b5a854bf86f26b565208f` |
+| `Veritas-Kanban-6.1.4-mac-arm64.zip.blockmap` |     287,599 bytes | `ad92a8b2c39c5dc769f65fff8d9027bf53ff4f785793f5e97e05e84a9f3e54a5` |
+| `latest-mac.yml`                              |         530 bytes | `82665b85024579ef78a130c2ac71c2d82a389b140bf7a843c7fff0707a11cd54` |
+
+Homebrew tap [PR #55](https://github.com/BradGroux/homebrew-tap/pull/55) merged as `1b01aa1cfd463bb5d5a51e4395c1071c142bbd80`. The live cask reports 6.1.4 and pins the published ZIP checksum `83eb0dd50116058b975f22de2d96a5583a7a3cda6e2be6266e897ca895ff0672`.
+
+## Historical 6.1.3 Backlog Release Candidate
 
 | Field                 | Value                                                                                                                                                                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
