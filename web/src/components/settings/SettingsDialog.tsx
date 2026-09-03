@@ -585,7 +585,18 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     <Modal
       opened={open}
       onClose={() => onOpenChange(false)}
-      title={<span className="sr-only">Settings</span>}
+      title={
+        <Group gap="xs" wrap="nowrap">
+          <Text component="span" size="sm" fw={600}>
+            Settings
+          </Text>
+          {isBoardOnly && (
+            <Badge size="xs" variant="light" color="cyan">
+              Board Only
+            </Badge>
+          )}
+        </Group>
+      }
       size={1040}
       padding={0}
       centered
@@ -594,12 +605,13 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       closeButtonProps={{ 'aria-label': 'Close settings' }}
       classNames={{
         content: 'settings-dialog-content',
+        header: 'settings-dialog-header border-b border-border',
         body: 'settings-dialog-body',
       }}
       styles={{
-        content: { height: '85vh', overflow: 'hidden' },
-        body: { height: '100%', padding: 0 },
-        close: { top: '1rem', right: '1rem' },
+        content: { height: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+        header: { minHeight: '3rem', padding: '0.5rem 0.75rem 0.5rem 1rem' },
+        body: { flex: 1, minHeight: 0, padding: 0 },
       }}
     >
       <ErrorBoundary level="section">
@@ -611,14 +623,6 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
           <div className="hidden min-h-0 w-56 flex-col border-r bg-muted/25 py-4 sm:flex">
             <div className="px-4 pb-3">
-              <Group gap="xs">
-                <h2 className="text-sm font-semibold">Settings</h2>
-                {isBoardOnly && (
-                  <Badge size="xs" variant="light" color="cyan">
-                    Board Only
-                  </Badge>
-                )}
-              </Group>
               <Text size="xs" c="dimmed" mt={4}>
                 {isBoardOnly
                   ? 'Board essentials first. Advanced settings remain available.'
@@ -763,7 +767,6 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           {/* Content */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
             <div data-settings-mobile-header className="shrink-0 border-b px-4 py-3 sm:hidden">
-              <h2 className="text-lg font-semibold">Settings</h2>
               <Select
                 value={activeTab}
                 onChange={(value) => {

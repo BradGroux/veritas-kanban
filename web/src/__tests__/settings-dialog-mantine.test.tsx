@@ -118,6 +118,12 @@ describe('SettingsDialog Mantine shell', () => {
     expect(baseElement.querySelector('.mantine-Button-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
     expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
+
+    const closeButton = screen.getByRole('button', { name: 'Close settings' });
+    const modalHeader = closeButton.closest('.mantine-Modal-header');
+    expect(modalHeader?.className).toContain('settings-dialog-header');
+    expect(modalHeader?.textContent).toContain('Settings');
+    expect(screen.getAllByText('Settings')).toHaveLength(1);
   });
 
   it('groups every destination exactly once and separates destructive actions', async () => {
