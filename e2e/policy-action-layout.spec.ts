@@ -31,6 +31,13 @@ for (const theme of ['light', 'dark']) {
           const toggle = page.getByRole('button', { name: /^(Expand|Collapse) left sidebar$/ });
           if ((await toggle.getAttribute('aria-expanded')) !== String(sidebar === 'open'))
             await toggle.click();
+          for (const label of await page.getByText('Risk Threshold', { exact: true }).all()) {
+            const geometry = await label.evaluate((element) => ({
+              height: element.getBoundingClientRect().height,
+              lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+            }));
+            expect(geometry.height).toBeLessThanOrEqual(geometry.lineHeight * 2 + 8);
+          }
           for (const name of ['Edit', 'Test']) {
             for (const button of await page.getByRole('button', { name, exact: true }).all()) {
               const geometry = await button.evaluate((element) => {
@@ -56,12 +63,16 @@ for (const theme of ['light', 'dark']) {
       }
     }
     await page.screenshot({ path: testInfo.outputPath(`policy-${theme}.png`) });
-    await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+    const edit = page.getByRole('button', { name: 'Edit', exact: true }).first();
+    await edit.click();
     await expect(page.getByRole('dialog')).toContainText('Edit Policy');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Test', exact: true }).first().click();
+    await expect(edit).toBeFocused();
+    const preview = page.getByRole('button', { name: 'Test', exact: true }).first();
+    await preview.click();
     await expect(page.getByRole('dialog')).toContainText('Test Policy');
     await page.keyboard.press('Escape');
+    await expect(preview).toBeFocused();
     await cleanupRoutes(page);
   });
 }

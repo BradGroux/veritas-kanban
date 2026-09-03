@@ -425,6 +425,7 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
     {
       key: 'type',
       header: 'Type',
+      className: 'min-w-[9rem]',
       cell: (policy) => <UiPill>{policyTypeLabel(policy.type)}</UiPill>,
     },
     {
