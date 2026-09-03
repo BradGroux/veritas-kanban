@@ -99,10 +99,11 @@ describe('Managed list Mantine migration', () => {
     });
   });
 
-  it('keeps the task-type default color available in the Manage tab picker', () => {
+  it('offers semantic task-type colors rather than presentation classes', () => {
     expect(AVAILABLE_COLORS).toContainEqual({
-      value: 'border-l-gray-500',
-      label: 'Gray',
+      value: 'neutral',
+      label: 'Graphite',
     });
+    expect(AVAILABLE_COLORS.some((color) => color.value.startsWith('border-'))).toBe(false);
   });
 });

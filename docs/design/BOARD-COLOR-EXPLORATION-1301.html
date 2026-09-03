@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Veritas board color exploration</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, Roboto, system-ui, sans-serif;
+        --bg: #101013;
+        --panel: #18181d;
+        --card: #202027;
+        --line: #34343d;
+        --text: #f3f3f5;
+        --muted: #a7a6b0;
+        --violet: #9c7cff;
+        --blue: #58a6ff;
+        --red: #ff6b72;
+        --green: #54d18b;
+        --amber: #f2b84b;
+        --cyan: #49c7d5;
+        --orange: #f29a58;
+        --rose: #ee77b7;
+      }
+      [data-theme='light'] {
+        color-scheme: light;
+        --bg: #f4f4f7;
+        --panel: #ffffff;
+        --card: #ffffff;
+        --line: #dcdce4;
+        --text: #1d1d24;
+        --muted: #656572;
+        --violet: #6541d5;
+        --blue: #1769c2;
+        --red: #c5353d;
+        --green: #187c46;
+        --amber: #956311;
+        --cyan: #177986;
+        --orange: #a95016;
+        --rose: #a13970;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--bg) 92%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+      header p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--panel);
+        color: var(--text);
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .preview-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      select {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--panel);
+        color: var(--text);
+        padding: 8px 12px;
+      }
+      main {
+        display: grid;
+        gap: 30px;
+        padding: 24px;
+      }
+      section {
+        display: grid;
+        gap: 12px;
+      }
+      .concept-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .concept-head p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .verdict {
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+        max-width: 420px;
+      }
+      .board {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(235px, 1fr));
+        gap: 10px;
+        overflow-x: auto;
+      }
+      .column {
+        min-width: 235px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--panel) 78%, var(--bg));
+        padding: 8px;
+      }
+      .column-head {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .column-title {
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .count {
+        font:
+          700 10px ui-monospace,
+          monospace;
+        color: var(--muted);
+      }
+      .cards {
+        display: grid;
+        gap: 7px;
+      }
+      .card {
+        position: relative;
+        min-height: 76px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        padding: 9px;
+      }
+      .card-title {
+        margin-top: 7px;
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.25;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 7px;
+      }
+      .tag {
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--line) 55%, transparent);
+        color: var(--muted);
+        padding: 2px 5px;
+        font-size: 9px;
+      }
+      .state {
+        font-weight: 700;
+      }
+      .state.running {
+        color: var(--violet);
+      }
+      .state.blocked,
+      .state.failed {
+        color: var(--red);
+      }
+      .state.review {
+        color: var(--blue);
+      }
+      .state.verified {
+        color: var(--green);
+      }
+      .selected {
+        outline: 2px solid var(--violet);
+        outline-offset: 1px;
+      }
+      .focused {
+        outline: 2px dotted var(--text);
+        outline-offset: 2px;
+      }
+      .dragged {
+        opacity: 0.55;
+        transform: translateY(-2px) rotate(0.5deg);
+      }
+      .drop-target {
+        box-shadow: inset 0 0 0 2px var(--violet);
+      }
+      .running-card {
+        background: color-mix(in srgb, var(--violet) 8%, var(--card));
+      }
+      .blocked-card,
+      .failed-card {
+        background: color-mix(in srgb, var(--red) 7%, var(--card));
+      }
+
+      .c1 .status-plate {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 6px;
+        padding: 6px 8px;
+        color: var(--status);
+        background: color-mix(in srgb, var(--status) 13%, var(--card));
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status) 32%, transparent);
+      }
+      .c1 .status-plate .count {
+        color: inherit;
+        opacity: 0.8;
+        padding-left: 6px;
+        border-left: 1px solid color-mix(in srgb, var(--status) 35%, transparent);
+      }
+      .c1 .stamp {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 5px;
+        padding: 3px 6px;
+        color: var(--identity);
+        background: color-mix(in srgb, var(--identity) 13%, var(--card));
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--identity) 30%, transparent);
+        font-size: 9px;
+        font-weight: 750;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .c1 .stamp::before {
+        content: attr(data-glyph);
+        font-size: 10px;
+      }
+
+      .c2 .column-head {
+        border-bottom: 1px solid var(--line);
+      }
+      .c2 .field-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 4px;
+        margin-top: 7px;
+      }
+      .c2 .field {
+        padding: 4px 6px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--identity) 16%, var(--card));
+        color: var(--identity);
+        font-size: 9px;
+        font-weight: 700;
+      }
+      .c2 .state-field {
+        padding: 4px 6px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--status) 14%, var(--card));
+        color: var(--status);
+        font-size: 9px;
+        font-weight: 700;
+      }
+
+      .c3 .column-head {
+        padding-inline: 3px;
+      }
+      .c3 .seal {
+        position: absolute;
+        right: 8px;
+        top: 8px;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--status) 42%, var(--line));
+        border-radius: 4px 8px 4px 8px;
+        color: var(--status);
+        background: color-mix(in srgb, var(--status) 12%, var(--card));
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .c3 .card-title {
+        padding-right: 26px;
+      }
+      .c3 .identity-key {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--identity);
+        font-size: 9px;
+        font-weight: 700;
+      }
+      .c3 .identity-key::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--identity);
+      }
+
+      [data-status='todo'] {
+        --status: var(--muted);
+      }
+      [data-status='in-progress'] {
+        --status: var(--blue);
+      }
+      [data-status='blocked'],
+      [data-state='blocked'],
+      [data-state='failed'] {
+        --status: var(--red);
+      }
+      [data-status='done'],
+      [data-state='verified'] {
+        --status: var(--green);
+      }
+      [data-state='running'] {
+        --status: var(--blue);
+      }
+      [data-state='review'] {
+        --status: var(--blue);
+      }
+      [data-type='code'] {
+        --identity: var(--violet);
+      }
+      [data-type='research'] {
+        --identity: var(--cyan);
+      }
+      [data-type='content'] {
+        --identity: var(--orange);
+      }
+      [data-type='automation'] {
+        --identity: var(--green);
+      }
+      [data-type='bug'] {
+        --identity: var(--red);
+      }
+      [data-type='design'] {
+        --identity: var(--rose);
+      }
+      @media (max-width: 760px) {
+        header,
+        .concept-head {
+          align-items: flex-start;
+        }
+        header {
+          padding: 14px;
+        }
+        main {
+          padding: 14px;
+        }
+        .board {
+          grid-template-columns: repeat(4, 250px);
+        }
+        .verdict {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Board color language · #1301</h1>
+        <p>Same 24 tasks, same states, three placement systems</p>
+      </div>
+      <div class="preview-controls">
+        <label>
+          <span class="sr-only">Color simulation</span>
+          <select id="simulation" aria-label="Color simulation">
+            <option value="normal">Normal color</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="deuteranopia">Deuteranopia simulation</option>
+          </select>
+        </label>
+        <button id="theme" type="button">Switch theme</button>
+      </div>
+    </header>
+    <svg aria-hidden="true" width="0" height="0" style="position: absolute">
+      <filter id="deuteranopia">
+        <feColorMatrix
+          type="matrix"
+          values="0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0"
+        />
+      </filter>
+    </svg>
+    <main id="concepts"></main>
+    <script>
+      const tasks = [
+        ['Define launch policy', 'code', 'normal'],
+        ['Interview operators', 'research', 'review'],
+        ['Draft release narrative', 'content', 'normal'],
+        ['Automate artifact checks', 'automation', 'running'],
+        ['Repair auth callback', 'bug', 'blocked'],
+        ['Refine empty state', 'design', 'focused'],
+        ['Persist run journal', 'code', 'running'],
+        ['Review provider matrix', 'research', 'normal'],
+        ['Write migration guide', 'content', 'review'],
+        ['Sync release assets', 'automation', 'normal'],
+        ['Fix recovery race', 'bug', 'failed'],
+        ['Map evidence panel', 'design', 'selected'],
+        ['Compile phase authority', 'code', 'normal'],
+        ['Audit dependency graph', 'research', 'normal'],
+        ['Polish operator notes', 'content', 'normal'],
+        ['Publish package metadata', 'automation', 'dragged'],
+        ['Resolve storage lock', 'bug', 'blocked'],
+        ['Tune dense card layout', 'design', 'normal'],
+        ['Verify sandbox contract', 'code', 'verified'],
+        ['Confirm release checksum', 'research', 'verified'],
+        ['Finalize changelog', 'content', 'verified'],
+        ['Tag signed artifacts', 'automation', 'verified'],
+        ['Close regression finding', 'bug', 'verified'],
+        ['Approve visual system', 'design', 'verified'],
+      ];
+      const columns = [
+        ['todo', '○', 'To Do'],
+        ['in-progress', '▶', 'In Progress'],
+        ['blocked', '!', 'Blocked'],
+        ['done', '✓', 'Done'],
+      ];
+      const concepts = [
+        [
+          'c1',
+          '1 · Status plates + classification stamps',
+          'Chosen: fastest status/type scan, distinctive compact objects, clean interaction hierarchy.',
+        ],
+        [
+          'c2',
+          '2 · Integrated metadata fields',
+          'Rejected: coherent but the repeated field tray reads like a generic admin dashboard.',
+        ],
+        [
+          'c3',
+          '3 · Evidence seals + identity keys',
+          'Rejected: Veritas-specific, but verification marks compete with blocked and running state.',
+        ],
+      ];
+      const stateLabel = {
+        normal: 'Ready',
+        running: 'Running',
+        blocked: 'Blocked',
+        failed: 'Failed',
+        review: 'Awaiting review',
+        verified: 'Verified',
+        selected: 'Selected',
+        focused: 'Focused',
+        dragged: 'Dragging',
+      };
+      function cardMarkup(task, concept, index) {
+        const [title, type, state] = task;
+        const classNames = [
+          'card',
+          state === 'selected' ? 'selected' : '',
+          state === 'focused' ? 'focused' : '',
+          state === 'dragged' ? 'dragged' : '',
+          state === 'running' ? 'running-card' : '',
+          state === 'blocked' ? 'blocked-card' : '',
+          state === 'failed' ? 'failed-card' : '',
+        ].join(' ');
+        const glyph = {
+          code: '</>',
+          research: '?',
+          content: '¶',
+          automation: '⚡',
+          bug: '!',
+          design: '◇',
+        }[type];
+        const status = state === 'normal' ? columns[Math.floor(index / 6)][0] : state;
+        if (concept === 'c1')
+          return `<article class="${classNames}" data-type="${type}" data-state="${state}"><span class="stamp" data-glyph="${glyph}">${type}</span><div class="card-title">${title}</div><div class="meta"><span class="tag">Veritas</span><span class="tag state ${state}">${stateLabel[state]}</span><span class="tag">P${index % 4}</span></div></article>`;
+        if (concept === 'c2')
+          return `<article class="${classNames}" data-type="${type}" data-state="${state}"><div class="card-title">${title}</div><div class="field-row"><span class="field">${glyph} ${type}</span><span class="state-field">${stateLabel[state]}</span></div><div class="meta"><span class="tag">Veritas</span><span class="tag">Sprint 6.1</span></div></article>`;
+        return `<article class="${classNames}" data-type="${type}" data-state="${state}"><span class="seal">${state === 'verified' ? 'V' : state === 'blocked' || state === 'failed' ? '!' : state === 'running' ? '▶' : '·'}</span><span class="identity-key">${type}</span><div class="card-title">${title}</div><div class="meta"><span class="tag">Veritas</span><span class="tag state ${state}">${stateLabel[state]}</span></div></article>`;
+      }
+      function conceptMarkup([className, title, verdict]) {
+        return `<section class="${className}"><div class="concept-head"><div><h2>${title}</h2><p>Normal, selected, focused, dragged, running, blocked, failed, review, and verified states</p></div><div class="verdict">${verdict}</div></div><div class="board">${columns
+          .map(
+            ([status, glyph, label], columnIndex) =>
+              `<div class="column ${columnIndex === 1 ? 'drop-target' : ''}" data-status="${status}"><div class="column-head">${className === 'c1' ? `<span class="status-plate"><b>${glyph}</b><span class="column-title">${label}</span><span class="count">6</span></span>` : `<span class="column-title">${glyph} ${label}</span><span class="count">6</span>`}</div><div class="cards">${tasks
+                .slice(columnIndex * 6, columnIndex * 6 + 6)
+                .map((task, offset) => cardMarkup(task, className, columnIndex * 6 + offset))
+                .join('')}</div></div>`
+          )
+          .join('')}</div></section>`;
+      }
+      document.querySelector('#concepts').innerHTML = concepts.map(conceptMarkup).join('');
+      document.querySelector('#theme').addEventListener('click', () => {
+        document.documentElement.dataset.theme =
+          document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      });
+      document.querySelector('#simulation').addEventListener('change', (event) => {
+        const filters = {
+          normal: 'none',
+          grayscale: 'grayscale(1)',
+          deuteranopia: 'url(#deuteranopia)',
+        };
+        document.querySelector('#concepts').style.filter = filters[event.target.value];
+      });
+    </script>
+  </body>
+</html>

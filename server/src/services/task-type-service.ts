@@ -8,7 +8,7 @@ const DEFAULT_TASK_TYPES: TaskTypeConfig[] = [
     id: 'code',
     label: 'Code',
     icon: 'Code',
-    color: 'border-l-violet-500',
+    colorToken: 'violet',
     order: 0,
     isDefault: true,
     created: new Date().toISOString(),
@@ -18,7 +18,7 @@ const DEFAULT_TASK_TYPES: TaskTypeConfig[] = [
     id: 'research',
     label: 'Research',
     icon: 'Search',
-    color: 'border-l-cyan-500',
+    colorToken: 'cyan',
     order: 1,
     isDefault: true,
     created: new Date().toISOString(),
@@ -28,7 +28,7 @@ const DEFAULT_TASK_TYPES: TaskTypeConfig[] = [
     id: 'content',
     label: 'Content',
     icon: 'FileText',
-    color: 'border-l-orange-500',
+    colorToken: 'orange',
     order: 2,
     isDefault: true,
     created: new Date().toISOString(),
@@ -38,7 +38,7 @@ const DEFAULT_TASK_TYPES: TaskTypeConfig[] = [
     id: 'automation',
     label: 'Automation',
     icon: 'Zap',
-    color: 'border-l-emerald-500',
+    colorToken: 'emerald',
     order: 3,
     isDefault: true,
     created: new Date().toISOString(),
@@ -59,7 +59,7 @@ export class TaskTypeService extends ManagedListService<TaskTypeConfig> {
       referenceCounter: async (typeId: string) => {
         // Count how many tasks use this type
         const tasks = await taskService.listTasks();
-        return tasks.filter((task: any) => task.type === typeId).length;
+        return tasks.filter((task) => task.type === typeId).length;
       },
     });
 

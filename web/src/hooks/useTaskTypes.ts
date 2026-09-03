@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import type { TaskTypeConfig } from '@veritas-kanban/shared';
+import {
+  TASK_TYPE_COLOR_TOKENS,
+  type TaskTypeColorToken,
+  type TaskTypeConfig,
+} from '@veritas-kanban/shared';
 import * as LucideIcons from 'lucide-react';
 import { useManagedList } from './useManagedList';
 import { apiFetch } from '@/lib/api/helpers';
@@ -68,12 +72,32 @@ export function getAvailableIcons(): string[] {
   return Object.keys(ICON_MAP);
 }
 
-/**
- * Get the color class for a task type
- */
-export function getTypeColor(types: TaskTypeConfig[], typeId: string): string {
-  const type = types.find((t) => t.id === typeId);
-  return type?.color || 'border-l-gray-500';
+const LEGACY_COLOR_TOKENS: Readonly<Record<string, TaskTypeColorToken>> = {
+  'border-l-gray-500': 'neutral',
+  'border-l-violet-500': 'violet',
+  'border-l-cyan-500': 'cyan',
+  'border-l-orange-500': 'orange',
+  'border-l-emerald-500': 'emerald',
+  'border-l-fuchsia-500': 'rose',
+  'border-l-amber-500': 'amber',
+  'border-l-blue-700': 'blue',
+  'border-l-green-700': 'emerald',
+  'border-l-red-500': 'red',
+  'border-l-purple-500': 'violet',
+  'border-l-yellow-400': 'amber',
+  'border-l-amber-800': 'umber',
+};
+
+export function normalizeTaskTypeColorToken(value?: string): TaskTypeColorToken {
+  if (TASK_TYPE_COLOR_TOKENS.includes(value as TaskTypeColorToken)) {
+    return value as TaskTypeColorToken;
+  }
+  return LEGACY_COLOR_TOKENS[value ?? ''] ?? 'neutral';
+}
+
+export function getTypeColorToken(types: TaskTypeConfig[], typeId: string): TaskTypeColorToken {
+  const type = types.find((candidate) => candidate.id === typeId);
+  return normalizeTaskTypeColorToken(type?.colorToken ?? type?.color);
 }
 
 /**
@@ -93,20 +117,17 @@ export function getTypeIconName(types: TaskTypeConfig[], typeId: string): string
 }
 
 /**
- * Available border colors for task types
+ * Semantic task identity colors. Rendering derives theme-aware surfaces from these tokens.
  */
 export const AVAILABLE_COLORS = [
-  { value: 'border-l-gray-500', label: 'Gray' },
-  { value: 'border-l-violet-500', label: 'Violet' },
-  { value: 'border-l-cyan-500', label: 'Cyan' },
-  { value: 'border-l-orange-500', label: 'Orange' },
-  { value: 'border-l-emerald-500', label: 'Emerald' },
-  { value: 'border-l-fuchsia-500', label: 'Pink' },
-  { value: 'border-l-amber-500', label: 'Amber' },
-  { value: 'border-l-blue-700', label: 'Blue' },
-  { value: 'border-l-green-700', label: 'Green' },
-  { value: 'border-l-red-500', label: 'Red' },
-  { value: 'border-l-purple-500', label: 'Purple' },
-  { value: 'border-l-yellow-400', label: 'Yellow' },
-  { value: 'border-l-amber-800', label: 'Brown' },
-];
+  { value: 'neutral', label: 'Graphite' },
+  { value: 'violet', label: 'Violet' },
+  { value: 'cyan', label: 'Cyan' },
+  { value: 'orange', label: 'Orange' },
+  { value: 'emerald', label: 'Emerald' },
+  { value: 'rose', label: 'Rose' },
+  { value: 'amber', label: 'Amber' },
+  { value: 'blue', label: 'Blue' },
+  { value: 'red', label: 'Red' },
+  { value: 'umber', label: 'Umber' },
+] satisfies Array<{ value: TaskTypeColorToken; label: string }>;

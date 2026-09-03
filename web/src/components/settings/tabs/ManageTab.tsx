@@ -6,6 +6,7 @@ import {
   AVAILABLE_COLORS,
   getAvailableIcons,
   getTypeIcon,
+  normalizeTaskTypeColorToken,
   useTaskTypesManager,
 } from '@/hooks/useTaskTypes';
 import { AVAILABLE_PROJECT_COLORS, useProjectsManager } from '@/hooks/useProjects';
@@ -152,9 +153,9 @@ export function ManageTab() {
                     Color
                   </Text>
                   <Select
-                    value={item.color || 'border-l-gray-500'}
-                    onChange={(color) => {
-                      if (color) onChange({ color });
+                    value={normalizeTaskTypeColorToken(item.colorToken ?? item.color)}
+                    onChange={(colorToken) => {
+                      if (colorToken) onChange({ colorToken });
                     }}
                     data={taskTypeColorOptions}
                     size="xs"
@@ -163,7 +164,11 @@ export function ManageTab() {
                     aria-label={`${item.label} color`}
                     renderOption={({ option }) => (
                       <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded border-l-4 ${option.value}`} />
+                        <div
+                          className="vk-task-type-swatch"
+                          data-color-token={option.value}
+                          aria-hidden="true"
+                        />
                         {option.label}
                       </div>
                     )}
@@ -171,7 +176,7 @@ export function ManageTab() {
                 </div>
               </div>
             )}
-            newItemDefaults={{ icon: 'Code', color: 'border-l-gray-500' }}
+            newItemDefaults={{ icon: 'Code', colorToken: 'neutral' }}
           />
         </div>
       </div>
