@@ -207,7 +207,9 @@ describe('task detail Mantine migration', () => {
     expect((screen.getByLabelText('Task title') as HTMLInputElement).value).toBe(
       'Ship Mantine task detail'
     );
-    expect(screen.getByRole('tab', { name: 'Work' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Plan' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('tab', { name: 'Details' })).toBeDefined();
     expect(screen.queryByRole('tab', { name: 'Git' })).toBeNull();
     expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
@@ -218,6 +220,8 @@ describe('task detail Mantine migration', () => {
     );
     expect(screen.getByTestId('task-detail-panel').className).toContain('veritas-overlay-surface');
     expect(screen.getByTestId('task-detail-panel').className).toContain('min-h-0');
+    expect(screen.getByTestId('task-workspace-mode-navigation').className).toContain('sm:flex');
+    expect(screen.getByRole('combobox', { name: 'Task workspace mode' })).toBeDefined();
     const scrollRegion = screen.getByTestId('task-detail-scroll-region');
     expect(scrollRegion.className).toContain('min-h-0');
     expect(scrollRegion.className).toContain('overflow-y-scroll');
@@ -231,7 +235,7 @@ describe('task detail Mantine migration', () => {
     expect(container.querySelector('.mantine-Tabs-root')).toBeDefined();
     expect(container.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(container.querySelectorAll('.mantine-Select-root').length).toBeGreaterThanOrEqual(5);
-    expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThanOrEqual(5);
+    expect(container.querySelectorAll('.mantine-Button-root').length).toBeGreaterThanOrEqual(4);
     expect(container.querySelector('.mantine-ActionIcon-root')).toBeDefined();
     expect(baseElement.querySelector('[data-slot="sheet-content"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="tabs-trigger"]')).toBeNull();
@@ -247,10 +251,25 @@ describe('task detail Mantine migration', () => {
     const scrollRegion = screen.getByTestId('task-detail-scroll-region');
     expect(within(scrollRegion).getByLabelText('Task description')).toBeDefined();
 
+    await user.click(screen.getByRole('button', { name: 'Results' }));
     await user.click(screen.getByRole('tab', { name: 'Evidence' }));
 
     expect(await within(scrollRegion).findByTestId('long-evidence-content')).toBeDefined();
     expect(screen.getByTestId('task-detail-scroll-region')).toBe(scrollRegion);
+  });
+
+  it('remembers the selected local section when moving between modes', async () => {
+    const user = userEvent.setup();
+    renderTaskDetail();
+
+    await user.click(screen.getByRole('tab', { name: 'Progress' }));
+    await user.click(screen.getByRole('button', { name: 'Results' }));
+    await user.click(screen.getByRole('tab', { name: 'Evidence' }));
+    await user.click(screen.getByRole('button', { name: 'Plan' }));
+
+    expect(screen.getByRole('tab', { name: 'Progress' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
   });
 
   it('applies description height and vertical resizing to the textarea input', () => {
@@ -271,8 +290,19 @@ describe('task detail Mantine migration', () => {
 
   it('keeps the task drawer open when Escape belongs to a nested Workflow dialog', async () => {
     const user = userEvent.setup();
-    renderTaskDetail();
+    const task = createMockTask({
+      id: 'task-code-workflow',
+      title: 'Run a code workflow',
+      type: 'code',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'task-workspace-shell',
+        baseBranch: 'main',
+      },
+    });
+    renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
 
+    await user.click(screen.getByRole('button', { name: 'Run' }));
     await user.click(screen.getByRole('button', { name: 'Workflow' }));
     expect(screen.getByRole('dialog', { name: 'Run Workflow' })).toBeDefined();
 
@@ -319,7 +349,7 @@ describe('task detail Mantine migration', () => {
     expect(mocks.onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('defaults code tasks with execution context to the Work tab', () => {
+  it('defaults code tasks with execution context to Overview', () => {
     const task = createMockTask({
       id: 'task-code-work',
       title: 'Ship task work view',
@@ -336,9 +366,64 @@ describe('task detail Mantine migration', () => {
 
     renderWithProviders(<TaskDetailPanel task={task} open onOpenChange={mocks.onOpenChange} />);
 
-    expect(screen.getByRole('tab', { name: 'Work' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('tab', { name: 'Timeline' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-current')).toBe(
+      'page'
+    );
+    expect(screen.getByRole('button', { name: 'History' })).toBeDefined();
+    expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
     expect(screen.getByText('Work View')).toBeDefined();
+  });
+
+  it('translates legacy and versioned deep links into modes and local sections', async () => {
+    const codeTask = createMockTask({
+      id: 'task-deep-link',
+      title: 'Inspect a run timeline',
+      type: 'code',
+      git: {
+        repo: 'BradGroux/veritas-kanban',
+        branch: 'task-workspace-shell',
+        baseBranch: 'main',
+        worktreePath: '/tmp/task-workspace-shell',
+      },
+    });
+
+    const { rerender } = renderWithProviders(
+      <TaskDetailPanel
+        task={codeTask}
+        open
+        onOpenChange={mocks.onOpenChange}
+        navigationTarget={{ tab: 'timeline', timelineAttemptId: 'attempt-1' }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'History' }).getAttribute('aria-current')).toBe(
+        'page'
+      )
+    );
+    expect(screen.getByRole('tab', { name: 'Timeline' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+
+    rerender(
+      <TaskDetailPanel
+        task={codeTask}
+        open
+        onOpenChange={mocks.onOpenChange}
+        navigationTarget={{
+          workspace: { version: 1, mode: 'results', section: 'evidence' },
+        }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Results' }).getAttribute('aria-current')).toBe(
+        'page'
+      )
+    );
+    expect(screen.getByRole('tab', { name: 'Evidence' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
   });
 
   it('falls back when the active tab becomes unavailable for the task data', async () => {
@@ -358,6 +443,7 @@ describe('task detail Mantine migration', () => {
       <TaskDetailPanel task={codeTask} open onOpenChange={mocks.onOpenChange} />
     );
 
+    await user.click(screen.getByRole('button', { name: 'History' }));
     await user.click(screen.getByRole('tab', { name: 'Timeline' }));
     expect(screen.getByRole('tab', { name: 'Timeline' }).getAttribute('aria-selected')).toBe(
       'true'
@@ -371,10 +457,9 @@ describe('task detail Mantine migration', () => {
     rerender(<TaskDetailPanel task={featureTask} open onOpenChange={mocks.onOpenChange} />);
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: 'Details' }).getAttribute('aria-selected')).toBe(
-        'true'
-      )
+      expect(screen.getByRole('button', { name: 'Plan' }).getAttribute('aria-current')).toBe('page')
     );
+    expect(screen.getByRole('tab', { name: 'Details' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByRole('tab', { name: 'Timeline' })).toBeNull();
   });
 });
