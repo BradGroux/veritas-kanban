@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Search, ShieldAlert, BrainCircuit, Route, ShieldCheck } from 'lucide-react';
-import { Badge, Button, SegmentedControl, Select, TextInput } from '@mantine/core';
+import { Search, ShieldAlert, BrainCircuit, Route, ShieldCheck } from 'lucide-react';
+import { Badge, SegmentedControl, Select, TextInput } from '@mantine/core';
 import { useDecisions } from '@/hooks/useDecisions';
 import { useGovernanceTraces } from '@/hooks/useGovernanceTraces';
 import type {
@@ -13,6 +13,7 @@ import type {
 } from '@veritas-kanban/shared';
 import { DecisionDetail } from './DecisionDetail';
 import { GovernanceTraceDetail } from './GovernanceTraceDetail';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 interface DecisionExplorerProps {
   onBack: () => void;
@@ -197,175 +198,169 @@ export function DecisionExplorer({ onBack }: DecisionExplorerProps) {
   const activeLabel = mode === 'decisions' ? 'decisions' : 'traces';
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="subtle" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Decision Audit Trail</h1>
-            <p className="text-sm text-muted-foreground">
-              Review agent reasoning, policy decisions, and workflow gate outcomes.
-            </p>
-          </div>
-        </div>
+    <PrimaryPageShell
+      title="Decision Audit Trail"
+      subtitle="Review agent reasoning, policy decisions, and workflow gate outcomes."
+      onBack={onBack}
+      width="wide"
+      status={
         <Badge variant="light" tt="none">
           {activeCount} {activeLabel}
         </Badge>
-      </div>
+      }
+    >
+      <div className="space-y-6">
+        <SegmentedControl
+          value={mode}
+          onChange={handleModeChange}
+          data={[
+            { value: 'decisions', label: 'Agent Decisions' },
+            { value: 'governance', label: 'Governance Traces' },
+          ]}
+        />
 
-      <SegmentedControl
-        value={mode}
-        onChange={handleModeChange}
-        data={[
-          { value: 'decisions', label: 'Agent Decisions' },
-          { value: 'governance', label: 'Governance Traces' },
-        ]}
-      />
+        <div
+          className={
+            mode === 'decisions'
+              ? 'grid gap-4 lg:grid-cols-[1.2fr_220px_220px_220px]'
+              : 'grid gap-4 lg:grid-cols-[1.2fr_220px_220px]'
+          }
+        >
+          <div>
+            <TextInput
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={
+                mode === 'decisions'
+                  ? 'Search decision id, task, context...'
+                  : 'Search trace id, rule, action, subject...'
+              }
+              leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
+            />
+          </div>
 
-      <div
-        className={
-          mode === 'decisions'
-            ? 'grid gap-4 lg:grid-cols-[1.2fr_220px_220px_220px]'
-            : 'grid gap-4 lg:grid-cols-[1.2fr_220px_220px]'
-        }
-      >
-        <div>
-          <TextInput
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={
-              mode === 'decisions'
-                ? 'Search decision id, task, context...'
-                : 'Search trace id, rule, action, subject...'
-            }
-            leftSection={<Search className="h-4 w-4 text-muted-foreground" />}
-          />
+          {mode === 'decisions' ? (
+            <>
+              <Select
+                value={agent}
+                onChange={(value) => setAgent(value ?? 'all')}
+                data={[
+                  { value: 'all', label: 'All agents' },
+                  ...agentOptions.map((option) => ({ value: option, label: option })),
+                ]}
+                placeholder="All agents"
+                allowDeselect={false}
+              />
+
+              <Select
+                value={confidenceFilter}
+                onChange={(value) => setConfidenceFilter(value ?? 'all')}
+                data={[
+                  { value: 'all', label: 'All confidence' },
+                  { value: 'high', label: '80-100' },
+                  { value: 'medium', label: '50-79' },
+                  { value: 'low', label: '0-49' },
+                ]}
+                placeholder="Confidence"
+                allowDeselect={false}
+              />
+
+              <Select
+                value={riskFilter}
+                onChange={(value) => setRiskFilter(value ?? 'all')}
+                data={[
+                  { value: 'all', label: 'All risk' },
+                  { value: 'low', label: '0-39' },
+                  { value: 'medium', label: '40-69' },
+                  { value: 'high', label: '70-100' },
+                ]}
+                placeholder="Risk"
+                allowDeselect={false}
+              />
+            </>
+          ) : (
+            <>
+              <Select
+                value={traceKind}
+                onChange={(value) => setTraceKind((value ?? 'all') as 'all' | GovernanceTraceKind)}
+                data={traceKindOptions}
+                placeholder="Trace type"
+                allowDeselect={false}
+              />
+
+              <Select
+                value={traceOutcome}
+                onChange={(value) =>
+                  setTraceOutcome((value ?? 'all') as 'all' | GovernanceTraceOutcome)
+                }
+                data={traceOutcomeOptions}
+                placeholder="Outcome"
+                allowDeselect={false}
+              />
+            </>
+          )}
         </div>
 
         {mode === 'decisions' ? (
-          <>
-            <Select
-              value={agent}
-              onChange={(value) => setAgent(value ?? 'all')}
-              data={[
-                { value: 'all', label: 'All agents' },
-                ...agentOptions.map((option) => ({ value: option, label: option })),
-              ]}
-              placeholder="All agents"
-              allowDeselect={false}
-            />
+          <div className="overflow-hidden rounded-lg border bg-card">
+            <div className="grid grid-cols-[1.5fr_1.1fr_120px_120px_150px_180px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span>Action</span>
+              <span>Agent / Task</span>
+              <span>Confidence</span>
+              <span>Risk</span>
+              <span>Assumptions</span>
+              <span>Timestamp</span>
+            </div>
 
-            <Select
-              value={confidenceFilter}
-              onChange={(value) => setConfidenceFilter(value ?? 'all')}
-              data={[
-                { value: 'all', label: 'All confidence' },
-                { value: 'high', label: '80-100' },
-                { value: 'medium', label: '50-79' },
-                { value: 'low', label: '0-49' },
-              ]}
-              placeholder="Confidence"
-              allowDeselect={false}
-            />
-
-            <Select
-              value={riskFilter}
-              onChange={(value) => setRiskFilter(value ?? 'all')}
-              data={[
-                { value: 'all', label: 'All risk' },
-                { value: 'low', label: '0-39' },
-                { value: 'medium', label: '40-69' },
-                { value: 'high', label: '70-100' },
-              ]}
-              placeholder="Risk"
-              allowDeselect={false}
-            />
-          </>
+            {isLoading ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                Loading decisions...
+              </div>
+            ) : filteredDecisions.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                No decisions match the current filters.
+              </div>
+            ) : (
+              filteredDecisions.map((decision) => (
+                <DecisionRow
+                  key={decision.id}
+                  decision={decision}
+                  onOpen={() => setSelectedId(decision.id)}
+                />
+              ))
+            )}
+          </div>
         ) : (
-          <>
-            <Select
-              value={traceKind}
-              onChange={(value) => setTraceKind((value ?? 'all') as 'all' | GovernanceTraceKind)}
-              data={traceKindOptions}
-              placeholder="Trace type"
-              allowDeselect={false}
-            />
+          <div className="overflow-hidden rounded-lg border bg-card">
+            <div className="grid grid-cols-[1.5fr_150px_150px_170px_180px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span>Trace</span>
+              <span>Type</span>
+              <span>Outcome</span>
+              <span>Subject</span>
+              <span>Timestamp</span>
+            </div>
 
-            <Select
-              value={traceOutcome}
-              onChange={(value) =>
-                setTraceOutcome((value ?? 'all') as 'all' | GovernanceTraceOutcome)
-              }
-              data={traceOutcomeOptions}
-              placeholder="Outcome"
-              allowDeselect={false}
-            />
-          </>
+            {tracesLoading ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                Loading governance traces...
+              </div>
+            ) : filteredTraces.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                No governance traces match the current filters.
+              </div>
+            ) : (
+              filteredTraces.map((trace) => (
+                <GovernanceTraceRow
+                  key={trace.id}
+                  trace={trace}
+                  onOpen={() => setSelectedTraceId(trace.id)}
+                />
+              ))
+            )}
+          </div>
         )}
       </div>
-
-      {mode === 'decisions' ? (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <div className="grid grid-cols-[1.5fr_1.1fr_120px_120px_150px_180px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <span>Action</span>
-            <span>Agent / Task</span>
-            <span>Confidence</span>
-            <span>Risk</span>
-            <span>Assumptions</span>
-            <span>Timestamp</span>
-          </div>
-
-          {isLoading ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              Loading decisions...
-            </div>
-          ) : filteredDecisions.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              No decisions match the current filters.
-            </div>
-          ) : (
-            filteredDecisions.map((decision) => (
-              <DecisionRow
-                key={decision.id}
-                decision={decision}
-                onOpen={() => setSelectedId(decision.id)}
-              />
-            ))
-          )}
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <div className="grid grid-cols-[1.5fr_150px_150px_170px_180px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <span>Trace</span>
-            <span>Type</span>
-            <span>Outcome</span>
-            <span>Subject</span>
-            <span>Timestamp</span>
-          </div>
-
-          {tracesLoading ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              Loading governance traces...
-            </div>
-          ) : filteredTraces.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              No governance traces match the current filters.
-            </div>
-          ) : (
-            filteredTraces.map((trace) => (
-              <GovernanceTraceRow
-                key={trace.id}
-                trace={trace}
-                onOpen={() => setSelectedTraceId(trace.id)}
-              />
-            ))
-          )}
-        </div>
-      )}
-    </div>
+    </PrimaryPageShell>
   );
 }
 

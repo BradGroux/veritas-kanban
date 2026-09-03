@@ -1,13 +1,6 @@
 import { useMemo } from 'react';
-import {
-  Activity as ActivityIcon,
-  ArrowLeft,
-  ArrowRight,
-  ArrowRightLeft,
-  Zap,
-  Coffee,
-} from 'lucide-react';
-import { ActionIcon, Badge, Group, Paper, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
+import { Activity as ActivityIcon, ArrowRight, ArrowRightLeft, Zap, Coffee } from 'lucide-react';
+import { Badge, Group, Paper, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
 import {
   useDailySummary,
   useStatusHistory,
@@ -16,6 +9,7 @@ import {
 } from '@/hooks/useStatusHistory';
 import { useActivityFeed, type Activity } from '@/hooks/useActivity';
 import { cn } from '@/lib/utils';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 // Kanban column colors
 function getColumnColor(status: string): string {
@@ -342,23 +336,11 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ onBack, onTaskClick }: ActivityFeedProps) {
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <ActionIcon variant="subtle" onClick={onBack} title="Back" aria-label="Back">
-          <ArrowLeft className="h-5 w-5" />
-        </ActionIcon>
-        <div className="flex items-center gap-2">
-          <ActivityIcon className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold">Activity</h2>
-        </div>
-      </div>
-
-      {/* Daily Summary */}
-      <DailySummaryPanel />
-
-      {/* Status History — full width */}
-      <StatusHistoryPanel onTaskClick={onTaskClick} />
-    </div>
+    <PrimaryPageShell title="Activity" onBack={onBack}>
+      <Stack gap="lg">
+        <DailySummaryPanel />
+        <StatusHistoryPanel onTaskClick={onTaskClick} />
+      </Stack>
+    </PrimaryPageShell>
   );
 }

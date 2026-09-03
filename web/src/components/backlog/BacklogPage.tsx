@@ -28,10 +28,11 @@ import {
 } from '@/hooks/useBacklog';
 import { useProjects } from '@/hooks/useProjects';
 import { useTaskTypes } from '@/hooks/useTaskTypes';
-import { ArrowLeft, ArrowUp, Search, Trash2 } from 'lucide-react';
+import { ArrowUp, Search, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import type { Task } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 interface BacklogPageProps {
   onBack: () => void;
@@ -163,22 +164,17 @@ export function BacklogPage({ onBack }: BacklogPageProps) {
   };
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="center" gap="md" wrap="wrap">
-        <Group gap="md" wrap="wrap">
-          <Button variant="subtle" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <Text component="h1" size="xl" fw={700} lh={1.1} m={0}>
-            Backlog
-          </Text>
-          <Badge variant="light" color="gray" tt="none">
-            {filteredTasks.length} tasks
-          </Badge>
-        </Group>
-
-        {selectedIds.size > 0 && (
+    <PrimaryPageShell
+      title="Backlog"
+      onBack={onBack}
+      width="wide"
+      status={
+        <Badge variant="light" color="gray" tt="none">
+          {filteredTasks.length} tasks
+        </Badge>
+      }
+      actions={
+        selectedIds.size > 0 ? (
           <Group gap="sm">
             <Text size="sm" c="dimmed">
               {selectedIds.size} selected
@@ -188,79 +184,81 @@ export function BacklogPage({ onBack }: BacklogPageProps) {
               Promote to Board
             </Button>
           </Group>
+        ) : null
+      }
+    >
+      <Stack gap="lg">
+        <Paper withBorder radius="md" p="md">
+          <Group gap="md" align="end" wrap="wrap">
+            <TextInput
+              value={search}
+              onChange={(event) => setSearch(event.currentTarget.value)}
+              placeholder="Search tasks..."
+              aria-label="Search backlog tasks"
+              leftSection={<Search className="h-4 w-4" aria-hidden="true" />}
+              className="min-w-[240px] flex-1"
+            />
+
+            <Select
+              value={projectFilter}
+              onChange={(value) => setProjectFilter(value ?? 'all')}
+              data={projectOptions}
+              aria-label="Filter backlog by project"
+              checkIconPosition="right"
+              className="w-[180px]"
+            />
+
+            <Select
+              value={typeFilter}
+              onChange={(value) => setTypeFilter(value ?? 'all')}
+              data={taskTypeOptions}
+              aria-label="Filter backlog by type"
+              checkIconPosition="right"
+              className="w-[180px]"
+            />
+
+            {filteredTasks.length > 0 && (
+              <Checkbox
+                checked={selectedIds.size === filteredTasks.length}
+                onChange={handleSelectAll}
+                id="select-all"
+                label="Select all"
+                className="shrink-0"
+              />
+            )}
+          </Group>
+        </Paper>
+
+        {/* Task List */}
+        {isLoading ? (
+          <Text ta="center" py="xl" c="dimmed">
+            Loading backlog tasks...
+          </Text>
+        ) : filteredTasks.length === 0 ? (
+          <Text ta="center" py="xl" c="dimmed">
+            {search || projectFilter !== 'all' || typeFilter !== 'all'
+              ? 'No tasks match your filters'
+              : 'No tasks in backlog'}
+          </Text>
+        ) : (
+          <Stack gap="sm">
+            {filteredTasks.map((task) => (
+              <BacklogTaskCard
+                key={task.id}
+                task={task}
+                isSelected={selectedIds.has(task.id)}
+                isExpanded={expandedTaskId === task.id}
+                onToggleSelect={() => handleToggleSelect(task.id)}
+                onPromote={() => handlePromote(task.id)}
+                onDelete={() => handleDelete(task.id)}
+                onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                priorityColors={priorityColors}
+              />
+            ))}
+          </Stack>
         )}
-      </Group>
-
-      <Paper withBorder radius="md" p="md">
-        <Group gap="md" align="end" wrap="wrap">
-          <TextInput
-            value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="Search tasks..."
-            aria-label="Search backlog tasks"
-            leftSection={<Search className="h-4 w-4" aria-hidden="true" />}
-            className="min-w-[240px] flex-1"
-          />
-
-          <Select
-            value={projectFilter}
-            onChange={(value) => setProjectFilter(value ?? 'all')}
-            data={projectOptions}
-            aria-label="Filter backlog by project"
-            checkIconPosition="right"
-            className="w-[180px]"
-          />
-
-          <Select
-            value={typeFilter}
-            onChange={(value) => setTypeFilter(value ?? 'all')}
-            data={taskTypeOptions}
-            aria-label="Filter backlog by type"
-            checkIconPosition="right"
-            className="w-[180px]"
-          />
-
-          {filteredTasks.length > 0 && (
-            <Checkbox
-              checked={selectedIds.size === filteredTasks.length}
-              onChange={handleSelectAll}
-              id="select-all"
-              label="Select all"
-              className="shrink-0"
-            />
-          )}
-        </Group>
-      </Paper>
-
-      {/* Task List */}
-      {isLoading ? (
-        <Text ta="center" py="xl" c="dimmed">
-          Loading backlog tasks...
-        </Text>
-      ) : filteredTasks.length === 0 ? (
-        <Text ta="center" py="xl" c="dimmed">
-          {search || projectFilter !== 'all' || typeFilter !== 'all'
-            ? 'No tasks match your filters'
-            : 'No tasks in backlog'}
-        </Text>
-      ) : (
-        <Stack gap="sm">
-          {filteredTasks.map((task) => (
-            <BacklogTaskCard
-              key={task.id}
-              task={task}
-              isSelected={selectedIds.has(task.id)}
-              isExpanded={expandedTaskId === task.id}
-              onToggleSelect={() => handleToggleSelect(task.id)}
-              onPromote={() => handlePromote(task.id)}
-              onDelete={() => handleDelete(task.id)}
-              onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
-              priorityColors={priorityColors}
-            />
-          ))}
-        </Stack>
-      )}
-    </Stack>
+      </Stack>
+    </PrimaryPageShell>
   );
 }
 

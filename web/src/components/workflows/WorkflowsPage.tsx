@@ -24,7 +24,7 @@ import {
   Title,
   UnstyledButton,
 } from '@mantine/core';
-import { ArrowLeft, Search, Play, Users, ListOrdered, BarChart3, Eye } from 'lucide-react';
+import { Search, Play, Users, ListOrdered, BarChart3, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { WorkflowRunList } from './WorkflowRunList';
 import { WorkflowAuthoringPanel } from './WorkflowAuthoringPanel';
@@ -33,6 +33,7 @@ import { workflowsApi, type WorkflowSummary } from '@/lib/api/workflows';
 import { WorkflowDetailView } from './WorkflowDetailView';
 import { WorkflowEditorRoute } from './WorkflowEditorRoute';
 import { WorkflowStartDialog } from './WorkflowStartDialog';
+import { PrimaryPageShell } from '@/components/layout/PrimaryPageShell';
 
 const WorkflowDashboard = lazy(() =>
   import('./WorkflowDashboard').then((mod) => ({ default: mod.WorkflowDashboard }))
@@ -275,36 +276,24 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   }
 
   return (
-    <>
+    <PrimaryPageShell
+      title="Workflows"
+      onBack={onBack}
+      width="wide"
+      status={<Badge variant="light">{filteredWorkflows.length} workflows</Badge>}
+      actions={
+        <Button
+          variant="filled"
+          color="veritas"
+          size="sm"
+          leftSection={<BarChart3 className="h-4 w-4" />}
+          onClick={() => setShowDashboard(true)}
+        >
+          Dashboard
+        </Button>
+      }
+    >
       <Stack gap="lg">
-        {/* Header */}
-        <Group justify="space-between" align="center">
-          <Group gap="md" align="center">
-            <Button
-              variant="subtle"
-              size="sm"
-              leftSection={<ArrowLeft className="h-4 w-4" />}
-              onClick={onBack}
-            >
-              Back
-            </Button>
-            <Title order={1} className="text-2xl">
-              Workflows
-            </Title>
-            <Badge variant="light">{filteredWorkflows.length} workflows</Badge>
-          </Group>
-
-          <Button
-            variant="filled"
-            color="veritas"
-            size="sm"
-            leftSection={<BarChart3 className="h-4 w-4" />}
-            onClick={() => setShowDashboard(true)}
-          >
-            Dashboard
-          </Button>
-        </Group>
-
         <Tabs value={activeTab} onChange={setActiveTab} className="w-full">
           <Tabs.List className="w-fit">
             <Tabs.Tab value="browse">Browse</Tabs.Tab>
@@ -387,7 +376,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
           if (workflowId) setSelectedWorkflowId(workflowId);
         }}
       />
-    </>
+    </PrimaryPageShell>
   );
 }
 
