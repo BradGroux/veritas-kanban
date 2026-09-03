@@ -21,6 +21,19 @@ async function useDarkTheme(page: Page) {
   });
 }
 
+async function useDesktopBridge(page: Page) {
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'veritasDesktop', {
+      configurable: true,
+      value: {
+        onMenuCommand: () => () => undefined,
+        toggleWindowMaximize: async () => ({ maximized: false }),
+      },
+    });
+  });
+  await page.reload();
+}
+
 test('captures public-safe 6.1.6 desktop and mobile documentation media', async ({ page }) => {
   test.setTimeout(180_000);
   await mkdir(assetsDir, { recursive: true });
@@ -63,6 +76,7 @@ test('captures public-safe 6.1.6 desktop and mobile documentation media', async 
   try {
     await page.setViewportSize(desktopViewport);
     await page.goto('/');
+    await useDesktopBridge(page);
     await expect(page.getByRole('region', { name: 'To Do' })).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByRole('heading', { name: 'Prepare the release candidate' })
@@ -102,15 +116,19 @@ test('captures public-safe 6.1.6 desktop and mobile documentation media', async 
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'Open Board Chat' }).click();
-    await expect(page.getByRole('region', { name: 'Workbench bottom dock' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Workbench right dock' })).toBeVisible();
     await expect(page.locator('section[aria-label="Board Chat"]')).toBeVisible();
     await capture(page, 'workbench-panel.png');
     await page.getByText('Squad Chat', { exact: true }).last().click();
     await expect(page.getByRole('region', { name: 'Squad Chat' })).toBeVisible();
     await capture(page, 'squad-chat.png');
-    await page.getByRole('button', { name: 'Close bottom dock' }).click();
+    await page.getByRole('button', { name: 'Close right dock' }).click();
 
     await page.setViewportSize(mobileViewport);
+    await page.evaluate(() => {
+      delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
+      delete document.documentElement.dataset.client;
+    });
     await page.goto('/');
     await page.getByRole('button', { name: 'Mobile board' }).click();
     await expect(page.getByRole('region', { name: 'To Do' })).toBeVisible({ timeout: 15_000 });

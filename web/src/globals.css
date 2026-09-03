@@ -234,13 +234,19 @@ html[data-client='desktop'],
 html[data-client='desktop'] body,
 html[data-client='desktop'] #root {
   height: 100%;
+  min-height: 0;
+  max-height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 html[data-client='desktop'] .desktop-app-shell {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   min-height: 0;
+  max-height: 100dvh;
+  width: 100%;
   flex-direction: column;
   overflow: hidden;
   /* Keep tall board and drag descendants inside the app's internal scrollers.
@@ -286,17 +292,9 @@ html[data-client='desktop'] .desktop-workbench-container {
   min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
+  flex-direction: row;
   overflow: hidden;
   overscroll-behavior: none;
-}
-
-html[data-client='desktop'] .desktop-workbench-container[data-dock-position='right'] {
-  flex-direction: row;
-}
-
-html[data-client='desktop'] .desktop-workbench-container[data-dock-position='bottom'],
-html[data-client='desktop'] .desktop-workbench-container:not([data-dock-position]) {
-  flex-direction: column;
 }
 
 html[data-client='desktop'] .desktop-workbench {
@@ -329,25 +327,8 @@ html[data-client='desktop'] .desktop-main-content {
   overscroll-behavior: contain;
 }
 
-html:not([data-client='desktop']) .workbench-chat-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 35;
-  height: var(--workbench-bottom-panel-height, 340px);
-  max-height: min(max(200px, calc(100vh - 320px)), 640px);
-  flex: 0 0 var(--workbench-bottom-panel-height, 340px);
-  box-shadow: 0 -12px 32px color-mix(in oklch, var(--foreground) 10%, transparent);
-}
-
-html[data-client='desktop'] .workbench-chat-dock--bottom {
-  height: var(--workbench-bottom-panel-height, 340px);
-  min-height: 0;
-  max-height: min(max(200px, calc(100vh - 320px)), 640px);
-  flex: 0 0 var(--workbench-bottom-panel-height, 340px);
-  border-top: 1px solid var(--border);
-}
-
 html[data-client='desktop'] .workbench-chat-dock--right {
+  position: relative;
   width: var(--workbench-right-panel-width, 420px);
   min-width: 0;
   max-width: min(max(280px, calc(100vw - 520px)), 640px);
@@ -367,13 +348,6 @@ html[data-client='desktop'] .workbench-chat-dock--right {
   overscroll-behavior: none;
 }
 
-.workbench-chat-dock--bottom .workbench-chat-dock-resizer {
-  height: 10px;
-  width: 100%;
-  border-bottom-width: 1px;
-  cursor: ns-resize;
-}
-
 .workbench-chat-dock--right .workbench-chat-dock-resizer {
   position: absolute;
   z-index: 2;
@@ -382,10 +356,6 @@ html[data-client='desktop'] .workbench-chat-dock--right {
   width: 10px;
   border-right-width: 1px;
   cursor: ew-resize;
-}
-
-.workbench-chat-dock--right {
-  position: relative;
 }
 
 .workbench-chat-dock-resizer:hover,

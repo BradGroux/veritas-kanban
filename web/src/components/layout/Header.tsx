@@ -30,8 +30,6 @@ import {
   ListOrdered,
   MoreHorizontal,
   MessageSquare,
-  PanelBottom,
-  PanelBottomClose,
   PanelLeft,
   PanelLeftClose,
   PanelRight,
@@ -147,7 +145,6 @@ export function Header() {
   const [squadChatOpen, setSquadChatOpen] = useState(false);
   const [loadedPanels, setLoadedPanels] = useState<Set<LazyPanel>>(() => new Set());
   const isCompactHeader = useMediaQuery('(max-width: 639px)', false);
-  const supportsWorkbenchPanel = useMediaQuery('(min-width: 768px)', false);
   const { setOpenCreateDialog, setOpenChatPanel } = useKeyboard();
   const { view, setView, navigateToTask } = useView();
   const { data: backlogCount = 0 } = useBacklogCount();
@@ -160,13 +157,12 @@ export function Header() {
     leftRailOpen,
     rightRailOpen,
     bottomPanel,
-    dockPosition,
     setLeftRailOpen,
     setRightRailOpen,
     openBottomPanel,
     toggleBottomPanel,
   } = useDesktopShell();
-  const usesWorkbenchChat = isDesktopClient || supportsWorkbenchPanel;
+  const usesWorkbenchChat = isDesktopClient;
   const boardChatActive = usesWorkbenchChat && bottomPanel === 'board-chat';
   const squadChatActive = usesWorkbenchChat && bottomPanel === 'squad-chat';
   const boardChatAction = !usesWorkbenchChat
@@ -205,13 +201,13 @@ export function Header() {
   }, [markPanelLoaded]);
 
   const openChatPanel = useCallback(() => {
-    if (isDesktopClient || supportsWorkbenchPanel) {
+    if (isDesktopClient) {
       openBottomPanel('board-chat');
       return;
     }
     markPanelLoaded('chat');
     setChatOpen(true);
-  }, [isDesktopClient, markPanelLoaded, openBottomPanel, supportsWorkbenchPanel]);
+  }, [isDesktopClient, markPanelLoaded, openBottomPanel]);
 
   const toggleChatPanel = useCallback(() => {
     if (usesWorkbenchChat) {
@@ -231,13 +227,13 @@ export function Header() {
   );
 
   const openSquadChatPanel = useCallback(() => {
-    if (isDesktopClient || supportsWorkbenchPanel) {
+    if (isDesktopClient) {
       openBottomPanel('squad-chat');
       return;
     }
     markPanelLoaded('squadChat');
     setSquadChatOpen(true);
-  }, [isDesktopClient, markPanelLoaded, openBottomPanel, supportsWorkbenchPanel]);
+  }, [isDesktopClient, markPanelLoaded, openBottomPanel]);
 
   const toggleSquadChatPanel = useCallback(() => {
     if (usesWorkbenchChat) {
@@ -421,7 +417,7 @@ export function Header() {
             aria-label="Board actions"
             className="min-w-0 shrink-0"
           >
-            {(isDesktopClient || supportsWorkbenchPanel) && (
+            {isDesktopClient && (
               <Group gap={4} wrap="nowrap" className="desktop-no-drag">
                 {isDesktopClient && (
                   <>
@@ -462,16 +458,12 @@ export function Header() {
                   color={bottomPanel ? 'veritas' : 'gray'}
                   size={32}
                   onClick={() => toggleBottomPanel('board-chat')}
-                  aria-label={bottomPanel ? `Close ${dockPosition} chat dock` : 'Open chat dock'}
+                  aria-label={bottomPanel ? 'Close right chat dock' : 'Open chat dock'}
                   aria-pressed={Boolean(bottomPanel)}
-                  title={bottomPanel ? `Close ${dockPosition} chat dock` : 'Open chat dock'}
+                  title={bottomPanel ? 'Close right chat dock' : 'Open chat dock'}
                 >
-                  {bottomPanel && dockPosition === 'bottom' ? (
-                    <PanelBottomClose className="h-4 w-4" aria-hidden="true" />
-                  ) : bottomPanel ? (
+                  {bottomPanel ? (
                     <PanelRightClose className="h-4 w-4" aria-hidden="true" />
-                  ) : dockPosition === 'bottom' ? (
-                    <PanelBottom className="h-4 w-4" aria-hidden="true" />
                   ) : (
                     <PanelRight className="h-4 w-4" aria-hidden="true" />
                   )}

@@ -119,7 +119,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, view toggles, and bounded left/right/chat dock controls shared by the web and macOS app shells
 - **Native version identity** — The macOS application menu opens an offline About panel and copies a redacted support string from the same authoritative Electron version, embedded release commit, release channel, OS, and architecture record exposed by the desktop bridge
 - **Mobile shell controls** — Compact navigation uses bounded labels and full accessible names; Board Chat stays fixed above the bottom navigation and device safe area
-- **Resizable Workbench** — Board Chat and Squad Chat open in a right dock by default, can switch to Bottom without losing the active conversation, and clamp their width or height to keep the application shell recoverable
+- **Resizable Workbench** — Board Chat and Squad Chat open in one bounded right-side dock, preserve the active conversation when switching channels, and clamp their width to keep the application shell recoverable
 - **Bulk operations** — Select multiple tasks to move, archive, or delete in batch; select-all toggle
 - **Keyboard shortcuts** — Navigate tasks (j/k, arrows), open (Enter), close (Esc), create (c), move to column (1-4), help (?)
 - **Loading skeleton** — Shimmer placeholders while the board loads
@@ -636,7 +636,7 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 | ![6.1.6 Squad Chat coordination](assets/v6.1.6/squad-chat.png) | ![6.1.6 notification and reply adapters](assets/v6.1.6/notification-adapters.png) |
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
-- **Resizable Workbench dock** — Board Chat and Squad Chat share one dock that defaults Right, optionally moves to Bottom, isolates chat scrolling, and keeps Close, Escape, Back, and Reset Layout recovery available
+- **Resizable Workbench dock** — Board Chat and Squad Chat share one bounded right-side dock that isolates chat scrolling and keeps Close, Escape, Back, and Reset Layout recovery available
 - **Local shared log** — Squad Chat stores and streams messages; it does not wake or reply through an external agent unless a webhook, OpenClaw Direct path, or orchestrator is configured
 - **Threaded coordination** — Reply-to links render compact threads for long multi-agent runs
 - **Unread and mentions** — Per-actor unread state persists across refreshes, and mentions create local notifications linked back to messages

@@ -171,9 +171,9 @@ Spawn autonomous coding agents on tasks when you choose to connect an agent runn
 
 ![Resizable Workbench panel](docs/assets/v6.1.6/workbench-panel.png)
 
-Desktop Board Chat and Squad Chat open in a bounded right-side Workbench dock by
-default. Switch to Bottom when vertical space is preferable; both orientations
-keep the board, header, close control, and keyboard recovery paths reachable.
+Desktop Board Chat and Squad Chat open in one bounded, resizable right-side
+Workbench dock. The single orientation keeps the board, header, close control,
+and keyboard recovery paths reachable at every supported window size.
 
 ![Squad Chat coordination](docs/assets/v6.1.6/squad-chat.png)
 

@@ -308,43 +308,40 @@ describe('layout chrome Mantine migration', () => {
     expect(activeItem.className).not.toContain('bg-primary/15');
   });
 
-  it.each(['right', 'bottom'] as const)(
-    'toggles and switches the header chat controls with the %s dock',
-    async (dockPosition) => {
-      window.localStorage.setItem('veritas.workbench.dockPosition', dockPosition);
-      const user = userEvent.setup();
-      renderDesktopHeaderChrome({ withBottomPanel: true });
+  it('toggles and switches the header chat controls with the right dock', async () => {
+    const user = userEvent.setup();
+    renderDesktopHeaderChrome({ withBottomPanel: true });
 
-      const openBoard = screen.getByRole('button', { name: 'Open Board Chat' });
-      const openSquad = screen.getByRole('button', { name: 'Open Squad Chat' });
-      expect(openBoard.getAttribute('aria-pressed')).toBe('false');
-      expect(openSquad.getAttribute('aria-pressed')).toBe('false');
+    const openBoard = screen.getByRole('button', { name: 'Open Board Chat' });
+    const openSquad = screen.getByRole('button', { name: 'Open Squad Chat' });
+    expect(openBoard.getAttribute('aria-pressed')).toBe('false');
+    expect(openSquad.getAttribute('aria-pressed')).toBe('false');
 
-      await user.click(openBoard);
-      const closeBoard = screen.getByRole('button', { name: 'Close Board Chat' });
-      expect(closeBoard.getAttribute('aria-pressed')).toBe('true');
-      expect(screen.getByRole('button', { name: 'Switch to Squad Chat' })).toBeDefined();
+    await user.click(openBoard);
+    const closeBoard = screen.getByRole('button', { name: 'Close Board Chat' });
+    expect(closeBoard.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Switch to Squad Chat' })).toBeDefined();
 
-      await user.click(closeBoard);
-      expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+    await user.click(closeBoard);
+    expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
 
-      await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
-      await user.click(screen.getByRole('button', { name: 'Switch to Squad Chat' }));
-      const closeSquad = screen.getByRole('button', { name: 'Close Squad Chat' });
-      expect(closeSquad.getAttribute('aria-pressed')).toBe('true');
-      expect(screen.getByRole('button', { name: 'Switch to Board Chat' })).toBeDefined();
+    await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
+    await user.click(screen.getByRole('button', { name: 'Switch to Squad Chat' }));
+    const closeSquad = screen.getByRole('button', { name: 'Close Squad Chat' });
+    expect(closeSquad.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Switch to Board Chat' })).toBeDefined();
 
-      await user.click(closeSquad);
-      await waitFor(() => {
-        const board = screen.getByRole('button', { name: 'Open Board Chat' });
-        const squad = screen.getByRole('button', { name: 'Open Squad Chat' });
-        expect([board, squad]).toContain(document.activeElement);
-      });
+    await user.click(closeSquad);
+    await waitFor(() => {
+      const board = screen.getByRole('button', { name: 'Open Board Chat' });
+      const squad = screen.getByRole('button', { name: 'Open Squad Chat' });
+      expect([board, squad]).toContain(document.activeElement);
+    });
 
-      await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
-      const dock = screen.getByRole('region', { name: `Workbench ${dockPosition} dock` });
-      await user.click(within(dock).getByRole('button', { name: `Close ${dockPosition} dock` }));
-      expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
-    }
-  );
+    await user.click(screen.getByRole('button', { name: 'Open Board Chat' }));
+    const dock = screen.getByRole('region', { name: 'Workbench right dock' });
+    expect(within(dock).queryByRole('radiogroup', { name: 'Dock position' })).toBeNull();
+    await user.click(within(dock).getByRole('button', { name: 'Close right dock' }));
+    expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+  });
 });
