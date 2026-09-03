@@ -26,7 +26,7 @@ In Board Only mode, General, Board, and Tasks are marked as the primary path. Ev
 - `SettingsLocalNav` is reserved for related sections on a long page. It uses in-page anchors, remains horizontally scrollable at narrow widths, and does not promote subsections into global destinations.
 - `SettingsHelpText`, `SettingsErrorText`, `SettingsUnit`, and `SettingsActionGroup` standardize secondary explanation, validation, numeric units, routine transfer actions, and destructive actions.
 
-General, Board, Tasks, and Data are the reference migrations. Data demonstrates continuous local navigation; simpler pages omit it. Agents, Notifications, Multi-user, and Maintenance require dedicated workflow decomposition before migration because each combines several independent operational surfaces.
+General, Board, Tasks, and Data are the reference migrations. Data demonstrates continuous local navigation; simpler pages omit it. Agents extends that pattern with anchored Providers, Compatibility, Profiles, Health, and Policies workflows. Notifications, Multi-user, and Maintenance still require dedicated workflow decomposition because each combines several independent operational surfaces.
 
 ## Focus and responsive behavior
 

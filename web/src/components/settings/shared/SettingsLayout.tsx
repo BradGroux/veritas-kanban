@@ -66,10 +66,10 @@ export function SettingsSection({
       data-settings-section={tone}
       className={
         tone === 'danger'
-          ? 'border-red-500/35 bg-red-500/[0.035]'
+          ? 'scroll-mt-16 border-red-500/35 bg-red-500/[0.035]'
           : tone === 'advanced'
-            ? 'bg-muted/20'
-            : 'bg-card'
+            ? 'scroll-mt-16 bg-muted/20'
+            : 'scroll-mt-16 bg-card'
       }
     >
       <SectionHeader
