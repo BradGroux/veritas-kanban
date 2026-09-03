@@ -12,6 +12,7 @@ import type { TemplateRepository } from '../storage/interfaces.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteTemplateRepository } from '../storage/sqlite/template-repository.js';
 import { getTemplatesDir } from '../utils/paths.js';
+import { applyTemplateUpdate } from '../utils/template-update.js';
 const log = createLogger('template-service');
 
 export interface TemplateServiceOptions {
@@ -214,21 +215,7 @@ export class TemplateService {
     const existing = await this.getTemplate(id);
     if (!existing) return null;
 
-    const updated: TaskTemplate = {
-      ...existing,
-      name: input.name ?? existing.name,
-      description: input.description ?? existing.description,
-      category: input.category ?? existing.category,
-      version: existing.version, // Preserve version
-      taskDefaults: {
-        ...existing.taskDefaults,
-        ...input.taskDefaults,
-      },
-      subtaskTemplates: input.subtaskTemplates ?? existing.subtaskTemplates,
-      blueprint: input.blueprint ?? existing.blueprint,
-      launch: input.launch ?? existing.launch,
-      updated: new Date().toISOString(),
-    };
+    const updated = applyTemplateUpdate(existing, input);
 
     // Recursively filter out undefined values for YAML serialization
     const cleanTemplate = this.cleanTemplateForYaml(updated);
