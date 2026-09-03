@@ -18,18 +18,27 @@ test('long task detail content remains constrained and scrollable', async ({ pag
 
     const detailPanel = page.getByRole('dialog');
     const tabsRoot = detailPanel.locator('.mantine-Tabs-root').first();
-    const scrollPanel = detailPanel.locator('.veritas-overlay-scroll').first();
+    const scrollPanel = detailPanel.getByTestId('task-detail-scroll-region');
+    const description = detailPanel.getByLabel('Task description');
 
     await expect(tabsRoot).toHaveCSS('display', 'flex');
     await expect(tabsRoot).toHaveCSS('flex-direction', 'column');
 
-    const dimensions = await scrollPanel.evaluate((element) => ({
+    const scrollPanelBox = await scrollPanel.boundingBox();
+    const detailPanelBox = await detailPanel.boundingBox();
+    expect(scrollPanelBox).not.toBeNull();
+    expect(detailPanelBox).not.toBeNull();
+    expect(scrollPanelBox!.y + scrollPanelBox!.height).toBeLessThanOrEqual(
+      detailPanelBox!.y + detailPanelBox!.height
+    );
+
+    const dimensions = await description.evaluate((element) => ({
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
     }));
     expect(dimensions.clientHeight).toBeLessThan(dimensions.scrollHeight);
 
-    const scrollBox = await scrollPanel.boundingBox();
+    const scrollBox = await description.boundingBox();
     expect(scrollBox).not.toBeNull();
     await page.mouse.move(
       scrollBox!.x + scrollBox!.width - 4,
@@ -37,7 +46,7 @@ test('long task detail content remains constrained and scrollable', async ({ pag
     );
     await page.mouse.wheel(0, 600);
     await expect
-      .poll(() => scrollPanel.evaluate((element) => element.scrollTop))
+      .poll(() => description.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
   } finally {
     await deleteTask(page, (task as { id: string }).id).catch(() => {});
