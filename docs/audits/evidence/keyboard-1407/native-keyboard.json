@@ -1,0 +1,24 @@
+{
+  "testedAt": "2026-09-03T21:26:56.683Z",
+  "packaged": true,
+  "records": [
+    {
+      "theme": "light",
+      "width": 1180,
+      "height": 760,
+      "font": 20,
+      "enterActivation": true,
+      "escapeFocus": true,
+      "policyLabels": true
+    },
+    {
+      "theme": "dark",
+      "width": 1180,
+      "height": 760,
+      "font": 20,
+      "enterActivation": true,
+      "escapeFocus": true,
+      "policyLabels": true
+    }
+  ]
+}
