@@ -1,13 +1,24 @@
 # Veritas Kanban v6 GA Checklist
 
 This checklist contains the active stable-release gate for Veritas Kanban
-6.1.5 and retains the completed 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
+6.1.6 and retains the completed 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
 Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.5 stable release.
+Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.6 release candidate.
 
-## 6.1.5 Release Gate
+## 6.1.6 Release Gate
+
+- [x] Focused fixes #1367-#1373 close dependency, app-shell containment, Settings, Command+K, desktop wordmark, consecutive drag, and action/navigation consistency issues #1360-#1366.
+- [x] Production and complete dependency audits report no known vulnerabilities, and the default branch has zero open Dependabot alerts.
+- [x] The integrated release builds all seven workspaces, passes the full unit and browser suites, packages a launchable macOS arm64 app, and exercises the corrected UI in the compiled app.
+- [x] Current desktop and mobile screenshots, GIFs, social previews, and demo video were regenerated from an isolated public-safe 6.1.6 workspace with `pnpm docs:capture-media`.
+- [ ] Release PR passes the authoritative `ci:full` matrix and merges with all maintained package metadata at 6.1.6.
+- [ ] Annotated tag `v6.1.6` peels to the release merge, and the live GitHub release body exactly matches `docs/releases/v6.1.6.md`.
+- [ ] Desktop Release publishes independently verified signed/notarized 6.1.6 DMG and ZIP assets, blockmaps, checksum sidecars, and updater metadata.
+- [ ] The Homebrew tap publishes cask version 6.1.6 with the verified ZIP checksum and passes strict online audit, fetch, livecheck, and installed-app acceptance.
+
+## Historical 6.1.5 Completed Release Gate
 
 - [x] Starting issues #1295-#1302 have an evidence-backed completed disposition through focused merged work.
 - [x] Starting dependency PRs #1303-#1306 were reviewed and superseded by focused merged PRs #1311-#1313.

@@ -1,17 +1,36 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the completed Veritas Kanban 6.1.5 integrated backlog release and
-retains historical evidence for the completed 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
+This packet records the Veritas Kanban 6.1.6 desktop reliability release candidate and
+retains historical evidence for the completed 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.5 is the supported stable v6 release. Do not use 6.0.0 for
-installation or upgrade validation.
+Veritas Kanban 6.1.6 is the active release candidate. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.5 stable release.
+Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.6 release candidate.
 
-## 6.1.5 Integrated Backlog Release
+## 6.1.6 Desktop Reliability Release Candidate
+
+| Field                     | Value                                                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version           | 6.1.6                                                                                                                                              |
+| Release tracker           | [#1374](https://github.com/BradGroux/veritas-kanban/issues/1374)                                                                                   |
+| Source base               | `e3f258420e42874a88eaf42a46e7f8db0a2496a6`, containing focused merged fixes #1367-#1373                                                            |
+| Included issues           | #1360-#1366: dependencies, app-shell containment, Settings, Command+K, desktop wordmark, consecutive drag, and action/navigation consistency       |
+| Version and compatibility | All maintained packages are 6.1.6; REST API remains `v1`; no database migration; valid 6.1.5 workspaces remain compatible; macOS 13 arm64 minimum  |
+| Local candidate evidence  | Full workspace integration, browser coverage, public-safe media, unsigned arm64 packaging, compiled app launch, and exact-version readiness passed |
+| Publication status        | Pending release PR, annotated tag, signed/notarized assets, independent launch, and Homebrew verification                                          |
+
+Focused feature-level verification passed in the implementation pull requests. The release candidate retains zero open Dependabot alerts and both production and complete dependency audits report no known vulnerabilities.
+
+The isolated documentation-media capture produced twelve 1440x1000 or 390x844 PNGs, a 75-frame 1200x833 desktop GIF, a 54-frame 390x844 mobile GIF, and identical 1280x720 H.264 demo-video copies with SHA-256 `677c1e90ca8d85807811b2b0e3887bcfb32f82ad65557277670918b67f414818`. Visual inspection confirmed the brighter selected state, redesigned Command+K surface, aligned Settings header, and bounded Workbench dock.
+
+The release integration passed both dependency audits, public-doc and security-artifact checks, delivery-cadence and gitleaks checks, lint with 448 warnings under the 458-warning budget, typecheck, all seven workspace builds, and 4,574 unit tests with 24 intentional skips. Browser acceptance passed 46 applicable tests with one explicit media-capture skip after installing the matching Playwright WebKit runtime; the one Chromium test initially limited by the test server's 60-write default passed after the isolated configuration set the documented `RATE_LIMIT_WRITE_MAX` override. Desktop coverage passed 72 tests, Electron artifact checks, unsigned DMG and ZIP packaging, and staging-isolation smoke.
+
+The unpacked arm64 app reported version 6.1.6 and macOS 13.0 minimum. It launched with a disposable profile on isolated ports, completed first-run security setup, served `/api/health.version` as 6.1.6 from its bundled server, loaded the empty board, and exposed the icon-only desktop header, aligned Settings header, and redesigned Command+K surface. The candidate stopped cleanly, its disposable profile was moved to Trash, and the existing installed 6.1.5 app was restored with its health response verified.
+
+## Historical 6.1.5 Integrated Backlog Release
 
 | Field                     | Value                                                                                                                                                                             |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

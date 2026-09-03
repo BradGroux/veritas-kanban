@@ -19,6 +19,8 @@ if (!process.env.VERITAS_ADMIN_KEY) {
 const e2eDataDir =
   process.env.VERITAS_DATA_DIR ?? mkdtempSync(resolve(tmpdir(), 'veritas-kanban-e2e-'));
 process.env.VERITAS_DATA_DIR = e2eDataDir;
+const apiPort = Number(process.env.PLAYWRIGHT_API_PORT ?? '3001');
+const webPort = Number(process.env.PLAYWRIGHT_WEB_PORT ?? '3000');
 
 /**
  * Playwright E2E test configuration for Veritas Kanban.
@@ -44,7 +46,7 @@ export default defineConfig({
   timeout: 30_000,
 
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: `http://127.0.0.1:${webPort}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     // Auth — read admin key from server/.env (loaded via dotenv above)
@@ -75,7 +77,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'cd server && node_modules/.bin/tsx src/index.ts',
-      port: 3001,
+      port: apiPort,
       reuseExistingServer: true,
       timeout: 30_000,
       env: {
@@ -85,17 +87,19 @@ export default defineConfig({
         VERITAS_AUTH_LOCALHOST_BYPASS: 'true',
         VERITAS_AUTH_LOCALHOST_ROLE: 'admin',
         RATE_LIMIT_MAX: '10000',
+        RATE_LIMIT_WRITE_MAX: '10000',
+        PORT: String(apiPort),
       },
     },
     {
-      command: 'cd web && node_modules/.bin/vite --host 127.0.0.1',
-      url: 'http://127.0.0.1:3000',
+      command: `cd web && node_modules/.bin/vite --host 127.0.0.1 --port ${webPort}`,
+      url: `http://127.0.0.1:${webPort}`,
       reuseExistingServer: true,
       timeout: 30_000,
       env: {
-        VITE_API_URL: 'http://127.0.0.1:3001/api',
-        VITE_API_PROXY_TARGET: 'http://127.0.0.1:3001',
-        VITE_WS_PROXY_TARGET: 'ws://127.0.0.1:3001',
+        VITE_API_URL: `http://127.0.0.1:${apiPort}/api`,
+        VITE_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`,
+        VITE_WS_PROXY_TARGET: `ws://127.0.0.1:${apiPort}`,
       },
     },
   ],

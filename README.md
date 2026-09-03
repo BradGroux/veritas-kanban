@@ -10,11 +10,11 @@ Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, w
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-6.1.5-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.1.6-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-![Veritas Kanban 6.1.5 board, task workspace, Settings, and command palette tour](docs/assets/v6.1.5/board-to-workspace.gif)
+![Veritas Kanban 6.1.6 board, task workspace, Settings, and command palette tour](docs/assets/v6.1.6/board-to-workspace.gif)
 
 > 🎬 [Watch the full demo video](https://bradgroux.github.io/veritas-kanban/demo/)
 
@@ -167,15 +167,15 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 Spawn autonomous coding agents on tasks when you choose to connect an agent runner. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Team roster manifests and workspace capability discovery route work to the right agent or trusted workspace before a run starts. Shared live run sessions let workspace members observe an active task run, co-drive with attributed messages, or fork a clean follow-up task without taking over the parent run. Squad Chat gives agents a shared local communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
-![Agent orchestration board](docs/assets/v6.1.5/board-overview.png)
+![Agent orchestration board](docs/assets/v6.1.6/board-overview.png)
 
-![Resizable Workbench panel](docs/assets/v6.1.5/workbench-panel.png)
+![Resizable Workbench panel](docs/assets/v6.1.6/workbench-panel.png)
 
 Desktop Board Chat and Squad Chat open in a bounded right-side Workbench dock by
 default. Switch to Bottom when vertical space is preferable; both orientations
 keep the board, header, close control, and keyboard recovery paths reachable.
 
-![Squad Chat coordination](docs/assets/v6.1.5/squad-chat.png)
+![Squad Chat coordination](docs/assets/v6.1.6/squad-chat.png)
 
 ### 🧭 Provider And Cutover Operations
 
@@ -185,7 +185,7 @@ The cutover guide documents a GitHub-backed operating model for Codex and Hermes
 
 Codex can run as the default first-class Veritas agent through local `codex exec`, SDK-backed sessions, GitHub-native `@codex` delegation, workflow-engine steps, review actions, Settings health checks, and MCP access to the board. Ollama Local, Ollama Cloud, and LM Studio Local profiles are optional routing targets for users who want local/server-hosted models or explicit cloud model execution. The docs include a roadmap, SOP, workflow examples, and an AGENTS template so provider-backed work can be started, tracked, reviewed, and released through the same Veritas lifecycle as other agents.
 
-![Agent provider settings](docs/assets/v6.1.5/agent-providers.png)
+![Agent provider settings](docs/assets/v6.1.6/agent-providers.png)
 
 ### 📊 Customizable Dashboard
 
@@ -203,7 +203,7 @@ Define multi-step agent pipelines as version-controlled YAML. Sequential steps, 
 
 Not just cards on a board. Tasks have dependency graphs with cycle detection, crash-recovery checkpointing (auto-sanitizes secrets), observational memory with importance scoring, time tracking, and full activity logs. Enforcement gates (review gates, delegation enforcement, auto-telemetry) add production guardrails — all optional, all toggleable.
 
-![Progressive task workspace](docs/assets/v6.1.5/task-workspace.png)
+![Progressive task workspace](docs/assets/v6.1.6/task-workspace.png)
 
 ### 🔀 Git-Native Development
 
@@ -870,31 +870,31 @@ pnpm validate:release # Release readiness checks
 <details>
 <summary><strong>Click to expand screenshots and GIFs</strong></summary>
 
-These 6.1.5 captures use release-safe dummy content against the current app surfaces. See the [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) for the maintained media index and capture rules.
+These 6.1.6 captures use release-safe dummy content against the current app surfaces. See the [v6 Visual Tour](docs/V6-VISUAL-TOUR.md) for the maintained media index and capture rules.
 
 ### Desktop
 
 | Board and task-workspace tour                                                | Current desktop board                                         |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| ![6.1.5 board and workspace tour](docs/assets/v6.1.5/board-to-workspace.gif) | ![6.1.5 desktop board](docs/assets/v6.1.5/board-overview.png) |
+| ![6.1.6 board and workspace tour](docs/assets/v6.1.6/board-to-workspace.gif) | ![6.1.6 desktop board](docs/assets/v6.1.6/board-overview.png) |
 
 | Workbench panel                                                  | Agent provider settings                                          |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| ![6.1.5 Workbench panel](docs/assets/v6.1.5/workbench-panel.png) | ![6.1.5 agent providers](docs/assets/v6.1.5/agent-providers.png) |
+| ![6.1.6 Workbench panel](docs/assets/v6.1.6/workbench-panel.png) | ![6.1.6 agent providers](docs/assets/v6.1.6/agent-providers.png) |
 
 | Squad Chat coordination                                | Notification and reply adapters                                              |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| ![6.1.5 Squad Chat](docs/assets/v6.1.5/squad-chat.png) | ![6.1.5 notification adapters](docs/assets/v6.1.5/notification-adapters.png) |
+| ![6.1.6 Squad Chat](docs/assets/v6.1.6/squad-chat.png) | ![6.1.6 notification adapters](docs/assets/v6.1.6/notification-adapters.png) |
 
 | Task workspace                                                 | Maintenance Center                                                     |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| ![6.1.5 task workspace](docs/assets/v6.1.5/task-workspace.png) | ![6.1.5 Maintenance Center](docs/assets/v6.1.5/maintenance-center.png) |
+| ![6.1.6 task workspace](docs/assets/v6.1.6/task-workspace.png) | ![6.1.6 Maintenance Center](docs/assets/v6.1.6/maintenance-center.png) |
 
 ### Mobile/PWA
 
 | Mobile board                                               | Mobile board to workspace/settings flow                  |
 | ---------------------------------------------------------- | -------------------------------------------------------- |
-| ![6.1.5 mobile board](docs/assets/v6.1.5/mobile-board.png) | ![6.1.5 mobile flow](docs/assets/v6.1.5/mobile-flow.gif) |
+| ![6.1.6 mobile board](docs/assets/v6.1.6/mobile-board.png) | ![6.1.6 mobile flow](docs/assets/v6.1.6/mobile-flow.gif) |
 
 </details>
 
