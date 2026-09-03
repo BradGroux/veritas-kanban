@@ -9,7 +9,8 @@ test.describe('Desktop board shell containment', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('veritas-kanban-theme', 'dark');
       window.localStorage.setItem('veritas.desktop.rightRailOpen', 'true');
-      window.localStorage.setItem('veritas.workbench.dockPosition', 'right');
+      window.localStorage.setItem('veritas.workbench.dockPosition', 'bottom');
+      window.localStorage.setItem('veritas.workbench.bottomPanelHeight', '640');
       Object.defineProperty(window, 'veritasDesktop', {
         configurable: true,
         value: {
@@ -46,12 +47,24 @@ test.describe('Desktop board shell containment', () => {
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-client', 'desktop');
     await expect(page.getByLabel('Board right sidebar')).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.localStorage.getItem('veritas.workbench.dockPosition'))
+      )
+      .toBeNull();
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.localStorage.getItem('veritas.workbench.bottomPanelHeight'))
+      )
+      .toBeNull();
     await Promise.all(
       taskIds.map((taskId) => expect(page.locator(`[data-task-id="${taskId}"]`)).toBeAttached())
     );
 
     await page.getByRole('button', { name: 'Open chat dock' }).click();
-    await expect(page.getByRole('region', { name: 'Workbench right dock' })).toBeVisible();
+    const workbench = page.getByRole('region', { name: 'Workbench right dock' });
+    await expect(workbench).toBeVisible();
+    await expect(workbench.getByRole('radiogroup', { name: 'Dock position' })).toHaveCount(0);
 
     const readViewport = () =>
       page.evaluate(() => ({
@@ -66,6 +79,21 @@ test.describe('Desktop board shell containment', () => {
       scrollY: 0,
       shellHeight: 768,
     };
+    expect(await readViewport()).toEqual(expectedViewport);
+
+    const resizer = page.getByRole('button', { name: 'Resize right dock' });
+    const widthBeforeResize = await workbench.evaluate(
+      (element) => element.getBoundingClientRect().width
+    );
+    await resizer.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect
+      .poll(() => workbench.evaluate((element) => element.getBoundingClientRect().width))
+      .toBeGreaterThan(widthBeforeResize);
+    expect(await readViewport()).toEqual(expectedViewport);
+
+    await page.getByRole('button', { name: 'Switch to Squad Chat' }).click();
+    await expect(page.getByRole('region', { name: 'Squad Chat' })).toBeVisible();
     expect(await readViewport()).toEqual(expectedViewport);
 
     await page.getByRole('button', { name: 'Close right dock' }).click();

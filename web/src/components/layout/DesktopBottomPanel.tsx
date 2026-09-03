@@ -8,23 +8,13 @@ import {
   type WheelEvent,
 } from 'react';
 import { ActionIcon, Group, SegmentedControl, Text } from '@mantine/core';
-import {
-  GripHorizontal,
-  GripVertical,
-  MessageSquare,
-  PanelBottomClose,
-  PanelRightClose,
-  Users,
-} from 'lucide-react';
+import { GripVertical, MessageSquare, PanelRightClose, Users } from 'lucide-react';
 
 import {
-  MAX_BOTTOM_PANEL_HEIGHT,
   MAX_RIGHT_PANEL_WIDTH,
-  MIN_BOTTOM_PANEL_HEIGHT,
   MIN_RIGHT_PANEL_WIDTH,
   useDesktopShell,
   type DesktopBottomPanel as DesktopBottomPanelId,
-  type DesktopDockPosition,
 } from './DesktopShellContext';
 
 const ChatPanel = lazy(() =>
@@ -44,54 +34,30 @@ const PANEL_OPTIONS = [
   { label: 'Squad Chat', value: 'squad-chat' },
 ] satisfies Array<{ label: string; value: DesktopBottomPanelId }>;
 
-const DOCK_OPTIONS = [
-  { label: 'Right', value: 'right' },
-  { label: 'Bottom', value: 'bottom' },
-] satisfies Array<{ label: string; value: DesktopDockPosition }>;
-
 export function DesktopBottomPanel() {
-  const {
-    isDesktopClient,
-    bottomPanel,
-    dockPosition,
-    bottomPanelHeight,
-    rightPanelWidth,
-    setDockPosition,
-    setBottomPanelHeight,
-    setRightPanelWidth,
-    openBottomPanel,
-    closeBottomPanel,
-  } = useDesktopShell();
+  const { bottomPanel, rightPanelWidth, setRightPanelWidth, openBottomPanel, closeBottomPanel } =
+    useDesktopShell();
   const dragStateRef = useRef<{ startPosition: number; startSize: number } | null>(null);
 
   if (!bottomPanel) return null;
 
   const resizeBy = (delta: number) => {
-    if (dockPosition === 'right') {
-      setRightPanelWidth(rightPanelWidth + delta);
-    } else {
-      setBottomPanelHeight(bottomPanelHeight + delta);
-    }
+    setRightPanelWidth(rightPanelWidth + delta);
   };
 
   const handleResizePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     dragStateRef.current = {
-      startPosition: dockPosition === 'right' ? event.clientX : event.clientY,
-      startSize: dockPosition === 'right' ? rightPanelWidth : bottomPanelHeight,
+      startPosition: event.clientX,
+      startSize: rightPanelWidth,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const handleResizePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
     if (!dragStateRef.current) return;
-    const currentPosition = dockPosition === 'right' ? event.clientX : event.clientY;
-    const delta = dragStateRef.current.startPosition - currentPosition;
-    if (dockPosition === 'right') {
-      setRightPanelWidth(dragStateRef.current.startSize + delta);
-    } else {
-      setBottomPanelHeight(dragStateRef.current.startSize + delta);
-    }
+    const delta = dragStateRef.current.startPosition - event.clientX;
+    setRightPanelWidth(dragStateRef.current.startSize + delta);
   };
 
   const handleResizePointerEnd = (event: PointerEvent<HTMLButtonElement>) => {
@@ -102,28 +68,18 @@ export function DesktopBottomPanel() {
   };
 
   const handleResizeKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const growKey = dockPosition === 'right' ? 'ArrowLeft' : 'ArrowUp';
-    const shrinkKey = dockPosition === 'right' ? 'ArrowRight' : 'ArrowDown';
-    if (event.key === growKey) {
+    if (event.key === 'ArrowLeft') {
       event.preventDefault();
       resizeBy(event.shiftKey ? 80 : 24);
-    } else if (event.key === shrinkKey) {
+    } else if (event.key === 'ArrowRight') {
       event.preventDefault();
       resizeBy(event.shiftKey ? -80 : -24);
     } else if (event.key === 'Home') {
       event.preventDefault();
-      if (dockPosition === 'right') {
-        setRightPanelWidth(MIN_RIGHT_PANEL_WIDTH);
-      } else {
-        setBottomPanelHeight(MIN_BOTTOM_PANEL_HEIGHT);
-      }
+      setRightPanelWidth(MIN_RIGHT_PANEL_WIDTH);
     } else if (event.key === 'End') {
       event.preventDefault();
-      if (dockPosition === 'right') {
-        setRightPanelWidth(MAX_RIGHT_PANEL_WIDTH);
-      } else {
-        setBottomPanelHeight(MAX_BOTTOM_PANEL_HEIGHT);
-      }
+      setRightPanelWidth(MAX_RIGHT_PANEL_WIDTH);
     }
   };
 
@@ -132,16 +88,13 @@ export function DesktopBottomPanel() {
     event.stopPropagation();
   };
 
-  const orientationLabel = dockPosition === 'right' ? 'right dock' : 'bottom dock';
-
   return (
     <section
-      className={`workbench-chat-dock workbench-chat-dock--${dockPosition} bg-card`}
-      aria-label={`Workbench ${orientationLabel}`}
-      data-dock-position={dockPosition}
+      className="workbench-chat-dock workbench-chat-dock--right bg-card"
+      aria-label="Workbench right dock"
+      data-dock-position="right"
       style={
         {
-          '--workbench-bottom-panel-height': `${bottomPanelHeight}px`,
           '--workbench-right-panel-width': `${rightPanelWidth}px`,
         } as CSSProperties
       }
@@ -149,9 +102,9 @@ export function DesktopBottomPanel() {
       <button
         type="button"
         className="workbench-chat-dock-resizer desktop-no-drag"
-        aria-label={`Resize ${orientationLabel}`}
-        aria-orientation={dockPosition === 'right' ? 'vertical' : 'horizontal'}
-        title={`Drag to resize ${orientationLabel}`}
+        aria-label="Resize right dock"
+        aria-orientation="vertical"
+        title="Drag to resize right dock"
         onPointerDown={handleResizePointerDown}
         onPointerMove={handleResizePointerMove}
         onPointerUp={handleResizePointerEnd}
@@ -159,11 +112,7 @@ export function DesktopBottomPanel() {
         onKeyDown={handleResizeKeyDown}
         onWheel={handleResizeWheel}
       >
-        {dockPosition === 'right' ? (
-          <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
-        ) : (
-          <GripHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-        )}
+        <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
       <div className="desktop-no-drag shrink-0 space-y-2 border-b border-border px-3 py-2">
         <Group justify="space-between" wrap="nowrap">
@@ -178,28 +127,15 @@ export function DesktopBottomPanel() {
             </Text>
           </Group>
           <Group gap={4} wrap="nowrap">
-            {isDesktopClient && (
-              <SegmentedControl
-                size="xs"
-                value={dockPosition}
-                onChange={(value) => setDockPosition(value as DesktopDockPosition)}
-                data={DOCK_OPTIONS}
-                aria-label="Dock position"
-              />
-            )}
             <ActionIcon
               variant="subtle"
               color="gray"
               size={30}
               onClick={closeBottomPanel}
-              aria-label={`Close ${orientationLabel}`}
-              title={`Close ${orientationLabel}`}
+              aria-label="Close right dock"
+              title="Close right dock"
             >
-              {dockPosition === 'right' ? (
-                <PanelRightClose className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <PanelBottomClose className="h-4 w-4" aria-hidden="true" />
-              )}
+              <PanelRightClose className="h-4 w-4" aria-hidden="true" />
             </ActionIcon>
           </Group>
         </Group>

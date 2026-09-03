@@ -120,7 +120,7 @@ function DesktopAwareAppShell({
   showDesktopOnboarding: boolean;
   setShowDesktopOnboarding: (open: boolean) => void;
 }) {
-  const { isDesktopClient, bottomPanel, dockPosition } = useDesktopShell();
+  const { isDesktopClient, bottomPanel } = useDesktopShell();
 
   return (
     <Box className="desktop-app-shell min-h-screen bg-background">
@@ -132,10 +132,7 @@ function DesktopAwareAppShell({
       <Suspense fallback={null}>
         <PwaStatusBanner sessionExpiry={authStatus?.sessionExpiry} onRefreshAuth={refreshStatus} />
       </Suspense>
-      <div
-        className="desktop-workbench-container"
-        data-dock-position={bottomPanel ? dockPosition : undefined}
-      >
+      <div className="desktop-workbench-container">
         <div className="desktop-workbench">
           <DesktopLeftSidebar />
           <Box
