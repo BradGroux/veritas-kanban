@@ -5,9 +5,10 @@ import {
   normalizeBoardColumns,
   normalizeBoardDefaultStatus,
   type BoardColumnConfig,
+  type BoardSettings,
   type DashboardWidgetSettings,
 } from '@veritas-kanban/shared';
-import { SettingRow, ToggleRow, SectionHeader, SaveIndicator } from '../shared';
+import { SettingRow, ToggleRow, SaveIndicator, SettingsPage, SettingsSection } from '../shared';
 import { Plus, Trash2 } from 'lucide-react';
 
 export function BoardTab() {
@@ -17,7 +18,7 @@ export function BoardTab() {
   const columns = normalizeBoardColumns(boardSettings.columns);
   const defaultStatus = normalizeBoardDefaultStatus(boardSettings.defaultStatus, columns);
 
-  const update = (key: string, value: any) => {
+  const update = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]) => {
     debouncedUpdate({ board: { [key]: value } });
   };
 
@@ -78,12 +79,18 @@ export function BoardTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <SectionHeader title="Board & Display" onReset={resetBoard} />
-        <SaveIndicator isPending={isPending} />
-      </div>
-      <div className="divide-y">
+    <SettingsPage
+      title="Board"
+      description="Control board structure, card density, visible metadata, and direct manipulation."
+      actions={<SaveIndicator isPending={isPending} />}
+    >
+      <SettingsSection
+        id="board-display"
+        title="Board and display"
+        description="Changes apply to the shared board experience."
+        onReset={resetBoard}
+        divided
+      >
         <ToggleRow
           label="Show Dashboard"
           description="Display the metrics dashboard section above the board"
@@ -151,7 +158,9 @@ export function BoardTab() {
         <SettingRow label="Card Density" description="Compact cards use less space">
           <Select
             value={boardSettings.cardDensity ?? DEFAULT_FEATURE_SETTINGS.board.cardDensity}
-            onChange={(value) => value && update('cardDensity', value)}
+            onChange={(value) =>
+              value && update('cardDensity', value as BoardSettings['cardDensity'])
+            }
             data={[
               { value: 'normal', label: 'Normal' },
               { value: 'compact', label: 'Compact' },
@@ -272,7 +281,7 @@ export function BoardTab() {
           checked={boardSettings.showDoneMetrics ?? DEFAULT_FEATURE_SETTINGS.board.showDoneMetrics}
           onCheckedChange={(v) => update('showDoneMetrics', v)}
         />
-      </div>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

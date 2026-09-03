@@ -1,6 +1,7 @@
 import { memo, useState, useEffect } from 'react';
 import { NumberInput } from '@mantine/core';
 import { SettingRow } from './SettingRow';
+import { SettingsUnit } from './SettingsLayout';
 
 export const NumberRow = memo(function NumberRow({
   label,
@@ -83,7 +84,7 @@ export const NumberRow = memo(function NumberRow({
             className="w-28"
             styles={{ input: { textAlign: 'right' } }}
           />
-          {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+          {unit && <SettingsUnit>{unit}</SettingsUnit>}
         </div>
       </SettingRow>
     );
@@ -107,7 +108,7 @@ export const NumberRow = memo(function NumberRow({
           className="w-24"
           styles={{ input: { textAlign: 'right' } }}
         />
-        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+        {unit && <SettingsUnit>{unit}</SettingsUnit>}
       </div>
     </SettingRow>
   );

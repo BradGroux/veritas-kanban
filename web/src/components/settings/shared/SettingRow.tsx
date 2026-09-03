@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import type { ReactNode } from 'react';
-import { Group, Stack, Text } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 
 export const SettingRow = memo(function SettingRow({
   label,
@@ -12,7 +12,10 @@ export const SettingRow = memo(function SettingRow({
   children: ReactNode;
 }) {
   return (
-    <Group justify="space-between" align="center" gap="md" py="sm" wrap="nowrap">
+    <div
+      className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] sm:items-center"
+      data-settings-row
+    >
       <Stack gap={2} className="min-w-0 flex-1">
         <Text size="sm" fw={500}>
           {label}
@@ -23,7 +26,9 @@ export const SettingRow = memo(function SettingRow({
           </Text>
         )}
       </Stack>
-      <div className="flex-shrink-0">{children}</div>
-    </Group>
+      <div className="min-w-0 sm:justify-self-end [&_.mantine-InputWrapper-root]:w-full [&_.mantine-Select-root]:w-full">
+        {children}
+      </div>
+    </div>
   );
 });
