@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { TemplateEditorDialog } from '@/components/templates/TemplateEditorDialog';
@@ -68,7 +68,6 @@ describe('TemplateEditorDialog', () => {
   });
 
   it('uses one bounded scroll region with fixed actions and a useful Markdown editor', async () => {
-    const user = userEvent.setup();
     const { baseElement } = renderWithProviders(
       <TemplateEditorDialog template={template} open onOpenChange={vi.fn()} />
     );
@@ -77,17 +76,18 @@ describe('TemplateEditorDialog', () => {
     const scrollRegion = screen.getByTestId('template-editor-scroll-region');
     const actions = screen.getByTestId('template-editor-actions');
 
-    expect(modal.className).toContain('h-[min(780px,calc(100dvh-2rem))]');
+    expect(modal.className).toContain('h-[min(45rem,calc(100dvh-2rem))]');
     expect(modal.className).toContain('max-h-[calc(100dvh-2rem)]');
     expect(scrollRegion.className).toContain('vk-overlay-scroll');
     expect(scrollRegion.getAttribute('tabindex')).toBe('0');
     expect(scrollRegion.contains(actions)).toBe(false);
 
-    await user.click(screen.getByRole('tab', { name: 'Task Defaults' }));
+    expect(screen.getByRole('region', { name: 'Basic Information' })).toBeDefined();
+    expect(screen.getByRole('region', { name: 'Task Defaults' })).toBeDefined();
 
     const markdownEditor = screen.getByRole('textbox', { name: 'Description Template' });
     expect((markdownEditor as HTMLTextAreaElement).value).toBe(longMarkdown);
-    expect((markdownEditor as HTMLTextAreaElement).style.minHeight).toBe('240px');
+    expect((markdownEditor as HTMLTextAreaElement).style.minHeight).toBe('10rem');
     expect((markdownEditor as HTMLTextAreaElement).style.resize).toBe('vertical');
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Update Template' })).toBeDefined();
@@ -96,7 +96,6 @@ describe('TemplateEditorDialog', () => {
   it('warns before closing a dirty editor and keeps the modal open when declined', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
-    const confirmDiscard = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderWithProviders(
       <TemplateEditorDialog template={template} open onOpenChange={onOpenChange} />
     );
@@ -105,13 +104,15 @@ describe('TemplateEditorDialog', () => {
     await user.type(screen.getByRole('textbox', { name: /Template Name/i }), 'Changed template');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(confirmDiscard).toHaveBeenCalledWith('Discard unsaved template changes?');
+    expect(screen.getByRole('dialog', { name: 'Discard template changes?' })).toBeDefined();
     expect(onOpenChange).not.toHaveBeenCalled();
-
-    confirmDiscard.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(
+      (screen.getByRole('textbox', { name: /Template Name/i }) as HTMLInputElement).value
+    ).toBe('Changed template');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    confirmDiscard.mockRestore();
   });
 
   it('shows inline validation and does not create a nameless template', () => {
@@ -120,13 +121,87 @@ describe('TemplateEditorDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Template' }));
 
     expect(screen.getByText('Template name is required')).toBeDefined();
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: /Template Name/i }));
     expect(mocks.createTemplate).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Validation Error',
-        variant: 'destructive',
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+
+  it.each([null, template])(
+    'saves create and edit using the same authoring form',
+    async (editingTemplate) => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      renderWithProviders(
+        <TemplateEditorDialog template={editingTemplate} open onOpenChange={onOpenChange} />
+      );
+      const name = screen.getByRole('textbox', { name: /Template Name/i });
+      await user.clear(name);
+      await user.type(name, 'Ready for use');
+      await user.keyboard('{Enter}');
+      const mutation = editingTemplate ? mocks.updateTemplate : mocks.createTemplate;
+      expect(mutation).toHaveBeenCalledOnce();
+      expect(mutation).toHaveBeenCalledWith(
+        editingTemplate
+          ? {
+              id: template.id,
+              input: expect.objectContaining({
+                name: 'Ready for use',
+                taskDefaults: expect.objectContaining({ descriptionTemplate: longMarkdown }),
+              }),
+            }
+          : expect.objectContaining({ name: 'Ready for use' })
+      );
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    }
+  );
+
+  it('preserves the draft and focuses an inline error after save failure', async () => {
+    mocks.updateTemplate.mockRejectedValue(new Error('Connection unavailable'));
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    renderWithProviders(
+      <TemplateEditorDialog template={template} open onOpenChange={onOpenChange} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Update Template' }));
+    const error = await screen.findByRole('alert');
+    await waitFor(() => expect(document.activeElement).toBe(error));
+    expect(error.textContent).toContain('Connection unavailable');
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(
+      (screen.getByRole('textbox', { name: 'Description Template' }) as HTMLTextAreaElement).value
+    ).toBe(longMarkdown);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('blocks repeated submission and dismissal until a pending save settles', async () => {
+    let finishSave!: (value: unknown) => void;
+    mocks.createTemplate.mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = resolve;
       })
     );
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    renderWithProviders(<TemplateEditorDialog template={null} open onOpenChange={onOpenChange} />);
+    const name = screen.getByRole('textbox', { name: /Template Name/i }) as HTMLInputElement;
+    await user.type(name, 'One template only');
+    const form = name.closest('form');
+    if (!form) throw new Error('Template name must belong to the authoring form');
+    const close = screen.getByRole('button', { name: 'Close dialog' }) as HTMLButtonElement;
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+      fireEvent.click(close);
+    });
+    expect(mocks.createTemplate).toHaveBeenCalledOnce();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(name.disabled).toBe(true);
+    expect(close.disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    await act(async () => finishSave({}));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('sends explicit nulls when optional fields are cleared from an existing template', async () => {
@@ -170,5 +245,28 @@ describe('TemplateEditorDialog', () => {
     await user.keyboard(key);
     expect(screen.queryByRole('button', { name: 'Clear category' })).toBeNull();
     expect(document.activeElement).toBe(category);
+  });
+
+  it('offers Critical and preserves its shared priority value on save', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TemplateEditorDialog
+        template={{ ...template, taskDefaults: { ...template.taskDefaults, priority: 'critical' } }}
+        open
+        onOpenChange={vi.fn()}
+      />
+    );
+    await user.click(screen.getByRole('tab', { name: 'Task Defaults' }));
+    expect(
+      (screen.getByRole('combobox', { name: 'Default Priority' }) as HTMLInputElement).value
+    ).toBe('Critical');
+    await user.click(screen.getByRole('button', { name: 'Update Template' }));
+    expect(mocks.updateTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          taskDefaults: expect.objectContaining({ priority: 'critical' }),
+        }),
+      })
+    );
   });
 });
