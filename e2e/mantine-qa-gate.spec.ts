@@ -514,6 +514,21 @@ test.describe('v5 Mantine migration QA gate', () => {
     await assertNoLegacyPrimitiveSlots(page);
     await assertVisibleInteractiveControlsHaveNames(page);
     await assertFocusRemainsInsideDialog(page, 'Settings');
+    const settingsTitleBox = await settingsDialog
+      .getByText('Settings', { exact: true })
+      .boundingBox();
+    const settingsCloseBox = await settingsDialog
+      .getByRole('button', { name: 'Close settings' })
+      .boundingBox();
+    expect(settingsTitleBox).not.toBeNull();
+    expect(settingsCloseBox).not.toBeNull();
+    expect(
+      Math.abs(
+        settingsTitleBox!.y +
+          settingsTitleBox!.height / 2 -
+          (settingsCloseBox!.y + settingsCloseBox!.height / 2)
+      )
+    ).toBeLessThanOrEqual(1);
     await attachViewportScreenshot(page, testInfo, 'overlay-settings-desktop', 'dark');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 });
