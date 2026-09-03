@@ -27,17 +27,24 @@ permissions:
   contents: read
 
 concurrency:
+  # Captured full requests never share cancellation with ordinary/stale events.
+  # Bind PR requests to their exact head; label removal only affects new requests.
   group: >-
     ${{
       format(
-        '{0}-{1}-{2}',
+        '{0}-{1}-{2}-{3}',
         github.workflow,
         github.ref,
+        github.event.pull_request.head.sha || github.sha,
         github.event_name == 'pull_request' &&
           contains(fromJSON('["labeled","unlabeled"]'), github.event.action) &&
           github.event.label.name != 'ci:full' &&
           format('cosmetic-{0}', github.run_id) ||
-          'authoritative'
+          (github.event_name == 'pull_request' &&
+            (contains(github.event.pull_request.labels.*.name, 'ci:full') ||
+              (github.event.action == 'labeled' && github.event.label.name == 'ci:full')) ||
+            github.event_name == 'workflow_dispatch' && inputs.test_scope == 'full' ||
+            github.event_name == 'schedule') && 'full-request' || 'ordinary'
       )
     }}
   cancel-in-progress: true
@@ -49,6 +56,9 @@ jobs:
   # ─── Deterministic Test Scope ───────────────────────────────────
   select-tests:
     name: Select Test Scope
+    permissions:
+      contents: read
+      pull-requests: read
     if: >-
       github.event_name != 'pull_request' ||
       !contains(fromJSON('["labeled","unlabeled"]'), github.event.action) ||
@@ -78,6 +88,7 @@ jobs:
           scripts/check-security-gates.test.mjs
           scripts/check-tracked-ignore.test.mjs
           scripts/select-ci-test-scope.test.mjs
+          scripts/ci-pr-label-state.test.mjs
 
       - name: Guard delivery cadence
         run: node scripts/check-delivery-cadence.mjs
@@ -98,6 +109,10 @@ jobs:
           CI_EVENT_NAME: ${{ github.event_name }}
           CI_MANUAL_SCOPE: ${{ inputs.test_scope || '' }}
           CI_PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          GH_TOKEN: ${{ github.token }}
+          CI_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CI_PR_ACTION: ${{ github.event.action || '' }}
+          CI_PR_EVENT_LABEL: ${{ github.event.label.name || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
