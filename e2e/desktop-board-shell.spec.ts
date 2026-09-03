@@ -43,10 +43,33 @@ test.describe('Desktop board shell containment', () => {
     });
     taskIds.push(destination.id as string);
 
-    await page.setViewportSize({ width: 1224, height: 768 });
+    await page.setViewportSize({ width: 1360, height: 768 });
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-client', 'desktop');
     await expect(page.getByLabel('Board right sidebar')).toBeVisible();
+    const rightRailToggle = page.getByRole('button', { name: 'Collapse right sidebar' });
+    await expect(rightRailToggle).toHaveAttribute('aria-controls', 'board-right-sidebar');
+    await expect(rightRailToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#board-right-sidebar')).toBeVisible();
+    await rightRailToggle.click();
+    await expect(page.getByRole('button', { name: 'Expand right sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    await expect(page.locator('#board-right-sidebar')).toBeHidden();
+    await page.getByRole('button', { name: 'Expand right sidebar' }).click();
+    await expect(page.getByRole('button', { name: 'Collapse right sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(page.locator('#board-right-sidebar')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open chat dock' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open Board Chat' }).locator('svg')).toHaveClass(
+      /lucide-message-square/
+    );
+    await expect(page.getByRole('button', { name: 'Open Squad Chat' }).locator('svg')).toHaveClass(
+      /lucide-users/
+    );
     await expect
       .poll(() =>
         page.evaluate(() => window.localStorage.getItem('veritas.workbench.dockPosition'))
@@ -61,9 +84,14 @@ test.describe('Desktop board shell containment', () => {
       taskIds.map((taskId) => expect(page.locator(`[data-task-id="${taskId}"]`)).toBeAttached())
     );
 
-    await page.getByRole('button', { name: 'Open chat dock' }).click();
+    await page.getByRole('button', { name: 'Open Board Chat' }).click();
     const workbench = page.getByRole('region', { name: 'Workbench right dock' });
     await expect(workbench).toBeVisible();
+    await expect(workbench).toHaveAttribute('id', 'workbench-right-dock');
+    await expect(page.getByRole('button', { name: 'Close Board Chat' })).toHaveAttribute(
+      'aria-controls',
+      'workbench-right-dock'
+    );
     await expect(workbench.getByRole('radiogroup', { name: 'Dock position' })).toHaveCount(0);
 
     const readViewport = () =>
@@ -96,8 +124,34 @@ test.describe('Desktop board shell containment', () => {
     await expect(page.getByRole('region', { name: 'Squad Chat' })).toBeVisible();
     expect(await readViewport()).toEqual(expectedViewport);
 
-    await page.getByRole('button', { name: 'Close right dock' }).click();
+    await page.setViewportSize({ width: 1180, height: 760 });
+    await expect(page.getByRole('button', { name: 'Expand left sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    await expect(page.getByRole('button', { name: 'Expand right sidebar' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
     await expect(page.getByRole('region', { name: 'Workbench right dock' })).toHaveCount(0);
+    expect(await readViewport()).toEqual({
+      innerHeight: 760,
+      documentHeight: 760,
+      scrollY: 0,
+      shellHeight: 760,
+    });
+    await page.setViewportSize({ width: 1360, height: 768 });
+
+    await page.getByRole('button', { name: 'Activity', exact: true }).click();
+    await expect(page).toHaveURL(/\/activity$/);
+    await expect(page.getByRole('button', { name: /right sidebar/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open chat dock' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open Board Chat' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open Squad Chat' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Board', exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('button', { name: 'Expand right sidebar' })).toBeVisible();
 
     const movingId = taskIds[5];
     const destinationId = destination.id as string;

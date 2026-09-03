@@ -419,7 +419,9 @@ describe('KanbanBoard', () => {
     renderDesktopBoard();
 
     expect(screen.getByTestId('column-todo')).toBeDefined();
-    expect(screen.queryByLabelText('Board right sidebar')).toBeNull();
+    const rightRail = screen.getByLabelText('Board right sidebar');
+    expect(rightRail.id).toBe('board-right-sidebar');
+    expect(rightRail.hasAttribute('hidden')).toBe(true);
   });
 
   it('fits configured board columns across the desktop shell', () => {

@@ -101,7 +101,7 @@ test.describe('Atomic board drag', () => {
       await expect(blocked).toBeVisible();
       await expect(page.locator('html')).toHaveAttribute('data-client', 'desktop');
       if (rightRailOpen) await expect(page.getByLabel('Board right sidebar')).toBeVisible();
-      else await expect(page.getByLabel('Board right sidebar')).toHaveCount(0);
+      else await expect(page.getByLabel('Board right sidebar')).toBeHidden();
       await expect(page.getByLabel('Board dashboard')).toBeAttached();
       await page.waitForTimeout(500);
 

@@ -418,56 +418,47 @@ export function Header() {
             className="min-w-0 shrink-0"
           >
             {isDesktopClient && (
-              <Group gap={4} wrap="nowrap" className="desktop-no-drag">
-                {isDesktopClient && (
-                  <>
-                    <ActionIcon
-                      variant={leftRailOpen ? 'light' : 'subtle'}
-                      color={leftRailOpen ? 'veritas' : 'gray'}
-                      size={32}
-                      onClick={() => setLeftRailOpen(!leftRailOpen)}
-                      aria-label={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
-                      aria-pressed={leftRailOpen}
-                      title={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
-                    >
-                      {leftRailOpen ? (
-                        <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <PanelLeft className="h-4 w-4" aria-hidden="true" />
-                      )}
-                    </ActionIcon>
-                    <ActionIcon
-                      variant={rightRailOpen ? 'light' : 'subtle'}
-                      color={rightRailOpen ? 'veritas' : 'gray'}
-                      size={32}
-                      onClick={() => setRightRailOpen(!rightRailOpen)}
-                      aria-label={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
-                      aria-pressed={rightRailOpen}
-                      title={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
-                    >
-                      {rightRailOpen ? (
-                        <PanelRightClose className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <PanelRight className="h-4 w-4" aria-hidden="true" />
-                      )}
-                    </ActionIcon>
-                  </>
-                )}
+              <Group
+                gap={4}
+                wrap="nowrap"
+                role="group"
+                aria-label="Desktop layout controls"
+                className="desktop-no-drag"
+              >
                 <ActionIcon
-                  variant={bottomPanel ? 'light' : 'subtle'}
-                  color={bottomPanel ? 'veritas' : 'gray'}
+                  variant={leftRailOpen ? 'light' : 'subtle'}
+                  color={leftRailOpen ? 'veritas' : 'gray'}
                   size={32}
-                  onClick={() => toggleBottomPanel('board-chat')}
-                  aria-label={bottomPanel ? 'Close right chat dock' : 'Open chat dock'}
-                  aria-pressed={Boolean(bottomPanel)}
-                  title={bottomPanel ? 'Close right chat dock' : 'Open chat dock'}
+                  onClick={() => setLeftRailOpen(!leftRailOpen)}
+                  aria-label={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
+                  aria-controls="desktop-navigation-sidebar"
+                  aria-expanded={leftRailOpen}
+                  title={leftRailOpen ? 'Collapse left sidebar' : 'Expand left sidebar'}
                 >
-                  {bottomPanel ? (
-                    <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+                  {leftRailOpen ? (
+                    <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
                   ) : (
-                    <PanelRight className="h-4 w-4" aria-hidden="true" />
+                    <PanelLeft className="h-4 w-4" aria-hidden="true" />
                   )}
                 </ActionIcon>
+                {view === 'board' && (
+                  <ActionIcon
+                    variant={rightRailOpen ? 'light' : 'subtle'}
+                    color={rightRailOpen ? 'veritas' : 'gray'}
+                    size={32}
+                    onClick={() => setRightRailOpen(!rightRailOpen)}
+                    aria-label={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+                    aria-controls="board-right-sidebar"
+                    aria-expanded={rightRailOpen}
+                    title={rightRailOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+                  >
+                    {rightRailOpen ? (
+                      <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <PanelRight className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </ActionIcon>
+                )}
               </Group>
             )}
             {isCompactHeader ? (
@@ -529,7 +520,7 @@ export function Header() {
               <Search className="h-4 w-4" aria-hidden="true" />
             </ActionIcon>
             {!isCompactHeader && (
-              <>
+              <Group gap={4} wrap="nowrap" role="group" aria-label="Chat controls">
                 <ActionIcon
                   variant={boardChatActive ? 'light' : 'subtle'}
                   color={boardChatActive ? 'veritas' : 'gray'}
@@ -537,6 +528,7 @@ export function Header() {
                   onClick={toggleChatPanel}
                   aria-label={boardChatAction}
                   aria-pressed={boardChatActive}
+                  aria-controls={boardChatActive ? 'workbench-right-dock' : undefined}
                   title={boardChatAction}
                 >
                   <MessageSquare className="h-4 w-4" aria-hidden="true" />
@@ -548,11 +540,12 @@ export function Header() {
                   onClick={toggleSquadChatPanel}
                   aria-label={squadChatAction}
                   aria-pressed={squadChatActive}
+                  aria-controls={squadChatActive ? 'workbench-right-dock' : undefined}
                   title={squadChatAction}
                 >
                   <Users className="h-4 w-4" aria-hidden="true" />
                 </ActionIcon>
-              </>
+              </Group>
             )}
             {!isCompactHeader && (
               <ActionIcon

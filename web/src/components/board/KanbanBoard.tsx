@@ -733,21 +733,26 @@ export function KanbanBoard() {
             )}
           </section>
 
-          {(!isDesktopClient || rightRailOpen) && (
-            <Suspense
-              fallback={
-                <aside className="min-h-24 rounded-md border border-dashed border-border/70" />
-              }
-            >
-              <aside className="min-w-0" aria-label="Board right sidebar">
+          <aside
+            id="board-right-sidebar"
+            className="min-w-0"
+            aria-label="Board right sidebar"
+            hidden={isDesktopClient && !rightRailOpen}
+          >
+            {(!isDesktopClient || rightRailOpen) && (
+              <Suspense
+                fallback={
+                  <div className="min-h-24 rounded-md border border-dashed border-border/70" />
+                }
+              >
                 <BoardSidebar
                   onTaskClick={(taskId) => {
                     void handleTaskIdClick(taskId);
                   }}
                 />
-              </aside>
-            </Suspense>
-          )}
+              </Suspense>
+            )}
+          </aside>
         </div>
 
         {boardSettings.showDashboard && (
