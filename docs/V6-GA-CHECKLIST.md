@@ -15,6 +15,7 @@ Documentation freshness: 2026-09-03 for the Veritas Kanban 6.1.5 release candida
 - [x] Public documentation excludes internal prompts, raw audits, handoffs, and working notes, and CI classifies every tracked Markdown file (#1350, #1353).
 - [x] The integrated current-main candidate builds all seven workspaces, packages a launchable macOS arm64 app, and exposes the completed Settings and task-workspace UI.
 - [x] Current desktop and mobile screenshots, GIFs, social previews, and demo video were regenerated from an isolated public-safe 6.1.5 workspace with `pnpm docs:capture-media`.
+- [x] The native About panel identifies the MIT license and Digital Meld copyright holder, uses concise build metadata, and reports the current 6.1.5 application version.
 - [ ] Release PR passes the authoritative `ci:full` matrix and merges with all maintained package metadata at 6.1.5.
 - [ ] Annotated tag `v6.1.5` peels to the release merge, and the live GitHub release body exactly matches `docs/releases/v6.1.5.md`.
 - [ ] Desktop Release publishes verified signed/notarized 6.1.5 DMG and ZIP assets, blockmaps, checksum sidecars, and updater metadata.

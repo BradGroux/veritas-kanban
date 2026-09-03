@@ -24,6 +24,8 @@ The UI work changes the named Settings, task-workspace, board, palette, and chat
 
 Maintained screenshots, desktop and mobile GIFs, social previews, and the demo video now show the integrated 6.1.5 interface. They are generated from an isolated workspace containing only public-safe dummy tasks with `pnpm docs:capture-media`.
 
+The native macOS About panel now keeps the displayed build identity concise, labels Apple silicon in familiar terms, links the project source, and identifies the MIT license alongside the Digital Meld copyright holder. Full build evidence remains available in copied support information.
+
 The public REST API remains `v1`. Version 6.1.5 adds no SQLite migration and remains compatible with valid 6.1.4 workspaces. The repository-publication security boundary and patched `fast-uri` override shipped in 6.1.4 remain in place.
 
 ## Historical 6.1.4 Security And Compatibility

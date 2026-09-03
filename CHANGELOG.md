@@ -41,6 +41,8 @@ documentation boundary.
 - Refreshed the maintained screenshots, desktop and mobile GIFs, social preview,
   and demo video from an isolated public-safe 6.1.5 workspace. The complete
   media set is reproducible with `pnpm docs:capture-media`.
+- Polished the native About panel with a concise build identity, familiar Mac
+  architecture naming, the project URL, and an explicit MIT license notice.
 
 ### Fixed
 

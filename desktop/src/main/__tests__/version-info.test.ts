@@ -74,7 +74,30 @@ describe('desktop version information', () => {
       applicationName: 'Veritas Kanban',
       applicationVersion: '6.0.2',
       version: 'Build abc1234',
-      credits: expect.stringContaining('Channel: stable'),
+      copyright: 'MIT License · © 2026 Digital Meld',
+      credits: [
+        'Local-first task management and agent orchestration',
+        '',
+        'Stable channel · macOS 15.5 · Apple silicon',
+        '',
+        'github.com/BradGroux/veritas-kanban',
+      ].join('\n'),
     });
+  });
+
+  it('keeps the native About panel concise while support output retains the full build', () => {
+    const fullBuild = '32ced60ebb1709f4a839dd80cc7bf067be1c5d9a';
+    const info = createDesktopAppInfo('6.1.5', true, {
+      platform: 'darwin',
+      arch: 'x64',
+      osVersion: '26.6.2',
+      buildIdentity: fullBuild,
+    });
+
+    expect(createDesktopAboutPanelOptions(info)).toMatchObject({
+      version: 'Build 32ced60ebb17',
+      credits: expect.stringContaining('macOS 26.6.2 · Intel'),
+    });
+    expect(formatDesktopVersionInfo(info)).toContain(`Build: ${fullBuild}`);
   });
 });

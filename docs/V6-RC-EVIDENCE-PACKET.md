@@ -29,7 +29,7 @@ The isolated current-main macOS candidate reached the board with `/api/health` r
 
 The documentation media capture passed in an isolated Playwright profile using only seeded dummy tasks. The maintained set contains twelve PNG screenshots, a 75-frame 1200x833 desktop GIF, a 54-frame 390x844 mobile GIF, and identical 1280x720 H.264 demo-video copies with SHA-256 `7200da247183fca4090ba96505665b26387a4db9bc38843928581d34bbbe0f73`.
 
-Local feature-level acceptance passed five Chromium task-status and Mantine interaction checks plus six mobile-flow checks across Chromium and WebKit. The canonical sequential workspace unit gate passed, all workspaces built, and the unpacked arm64 Electron bundle reported 6.1.5 in `Info.plist`. A fresh packaged-app profile completed onboarding, served a ready 6.1.5 health response from the bundled server, loaded the board, and exposed the grouped Settings UI before the candidate and its child server stopped cleanly.
+Local feature-level acceptance passed five Chromium task-status and Mantine interaction checks plus six mobile-flow checks across Chromium and WebKit. The canonical sequential workspace unit gate passed, all workspaces built, and the unpacked arm64 Electron bundle reported 6.1.5 in `Info.plist`. A fresh packaged-app profile completed onboarding, served a ready 6.1.5 health response from the bundled server, loaded the board, and exposed the grouped Settings UI. A second packaged-app readback confirmed the native About panel reports 6.1.5, the stable channel, Apple silicon, the project URL, and `MIT License · © 2026 Digital Meld`. Each candidate and child server then stopped cleanly.
 
 ## Historical 6.1.4 Security Release
 
