@@ -159,11 +159,6 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
 
     if (!name.trim()) {
       nameInput.current?.focus();
-      toast({
-        title: 'Validation Error',
-        description: 'Template name is required',
-        variant: 'destructive',
-      });
       return;
     }
 
@@ -215,11 +210,6 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
       onOpenChange(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save template');
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to save template',
-        variant: 'destructive',
-      });
     } finally {
       submitting.current = false;
       setIsSubmitting(false);

@@ -123,12 +123,7 @@ describe('TemplateEditorDialog', () => {
     expect(screen.getByText('Template name is required')).toBeDefined();
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: /Template Name/i }));
     expect(mocks.createTemplate).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Validation Error',
-        variant: 'destructive',
-      })
-    );
+    expect(mocks.toast).not.toHaveBeenCalled();
   });
 
   it.each([null, template])(
@@ -171,6 +166,7 @@ describe('TemplateEditorDialog', () => {
     const error = await screen.findByRole('alert');
     await waitFor(() => expect(document.activeElement).toBe(error));
     expect(error.textContent).toContain('Connection unavailable');
+    expect(mocks.toast).not.toHaveBeenCalled();
     expect(
       (screen.getByRole('textbox', { name: 'Description Template' }) as HTMLTextAreaElement).value
     ).toBe(longMarkdown);
