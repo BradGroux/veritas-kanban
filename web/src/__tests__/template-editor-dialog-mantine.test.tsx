@@ -209,7 +209,6 @@ describe('TemplateEditorDialog', () => {
     renderWithProviders(<TemplateEditorDialog template={template} open onOpenChange={vi.fn()} />);
     await user.clear(screen.getByRole('textbox', { name: 'Description' }));
     await user.click(screen.getByRole('button', { name: 'Clear category' }));
-    await user.click(screen.getByRole('tab', { name: 'Task Defaults' }));
     await user.clear(screen.getByRole('textbox', { name: 'Default Project' }));
     await user.clear(screen.getByRole('textbox', { name: 'Description Template' }));
     for (const field of ['type', 'priority', 'agent']) {
@@ -237,7 +236,7 @@ describe('TemplateEditorDialog', () => {
     const user = userEvent.setup();
     renderWithProviders(<TemplateEditorDialog template={template} open onOpenChange={vi.fn()} />);
     const category = screen.getByRole('combobox', { name: 'Category' });
-    await user.click(screen.getByRole('textbox', { name: 'Description' }));
+    await user.click(screen.getByRole('textbox', { name: /Template Name/ }));
     await user.tab();
     expect(document.activeElement).toBe(category);
     await user.tab();
