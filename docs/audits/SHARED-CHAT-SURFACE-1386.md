@@ -17,11 +17,12 @@ Chat transcripts scroll their own element. Appending a message or jumping to a S
 - Diff whitespace check: passed.
 - Standards review: the initial chat-only focus-trap finding was corrected and rechecked.
 - Spec review: all Chat entry points now capture the invoking element; failed focus on an inactive mode falls back to the header.
-- Updated unit tests and new browser regression scenarios: authored, not executed at this implementation checkpoint. Execution belongs to the declared integration milestone under the repository cadence policy.
+- Combined integration: the activity/chat, Squad, layout-chrome, and shared-overlay unit slices passed. Task Chat browser scenarios passed in light/dark, including non-header opener focus, draft retention, compact takeover, nested confirmation Escape, and exact task/session identity on mocked send.
+- Compact Workbench browser scenarios passed in light/dark at minimum dock width and enlarged text. The first integration run targeted the Board's identically named filter before the Squad popover appeared; the locator now scopes the named Squad dialog. That exposed a real Escape-ordering defect: the parent Popover capture handler dismissed the filters before the Select, and Workbench ignored only modal dialogs. Filters now defer Escape to the nested Select, Workbench recognizes nonmodal dialogs, and Escape from the filters trigger also dismisses filters. Regression checks cover dropdown then popover dismissal, exact focus restoration, keyboard trigger open/close, menu bounds, draft retention, and resize cycles.
 - Packaged macOS normal/minimum-window interaction: pending.
 - Installed-app replacement, final screenshots/GIFs, version bump, and release: pending.
 
-The browser scenarios cover Board/Squad draft retention and portaled selectors, plus Task Chat light/dark geometry, non-header invocation, focus fallback after changing task mode, nested confirmation Escape, compact takeover, and a mocked send that asserts the exact task/session pair. These are planned gates, not passing evidence.
+These local results are scoped integration evidence, not a passing full CI gate or native-app acceptance. No real chat was dispatched. Both review axes rechecked the Escape correction without remaining findings.
 
 ## Acceptance still required
 
