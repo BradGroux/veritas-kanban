@@ -36,6 +36,7 @@ for (const width of [320, 430]) {
           exact: true,
         });
         await expect(status).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'Mobile navigation' })).toBeVisible();
         await status.evaluate((el) => {
           const bar = document
             .querySelector('[data-mobile-navigation-surface]')!
