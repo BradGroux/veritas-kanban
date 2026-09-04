@@ -91,7 +91,7 @@ interface TaskWorkViewProps {
   isCodeTask: boolean;
   readOnly?: boolean;
   onOpenTab: (target: TaskWorkViewTarget) => void;
-  onOpenChat: () => void;
+  onOpenChat: (invoker?: HTMLElement) => void;
   onOpenWorkflow: () => void;
 }
 
@@ -513,13 +513,13 @@ export function TaskWorkView({
     workProducts.length
   );
 
-  const openNextAction = () => {
+  const openNextAction = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (effectiveAction.target === 'workflow') {
       onOpenWorkflow();
       return;
     }
     if (effectiveAction.target === 'chat') {
-      onOpenChat();
+      onOpenChat(event.currentTarget);
       return;
     }
     onOpenTab(effectiveAction.target);
@@ -670,7 +670,7 @@ export function TaskWorkView({
                   <UiAction
                     variant="quiet"
                     leftSection={<MessageSquare className="h-3 w-3" />}
-                    onClick={onOpenChat}
+                    onClick={(event) => onOpenChat(event.currentTarget)}
                   >
                     Chat
                   </UiAction>

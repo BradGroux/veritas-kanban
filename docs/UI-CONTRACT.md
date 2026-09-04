@@ -68,6 +68,12 @@ Feature names are the entire Settings navigation label. Core destinations appear
 
 ## Adoption and verification
 
+### Chat surfaces
+
+Board, Squad, and Task Chat use `ChatSurface`, `ChatTranscript`, `ChatComposer`, `ChatEmptyState`, and `ChatMessageSurface`. Header/composer insets are 12px vertically and 16px horizontally; transcripts use 16px padding and 12px message gaps. Ordinary messages and tool details use neutral colors. Context controls remain explicit: Board/Task Ask and Build modes, task identity metadata, and Squad filters and sender selection. Do not add another title/close header around the shared chat header.
+
+The transcript owns scrolling; message updates must not scroll outer pages. Task Chat lives inside its task workspace, becoming a body takeover below 64rem of shell width while retaining the task header. The combined workspace owns focus unless a nested confirmation is open. Closing chat restores its invoking control, with the task header Chat action as a fallback. Squad filters use a bounded portal so dropdowns are not clipped by the transcript or composer.
+
 Activity, Templates, Workflows, Operations/Admission, Evidence, Time, Drift, Decisions, Scoring, Policies, Settings shared sections/actions, and task workspace actions adopt this vocabulary. Existing board classification styling remains governed by the board color contract in `globals.css`. Feature-specific forms and overlay layout are separate audit issues, not exemptions from this contract.
 
 The gallery and focused tests cover action roles, disabled/keyboard behavior, anchor/ref compatibility, pill meanings, surface levels, and palette contrast. Browser checks measure rendered controls in light/dark themes at standard and increased text sizes. Release acceptance also requires representative packaged macOS screenshots and the final installed-app matrix; passing browser tests does not substitute for that evidence. Docs screenshots and GIFs are refreshed only from the final accepted UI (#1388).

@@ -282,9 +282,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       // Let a nested popup handle Escape before dismissing its parent Workbench.
       if (
         Array.from(
-          document.querySelectorAll(
-            '[role="listbox"], [role="menu"], [role="dialog"][aria-modal="true"]'
-          )
+          document.querySelectorAll('[role="listbox"], [role="menu"], [role="dialog"]')
         ).some((element) => element.getClientRects().length > 0)
       )
         return;

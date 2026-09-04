@@ -1,17 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { Group, Stack, Text, TextInput } from '@mantine/core';
 import {
-  ActionIcon,
-  Button,
-  Drawer,
-  Group,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
-import {
-  MessageSquare,
   Send,
   ChevronDown,
   ChevronRight,
@@ -20,7 +9,6 @@ import {
   User,
   Trash2,
   Download,
-  X,
 } from 'lucide-react';
 import {
   useChatSession,
@@ -31,7 +19,15 @@ import {
 } from '@/hooks/useChat';
 import { useTask } from '@/hooks/useTasks';
 import type { ChatMessage } from '@veritas-kanban/shared';
-import { cn } from '@/lib/utils';
+import { UiDrawer, UiModal } from '@/components/ui/UiOverlay';
+import { UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
+import {
+  ChatSurface,
+  ChatTranscript,
+  ChatComposer,
+  ChatEmptyState,
+  ChatMessageSurface,
+} from './ChatSurface';
 
 interface ChatPanelProps {
   open: boolean;
@@ -39,6 +35,8 @@ interface ChatPanelProps {
   taskId?: string;
   variant?: 'drawer' | 'inline';
   className?: string;
+  /** Lets an inline host suspend its focus trap while chat owns a confirmation. */
+  onModalOpenChange?: (open: boolean) => void;
 }
 
 export function ChatPanel({
@@ -47,11 +45,16 @@ export function ChatPanel({
   taskId,
   variant = 'drawer',
   className,
+  onModalOpenChange,
 }: ChatPanelProps) {
   const [message, setMessage] = useState('');
   const [mode, setMode] = useState<'ask' | 'build'>('ask');
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  useEffect(() => {
+    onModalOpenChange?.(clearConfirmOpen);
+    return () => onModalOpenChange?.(false);
+  }, [clearConfirmOpen, onModalOpenChange]);
   const { data: task } = useTask(taskId || '');
   const { data: sessions = [] } = useChatSessions();
   const { data: session } = useChatSession(currentSessionId);
@@ -60,14 +63,13 @@ export function ChatPanel({
   const { streamingMessage } = useChatStream(currentSessionId);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (shouldAutoScroll && scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'auto' });
     }
   }, [session?.messages, streamingMessage, shouldAutoScroll]);
 
@@ -144,87 +146,47 @@ export function ChatPanel({
     URL.revokeObjectURL(url);
   };
 
-  const titleContent = (
-    <Group justify="space-between" wrap="nowrap" className="w-full pr-8">
-      <Stack gap={4}>
-        <Group gap="xs" wrap="nowrap">
-          <Bot className="h-5 w-5" />
-          <Text fw={600}>{taskId ? 'Task Chat' : 'Board Chat'}</Text>
-        </Group>
-        {taskId && task && (
-          <Group gap="xs" className="border-t border-border/50 pt-2">
-            <MessageSquare className="h-3 w-3" />
-            <Text size="xs" c="dimmed">
-              Task: {task.title}
-            </Text>
-          </Group>
-        )}
-      </Stack>
-      <Group gap={4} wrap="nowrap">
-        {currentSessionId && session?.messages && session.messages.length > 0 && (
-          <>
-            <ActionIcon variant="subtle" aria-label="Export chat" onClick={exportChat}>
-              <Download className="h-4 w-4" />
-            </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              aria-label="Clear chat"
-              onClick={() => setClearConfirmOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </ActionIcon>
-          </>
-        )}
-        {variant === 'inline' && (
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            aria-label="Close chat panel"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="h-4 w-4" />
-          </ActionIcon>
-        )}
-      </Group>
-    </Group>
+  const title = taskId ? 'Task Chat' : 'Board Chat';
+  const headerActions = (
+    <>
+      {currentSessionId && session?.messages && session.messages.length > 0 && (
+        <>
+          <UiIconAction aria-label="Export chat" onClick={exportChat}>
+            <Download className="h-4 w-4" />
+          </UiIconAction>
+          <UiIconAction aria-label="Clear chat" onClick={() => setClearConfirmOpen(true)}>
+            <Trash2 className="h-4 w-4" />
+          </UiIconAction>
+        </>
+      )}
+    </>
   );
 
   const chatContent = (
     <>
-      <ScrollArea
-        className="chat-dock-scroll-area min-h-0 flex-1 px-4"
-        onScrollCapture={handleScroll}
-        ref={scrollAreaRef}
-      >
-        <div className="py-4 space-y-4">
-          {session?.messages.map((msg) => (
-            <ChatMessageBubble key={msg.id} message={msg} />
-          ))}
-          {streamingMessage && (
-            <ChatMessageBubble
-              message={{
-                id: 'streaming',
-                role: 'assistant',
-                content: streamingMessage.content || '',
-                timestamp: new Date().toISOString(),
-              }}
-              isStreaming
-            />
-          )}
-          {(!session || session.messages.length === 0) && !streamingMessage && (
-            <div className="text-center text-muted-foreground py-8">
-              <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">
-                {taskId ? 'Start a conversation about this task' : 'Start a new chat session'}
-              </p>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+      <ChatTranscript onScroll={handleScroll} ref={scrollAreaRef}>
+        {session?.messages.map((msg) => (
+          <ChatMessageBubble key={msg.id} message={msg} />
+        ))}
+        {streamingMessage && (
+          <ChatMessageBubble
+            message={{
+              id: 'streaming',
+              role: 'assistant',
+              content: streamingMessage.content || '',
+              timestamp: new Date().toISOString(),
+            }}
+            isStreaming
+          />
+        )}
+        {(!session || session.messages.length === 0) && !streamingMessage && (
+          <ChatEmptyState icon={<Bot />}>
+            {taskId ? 'Start a conversation about this task' : 'Start a new chat session'}
+          </ChatEmptyState>
+        )}
+      </ChatTranscript>
 
-      <div className="border-t border-border p-4 flex-shrink-0 space-y-3">
+      <ChatComposer>
         <div className="flex items-center gap-2">
           <TextInput
             ref={inputRef}
@@ -232,11 +194,12 @@ export function ChatPanel({
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder="Type a message..."
+            aria-label={`Message ${title}`}
             disabled={isPending}
-            className="flex-1"
+            className="min-w-0 flex-1"
             autoFocus
           />
-          <ActionIcon
+          <UiIconAction
             onClick={handleSend}
             disabled={!message.trim() || isPending}
             aria-label="Send chat message"
@@ -246,62 +209,57 @@ export function ChatPanel({
             ) : (
               <Send className="h-4 w-4" />
             )}
-          </ActionIcon>
+          </UiIconAction>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">Mode:</span>
-          <Button
-            variant={mode === 'ask' ? 'filled' : 'outline'}
-            size="xs"
+          <UiAction
+            variant={mode === 'ask' ? 'primary' : 'secondary'}
+            aria-pressed={mode === 'ask'}
             onClick={() => setMode('ask')}
           >
             Ask
-          </Button>
-          <Button
-            variant={mode === 'build' ? 'filled' : 'outline'}
-            size="xs"
+          </UiAction>
+          <UiAction
+            variant={mode === 'build' ? 'primary' : 'secondary'}
+            aria-pressed={mode === 'build'}
             onClick={() => setMode('build')}
           >
             Build
-          </Button>
+          </UiAction>
           <span className="ml-1 min-w-0 text-muted-foreground">
             {mode === 'ask' ? '· Read-only queries' : '· Changes, files, commands'}
           </span>
         </div>
-      </div>
+      </ChatComposer>
     </>
   );
 
-  return (
-    <>
-      {variant === 'inline' ? (
-        open && (
-          <section
-            className={cn('flex h-full min-h-0 flex-col', className)}
-            aria-label="Board Chat"
-          >
-            <div className="desktop-no-drag border-b border-border px-4 py-3">{titleContent}</div>
-            <div className="flex min-h-0 flex-1 flex-col">{chatContent}</div>
-          </section>
-        )
-      ) : (
-        <Drawer
-          opened={open}
-          onClose={() => onOpenChange(false)}
-          position="right"
-          size={500}
-          padding={0}
-          title={titleContent}
-          styles={{
-            content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-            body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
-          }}
-        >
-          {chatContent}
-        </Drawer>
-      )}
-      <Modal
+  const surface = (
+    <ChatSurface
+      title={title}
+      metadata={taskId ? (task?.title ?? taskId) : undefined}
+      icon={<Bot className="h-4 w-4" aria-hidden="true" />}
+      actions={headerActions}
+      onClose={() => onOpenChange(false)}
+      className={className}
+      onKeyDown={(event) => {
+        if (
+          variant === 'inline' &&
+          event.key === 'Escape' &&
+          !clearConfirmOpen &&
+          !event.defaultPrevented &&
+          (event.target as HTMLElement).getAttribute('data-mantine-stop-propagation') !== 'true'
+        ) {
+          event.stopPropagation();
+          onOpenChange(false);
+        }
+      }}
+    >
+      {chatContent}
+      <UiModal
+        variant="confirm"
         opened={clearConfirmOpen}
         onClose={() => setClearConfirmOpen(false)}
         centered
@@ -312,11 +270,11 @@ export function ChatPanel({
             This will permanently delete all messages in this chat. This action cannot be undone.
           </Text>
           <Group justify="flex-end">
-            <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>
+            <UiAction variant="secondary" onClick={() => setClearConfirmOpen(false)}>
               Cancel
-            </Button>
-            <Button
-              color="red"
+            </UiAction>
+            <UiAction
+              variant="destructive"
               onClick={() => {
                 if (currentSessionId) {
                   deleteChatSession(currentSessionId, {
@@ -332,11 +290,25 @@ export function ChatPanel({
               }}
             >
               Clear History
-            </Button>
+            </UiAction>
           </Group>
         </Stack>
-      </Modal>
-    </>
+      </UiModal>
+    </ChatSurface>
+  );
+  if (variant === 'inline') return open ? surface : null;
+  return (
+    <UiDrawer
+      variant="chat"
+      compound
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      withCloseButton={false}
+      closeOnEscape={!clearConfirmOpen}
+      attributes={{ content: { 'aria-label': title } }}
+    >
+      {surface}
+    </UiDrawer>
   );
 }
 
@@ -371,50 +343,43 @@ function ChatMessageBubble({ message, isStreaming }: ChatMessageBubbleProps) {
   return (
     <div className={`flex gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-          <Bot className="h-4 w-4 text-primary" />
+        <div className="flex-shrink-0 h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+          <Bot className="h-4 w-4" />
         </div>
       )}
-      <div className={`max-w-[80%] space-y-2`}>
-        <div
-          className={`rounded-lg px-3 py-2 text-sm ${
-            isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
-          }`}
-        >
+      <div className="min-w-0 max-w-[85%] space-y-2">
+        <ChatMessageSurface>
           <MarkdownContent content={message.content} />
           {isStreaming && <span className="inline-block w-1 h-4 bg-current animate-pulse ml-1" />}
-        </div>
+        </ChatMessageSurface>
 
         {/* Tool calls */}
         {'toolCalls' in message && message.toolCalls && message.toolCalls.length > 0 && (
           <div className="space-y-1">
             {message.toolCalls.map((tool, idx) => (
-              <div key={idx} className="border border-border rounded bg-zinc-950 overflow-hidden">
+              <div key={idx} className="border border-border rounded bg-muted overflow-hidden">
                 <button
                   onClick={() => toggleTool(idx)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-zinc-900 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent transition-colors"
+                  aria-expanded={expandedTools.has(idx)}
                 >
                   {expandedTools.has(idx) ? (
                     <ChevronDown className="h-3 w-3" />
                   ) : (
                     <ChevronRight className="h-3 w-3" />
                   )}
-                  <code className="text-emerald-400">{tool.name}</code>
+                  <code>{tool.name}</code>
                 </button>
                 {expandedTools.has(idx) && (
                   <div className="px-3 pb-2 space-y-2 text-xs font-mono">
                     <div>
                       <div className="text-muted-foreground mb-1">Input:</div>
-                      <pre className="text-zinc-300 whitespace-pre-wrap break-all">
-                        {tool.input}
-                      </pre>
+                      <pre className="whitespace-pre-wrap break-all">{tool.input}</pre>
                     </div>
                     {tool.output && (
                       <div>
                         <div className="text-muted-foreground mb-1">Output:</div>
-                        <pre className="text-zinc-300 whitespace-pre-wrap break-all">
-                          {tool.output}
-                        </pre>
+                        <pre className="whitespace-pre-wrap break-all">{tool.output}</pre>
                       </div>
                     )}
                   </div>
@@ -430,8 +395,8 @@ function ChatMessageBubble({ message, isStreaming }: ChatMessageBubbleProps) {
         </div>
       </div>
       {isUser && (
-        <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-          <User className="h-4 w-4 text-primary-foreground" />
+        <div className="flex-shrink-0 h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+          <User className="h-4 w-4" />
         </div>
       )}
     </div>
@@ -456,9 +421,9 @@ function MarkdownContent({ content }: { content: string }) {
           const code = lines.slice(1, -1).join('\n');
 
           return (
-            <pre key={idx} className="bg-zinc-950 rounded p-2 overflow-x-auto text-xs">
+            <pre key={idx} className="bg-muted rounded p-2 overflow-x-auto text-xs">
               {language && <div className="text-muted-foreground mb-1">{language}</div>}
-              <code className="text-zinc-300">{code}</code>
+              <code>{code}</code>
             </pre>
           );
         }
@@ -466,7 +431,7 @@ function MarkdownContent({ content }: { content: string }) {
         // Inline code
         if (part.startsWith('`') && part.endsWith('`')) {
           return (
-            <code key={idx} className="bg-zinc-800 px-1 py-0.5 rounded text-xs">
+            <code key={idx} className="bg-muted px-1 py-0.5 rounded text-xs">
               {part.slice(1, -1)}
             </code>
           );

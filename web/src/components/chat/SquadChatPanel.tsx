@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Drawer,
-  Group,
-  ScrollArea,
-  Select,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core';
+import { Badge, Popover, Select, Text, TextInput, Tooltip } from '@mantine/core';
 import {
   CheckCircle2,
   Filter,
@@ -36,7 +25,15 @@ import {
 import { useConfig } from '@/hooks/useConfig';
 import { useFeatureSetting } from '@/hooks/useFeatureSettings';
 import type { SquadMessage } from '@veritas-kanban/shared';
-import { cn } from '@/lib/utils';
+import { UiDrawer } from '@/components/ui/UiOverlay';
+import { UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
+import {
+  ChatSurface,
+  ChatTranscript,
+  ChatComposer,
+  ChatEmptyState,
+  ChatMessageSurface,
+} from './ChatSurface';
 
 interface SquadChatPanelProps {
   open: boolean;
@@ -44,21 +41,6 @@ interface SquadChatPanelProps {
   variant?: 'drawer' | 'inline';
   className?: string;
 }
-
-// Agent colors for visual distinction
-const agentColors: Record<string, string> = {
-  Human: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', // Human user - distinct green
-  VERITAS: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  TARS: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  CASE: 'bg-green-500/20 text-green-400 border-green-500/30',
-  Ava: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-  'R2-D2': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  'K-2SO': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  MAX: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  'Johnny 5': 'bg-red-500/20 text-red-400 border-red-500/30',
-  Bishop: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  Marvin: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-};
 
 function safeSquadLinkHref(value?: string): string | undefined {
   if (!value) return undefined;
@@ -136,6 +118,7 @@ export function SquadChatPanel({
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [replyTo, setReplyTo] = useState<SquadMessage | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
 
   // Sync selectedAgent when humanDisplayName loads from settings
@@ -160,22 +143,17 @@ export function SquadChatPanel({
   const { mutate: addReaction } = useAddSquadReaction();
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   // Scroll helper — finds the actual scrollable viewport inside ScrollArea
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    // Try scrollIntoView on the sentinel div first
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior });
-    }
-    // Fallback: find the Mantine-backed ScrollArea viewport and scroll it directly.
-    const viewport = scrollAreaRef.current?.querySelector(
-      '[data-slot="scroll-area-viewport"], .mantine-ScrollArea-viewport'
-    );
+    const viewport = scrollAreaRef.current;
     if (viewport) {
-      viewport.scrollTop = viewport.scrollHeight;
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : behavior,
+      });
     }
   }, []);
 
@@ -246,10 +224,19 @@ export function SquadChatPanel({
   const handleJumpToMessage = (messageId: string) => {
     setActiveMessageId(messageId);
     requestAnimationFrame(() => {
-      document.getElementById(`squad-message-${messageId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
+      const target = document.getElementById(`squad-message-${messageId}`);
+      const viewport = scrollAreaRef.current;
+      if (target && viewport)
+        viewport.scrollTo({
+          top:
+            viewport.scrollTop +
+            target.getBoundingClientRect().top -
+            viewport.getBoundingClientRect().top -
+            (viewport.clientHeight - target.clientHeight) / 2,
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            ? 'auto'
+            : 'smooth',
+        });
     });
     window.setTimeout(() => setActiveMessageId(null), 2500);
   };
@@ -282,206 +269,198 @@ export function SquadChatPanel({
   // Get unique agents from messages
   const uniqueAgents = Array.from(new Set(messages.map((m) => m.agent))).sort();
 
-  const titleContent = (
-    <Group justify="space-between" wrap="nowrap" className="w-full pr-8">
-      <div>
-        <Group gap="xs" wrap="nowrap">
-          <Users className="h-5 w-5" />
-          <Text fw={600}>Squad Chat</Text>
-        </Group>
-        <Text size="xs" c="dimmed" pt={4}>
-          Agent-to-agent communication channel
-        </Text>
-      </div>
-      {variant === 'inline' && (
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          aria-label="Close squad chat panel"
-          onClick={() => onOpenChange(false)}
+  const filters = (
+    <Popover
+      position="bottom-end"
+      withinPortal
+      width="min(24rem, calc(100vw - 2rem))"
+      opened={filtersOpen}
+      onChange={setFiltersOpen}
+      // Handle Escape after the nested Select, not in Popover's capture handler.
+      closeOnEscape={false}
+      returnFocus
+    >
+      <Popover.Target>
+        <UiIconAction
+          aria-label="Squad filters and actions"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && filtersOpen) {
+              event.stopPropagation();
+              setFiltersOpen(false);
+            }
+          }}
         >
-          <X className="h-4 w-4" />
-        </ActionIcon>
-      )}
-    </Group>
+          <Filter className="h-4 w-4" />
+        </UiIconAction>
+      </Popover.Target>
+      <Popover.Dropdown
+        aria-label="Squad filters and actions"
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Escape' &&
+            !event.defaultPrevented &&
+            (event.target as HTMLElement).getAttribute('data-mantine-stop-propagation') !== 'true'
+          ) {
+            event.stopPropagation();
+            setFiltersOpen(false);
+          }
+        }}
+      >
+        <div className="vk-chat-toolbar">
+          <Select
+            value={agentFilter}
+            onChange={(value) => setAgentFilter(value ?? 'all')}
+            allowDeselect={false}
+            style={{ flex: '1 1 10rem', minWidth: 0 }}
+            leftSection={<Filter className="h-3.5 w-3.5" aria-hidden="true" />}
+            data={[
+              { value: 'all', label: 'All Agents' },
+              ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
+            ]}
+            aria-label="Filter by agent"
+          />
+          <TextInput
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
+            leftSection={<Search className="h-3.5 w-3.5" />}
+            placeholder="Search"
+            aria-label="Search squad chat"
+            style={{ flex: '1 1 10rem', minWidth: 0 }}
+          />
+          <UiAction
+            variant="secondary"
+            onClick={handleMarkRead}
+            style={{ flexShrink: 0 }}
+            disabled={!latestMessageId || isMarkingRead}
+            leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
+          >
+            Mark read
+            {unreadState?.unreadCount ? (
+              <Badge size="xs" ml={6} variant="light">
+                {unreadState.mentionCount
+                  ? `${unreadState.unreadCount}/${unreadState.mentionCount}`
+                  : unreadState.unreadCount}
+              </Badge>
+            ) : null}
+          </UiAction>
+          <UiAction
+            variant="secondary"
+            aria-pressed={includeSystem}
+            onClick={() => setIncludeSystem(!includeSystem)}
+            className="gap-1.5"
+            style={{ flexShrink: 0 }}
+            title={includeSystem ? 'Hide system messages' : 'Show system messages'}
+            leftSection={<Settings2 className="h-3.5 w-3.5" />}
+          >
+            {includeSystem ? 'Hide' : 'Show'} System
+          </UiAction>
+        </div>
+      </Popover.Dropdown>
+    </Popover>
   );
 
   const panelContent = (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* Filter Bar */}
-      <div className="border-b border-border px-4 py-2 flex flex-wrap items-center gap-2 flex-shrink-0">
-        <Select
-          value={agentFilter}
-          onChange={(value) => setAgentFilter(value ?? 'all')}
-          allowDeselect={false}
-          size="xs"
-          style={{ flex: '1 0 140px' }}
-          leftSection={<Filter className="h-3.5 w-3.5" aria-hidden="true" />}
-          data={[
-            { value: 'all', label: 'All Agents' },
-            ...uniqueAgents.map((agent) => ({ value: agent, label: agent })),
-          ]}
-          aria-label="Filter by agent"
-        />
-        <TextInput
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.currentTarget.value)}
-          leftSection={<Search className="h-3.5 w-3.5" />}
-          placeholder="Search"
-          size="xs"
-          aria-label="Search squad chat"
-          style={{ flex: '1 0 140px' }}
-        />
-        <Button
-          variant={unreadState?.unreadCount ? 'filled' : 'outline'}
-          size="xs"
-          onClick={handleMarkRead}
-          style={{ flexShrink: 0 }}
-          disabled={!latestMessageId || isMarkingRead}
-          leftSection={<CheckCircle2 className="h-3.5 w-3.5" />}
-        >
-          Mark read
-          {unreadState?.unreadCount ? (
-            <Badge size="xs" ml={6} variant="light">
-              {unreadState.mentionCount
-                ? `${unreadState.unreadCount}/${unreadState.mentionCount}`
-                : unreadState.unreadCount}
-            </Badge>
-          ) : null}
-        </Button>
-        <Button
-          variant={includeSystem ? 'filled' : 'outline'}
-          size="xs"
-          onClick={() => setIncludeSystem(!includeSystem)}
-          className="gap-1.5"
-          style={{ flexShrink: 0 }}
-          title={includeSystem ? 'Hide system messages' : 'Show system messages'}
-          leftSection={<Settings2 className="h-3.5 w-3.5" />}
-        >
-          {includeSystem ? 'Hide' : 'Show'} System
-        </Button>
-        {variant === 'inline' && (
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            aria-label="Close squad chat panel"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="h-4 w-4" />
-          </ActionIcon>
-        )}
-      </div>
-
-      {/* Messages */}
-      <ScrollArea
-        className="chat-dock-scroll-area flex-1 min-h-0 px-4"
-        onScrollCapture={handleScroll}
-        ref={scrollAreaRef}
-      >
-        <div className="py-4 space-y-3">
-          {searchQuery.trim() && (
-            <div className="rounded-md border border-border bg-background/80 p-2">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <Text size="xs" fw={600}>
-                  Search results
+    <ChatSurface
+      title="Squad Chat"
+      icon={<Users className="h-4 w-4" aria-hidden="true" />}
+      onClose={() => onOpenChange(false)}
+      actions={filters}
+      className={className}
+    >
+      <ChatTranscript onScroll={handleScroll} ref={scrollAreaRef}>
+        {searchQuery.trim() && (
+          <div className="rounded-md border border-border bg-background/80 p-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <Text size="xs" fw={600}>
+                Search results
+              </Text>
+              <Badge size="xs" variant="light">
+                {searchResponse?.results.length ?? 0}
+              </Badge>
+            </div>
+            <div className="space-y-1.5">
+              {(searchResponse?.results ?? []).map((result) => (
+                <button
+                  key={result.messageId}
+                  type="button"
+                  onClick={() => handleJumpToMessage(result.messageId)}
+                  className="w-full rounded border border-border/70 bg-muted/40 px-2 py-1.5 text-left text-xs hover:bg-muted"
+                >
+                  <span className="font-medium">{result.displayName || result.agent}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {new Date(result.timestamp).toLocaleTimeString()}
+                  </span>
+                  <span className="block truncate text-muted-foreground">{result.snippet}</span>
+                </button>
+              ))}
+              {searchResponse?.results.length === 0 && (
+                <Text size="xs" c="dimmed">
+                  No matching messages.
                 </Text>
-                <Badge size="xs" variant="light">
-                  {searchResponse?.results.length ?? 0}
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
-                {(searchResponse?.results ?? []).map((result) => (
-                  <button
-                    key={result.messageId}
-                    type="button"
-                    onClick={() => handleJumpToMessage(result.messageId)}
-                    className="w-full rounded border border-border/70 bg-muted/40 px-2 py-1.5 text-left text-xs hover:bg-muted"
-                  >
-                    <span className="font-medium">{result.displayName || result.agent}</span>
-                    <span className="ml-2 text-muted-foreground">
-                      {new Date(result.timestamp).toLocaleTimeString()}
-                    </span>
-                    <span className="block truncate text-muted-foreground">{result.snippet}</span>
-                  </button>
-                ))}
-                {searchResponse?.results.length === 0 && (
-                  <Text size="xs" c="dimmed">
-                    No matching messages.
-                  </Text>
-                )}
-              </div>
+              )}
             </div>
-          )}
-          {isLoading && (
-            <div className="text-center text-muted-foreground py-8">
-              <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
-              <p className="text-sm">Loading messages...</p>
-            </div>
-          )}
-          {!isLoading && filteredMessages.length === 0 && (
-            <div className="text-center text-muted-foreground py-8">
-              <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">
-                {agentFilter === 'all'
-                  ? 'No messages yet. Be the first to say something!'
-                  : `No messages from ${agentFilter}`}
-              </p>
-            </div>
-          )}
-          {threadedMessages.map(({ message: msg, replies }) =>
-            msg.system ? (
-              <SystemMessageDivider key={msg.id} message={msg} activeMessageId={activeMessageId} />
-            ) : (
-              <SquadMessageBubble
-                key={msg.id}
-                message={msg}
-                replies={replies}
-                humanDisplayName={humanDisplayName}
-                actor={actorForRead}
-                activeMessageId={activeMessageId}
-                onReply={setReplyTo}
-                onJump={handleJumpToMessage}
-                onTogglePin={(target) =>
-                  updateMessageState({ messageId: target.id, pinned: !target.pinned })
-                }
-                onMarkDecision={(target) =>
-                  updateMessageState({ messageId: target.id, decision: !target.decision })
-                }
-                onAck={(target) =>
-                  addReaction({ messageId: target.id, actor: actorForRead, reaction: 'ack' })
-                }
-              />
-            )
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+          </div>
+        )}
+        {isLoading && (
+          <ChatEmptyState icon={<Loader2 className="animate-spin" />}>
+            Loading messages...
+          </ChatEmptyState>
+        )}
+        {!isLoading && filteredMessages.length === 0 && (
+          <ChatEmptyState icon={<Users />}>
+            {agentFilter === 'all'
+              ? 'No messages yet. Be the first to say something!'
+              : `No messages from ${agentFilter}`}
+          </ChatEmptyState>
+        )}
+        {threadedMessages.map(({ message: msg, replies }) =>
+          msg.system ? (
+            <SystemMessageDivider key={msg.id} message={msg} activeMessageId={activeMessageId} />
+          ) : (
+            <SquadMessageBubble
+              key={msg.id}
+              message={msg}
+              replies={replies}
+              humanDisplayName={humanDisplayName}
+              actor={actorForRead}
+              activeMessageId={activeMessageId}
+              onReply={setReplyTo}
+              onJump={handleJumpToMessage}
+              onTogglePin={(target) =>
+                updateMessageState({ messageId: target.id, pinned: !target.pinned })
+              }
+              onMarkDecision={(target) =>
+                updateMessageState({ messageId: target.id, decision: !target.decision })
+              }
+              onAck={(target) =>
+                addReaction({ messageId: target.id, actor: actorForRead, reaction: 'ack' })
+              }
+            />
+          )
+        )}
+      </ChatTranscript>
 
       {/* Input Area */}
-      <div className="border-t border-border p-4 flex-shrink-0 space-y-2">
+      <ChatComposer>
         {replyTo && (
           <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
             <Text size="xs" c="dimmed" truncate>
               Replying to {replyTo.displayName || replyTo.agent}: {replyTo.message}
             </Text>
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              aria-label="Cancel reply"
-              onClick={() => setReplyTo(null)}
-            >
+            <UiIconAction aria-label="Cancel reply" onClick={() => setReplyTo(null)}>
               <X className="h-3.5 w-3.5" />
-            </ActionIcon>
+            </UiIconAction>
           </div>
         )}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Sending as:</span>
           <Select
             value={selectedAgent}
             onChange={(value) => setSelectedAgent(value ?? humanDisplayName ?? 'Human')}
             allowDeselect={false}
-            size="xs"
-            w={140}
+            style={{ flex: '1 1 10rem', minWidth: 0 }}
             data={availableAgents.map((agent) => ({ value: agent, label: agent }))}
             aria-label="Sending as"
           />
@@ -493,11 +472,12 @@ export function SquadChatPanel({
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder="Send a message to the squad..."
+            aria-label="Message Squad Chat"
             disabled={isPending}
-            className="flex-1"
+            className="min-w-0 flex-1"
             autoFocus
           />
-          <ActionIcon
+          <UiIconAction
             onClick={handleSend}
             disabled={!message.trim() || isPending}
             aria-label="Send squad message"
@@ -507,33 +487,25 @@ export function SquadChatPanel({
             ) : (
               <Send className="h-4 w-4" />
             )}
-          </ActionIcon>
+          </UiIconAction>
         </div>
-      </div>
-    </div>
+      </ChatComposer>
+    </ChatSurface>
   );
 
   return variant === 'inline' ? (
-    open && (
-      <section className={cn('flex h-full min-h-0 flex-col', className)} aria-label="Squad Chat">
-        {panelContent}
-      </section>
-    )
+    open && panelContent
   ) : (
-    <Drawer
+    <UiDrawer
       opened={open}
       onClose={() => onOpenChange(false)}
-      position="right"
-      size={500}
-      padding={0}
-      title={titleContent}
-      styles={{
-        content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-        body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
-      }}
+      variant="chat"
+      compound
+      withCloseButton={false}
+      attributes={{ content: { 'aria-label': 'Squad Chat' } }}
     >
       {panelContent}
-    </Drawer>
+    </UiDrawer>
   );
 }
 
@@ -564,13 +536,6 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
   onAck,
   compact = false,
 }: SquadMessageBubbleProps) {
-  // Case-insensitive agent color lookup
-  const colorClass =
-    agentColors[message.agent] ||
-    Object.entries(agentColors).find(
-      ([k]) => k.toLowerCase() === message.agent?.toLowerCase()
-    )?.[1] ||
-    agentColors.VERITAS;
   const isHuman = message.agent === 'Human';
   // Use the display name for Human agents, otherwise use the agent name
   const displayName = isHuman ? humanDisplayName : message.agent;
@@ -583,15 +548,13 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
   const replyTargetId = message.replyToId;
 
   return (
-    <div
+    <ChatMessageSurface
       id={`squad-message-${message.id}`}
-      className={`rounded-lg border p-3 transition-shadow ${colorClass} ${
-        compact ? 'ml-3 border-l-2 py-2' : ''
-      } ${isHuman ? 'ring-1 ring-emerald-500/50' : ''} ${
-        isActive ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-background' : ''
+      className={`transition-shadow ${compact ? 'ml-3 border-l-2 py-2' : ''} ${
+        isActive ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''
       }`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-semibold text-sm">
             {displayName}
@@ -657,16 +620,14 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
             );
           })}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <span className="text-xs opacity-70">
             {new Date(message.timestamp).toLocaleTimeString()}
           </span>
           {!compact && (
             <>
               <Tooltip label="Reply">
-                <ActionIcon
-                  size="sm"
-                  variant="subtle"
+                <UiIconAction
                   aria-label="Reply to message"
                   type="button"
                   onPointerDown={(event) => {
@@ -676,38 +637,34 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
                   onClick={() => onReply(message)}
                 >
                   <Reply className="h-3.5 w-3.5" />
-                </ActionIcon>
+                </UiIconAction>
               </Tooltip>
               <Tooltip label={message.pinned ? 'Unpin' : 'Pin'}>
-                <ActionIcon
-                  size="sm"
-                  variant={message.pinned ? 'filled' : 'subtle'}
+                <UiIconAction
+                  aria-pressed={Boolean(message.pinned)}
                   aria-label={message.pinned ? 'Unpin message' : 'Pin message'}
                   onClick={() => onTogglePin(message)}
                 >
                   <Pin className="h-3.5 w-3.5" />
-                </ActionIcon>
+                </UiIconAction>
               </Tooltip>
               <Tooltip label={message.decision ? 'Unmark decision' : 'Mark decision'}>
-                <ActionIcon
-                  size="sm"
-                  variant={message.decision ? 'filled' : 'subtle'}
-                  color={message.decision ? 'green' : undefined}
+                <UiIconAction
+                  aria-pressed={Boolean(message.decision)}
                   aria-label={message.decision ? 'Unmark decision' : 'Mark decision'}
                   onClick={() => onMarkDecision(message)}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                </ActionIcon>
+                </UiIconAction>
               </Tooltip>
               <Tooltip label="Acknowledge">
-                <ActionIcon
-                  size="sm"
-                  variant={hasActorAck ? 'filled' : 'subtle'}
+                <UiIconAction
+                  aria-pressed={Boolean(hasActorAck)}
                   aria-label="Acknowledge message"
                   onClick={() => onAck(message)}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                </ActionIcon>
+                </UiIconAction>
               </Tooltip>
             </>
           )}
@@ -749,7 +706,7 @@ const SquadMessageBubble = React.memo(function SquadMessageBubble({
           ))}
         </div>
       )}
-    </div>
+    </ChatMessageSurface>
   );
 });
 
