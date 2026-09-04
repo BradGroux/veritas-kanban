@@ -470,6 +470,29 @@ describe('Tasks Routes (actual module)', () => {
   });
 
   describe('POST /api/tasks', () => {
+    it('accepts critical priority on creation', async () => {
+      mockTaskService.createTask.mockImplementation(async (input) => ({
+        id: 'critical-task',
+        ...input,
+      }));
+      const res = await request(app)
+        .post('/api/tasks')
+        .send({ title: 'Urgent repair', priority: 'critical' });
+      expect(res.status).toBe(201);
+      expect(res.body.priority).toBe('critical');
+      expect(mockTaskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ priority: 'critical' })
+      );
+    });
+
+    it('rejects unknown priority before creation', async () => {
+      const res = await request(app)
+        .post('/api/tasks')
+        .send({ title: 'Invalid priority', priority: 'urgent' });
+      expect(res.status).toBe(400);
+      expect(mockTaskService.createTask).not.toHaveBeenCalled();
+    });
+
     it('should create a task', async () => {
       const newTask = {
         id: 't1',
@@ -483,6 +506,9 @@ describe('Tasks Routes (actual module)', () => {
       const res = await request(app).post('/api/tasks').send({ title: 'New Task' });
       expect(res.status).toBe(201);
       expect(res.body.id).toBe('t1');
+      expect(mockTaskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ priority: 'medium' })
+      );
     });
 
     it('should reject missing title', async () => {
@@ -497,6 +523,21 @@ describe('Tasks Routes (actual module)', () => {
   });
 
   describe('PATCH /api/tasks/:id', () => {
+    it('accepts critical priority on update', async () => {
+      const task = { id: 'critical-task', title: 'Urgent repair', status: 'todo' };
+      mockTaskService.getTask.mockResolvedValue(task);
+      mockTaskService.updateTask.mockImplementation(async (_id, input) => ({ ...task, ...input }));
+      const res = await request(app)
+        .patch('/api/tasks/critical-task')
+        .send({ priority: 'critical' });
+      expect(res.status).toBe(200);
+      expect(res.body.priority).toBe('critical');
+      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
+        'critical-task',
+        expect.objectContaining({ priority: 'critical' })
+      );
+    });
+
     it('should update a task', async () => {
       const oldTask = { id: 't1', title: 'Old', status: 'todo', created: '2025-01-01' };
       const updatedTask = { ...oldTask, title: 'Updated' };
