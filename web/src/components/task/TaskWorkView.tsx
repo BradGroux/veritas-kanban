@@ -7,7 +7,7 @@ import {
   UiAction,
   UiIconAction,
 } from '@/components/ui/UiVocabulary';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Code,
@@ -431,6 +431,9 @@ export function TaskWorkView({
   onOpenWorkflow,
 }: TaskWorkViewProps) {
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const stopInFlight = useRef(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const [previewProduct, setPreviewProduct] = useState<WorkProductPreview | null>(null);
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
   const {
@@ -525,10 +528,34 @@ export function TaskWorkView({
     onOpenTab(effectiveAction.target);
   };
 
-  const handleStopAgent = () => {
-    if (!canStop || !agentStatus?.attemptId) return;
-    stopAgent.mutate({ taskId: task.id, attemptId: agentStatus.attemptId });
-    setStopConfirmOpen(false);
+  const closeStopConfirm = () => {
+    if (!stopInFlight.current) {
+      setStopConfirmOpen(false);
+      setStopError(null);
+    }
+  };
+
+  const handleStopAgent = async () => {
+    if (
+      stopInFlight.current ||
+      !canControlAgents ||
+      readOnly ||
+      !canStop ||
+      !agentStatus?.attemptId
+    )
+      return;
+    stopInFlight.current = true;
+    setIsStopping(true);
+    setStopError(null);
+    try {
+      await stopAgent.mutateAsync({ taskId: task.id, attemptId: agentStatus.attemptId });
+      setStopConfirmOpen(false);
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : 'Unable to stop the active run.');
+    } finally {
+      stopInFlight.current = false;
+      setIsStopping(false);
+    }
   };
 
   return (
@@ -1056,7 +1083,7 @@ export function TaskWorkView({
         variant="confirm"
         compound
         opened={stopConfirmOpen}
-        onClose={() => setStopConfirmOpen(false)}
+        onClose={closeStopConfirm}
         title="Stop the active run?"
         centered
       >
@@ -1065,16 +1092,21 @@ export function TaskWorkView({
             This stops the running agent attempt and marks it failed so it can be inspected or
             retried from the Agent tab.
           </Text>
+          {stopError && (
+            <Text role="alert" size="sm" c="red" mt="sm">
+              {stopError}
+            </Text>
+          )}
         </div>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setStopConfirmOpen(false)}>
+          <UiAction variant="quiet" onClick={closeStopConfirm} disabled={isStopping}>
             Cancel
           </UiAction>
           <UiAction
             variant="destructive"
-            loading={stopAgent.isPending}
+            loading={isStopping}
             onClick={handleStopAgent}
-            disabled={!canStop}
+            disabled={!canStop || !canControlAgents || readOnly || isStopping}
             title={canStop ? 'Stop agent' : stopReason}
           >
             Stop Agent

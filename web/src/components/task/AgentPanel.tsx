@@ -100,6 +100,9 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [viewingAttemptId, setViewingAttemptId] = useState<string | null>(null);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const stopInFlight = useRef(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const [readinessOverrideOpen, setReadinessOverrideOpen] = useState(false);
   const [readinessOverrideReason, setReadinessOverrideReason] = useState('');
 
@@ -184,10 +187,27 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
     startAgentRun(reason);
   };
 
-  const handleStop = () => {
-    if (!canStop || !agentStatus?.attemptId) return;
-    stopAgent.mutate({ taskId: task.id, attemptId: agentStatus.attemptId });
-    setStopDialogOpen(false);
+  const closeStopDialog = () => {
+    if (!stopInFlight.current) {
+      setStopDialogOpen(false);
+      setStopError(null);
+    }
+  };
+
+  const handleStop = async () => {
+    if (stopInFlight.current || !canControlAgent || !canStop || !agentStatus?.attemptId) return;
+    stopInFlight.current = true;
+    setIsStopping(true);
+    setStopError(null);
+    try {
+      await stopAgent.mutateAsync({ taskId: task.id, attemptId: agentStatus.attemptId });
+      setStopDialogOpen(false);
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : 'Unable to stop the agent.');
+    } finally {
+      stopInFlight.current = false;
+      setIsStopping(false);
+    }
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -632,7 +652,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
           variant="confirm"
           compound
           opened={stopDialogOpen}
-          onClose={() => setStopDialogOpen(false)}
+          onClose={closeStopDialog}
           title="Stop the agent?"
           centered
         >
@@ -645,14 +665,20 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                 Stop unavailable: {stopReason}
               </Alert>
             )}
+            {stopError && (
+              <Text role="alert" size="sm" c="red">
+                {stopError}
+              </Text>
+            )}
           </Stack>
           <OverlayFooter>
-            <UiAction variant="quiet" onClick={() => setStopDialogOpen(false)}>
+            <UiAction variant="quiet" onClick={closeStopDialog} disabled={isStopping}>
               Cancel
             </UiAction>
             <UiAction
               variant="destructive"
-              disabled={!canStop || stopAgent.isPending}
+              disabled={!canStop || !canControlAgent || isStopping}
+              loading={isStopping}
               title={canStop ? 'Stop Agent' : stopReason}
               onClick={handleStop}
             >

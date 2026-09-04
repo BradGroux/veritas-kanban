@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { AgentPanel } from '@/components/task/AgentPanel';
@@ -48,6 +48,7 @@ vi.mock('@/hooks/useAgent', () => ({
   }),
   useStopAgent: () => ({
     mutate: mocks.stopAgentMutate,
+    mutateAsync: mocks.stopAgentMutate,
     isPending: false,
   }),
   useSendMessage: () => ({
@@ -307,6 +308,53 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     expect(screen.getByText('Agent controls unavailable for this client')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Agent' })).toBeNull();
+  });
+
+  it('retains agent stop confirmation through failure and successful retry', async () => {
+    let rejectStop!: (error: Error) => void;
+    mocks.stopAgentMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectStop = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-1',
+        controls: { controls: [{ action: 'stop', available: true }] },
+      },
+    });
+    renderWithProviders(
+      <AgentPanel
+        task={createMockTask({
+          id: 'task-stop-agent',
+          git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main', worktreePath: '/tmp' },
+        })}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }));
+    const dialog = screen.getByRole('dialog', { name: 'Stop the agent?' });
+    const submit = within(dialog).getByRole('button', { name: 'Stop Agent' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(mocks.stopAgentMutate).toHaveBeenCalledExactlyOnceWith({
+      taskId: 'task-stop-agent',
+      attemptId: 'attempt-1',
+    });
+    expect(screen.getByRole('dialog', { name: 'Stop the agent?' })).toBe(dialog);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(
+      (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    await act(async () => rejectStop(new Error('Stop fixture failed')));
+    expect(within(dialog).getByRole('alert').textContent).toContain('Stop fixture failed');
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.stopAgentMutate).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog', { name: 'Stop the agent?' })).toBeNull();
   });
 
   it('keeps running-agent message send and stop confirmation wired through Mantine modal', async () => {
