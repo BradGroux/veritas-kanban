@@ -156,7 +156,13 @@ function DesktopAwareAppShell({
             id="main-content"
             px={isDesktopClient ? 'md' : { base: 'md', md: '3.5rem' }}
             pt={isDesktopClient ? 'md' : 'lg'}
-            pb={bottomPanel ? 'md' : isDesktopClient ? 'lg' : { base: '6rem', md: 'lg' }}
+            pb={
+              bottomPanel
+                ? 'md'
+                : isDesktopClient
+                  ? 'lg'
+                  : { base: 'calc(var(--vk-mobile-nav-height, 5rem) + 1rem)', md: 'lg' }
+            }
             tabIndex={-1}
             className="desktop-main-content"
           >

@@ -540,7 +540,8 @@ export function TaskWorkView({
           data-state={overview.state}
         >
           <Group justify="space-between" align="flex-start" gap="lg" wrap="wrap">
-            <Stack gap={6} className="min-w-0 flex-1">
+            {/* Wrap the action before it squeezes the summary into a few words per line. */}
+            <Stack gap={6} className="min-w-0" style={{ flex: '1 1 20rem' }}>
               <Group gap="xs" wrap="wrap">
                 <Text size="xs" fw={700} tt="uppercase" c="dimmed">
                   Task state

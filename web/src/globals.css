@@ -334,12 +334,12 @@
 @media (max-width: 767px) {
   .floating-chat-trigger {
     right: max(1rem, env(safe-area-inset-right));
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    bottom: calc(var(--vk-mobile-nav-height, 5rem) + 1rem);
   }
 
   /* Keep high-z-index toasts from intercepting the fixed mobile navigation. */
   .veritas-notifications[data-position^='bottom-'] {
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    bottom: calc(var(--vk-mobile-nav-height, 5rem) + 1rem);
   }
 }
 

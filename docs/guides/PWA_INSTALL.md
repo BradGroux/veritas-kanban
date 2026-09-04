@@ -23,6 +23,8 @@ Chrome shows the install prompt only when the manifest and service worker are re
 
 On narrow screens, use **More views** in the header to reach Activity, Backlog, Archive, and other views. Their separate wide-screen shortcuts are omitted to preserve room for the logo, connection status, and task controls. Dropdown menus remain anchored to their controls without changing the page scale.
 
+The bottom navigation uses two rows on narrow phones so Home, Board, Alerts, Runs, Work, and Settings retain readable labels. Content and floating chat controls leave room for its actual height, including larger text and the device safe area. Task Overview actions move below their summary when the panel is too narrow for a readable side-by-side layout.
+
 ## Offline Behavior
 
 The service worker caches only the static app shell, manifest, icons, and same-origin static assets. It does not cache `/api` responses, WebSocket traffic, task data, work products, tokens, comments, or mutation responses.

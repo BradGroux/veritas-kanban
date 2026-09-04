@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActionIcon, Badge, Drawer, Group, Stack } from '@mantine/core';
 import { Bell, Columns3, Files, Home, Settings, Workflow } from 'lucide-react';
 import { NeedsAttentionQueue } from '@/components/dashboard/NeedsAttentionQueue';
@@ -13,9 +13,30 @@ function scrollToBoardColumns() {
 
 export function MobileShell() {
   const [inboxOpen, setInboxOpen] = useState(false);
+  const navigationRef = useRef<HTMLElement>(null);
   const { authContext, hasPermission } = useIdentity();
   const { navigateToTask, setView, view } = useView();
   const clientMode = authContext?.clientMode;
+
+  // Content, chat, and toasts must clear both navigation rows and the device safe area.
+  useEffect(() => {
+    const navigation = navigationRef.current;
+    if (!navigation) return;
+    const root = document.documentElement;
+    const measure = () => {
+      root.style.setProperty(
+        '--vk-mobile-nav-height',
+        `${navigation.getBoundingClientRect().height}px`
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(navigation, { box: 'border-box' });
+    measure();
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--vk-mobile-nav-height');
+    };
+  }, []);
 
   const openBoardHome = () => {
     setView('board');
@@ -87,6 +108,7 @@ export function MobileShell() {
   return (
     <>
       <nav
+        ref={navigationRef}
         aria-label="Mobile navigation"
         className="fixed inset-x-0 bottom-0 z-[100] border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1.5 shadow-lg backdrop-blur md:hidden"
       >
@@ -97,7 +119,7 @@ export function MobileShell() {
             </Badge>
           </div>
         )}
-        <div className="grid grid-cols-6 gap-1">
+        <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -109,7 +131,7 @@ export function MobileShell() {
                 disabled={item.disabled}
                 onClick={item.onClick}
                 className={[
-                  'flex min-h-12 min-w-0 flex-col items-center justify-center overflow-hidden rounded-md px-1 text-[11px] leading-tight text-muted-foreground transition-colors',
+                  'flex min-h-12 min-w-0 flex-col items-center justify-center rounded-md px-1 text-sm leading-tight text-muted-foreground transition-colors',
                   item.active
                     ? 'bg-primary/15 text-primary'
                     : 'hover:bg-muted hover:text-foreground',
@@ -117,7 +139,7 @@ export function MobileShell() {
                 ].join(' ')}
               >
                 <Icon className="mb-0.5 h-4 w-4" aria-hidden="true" />
-                <span data-mobile-nav-label className="block w-full truncate text-center">
+                <span data-mobile-nav-label className="block w-full text-center">
                   {'compactLabel' in item ? item.compactLabel : item.label}
                 </span>
               </button>
