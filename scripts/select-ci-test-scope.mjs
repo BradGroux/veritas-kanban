@@ -197,6 +197,45 @@ function parseLabels(value) {
   }
 }
 
+function currentPullRequestLabels(input) {
+  const repository = process.env.GITHUB_REPOSITORY || '';
+  const number = process.env.CI_PR_NUMBER || '';
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !/^[1-9]\d*$/.test(number)) {
+    throw new Error('A valid GITHUB_REPOSITORY and CI_PR_NUMBER are required for PR scope.');
+  }
+  let pullRequest;
+  try {
+    pullRequest = JSON.parse(
+      execFileSync('gh', ['api', `repos/${repository}/pulls/${number}`], {
+        encoding: 'utf8',
+        timeout: 30_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+    );
+  } catch {
+    throw new Error('Unable to resolve current PR label state; refusing to skip requested tests.');
+  }
+  if (!/^[a-f0-9]{40}$/i.test(input.headSha) || pullRequest.head?.sha !== input.headSha) {
+    throw new Error('The PR head changed; this stale run cannot select scope for another head.');
+  }
+  if (
+    !Array.isArray(pullRequest.labels) ||
+    pullRequest.labels.some((label) => typeof label?.name !== 'string')
+  ) {
+    throw new Error('The current PR label response is invalid.');
+  }
+  // Requests captured for this head stay full even if the label is later removed.
+  const explicitlyLabeled =
+    process.env.CI_PR_ACTION === 'labeled' && process.env.CI_PR_EVENT_LABEL === 'ci:full';
+  return [
+    ...new Set([
+      ...input.labels,
+      ...pullRequest.labels.map((label) => label.name),
+      ...(explicitlyLabeled ? ['ci:full'] : []),
+    ]),
+  ];
+}
+
 export function githubOutputLines(result, input) {
   const diffRange = diffRangeFor(input.baseSha, input.headSha, input.eventName);
   const coveragePackages = coverageWorkspaces(result.files, result.scope);
@@ -252,6 +291,8 @@ async function main() {
   if (!input.eventName) {
     throw new Error('CI_EVENT_NAME is required.');
   }
+
+  if (input.eventName === 'pull_request') input.labels = currentPullRequestLabels(input);
 
   const changedFiles = changedFilesForRange(input.baseSha, input.headSha, input.eventName);
   const deletedFiles = deletedFilesForRange(input.baseSha, input.headSha, input.eventName);

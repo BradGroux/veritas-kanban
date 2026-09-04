@@ -363,6 +363,10 @@ whole-repository gates on every ordinary code pull request. The full workspace
 suite and release-grade artifact gates run at scheduled, explicit `ci:full`,
 critical integration/security, and release milestones.
 
+For pull requests, scope selection reads current labels through the read-only GitHub API and verifies that the PR head still matches the triggering commit. A missing API response or a different head fails selection rather than reporting a green test skip. Current labels can upgrade a stale event to full scope. A `ci:full` request already captured in an event remains full even if the label is subsequently removed.
+
+Concurrency separates captured full requests from ordinary events and binds them to the exact PR head. Removing `ci:full` changes new ordinary requests; it does not cancel an already requested full run. Cosmetic label changes cannot replace either run. Two full requests for the same head may supersede one another, but the replacement must still run full scope. Always inspect the selected tier and executed test steps, not only green job badges, before accepting milestone evidence.
+
 Run the selector contract locally with:
 
 ```bash

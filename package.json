@@ -48,7 +48,7 @@
     "typecheck": "pnpm --filter @veritas-kanban/shared build && pnpm -r typecheck",
     "test": "pnpm test:unit",
     "test:unit": "node --test scripts/run-workspace-unit-tests.test.mjs && node scripts/run-workspace-unit-tests.mjs",
-    "test:ci-scope": "node --test scripts/select-ci-test-scope.test.mjs",
+    "test:ci-scope": "node --test scripts/select-ci-test-scope.test.mjs scripts/ci-pr-label-state.test.mjs",
     "test:coverage": "node scripts/run-coverage.mjs",
     "check:coverage-policy": "node --test scripts/check-coverage-policy.test.mjs scripts/check-coverage-ratchets.test.mjs scripts/run-coverage.test.mjs && node scripts/check-coverage-policy.mjs",
     "test:e2e": "playwright test",

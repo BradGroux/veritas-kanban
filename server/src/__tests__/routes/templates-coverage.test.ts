@@ -134,4 +134,53 @@ describe('Templates Routes (actual module)', () => {
       expect(res.status).toBe(500);
     });
   });
+
+  describe.each(['post', 'patch'] as const)('%s priority validation', (method) => {
+    it.each(['low', 'medium', 'high', 'critical'])(
+      'accepts %s in defaults and blueprints',
+      async (priority) => {
+        const input = {
+          name: 'Priority template',
+          taskDefaults: { priority },
+          blueprint: [{ refId: 'first', title: 'First task', taskDefaults: { priority } }],
+        };
+        const service =
+          method === 'post'
+            ? mockTemplateService.createTemplate
+            : mockTemplateService.updateTemplate;
+        service.mockResolvedValue({ id: 't1', ...input });
+        const client = request(app);
+        const res = await client[method](
+          method === 'post' ? '/api/templates' : '/api/templates/t1'
+        ).send(input);
+        expect(res.status).toBe(method === 'post' ? 201 : 200);
+        expect(res.body.taskDefaults.priority).toBe(priority);
+        expect(service).toHaveBeenCalledWith(...(method === 'post' ? [input] : ['t1', input]));
+      }
+    );
+
+    it.each(['defaults', 'blueprint'])(
+      'rejects unsupported priorities in %s without translating them',
+      async (location) => {
+        const input = {
+          name: 'Invalid priority',
+          taskDefaults: { priority: location === 'defaults' ? 'urgent' : 'high' },
+          blueprint: [
+            {
+              refId: 'first',
+              title: 'First task',
+              taskDefaults: { priority: location === 'blueprint' ? 'urgent' : 'high' },
+            },
+          ],
+        };
+        const client = request(app);
+        const res = await client[method](
+          method === 'post' ? '/api/templates' : '/api/templates/t1'
+        ).send(input);
+        expect(res.status).toBe(400);
+        expect(mockTemplateService.createTemplate).not.toHaveBeenCalled();
+        expect(mockTemplateService.updateTemplate).not.toHaveBeenCalled();
+      }
+    );
+  });
 });
