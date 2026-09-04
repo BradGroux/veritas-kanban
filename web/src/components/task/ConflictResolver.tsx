@@ -88,10 +88,16 @@ export function ConflictResolver({ task, open, onOpenChange }: ConflictResolverP
   }, [status?.conflictingFiles, selectedFile]);
 
   useEffect(() => {
-    if (operationError) {
+    if (!operationError) return;
+
+    // Nested modal focus traps finish their initial-focus pass after this render.
+    // Defer the error handoff so the actionable failure keeps focus deterministically.
+    const focusError = window.setTimeout(() => {
       operationErrorRef.current?.focus({ preventScroll: true });
       operationErrorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
-    }
+    });
+
+    return () => window.clearTimeout(focusError);
   }, [operationError]);
 
   const runOperation = async (

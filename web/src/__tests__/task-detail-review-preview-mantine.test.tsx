@@ -717,7 +717,7 @@ describe('task detail review and preview Mantine migration', () => {
       }
       await act(async () => rejectRequest(new Error('Fixture conflict request failed')));
       const error = within(owner).getByRole('alert', { name: 'Conflict operation failed' });
-      expect(document.activeElement).toBe(error);
+      await waitFor(() => expect(document.activeElement).toBe(error));
       expect(error.textContent).toContain('Fixture conflict request failed');
       expect((submit as HTMLButtonElement).disabled).toBe(false);
       if (operation === 'resolve')
@@ -766,7 +766,7 @@ describe('task detail review and preview Mantine migration', () => {
       name: 'Conflict operation failed',
     });
     expect(error.textContent).toContain('was not aborted');
-    expect(document.activeElement).toBe(error);
+    await waitFor(() => expect(document.activeElement).toBe(error));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(confirmation.isConnected).toBe(true);
   });
