@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { 
-  api, 
-  type ConflictStatus, 
-  type ConflictFile, 
+import {
+  api,
+  type ConflictStatus,
+  type ConflictFile,
   type ResolveResult,
-  type ConflictMarker 
+  type ConflictMarker,
 } from '../lib/api';
 
 export type { ConflictStatus, ConflictFile, ResolveResult, ConflictMarker };
@@ -16,7 +16,13 @@ export function useConflictStatus(taskId: string | undefined) {
   return useQuery<ConflictStatus>({
     queryKey: ['conflicts', taskId],
     queryFn: async () => {
-      if (!taskId) return { hasConflicts: false, conflictingFiles: [], rebaseInProgress: false, mergeInProgress: false };
+      if (!taskId)
+        return {
+          hasConflicts: false,
+          conflictingFiles: [],
+          rebaseInProgress: false,
+          mergeInProgress: false,
+        };
       return api.conflicts.getStatus(taskId);
     },
     enabled: !!taskId,
@@ -50,12 +56,16 @@ export function useFileConflict(taskId: string | undefined, filePath: string | u
 export function useResolveConflict() {
   const queryClient = useQueryClient();
 
-  return useMutation<ResolveResult, Error, {
-    taskId: string;
-    filePath: string;
-    resolution: 'ours' | 'theirs' | 'manual';
-    manualContent?: string;
-  }>({
+  return useMutation<
+    ResolveResult,
+    Error,
+    {
+      taskId: string;
+      filePath: string;
+      resolution: 'ours' | 'theirs' | 'manual';
+      manualContent?: string;
+    }
+  >({
     mutationFn: async ({ taskId, filePath, resolution, manualContent }) => {
       return api.conflicts.resolve(taskId, filePath, resolution, manualContent);
     },
@@ -72,7 +82,7 @@ export function useResolveConflict() {
 export function useAbortConflict() {
   const queryClient = useQueryClient();
 
-  return useMutation<{ success: boolean }, Error, string>({
+  return useMutation<{ aborted: boolean }, Error, string>({
     mutationFn: (taskId) => api.conflicts.abort(taskId),
     onSuccess: (_data, taskId) => {
       queryClient.invalidateQueries({ queryKey: ['conflicts', taskId] });
@@ -87,7 +97,11 @@ export function useAbortConflict() {
 export function useContinueConflict() {
   const queryClient = useQueryClient();
 
-  return useMutation<{ success: boolean; error?: string }, Error, { taskId: string; message?: string }>({
+  return useMutation<
+    { success: boolean; error?: string },
+    Error,
+    { taskId: string; message?: string }
+  >({
     mutationFn: ({ taskId, message }) => api.conflicts.continue(taskId, message),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['conflicts', variables.taskId] });
