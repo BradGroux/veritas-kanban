@@ -41,13 +41,13 @@ export function ArchiveSuggestionBanner() {
           <div
             key={suggestion.sprint}
             className={cn(
-              'flex items-center justify-between gap-4 px-4 py-3 rounded-lg',
+              'flex flex-wrap items-center justify-between gap-4 px-4 py-3 rounded-lg',
               'bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400'
             )}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
               <CheckCircle className="h-5 w-5 flex-shrink-0" />
-              <div>
+              <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                 <p className="font-medium">Sprint "{suggestion.sprint}" is complete!</p>
                 <p className="text-sm opacity-80">
                   All {suggestion.taskCount} task{suggestion.taskCount !== 1 ? 's' : ''} are done.
@@ -56,7 +56,7 @@ export function ArchiveSuggestionBanner() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex max-w-full flex-wrap items-center gap-2 flex-shrink-0">
               <Button
                 variant="outline"
                 size="sm"
