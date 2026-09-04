@@ -4,10 +4,17 @@ import { bypassAuth, cleanupRoutes } from './helpers/auth';
 for (const theme of ['light', 'dark']) {
   test(`Create Task uses bounded shared form geometry in ${theme}`, async ({ page }) => {
     await bypassAuth(page);
-    await page.addInitScript((theme) => localStorage.setItem('veritas-kanban-theme', theme), theme);
+    await page.addInitScript((theme) => {
+      localStorage.setItem('veritas-kanban-theme', theme);
+      Object.defineProperty(window, 'veritasDesktop', {
+        configurable: true,
+        value: { onMenuCommand: () => () => undefined },
+      });
+    }, theme);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 900, height: 480 });
     await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-client', 'desktop');
     await page.evaluate(() => (document.documentElement.style.fontSize = '20px'));
     const opener = page.getByRole('button', { name: 'New Task', exact: true });
     await opener.click();
