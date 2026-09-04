@@ -530,9 +530,10 @@ async function exercise(state, mode, shot) {
     await app.close();
     app = undefined;
     await launch();
-    await expect
-      .poll(() => page.evaluate(() => [innerWidth, innerHeight]))
-      .toEqual([mode.width, mode.height]);
+    // The hosted macOS window manager may restore a constrained prior width
+    // after a process relaunch. Re-establish this matrix entry's content size
+    // before checking the renderer state that the relaunch is meant to prove.
+    await resize(mode.width, mode.height);
     await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', mode.theme);
     await expect(
       page.getByRole('heading', { name: `Native acceptance ${mode.id}`, exact: true })
