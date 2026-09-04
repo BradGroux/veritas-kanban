@@ -21,6 +21,10 @@ iOS uses Safari's Add to Home Screen flow instead of the browser install prompt.
 
 Chrome shows the install prompt only when the manifest and service worker are reachable from the current origin.
 
+## Mobile Board Navigation
+
+Home returns to the top of the board page. Board jumps directly to the task columns, leaving the first column below the sticky toolbar. The jump uses the toolbar's current rendered height so text-size changes do not obscure the column heading.
+
 ## Offline Behavior
 
 The service worker caches only the static app shell, manifest, icons, and same-origin static assets. It does not cache `/api` responses, WebSocket traffic, task data, work products, tokens, comments, or mutation responses.
