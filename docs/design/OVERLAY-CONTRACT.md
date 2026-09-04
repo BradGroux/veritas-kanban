@@ -28,7 +28,7 @@ Line numbers identify the audited opening and may move during migration. A share
 | [TemplateEditorDialog.tsx](../../web/src/components/templates/TemplateEditorDialog.tsx)           |          188 | authoring        | Shared primitive adopted; runtime acceptance pending |
 | [TemplatesPage.tsx](../../web/src/components/templates/TemplatesPage.tsx)                         |          274 | confirm          | Shared primitive adopted; runtime acceptance pending |
 | [TemplatesPage.tsx](../../web/src/components/templates/TemplatesPage.tsx)                         |          298 | form             | Shared primitive adopted; runtime acceptance pending |
-| [SearchDialog.tsx](../../web/src/components/search/SearchDialog.tsx)                              |          282 | authoring        | Migration pending; migrate with nested consumers     |
+| [SearchDialog.tsx](../../web/src/components/search/SearchDialog.tsx)                              |          282 | authoring        | Shared geometry; browser/native passed #1440         |
 | [AdmissionQueuePanel.tsx](../../web/src/components/digest/AdmissionQueuePanel.tsx)                |          315 | form             | Migration pending                                    |
 | [WorkflowStartDialog.tsx](../../web/src/components/workflows/WorkflowStartDialog.tsx)             |           71 | form             | Migration pending; migrate with nested consumers     |
 | [CreateTaskDialog.tsx](../../web/src/components/task/CreateTaskDialog.tsx)                        |          267 | form             | Migration pending; migrate with nested consumers     |
@@ -48,7 +48,7 @@ Line numbers identify the audited opening and may move during migration. A share
 | [SquadChatPanel.tsx](../../web/src/components/chat/SquadChatPanel.tsx)                            |          522 | chat             | Migration pending; migrate with nested consumers     |
 | [ReviewPanel.tsx](../../web/src/components/task/ReviewPanel.tsx)                                  |          212 | form             | Migration pending                                    |
 | [ArtifactPreviewModal.tsx](../../web/src/components/task/ArtifactPreviewModal.tsx)                |          112 | authoring        | Migration pending                                    |
-| [CommandPalette.tsx](../../web/src/components/layout/CommandPalette.tsx)                          |          293 | form             | Migration pending; migrate with nested consumers     |
+| [CommandPalette.tsx](../../web/src/components/layout/CommandPalette.tsx)                          |          293 | form             | Shared geometry; browser/native passed #1440         |
 | [SettingsDialog.tsx](../../web/src/components/settings/SettingsDialog.tsx)                        |          529 | authoring        | Shared geometry; browser/native passed #1436         |
 | [SettingsDialog.tsx](../../web/src/components/settings/SettingsDialog.tsx)                        |          739 | confirm          | Shared geometry; browser/native passed #1436         |
 | [PRDialog.tsx](../../web/src/components/task/git/PRDialog.tsx)                                    |           36 | authoring        | Migration pending                                    |
@@ -57,7 +57,7 @@ Line numbers identify the audited opening and may move during migration. A share
 | [WorktreeStatus.tsx](../../web/src/components/task/git/WorktreeStatus.tsx)                        |          374 | form             | Migration pending                                    |
 | [WorktreeStatus.tsx](../../web/src/components/task/git/WorktreeStatus.tsx)                        |          404 | confirm          | Migration pending                                    |
 | [TaskDetailsTab.tsx](../../web/src/components/task/detail/TaskDetailsTab.tsx)                     |          254 | confirm          | Migration pending                                    |
-| [KeyboardShortcutsDialog.tsx](../../web/src/components/layout/KeyboardShortcutsDialog.tsx)        |           49 | form             | Migration pending                                    |
+| [KeyboardShortcutsDialog.tsx](../../web/src/components/layout/KeyboardShortcutsDialog.tsx)        |           49 | form             | Shared geometry; browser/native passed #1440         |
 | [ArchiveSidebar.tsx](../../web/src/components/layout/ArchiveSidebar.tsx)                          |          240 | utility          | Migration pending                                    |
 | [MobileShell.tsx](../../web/src/components/layout/MobileShell.tsx)                                |          129 | utility          | Migration pending                                    |
 | [ApplyTemplateDialog.tsx](../../web/src/components/task/ApplyTemplateDialog.tsx)                  |          305 | authoring        | Migration pending                                    |

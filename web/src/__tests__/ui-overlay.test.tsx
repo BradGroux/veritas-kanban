@@ -1,12 +1,95 @@
-import { StrictMode, useState } from 'react';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { StrictMode, useEffect, useState } from 'react';
+import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { UiModal, UiDrawer, OVERLAY_VARIANTS, OverlayFooter } from '@/components/ui/UiOverlay';
+import {
+  UiModal,
+  UiDrawer,
+  OVERLAY_VARIANTS,
+  OverlayFooter,
+  useOverlayHandoff,
+} from '@/components/ui/UiOverlay';
 import { renderWithProviders } from './test-utils';
 
 afterEach(cleanup);
 
 describe('shared popout contract', () => {
+  it('cancels queued handoffs on reopen and unmount, and executes only the latest selection', () => {
+    const frames: FrameRequestCallback[] = [];
+    const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    try {
+      const execute = vi.fn();
+      const { result, rerender, unmount } = renderHook(
+        ({ opened }) => useOverlayHandoff(opened, execute),
+        { initialProps: { opened: true } }
+      );
+      act(() => result.current.queue('old'));
+      rerender({ opened: false });
+      act(() => result.current.onExitTransitionEnd());
+      rerender({ opened: true });
+      act(() => frames.shift()?.(0));
+      expect(execute).not.toHaveBeenCalled();
+      act(() => {
+        result.current.queue('new');
+        result.current.queue('latest');
+      });
+      rerender({ opened: false });
+      act(() => result.current.onExitTransitionEnd());
+      act(() => frames.shift()?.(0));
+      expect(execute).toHaveBeenCalledExactlyOnceWith('latest');
+      rerender({ opened: true });
+      act(() => result.current.queue('unmounted'));
+      rerender({ opened: false });
+      act(() => result.current.onExitTransitionEnd());
+      unmount();
+      act(() => frames.shift()?.(0));
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      frameSpy.mockRestore();
+    }
+  });
+  it('keeps the first opener across effect replay and captures a new opener on reopen', async () => {
+    function Dialog({ close }: { close: () => void }) {
+      useEffect(() => {
+        document.getElementById('background-heading')?.focus();
+      }, []);
+      return (
+        <UiModal opened onClose={close} title="Replay">
+          <button onClick={close}>Close replay</button>
+        </UiModal>
+      );
+    }
+    function Probe() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <h1 id="background-heading" tabIndex={-1}>
+            Background
+          </h1>
+          <button onClick={() => setOpen(true)}>First opener</button>
+          <button onClick={() => setOpen(true)}>Second opener</button>
+          {open && <Dialog close={() => setOpen(false)} />}
+        </>
+      );
+    }
+    renderWithProviders(
+      <StrictMode>
+        <Probe />
+      </StrictMode>
+    );
+    for (const name of ['First opener', 'Second opener']) {
+      const trigger = screen.getByRole('button', { name });
+      vi.spyOn(trigger, 'getClientRects').mockReturnValue([
+        new DOMRect(0, 0, 100, 32),
+      ] as unknown as DOMRectList);
+      trigger.focus();
+      fireEvent.click(trigger);
+      fireEvent.click(await screen.findByRole('button', { name: 'Close replay' }));
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+    }
+  });
   it('restores the outer opener when a nested subtree unmounts in StrictMode', async () => {
     function Probe() {
       const [open, setOpen] = useState(false);

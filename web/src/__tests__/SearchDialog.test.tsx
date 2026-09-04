@@ -4,6 +4,21 @@ import userEvent from '@testing-library/user-event';
 import { SearchDialog, extractTaskId } from '@/components/search';
 import { api } from '@/lib/api';
 import { renderWithProviders } from './test-utils';
+import { useState, type ComponentProps } from 'react';
+
+function ControlledSearch(props: ComponentProps<typeof SearchDialog>) {
+  const [open, setOpen] = useState(props.open);
+  return (
+    <SearchDialog
+      {...props}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        props.onOpenChange(next);
+      }}
+    />
+  );
+}
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -130,13 +145,15 @@ describe('SearchDialog', () => {
       ],
     });
 
-    renderWithProviders(<SearchDialog open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />);
+    renderWithProviders(
+      <ControlledSearch open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />
+    );
 
     await userEvent.type(screen.getByPlaceholderText(/search tasks/i), 'task');
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
     fireEvent.click(await screen.findByText('Build search UI'));
 
-    expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123', undefined);
+    await waitFor(() => expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123', undefined));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -169,17 +186,21 @@ describe('SearchDialog', () => {
       ],
     });
 
-    renderWithProviders(<SearchDialog open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />);
+    renderWithProviders(
+      <ControlledSearch open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />
+    );
 
     await userEvent.type(screen.getByPlaceholderText(/search tasks/i), 'timeline');
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
     fireEvent.click(await screen.findByText('Open run timeline'));
 
-    expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123', {
-      tab: 'timeline',
-      timelineAttemptId: 'attempt-1',
-      timelineEventId: 'evt-1',
-    });
+    await waitFor(() =>
+      expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123', {
+        tab: 'timeline',
+        timelineAttemptId: 'attempt-1',
+        timelineEventId: 'evt-1',
+      })
+    );
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -222,14 +243,14 @@ describe('SearchDialog', () => {
     });
 
     renderWithProviders(
-      <SearchDialog open onOpenChange={onOpenChange} onSettingsOpen={onSettingsOpen} />
+      <ControlledSearch open onOpenChange={onOpenChange} onSettingsOpen={onSettingsOpen} />
     );
 
     await userEvent.type(screen.getByPlaceholderText(/search tasks/i), 'security');
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
     fireEvent.click(await screen.findByText('Security Settings'));
 
-    expect(onSettingsOpen).toHaveBeenCalledWith('security');
+    await waitFor(() => expect(onSettingsOpen).toHaveBeenCalledWith('security'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

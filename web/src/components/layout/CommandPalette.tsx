@@ -8,17 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import {
-  Box,
-  Group,
-  Kbd,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-  TextInput,
-  UnstyledButton,
-} from '@mantine/core';
+import { Box, Group, Kbd, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useView } from '@/contexts/ViewContext';
 import {
@@ -51,6 +41,7 @@ import {
   type CommandIcon,
 } from '@/lib/command-registry';
 import type { ViewIcon } from '@/lib/views';
+import { OverlayFooter, UiModal as Modal, useOverlayHandoff } from '@/components/ui/UiOverlay';
 
 const SearchDialog = lazy(() =>
   import('@/components/search').then((mod) => ({
@@ -243,15 +234,12 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const runCommand = useCallback(
-    (cmd: CommandItem) => {
-      if (cmd.disabledReason) return;
-      setOpen(false);
-      // Small delay so dialog closes before action fires
-      setTimeout(() => executeCommand(cmd), 50);
-    },
-    [executeCommand]
-  );
+  const handoff = useOverlayHandoff(open, executeCommand);
+  const runCommand = (cmd: CommandItem) => {
+    if (cmd.disabledReason) return;
+    handoff.queue(cmd);
+    setOpen(false);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -302,58 +290,25 @@ export function CommandPalette() {
       <Modal
         opened={open}
         onClose={() => setOpen(false)}
-        size={680}
-        padding={0}
-        title={<span className="sr-only">Command palette</span>}
-        withCloseButton={false}
-        classNames={{
-          content: 'overflow-hidden border border-border shadow-2xl',
-          header: 'sr-only',
-          body: 'p-0',
-        }}
+        variant="form"
+        compound
+        title="Command palette"
+        onExitTransitionEnd={handoff.onExitTransitionEnd}
       >
         <Box
           onKeyDown={handleKeyDown}
-          className="flex h-[min(34rem,calc(100dvh-6rem))] min-h-0 flex-col"
+          className="flex min-h-0 flex-1 flex-col"
+          style={{ height: '34rem' }}
           data-testid="command-palette-surface"
         >
           <Text component="p" className="sr-only">
             Search and run board actions, navigation commands, and shortcuts.
           </Text>
 
-          <Box px="md" py="sm" className="border-b bg-muted/15">
-            <Group justify="space-between" gap="sm" mb={8} wrap="nowrap">
-              <Group gap="sm" wrap="nowrap">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary text-white shadow-sm">
-                  <Keyboard className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <div>
-                  <Text
-                    component="p"
-                    size="xs"
-                    fw={700}
-                    tt="uppercase"
-                    c="dimmed"
-                    className="tracking-[0.12em]"
-                  >
-                    Command center
-                  </Text>
-                  <Text component="p" size="sm" fw={600}>
-                    Run a command
-                  </Text>
-                </div>
-              </Group>
-              <Group gap={6} wrap="nowrap">
-                <Text size="xs" c="dimmed" className="hidden sm:block">
-                  Close
-                </Text>
-                <Kbd className="h-5 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
-                  ESC
-                </Kbd>
-              </Group>
-            </Group>
+          <Box className="shrink-0 border-b bg-muted/15 p-[var(--vk-overlay-inset)]">
             <TextInput
               ref={inputRef}
+              data-autofocus
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -382,8 +337,8 @@ export function CommandPalette() {
               gap="sm"
               px="md"
               py={8}
-              wrap="nowrap"
-              className="border-b bg-primary/5"
+              wrap="wrap"
+              className="shrink-0 border-b bg-primary/5"
               data-testid="active-command-summary"
             >
               <Group gap="xs" wrap="nowrap" className="min-w-0">
@@ -403,123 +358,110 @@ export function CommandPalette() {
             </Group>
           )}
 
-          <Box className="relative min-h-0 flex-1">
-            <ScrollArea
-              viewportRef={listRef}
-              h="100%"
-              px="sm"
-              py="xs"
-              type="always"
-              scrollbarSize={8}
-              viewportProps={{
-                'aria-label': 'Available commands',
-                onScroll: updateScrollCues,
-              }}
-            >
-              {visibleCommands.length === 0 ? (
-                <Text ta="center" py="xl" size="sm" c="dimmed">
-                  No commands found
-                </Text>
-              ) : (
-                grouped.map((group) => (
-                  <Box key={group.category} pb={4}>
-                    <Group justify="space-between" gap="xs" px="xs" py={6} wrap="nowrap">
-                      <Text
-                        size="xs"
-                        fw={700}
-                        c="dimmed"
-                        tt="uppercase"
-                        className="tracking-[0.12em]"
-                      >
-                        {group.category}
-                      </Text>
-                      <Text size="xs" c="dimmed" aria-hidden="true">
-                        {group.items.length}
-                      </Text>
-                    </Group>
-                    <Stack gap={2}>
-                      {group.items.map((cmd) => {
-                        flatIndex++;
-                        const idx = flatIndex;
-                        const isSelected = idx === selectedIndex;
-                        const disabledDescriptionId = cmd.disabledReason
-                          ? `command-disabled-${cmd.id}`
-                          : undefined;
-                        return (
-                          <UnstyledButton
-                            key={cmd.id}
-                            id={`command-${cmd.id}`}
-                            data-index={idx}
-                            data-command-id={cmd.id}
-                            data-selected={isSelected || undefined}
-                            aria-disabled={Boolean(cmd.disabledReason)}
-                            aria-describedby={disabledDescriptionId}
+          <div
+            ref={listRef}
+            className="vk-overlay-scroll"
+            aria-label="Available commands"
+            onScroll={updateScrollCues}
+          >
+            {visibleCommands.length === 0 ? (
+              <Text ta="center" py="xl" size="sm" c="dimmed">
+                No commands found
+              </Text>
+            ) : (
+              grouped.map((group) => (
+                <Box key={group.category} pb={4}>
+                  <Group justify="space-between" gap="xs" px="xs" py={6} wrap="nowrap">
+                    <Text
+                      size="xs"
+                      fw={700}
+                      c="dimmed"
+                      tt="uppercase"
+                      className="tracking-[0.12em]"
+                    >
+                      {group.category}
+                    </Text>
+                    <Text size="xs" c="dimmed" aria-hidden="true">
+                      {group.items.length}
+                    </Text>
+                  </Group>
+                  <Stack gap={2}>
+                    {group.items.map((cmd) => {
+                      flatIndex++;
+                      const idx = flatIndex;
+                      const isSelected = idx === selectedIndex;
+                      const disabledDescriptionId = cmd.disabledReason
+                        ? `command-disabled-${cmd.id}`
+                        : undefined;
+                      return (
+                        <UnstyledButton
+                          key={cmd.id}
+                          px="sm"
+                          py="xs"
+                          id={`command-${cmd.id}`}
+                          data-index={idx}
+                          data-command-id={cmd.id}
+                          data-selected={isSelected || undefined}
+                          aria-disabled={Boolean(cmd.disabledReason)}
+                          aria-describedby={disabledDescriptionId}
+                          className={cn(
+                            'flex min-h-11 w-full items-center gap-3 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                            cmd.disabledReason
+                              ? 'cursor-not-allowed border border-dashed border-border/70 bg-muted/15 text-muted-foreground'
+                              : isSelected
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'text-foreground hover:bg-muted/50'
+                          )}
+                          style={
+                            isSelected && !cmd.disabledReason
+                              ? { backgroundColor: 'var(--primary)', color: 'white' }
+                              : undefined
+                          }
+                          onClick={() => runCommand(cmd)}
+                          onFocus={() => !cmd.disabledReason && setSelectedIndex(idx)}
+                          onMouseEnter={() => !cmd.disabledReason && setSelectedIndex(idx)}
+                        >
+                          <span
                             className={cn(
-                              'flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                              cmd.disabledReason
-                                ? 'cursor-not-allowed border border-dashed border-border/70 bg-muted/15 text-muted-foreground'
-                                : isSelected
-                                  ? 'bg-primary text-white shadow-sm'
-                                  : 'text-foreground hover:bg-muted/50'
+                              'shrink-0',
+                              isSelected ? 'text-white' : 'text-muted-foreground'
                             )}
-                            style={
-                              isSelected && !cmd.disabledReason
-                                ? { backgroundColor: 'var(--primary)', color: 'white' }
-                                : undefined
-                            }
-                            onClick={() => runCommand(cmd)}
-                            onFocus={() => !cmd.disabledReason && setSelectedIndex(idx)}
-                            onMouseEnter={() => !cmd.disabledReason && setSelectedIndex(idx)}
                           >
-                            <span
+                            {cmd.iconNode}
+                          </span>
+                          <span className="min-w-0 flex-1 text-left">
+                            <span className="block">{cmd.label}</span>
+                            {cmd.disabledReason && (
+                              <span
+                                id={disabledDescriptionId}
+                                className="mt-0.5 block text-[11px] leading-4 text-muted-foreground/80"
+                              >
+                                {cmd.disabledReason}
+                              </span>
+                            )}
+                          </span>
+                          {cmd.shortcut && (
+                            <Kbd
                               className={cn(
-                                'shrink-0',
-                                isSelected ? 'text-white' : 'text-muted-foreground'
+                                'ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-mono text-[10px] sm:inline-flex',
+                                isSelected
+                                  ? 'border-white/30 bg-white/15 text-white'
+                                  : 'bg-muted text-muted-foreground'
                               )}
                             >
-                              {cmd.iconNode}
-                            </span>
-                            <span className="min-w-0 flex-1 text-left">
-                              <span className="block">{cmd.label}</span>
-                              {cmd.disabledReason && (
-                                <span
-                                  id={disabledDescriptionId}
-                                  className="mt-0.5 block text-[11px] leading-4 text-muted-foreground/80"
-                                >
-                                  {cmd.disabledReason}
-                                </span>
-                              )}
-                            </span>
-                            {cmd.shortcut && (
-                              <Kbd
-                                className={cn(
-                                  'ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-mono text-[10px] sm:inline-flex',
-                                  isSelected
-                                    ? 'border-white/30 bg-white/15 text-white'
-                                    : 'bg-muted text-muted-foreground'
-                                )}
-                              >
-                                {cmd.shortcut}
-                              </Kbd>
-                            )}
-                          </UnstyledButton>
-                        );
-                      })}
-                    </Stack>
-                  </Box>
-                ))
-              )}
-            </ScrollArea>
-          </Box>
+                              {cmd.shortcut}
+                            </Kbd>
+                          )}
+                        </UnstyledButton>
+                      );
+                    })}
+                  </Stack>
+                </Box>
+              ))
+            )}
+          </div>
 
-          <Group
-            justify="space-between"
-            gap="xs"
-            px="md"
-            py={8}
-            wrap="nowrap"
-            className="shrink-0 border-t bg-muted/20"
-          >
+          <OverlayFooter wrap="wrap" className="!justify-between">
             <Text size="xs" c="dimmed">
               {query.trim()
                 ? `${visibleCommands.length} result${visibleCommands.length === 1 ? '' : 's'}`
@@ -544,7 +486,7 @@ export function CommandPalette() {
                 Run
               </Text>
             </Group>
-          </Group>
+          </OverlayFooter>
         </Box>
       </Modal>
       {searchMounted && (

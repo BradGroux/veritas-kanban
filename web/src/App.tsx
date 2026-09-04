@@ -4,6 +4,7 @@ import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/toaster';
 import { KeyboardProvider } from './hooks/useKeyboard';
 import { CommandPalette } from './components/layout/CommandPalette';
+import { KeyboardShortcutsDialog } from './components/layout/KeyboardShortcutsDialog';
 import { BulkActionsProvider } from './hooks/useBulkActions';
 import { useTaskSync } from './hooks/useTaskSync';
 import { TaskConfigProvider } from './contexts/TaskConfigContext';
@@ -169,6 +170,7 @@ function DesktopAwareAppShell({
       </div>
       <Toaster />
       <CommandPalette />
+      <KeyboardShortcutsDialog />
       {!isDesktopClient && !bottomPanel && (
         <Suspense fallback={null}>
           <FloatingChat />
