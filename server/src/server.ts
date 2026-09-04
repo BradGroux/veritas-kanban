@@ -85,6 +85,7 @@ import {
 } from './services/websocket-permissions.js';
 import { closeWebSocketSafely } from './utils/websocket-close.js';
 import { startAfterInitialization } from './utils/startup-gate.js';
+import { createServerShutdown } from './utils/server-shutdown.js';
 import { getCommunicationAdapterService } from './services/communication-adapter-service.js';
 import { getRunEventJournalService } from './services/run-event-journal-service.js';
 import { getToolControlPlaneService } from './services/tool-control-plane-service.js';
@@ -95,6 +96,7 @@ import { createAgentProgressWatchdogActionExecutor } from './services/progress-w
 
 const log = createLogger('server');
 let progressWatchdogCoordinator: ProgressWatchdogCoordinatorService | undefined;
+let shutdownServer: (() => Promise<void>) | undefined;
 
 // ============================================
 // Process Error Handlers (register early)
@@ -1218,11 +1220,8 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
 // Export for use in other modules
 export { wss, chatSubscriptions };
 
-// Graceful shutdown handler
-async function gracefulShutdown(signal: string) {
-  log.info({ signal }, 'Shutting down gracefully');
-
-  // 1. Stop heartbeat interval and close WebSocket connections
+async function closeServerWebSockets(): Promise<void> {
+  // Stop recurring admission and heartbeat work while HTTP drains.
   clearInterval(heartbeatInterval);
   if (credentialReconciliationInterval) {
     clearInterval(credentialReconciliationInterval);
@@ -1242,27 +1241,30 @@ async function gracefulShutdown(signal: string) {
     closeWebSocketSafely(client, 1001, 'Server going away');
   });
 
-  // Close the WebSocket server itself (stop accepting new connections)
-  // Timeout: if clients don't close within 3s, continue shutdown
-  await Promise.race([
-    new Promise<void>((resolve) => {
-      wss.close((err) => {
-        if (err) log.error({ err }, 'Error closing WebSocket server');
-        else log.info('WebSocket server closed');
-        resolve();
-      });
-    }),
-    new Promise<void>((resolve) =>
-      setTimeout(() => {
-        log.warn('WebSocket server close timed out after 3s — continuing shutdown');
-        resolve();
-      }, 3000)
-    ),
-  ]);
-
-  // 2. Dispose services (release file watchers, flush buffers)
+  // Upgraded sockets are not drained by HTTP close. Give peers time to
+  // acknowledge, then terminate only those remaining upgraded sockets.
+  const timeout = setTimeout(() => {
+    log.warn('Terminating WebSocket clients still open during shutdown');
+    wss.clients.forEach((client) => client.terminate());
+  }, 3000);
   try {
-    log.info('Disposing services');
+    await new Promise<void>((resolve, reject) => {
+      wss.close((err) => {
+        if (err) reject(err);
+        else {
+          log.info('WebSocket server closed');
+          resolve();
+        }
+      });
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function disposeServerServices(): Promise<void> {
+  try {
+    log.info('HTTP server closed; disposing services');
 
     stopScheduledDeliverablesRunner();
     log.info('Scheduled deliverables runner stopped');
@@ -1275,27 +1277,12 @@ async function gracefulShutdown(signal: string) {
     await getCommunicationAdapterService().shutdown();
     log.info('Communication adapter workers stopped');
 
-    await Promise.race([
-      getToolControlPlaneService().closeAll(),
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          log.warn('Tool control-plane shutdown timed out after 3s');
-          resolve();
-        }, 3000)
-      ),
-    ]);
+    await getToolControlPlaneService().closeAll();
     log.info('Tool control-plane sessions stopped');
 
-    // Flush pending telemetry writes (timeout: 5s)
-    await Promise.race([
-      getTelemetryService().flush(),
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          log.warn('Telemetry flush timed out after 5s — continuing shutdown');
-          resolve();
-        }, 5000)
-      ),
-    ]);
+    // The shared shutdown deadline bounds this flush. Never dispose storage
+    // while it or tool shutdown is still pending.
+    await getTelemetryService().flush();
     log.info('Telemetry flushed');
 
     // Dispose task service (closes file watchers, clears cache)
@@ -1320,19 +1307,29 @@ async function gracefulShutdown(signal: string) {
     }
   } catch (err) {
     log.error({ err }, 'Error during service disposal');
+    throw err;
   }
+}
 
-  // 3. Close HTTP server last
-  server.close(() => {
-    log.info('HTTP server closed');
-    process.exit(0);
-  });
-
-  // Force exit after 10 seconds
-  setTimeout(() => {
-    log.fatal('Forced shutdown after timeout');
-    process.exit(1);
-  }, 10000);
+async function gracefulShutdown(signal: string): Promise<void> {
+  if (!shutdownServer) {
+    log.info({ signal }, 'Shutting down gracefully');
+    shutdownServer = createServerShutdown({
+      server,
+      closeWebSockets: closeServerWebSockets,
+      disposeServices: disposeServerServices,
+    });
+  }
+  if (signal === 'uncaughtException' || signal === 'unhandledRejection') process.exitCode = 1;
+  return shutdownServer().then(
+    () => {
+      process.exit(process.exitCode ? 1 : 0);
+    },
+    (err) => {
+      log.fatal({ err }, 'Graceful shutdown failed');
+      process.exit(1);
+    }
+  );
 }
 
 // Register shutdown handlers
