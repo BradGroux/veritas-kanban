@@ -327,8 +327,8 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                           <Code>{'{{author}}'}</Code> are replaced when creating the task
                         </li>
                         <li>
-                          <strong>Custom variables</strong> such as <Code>{'{{bugId}}'}</Code>{' '}
-                          prompt you for values
+                          <strong>Custom variables</strong> such as{' '}
+                          <Code>{'{{custom:bugId}}'}</Code> prompt you for values
                         </li>
                         <li>
                           <strong>Blueprint templates</strong> create multiple linked tasks with
