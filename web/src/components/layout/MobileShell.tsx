@@ -7,14 +7,23 @@ import { useIdentity } from '@/hooks/useIdentity';
 import { useView } from '@/contexts/ViewContext';
 
 function scrollToBoardColumns() {
-  window.setTimeout(() => {
-    document.getElementById('mobile-board-columns')?.scrollIntoView({ block: 'start' });
-  }, 0);
+  const columns = document.getElementById('mobile-board-columns');
+  if (!columns) return false;
+  // The sticky toolbar remains over the document after scrolling. Measure it
+  // at activation so enlarged text and responsive chrome use their real size.
+  const toolbarHeight =
+    document.querySelector('.desktop-app-header')?.getBoundingClientRect().height ?? 0;
+  window.scrollTo({
+    top: Math.max(0, window.scrollY + columns.getBoundingClientRect().top - toolbarHeight),
+    behavior: 'instant',
+  });
+  return true;
 }
 
 export function MobileShell({ showChat = true }: { showChat?: boolean }) {
   const [inboxOpen, setInboxOpen] = useState(false);
   const navigationRef = useRef<HTMLDivElement>(null);
+  const [boardJumpRequested, setBoardJumpRequested] = useState(false);
   const { authContext, hasPermission } = useIdentity();
   const { navigateToTask, setView, view } = useView();
   const clientMode = authContext?.clientMode;
@@ -39,14 +48,42 @@ export function MobileShell({ showChat = true }: { showChat?: boolean }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!boardJumpRequested) return;
+    let frame = 0;
+    const attemptJump = () => {
+      if (view !== 'board' || scrollToBoardColumns()) {
+        observer.disconnect();
+        setBoardJumpRequested(false);
+      }
+    };
+    const scheduleJump = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(attemptJump);
+    };
+    // Route code and task data may both arrive after the navigation click.
+    // Observe the content mount instead of guessing a loading delay.
+    const observer = new MutationObserver(scheduleJump);
+    observer.observe(document.getElementById('main-content') ?? document.body, {
+      childList: true,
+      subtree: true,
+    });
+    scheduleJump();
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [boardJumpRequested, view]);
+
   const openBoardHome = () => {
+    setBoardJumpRequested(false);
     setView('board');
     window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
   };
 
   const openBoardColumns = () => {
     setView('board');
-    scrollToBoardColumns();
+    setBoardJumpRequested(true);
   };
 
   const openSettingsLite = () => {
