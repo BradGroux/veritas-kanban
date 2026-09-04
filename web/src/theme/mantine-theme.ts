@@ -155,6 +155,19 @@ export const veritasMantineTheme = createTheme({
         },
       },
     },
+    Tooltip: {
+      defaultProps: {
+        // Portaled hints must not expand the mobile document while positioning.
+        floatingStrategy: 'fixed',
+      },
+      styles: {
+        tooltip: {
+          maxWidth: 'calc(100vw - 1rem)',
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+        },
+      },
+    },
     TextInput: {
       defaultProps: {
         radius: 'sm',
