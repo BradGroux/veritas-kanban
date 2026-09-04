@@ -12,6 +12,10 @@ The report hashes the entire bundle, including server/web resources and framewor
 
 `pnpm desktop:ui:verify <evidence.json> <candidate.app>` rehashes the package and screenshots. It rejects incomplete/duplicate/failed entries, unbound builds, dirty candidates, wrong commits/versions/packages, stale reports, missing native environment, cropped or modified PNGs, transparent overlays, and shell geometry failures before and after interactions. It is a native-evidence verifier, not yet the release workflow's publication gate.
 
+Primary routes also record heading, Back, header, and content rectangles. Checks enforce the shared typography, icon-only Back sizing/placement, route-title semantics, and cross-route alignment. Overlay parts record their actual computed padding against the shared rem-based inset contract, including intentionally unpadded compound/task containers. The runner's final status includes structural verification; an unexpected viewport or invalid recorded layout cannot remain a passing run merely because its clicks succeeded.
+
+After the normal matrix, the disposable renderer receives six deliberately injected faults: blank shell space, a clipped modal, a shifted heading, a board-only rail control on Activity, wrong popout padding, and a visible New Task button with its handler removed. Each fault must be detected by the corresponding geometry or behavioral assertion, retains a native screenshot, and is removed by reloading before the next fault. These expected-failure probes are separate from the ordinary matrix and cannot waive an ordinary failed state. Missing fault probes fail verification.
+
 ## Development checkpoint
 
 The first complete development matrix reproduced Session menu Escape dismissal failure in both themes and both native window sizes. This is tracked separately in #1451; the runner must not waive it. Preview capture timing also exposed a harness defect: DOM content and geometry could pass while the native screenshot caught a transparent opening modal. Opacity measurement and paint synchronization address that defect, and the normal/minimum light-theme preview captures were visually rechecked.
@@ -22,8 +26,7 @@ These diagnostic runs use an unsigned 6.1.6 package built from `afb447156fd77d24
 
 ## Remaining acceptance work
 
-- Resolve observed product failures, including #1451, and complete a passing full native run.
-- Strengthen primary-heading/back alignment and overlay inset assertions, with seeded-failure coverage for those contracts and dead/context-invalid controls.
+- Integrate the Session menu fix from #1453 and rerun the newly strengthened matrix. Its preceding 144-state clean candidate passed, but predates the new geometry fields and seeded renderer requirements.
 - Bind refreshed maintained screenshots/GIFs to their capture candidate and reject stale media. Do not relabel the existing browser captures as native evidence.
 - Integrate mandatory evidence verification into release validation and signed packaging before any upload. The current workflow uses `electron-builder --publish always`; adding a check after that command would be too late.
 - Update release and issue templates to distinguish browser, packaged candidate, installed app, signing, documentation, and publication boundaries.

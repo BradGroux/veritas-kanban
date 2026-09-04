@@ -2,8 +2,17 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readdir, readlink, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { overlayInsetFailures, pageHeaderFailures } from './layout-contract.mjs';
 
 export const schema = 'packaged-macos-ui-conformance/v1';
+export const seededCases = [
+  ['shell-blank', 'shell does not fill viewport'],
+  ['clipped-modal', 'clipped overlay'],
+  ['heading-offset', 'inconsistent primary heading/Back geometry'],
+  ['context-invalid-header', 'context-invalid board rail control'],
+  ['overlay-padding', 'inconsistent overlay header padding'],
+  ['dead-header', 'dead header control'],
+];
 export const routes = [
   ['activity', '/activity', 'Activity'],
   ['backlog', '/backlog', 'Backlog'],
@@ -75,6 +84,48 @@ export function requiresOverlay(id) {
   );
 }
 
+// Expected production parts are keyed by the exercised surface, not whatever CSS
+// selectors happen to survive a regression in that surface.
+export function requiredOverlayParts(id) {
+  const state = id.split('/')[1];
+  if (['task-chat', 'task-drawer', 'task-expanded'].includes(state))
+    return ['task-header', 'task-body'];
+  if (state?.startsWith('settings-')) return ['header', 'body', 'scroll'];
+  if (state === 'search') return ['header', 'body'];
+  if (requiresOverlay(id) || ['clipped-modal', 'overlay-padding'].includes(state))
+    return ['header', 'body', 'scroll', 'footer'];
+  return [];
+}
+
+export function seededObservedFailures(seed) {
+  if (!seed?.geometry) return ['missing seeded geometry'];
+  const errors = geometryFailures(seed.geometry);
+  if (['seed/heading-offset', 'seed/context-invalid-header'].includes(seed.id))
+    errors.push(
+      ...pageHeaderFailures(
+        seed.geometry.primaryHeader,
+        seed.geometry.rem,
+        'Activity',
+        seed.geometry
+      )
+    );
+  if (seed.id === 'seed/dead-header') {
+    const action = seed.behavior;
+    if (
+      action?.control === 'New Task' &&
+      action.visibleBefore === true &&
+      action.enabledBefore === true &&
+      action.dialogVisibleBefore === false &&
+      action.clickCompleted === true &&
+      action.dialogVisibleAfter === false &&
+      Number.isFinite(action.waitedMs) &&
+      action.waitedMs >= 1000
+    )
+      errors.push('dead header control');
+  }
+  return errors;
+}
+
 export async function fileDigest(file) {
   const hash = createHash('sha256');
   for await (const chunk of createReadStream(file)) hash.update(chunk);
@@ -108,6 +159,7 @@ export async function packageDigest(directory) {
 export function geometryFailures(g) {
   if (!g) return ['missing geometry'];
   const failures = [];
+  if (!Number.isFinite(g.rem) || g.rem <= 0) failures.push('missing root font size');
   const validRect = (r) =>
     [r.x, r.y, r.width, r.height, r.right, r.bottom].every(Number.isFinite) &&
     r.width > 0 &&
@@ -137,6 +189,7 @@ export function geometryFailures(g) {
   )
     failures.push('shell does not fill viewport');
   for (const overlay of g.overlays ?? []) {
+    failures.push(...overlayInsetFailures(overlay, g.rem));
     if (!validRect(overlay) || !Number.isFinite(overlay.overflow))
       failures.push('unmeasured overlay');
     if (!Number.isFinite(overlay.opacity) || overlay.opacity < 0.999 || overlay.opacity > 1)
@@ -191,6 +244,22 @@ export function evidenceFailures(report, expected, now = Date.now()) {
   if (!Number.isFinite(completed) || completed > now || now - completed > 24 * 60 * 60 * 1000)
     errors.push('missing or stale native evidence');
   const entries = report.entries ?? [];
+  const seeds = report.seededFailures ?? [];
+  if (
+    seeds.length !== seededCases.length ||
+    new Set(seeds.map((seed) => seed.id)).size !== seededCases.length
+  )
+    errors.push('missing or duplicate seeded renderer checks');
+  for (const [id, reason] of seededCases) {
+    const seed = seeds.find((entry) => entry.id === `seed/${id}`);
+    if (
+      seed?.status !== 'detected' ||
+      !seed.observedFailures?.includes(reason) ||
+      !seededObservedFailures(seed).includes(reason) ||
+      !seed.screenshot?.path
+    )
+      errors.push(`seed/${id}: injected renderer failure not detected`);
+  }
   if (
     entries.length !== requiredEntries.length ||
     new Set(entries.map((e) => e.id)).size !== requiredEntries.length
@@ -231,12 +300,56 @@ export function evidenceFailures(report, expected, now = Date.now()) {
       errors.push(`${id}: missing native environment`);
     if (requiresOverlay(id) && !entry.geometry?.overlays?.length)
       errors.push(`${id}: missing required overlay`);
+    for (const overlay of entry.geometry?.overlays ?? []) {
+      for (const kind of requiredOverlayParts(id))
+        if (!overlay.parts?.some((part) => part.insetKind === kind))
+          errors.push(`${id}: missing required overlay ${kind}`);
+    }
+    const route = routes.find(([name]) => id.endsWith(`/route-${name}`));
+    if (route)
+      errors.push(
+        ...pageHeaderFailures(
+          entry.geometry?.primaryHeader,
+          entry.geometry?.rem,
+          route[2],
+          entry.geometry
+        ).map((error) => `${id}: ${error}`)
+      );
     errors.push(...geometryFailures(entry.geometry).map((error) => `${id}: ${error}`));
     errors.push(
       ...geometryFailures(entry.completionGeometry).map(
         (error) => `${id}: after interaction: ${error}`
       )
     );
+  }
+  for (const mode of modes) {
+    const headers = routes.map(
+      ([name]) =>
+        entries.find((entry) => entry.id === `${mode.id}/route-${name}`)?.geometry?.primaryHeader
+    );
+    const baseline = headers[0];
+    if (!baseline) continue;
+    for (const header of headers.slice(1)) {
+      if (!header) continue;
+      const values = [
+        [header.header?.y, baseline.header?.y],
+        [header.title?.y, baseline.title?.y],
+      ];
+      if (mode.width === 1700)
+        values.push(
+          [header.header?.height, baseline.header?.height],
+          [header.content?.y, baseline.content?.y]
+        );
+      if (
+        values.some(
+          ([actual, expected]) =>
+            !Number.isFinite(actual) ||
+            !Number.isFinite(expected) ||
+            Math.abs(actual - expected) > 2
+        )
+      )
+        errors.push(`${mode.id}: inconsistent route header baseline`);
+    }
   }
   return errors;
 }

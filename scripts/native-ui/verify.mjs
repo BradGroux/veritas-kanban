@@ -14,7 +14,7 @@ export async function verifyNativeEvidence({ evidencePath, appPath, commit, vers
     packageDigest: await packageDigest(appPath),
   });
   const directory = await realpath(path.dirname(evidencePath));
-  for (const entry of report.entries ?? []) {
+  for (const entry of [...(report.entries ?? []), ...(report.seededFailures ?? [])]) {
     const name = entry.screenshot?.path;
     if (
       typeof name !== 'string' ||

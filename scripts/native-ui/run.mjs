@@ -10,6 +10,7 @@ import path from 'node:path';
 import { _electron, expect } from '@playwright/test';
 import {
   fileDigest,
+  evidenceFailures,
   geometryFailures,
   modes,
   packageDigest,
@@ -17,8 +18,11 @@ import {
   schema,
   settingsSections,
   states,
+  seededCases,
 } from './contract.mjs';
 import { installPreviewFixture } from './preview-fixture.mjs';
+import { measurePageHeader, pageHeaderFailures } from './layout-contract.mjs';
+import { performance } from 'node:perf_hooks';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const [packageArgument, outputArgument] = process.argv.slice(2);
@@ -168,7 +172,7 @@ async function configure(mode) {
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
 }
 async function metrics() {
-  return page.evaluate(() => {
+  const geometry = await page.evaluate(() => {
     const shell = document.querySelector('.desktop-app-shell');
     if (!shell) throw new Error('Missing production desktop shell');
     const rect = (el) => {
@@ -187,6 +191,7 @@ async function metrics() {
     return {
       width: innerWidth,
       height: innerHeight,
+      rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
       scrollWidth: document.documentElement.scrollWidth,
       scrollHeight: document.documentElement.scrollHeight,
       shell: rect(shell),
@@ -196,16 +201,28 @@ async function metrics() {
         ),
       ].map((el) => ({
         ...rect(el),
+        compound: !!el.closest('[data-overlay-compound]'),
         opacity: paintedOpacity(el),
         overflow: el.scrollWidth - el.clientWidth,
         parts: [
           ...el.querySelectorAll(
-            '.vk-overlay-header, .vk-overlay-body, .vk-overlay-footer, .vk-task-workspace-header, .mantine-Drawer-body'
+            '.vk-overlay-header, .vk-overlay-body, .vk-overlay-footer, .vk-overlay-scroll, .vk-task-workspace-header, .mantine-Drawer-body'
           ),
         ].map((part) => {
           const style = getComputedStyle(part);
           const b = rect(part);
           return {
+            insetKind: part.matches('.vk-task-workspace-header')
+              ? 'task-header'
+              : part.matches('.mantine-Drawer-body')
+                ? 'task-body'
+                : part.matches('.vk-overlay-scroll')
+                  ? 'scroll'
+                  : part.matches('.vk-overlay-header')
+                    ? 'header'
+                    : part.matches('.vk-overlay-footer')
+                      ? 'footer'
+                      : 'body',
             name: part.matches('.vk-overlay-header, .vk-task-workspace-header')
               ? 'header'
               : part.matches('.vk-overlay-footer')
@@ -230,6 +247,8 @@ async function metrics() {
       })),
     };
   });
+  geometry.primaryHeader = await page.evaluate(measurePageHeader);
+  return geometry;
 }
 async function capture(entry) {
   // Native capturePage does not wait for CSS transitions as Playwright screenshots do.
@@ -259,6 +278,18 @@ async function capture(entry) {
   entry.nativeWindow = native;
   entry.screenshot = { path: name, sha256: await fileDigest(path.join(output, name)) };
   assert.deepEqual(geometryFailures(entry.geometry), [], entry.id);
+  const route = routes.find(([name]) => entry.id.endsWith(`/route-${name}`));
+  if (route)
+    assert.deepEqual(
+      pageHeaderFailures(
+        entry.geometry.primaryHeader,
+        entry.geometry.rem,
+        route[2],
+        entry.geometry
+      ),
+      [],
+      entry.id
+    );
 }
 const button = (name) => page.getByRole('button', { name, exact: true });
 async function dismiss(dialog, opener) {
@@ -581,6 +612,111 @@ async function exercise(state, mode, shot) {
     throw new Error(`Required scenario has not been implemented: ${state}`);
   }
 }
+async function checkSeededRendererFailures() {
+  report.seededFailures = [];
+  for (const [id, expectedFailure] of seededCases) {
+    const entry = { id: `seed/${id}`, status: 'running' };
+    report.seededFailures.push(entry);
+    try {
+      await configure(modes[0]);
+      if (id === 'heading-offset' || id === 'context-invalid-header') {
+        await page
+          .getByRole('complementary', { name: 'Desktop navigation' })
+          .getByRole('button', { name: 'Activity', exact: true })
+          .click();
+        await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeFocused();
+      }
+      if (id === 'clipped-modal' || id === 'overlay-padding') {
+        await button('New Task').click();
+        await expect(page.getByRole('dialog', { name: 'Create New Task' })).toBeVisible();
+      }
+      await page.evaluate((fault) => {
+        if (fault === 'shell-blank')
+          document
+            .querySelector('.desktop-app-shell')
+            .style.setProperty('height', `${innerHeight - 100}px`, 'important');
+        else if (fault === 'heading-offset')
+          document.querySelector('[data-page-shell="primary"] h1').style.transform =
+            'translateY(16px)';
+        else if (fault === 'context-invalid-header') {
+          const button = document.createElement('button');
+          button.setAttribute('aria-label', 'Expand right sidebar');
+          button.textContent = 'Invalid board control';
+          document.querySelector('[aria-label="Main navigation"]').append(button);
+        } else if (fault === 'clipped-modal')
+          document
+            .querySelector('[data-overlay-active="true"] .vk-overlay-content')
+            .style.setProperty('transform', `translateX(${innerWidth}px)`, 'important');
+        else if (fault === 'overlay-padding')
+          document
+            .querySelector('[data-overlay-active="true"] .vk-overlay-header')
+            .style.setProperty('padding', '0px', 'important');
+        else if (fault === 'dead-header') {
+          const button = [
+            ...document.querySelectorAll('[aria-label="Main navigation"] button'),
+          ].find((element) => element.textContent.trim() === 'New Task');
+          button.replaceWith(button.cloneNode(true)); // Remove React's target handler, retain visible UI.
+        }
+      }, id);
+      entry.observedFailures = [];
+      if (id === 'dead-header') {
+        entry.behavior = {
+          control: 'New Task',
+          visibleBefore: await button('New Task').isVisible(),
+          enabledBefore: await button('New Task').isEnabled(),
+          dialogVisibleBefore: await page
+            .getByRole('dialog', { name: 'Create New Task' })
+            .isVisible(),
+        };
+        await button('New Task').click();
+        entry.behavior.clickCompleted = true;
+        const started = performance.now();
+        try {
+          await expect(page.getByRole('dialog', { name: 'Create New Task' })).toBeVisible({
+            timeout: 1000,
+          });
+        } catch (error) {
+          if (!error.message.includes('toBeVisible')) throw error;
+          entry.observedFailures.push('dead header control');
+        }
+        entry.behavior.waitedMs = performance.now() - started;
+        entry.behavior.dialogVisibleAfter = await page
+          .getByRole('dialog', { name: 'Create New Task' })
+          .isVisible();
+      }
+      try {
+        await capture(entry);
+      } catch (error) {
+        // Geometry faults must retain their native capture, then be identified by the same validator.
+        if (!entry.screenshot) throw error;
+        entry.captureAssertion = error.message;
+      }
+      entry.observedFailures.push(...geometryFailures(entry.geometry));
+      if (id === 'heading-offset' || id === 'context-invalid-header')
+        entry.observedFailures.push(
+          ...pageHeaderFailures(
+            entry.geometry.primaryHeader,
+            entry.geometry.rem,
+            'Activity',
+            entry.geometry
+          )
+        );
+      assert(
+        entry.observedFailures.includes(expectedFailure),
+        `Injected fault was not detected: ${id}`
+      );
+      entry.status = 'detected';
+    } catch (error) {
+      entry.status = 'failed';
+      entry.error = error.message;
+    } finally {
+      // Faults only affect this disposable renderer; reload removes all injected DOM/CSS.
+      await page.goto(origin);
+    }
+    await persist();
+    console.log(`${entry.status}: ${entry.id}`);
+  }
+}
 try {
   await launch();
   for (const mode of modes) {
@@ -645,6 +781,7 @@ try {
       await persist();
     }
   }
+  await checkSeededRendererFailures();
   report.status = report.entries.every((entry) => entry.status === 'passed') ? 'passed' : 'failed';
 } catch (error) {
   report.status = 'failed';
@@ -652,6 +789,12 @@ try {
 } finally {
   if (app) await app.close();
   report.completedAt = new Date().toISOString();
+  report.validationErrors = evidenceFailures(report, {
+    commit,
+    version,
+    packageDigest: report.packageDigest,
+  });
+  if (report.validationErrors.length) report.status = 'failed';
   await persist();
 }
 console.log(`Native evidence: ${path.join(output, 'evidence.json')} (${report.status})`);
