@@ -21,6 +21,7 @@ function publicationPath(file, version) {
     file === 'README.md' ||
     /^docs\/(?:[^/]+\/)*[^/]+\.md$/.test(file) ||
     file === 'docs/index.json' ||
+    file === 'docs/index.html' ||
     file === 'docs/demo/index.html' ||
     ['assets/demo-overview.mp4', 'docs/assets/demo-overview.mp4'].includes(file) ||
     maintainedAssets.some((name) => file === `docs/assets/v${version}/${name}`)

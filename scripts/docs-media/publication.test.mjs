@@ -171,6 +171,25 @@ test('docs-only merge commits can publish the captured build', async (t) => {
   );
 });
 
+test('documentation index metadata can publish the captured build', async (t) => {
+  const f = await fixture(t);
+  await mkdir(path.join(f.root, 'docs'), { recursive: true });
+  await writeFile(
+    path.join(f.root, 'docs/index.html'),
+    '<meta property="og:image" content="assets/v6.1.7/board-overview.png">'
+  );
+  f.git('add', '.');
+  f.git('commit', '-qm', 'update documentation index metadata');
+  assert.doesNotThrow(() =>
+    verifyPublicationHistory({
+      root: f.root,
+      buildCommit: f.expected.commit,
+      publicationCommit: f.git('rev-parse', 'HEAD'),
+      version: f.expected.version,
+    })
+  );
+});
+
 test('dirty, stale, and unrelated publication history cannot reuse a build', async (t) => {
   const f = await fixture(t);
   await writeFile(path.join(f.root, 'README.md'), 'uncommitted edit');
