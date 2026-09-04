@@ -276,6 +276,8 @@ export function SquadChatPanel({
       width="min(24rem, calc(100vw - 2rem))"
       opened={filtersOpen}
       onChange={setFiltersOpen}
+      // Handle Escape after the nested Select, not in Popover's capture handler.
+      closeOnEscape={false}
       returnFocus
     >
       <Popover.Target>
@@ -283,11 +285,18 @@ export function SquadChatPanel({
           aria-label="Squad filters and actions"
           aria-expanded={filtersOpen}
           onClick={() => setFiltersOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && filtersOpen) {
+              event.stopPropagation();
+              setFiltersOpen(false);
+            }
+          }}
         >
           <Filter className="h-4 w-4" />
         </UiIconAction>
       </Popover.Target>
       <Popover.Dropdown
+        aria-label="Squad filters and actions"
         onKeyDown={(event) => {
           if (
             event.key === 'Escape' &&

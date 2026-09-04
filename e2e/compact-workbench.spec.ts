@@ -63,10 +63,22 @@ for (const theme of ['dark', 'light']) {
           es.filter((e) => e.scrollWidth > e.clientWidth + 2).map((e) => e.textContent)
         )
     ).toEqual([]);
+    const filtersTrigger = squad.getByRole('button', { name: 'Squad filters and actions' });
+    await filtersTrigger.focus();
+    await filtersTrigger.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Squad filters and actions' })).toBeVisible();
+    await filtersTrigger.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Squad filters and actions' })).toBeHidden();
+    await expect(filtersTrigger).toBeFocused();
+    await expect(dock).toBeVisible();
     for (const name of ['Filter by agent', 'Sending as']) {
       if (name === 'Filter by agent')
         await squad.getByRole('button', { name: 'Squad filters and actions' }).click();
-      const selector = page.getByRole('combobox', { name, exact: true });
+      const selector = (
+        name === 'Filter by agent'
+          ? page.getByRole('dialog', { name: 'Squad filters and actions', exact: true })
+          : squad
+      ).getByRole('combobox', { name, exact: true });
       await selector.click();
       const menu = page.getByRole('listbox', { name, exact: true });
       await expect(menu).toBeVisible();
@@ -85,6 +97,9 @@ for (const theme of ['dark', 'light']) {
         await selector.press('Escape');
         await expect(selector).toBeHidden();
         await expect(dock).toBeVisible();
+        await expect(
+          squad.getByRole('button', { name: 'Squad filters and actions' })
+        ).toBeFocused();
       }
     }
     await page.evaluate(() => (document.documentElement.style.fontSize = ''));
