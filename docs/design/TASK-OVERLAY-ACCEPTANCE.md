@@ -1,6 +1,6 @@
 # Task overlay family acceptance
 
-Tracking: #1444, parent #1383. Status: implementation in progress. This is not installed-app or release acceptance.
+Tracking: #1444, parent #1383. Status: accepted for the v6.1.7 packaged release candidate. Homebrew first-launch verification remains a separate boundary under #1389.
 
 ## Implementation
 
@@ -10,32 +10,34 @@ Task confirmations and forms use shared widths and insets, a primary scrolling b
 
 Reduced-motion preferences make CSS transitions immediate, with no transition delay. A tiny nonzero duration on every element would introduce default `all` transitions and temporarily retain old modal widths, padding, and gaps when text size changes. Footer checks retain exact before/after-scroll geometry rather than waiting away that layout regression. Explicit keyframe animations retain their finite reduced duration for animation-event compatibility.
 
-| Family                                            | Source                                        | Browser geometry evidence                                                                                                 | Packaged macOS evidence |
-| ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Task root                                         | `TaskDetailPanel`, `UiTaskSurface`            | Expanded mode retains section, scroll, board opener                                                                       | Pending                 |
-| Create task                                       | `CreateTaskDialog`                            | Light/dark; three sizes; normal/reduced motion; pending guards, retained draft, focused failure, safe retry boundary      | Pending                 |
-| Apply template                                    | `ApplyTemplateDialog`                         | Light/dark; 1700×900 at 16px, 1180×760 and 900×480 at 20px; fixed footer, parent inert, exact opener                      | Pending                 |
-| Preview                                           | `PreviewPanel`                                | Light/dark; 900×480 at 20px; fixed Start control and parent focus restoration                                             | Pending                 |
-| Conflict resolver and Abort                       | `ConflictResolver`                            | Light/dark; 900×480 at 20px; fixed Abort, nested inert parents, successive Escape ownership                               | Pending                 |
-| Task deletion                                     | `TaskDetailsTab`                              | Light/dark; three sizes; normal/reduced motion; pending dismissal and failed-request recovery                             | Pending                 |
-| Task stopping                                     | `TaskWorkView`                                | Light/dark; three sizes; normal/reduced motion; pending guards, visible failures, exact opener                            | Pending                 |
-| Attachments, comments, deliverables, observations | Respective task sections                      | Light/dark; three sizes; normal/reduced motion; pending dismissal and failed-request recovery                             | Pending                 |
-| Manual time                                       | `TimeTrackingSection`                         | Light/dark; three sizes; normal/reduced motion; pending dismissal, failed-request recovery, retained draft                | Pending                 |
-| Agent stop and readiness override                 | `AgentPanel`                                  | Both: light/dark, three sizes, both motion settings, pending/failure recovery, retained override reason                   | Pending                 |
-| Approval decisions                                | `AgentRunTimelinePanel`                       | Approve/reject: light/dark, three sizes, both motion settings, pending guards, visible failure/hash, exact bindings       | Pending                 |
-| Review merge                                      | `ReviewPanel`                                 | Light/dark; three sizes; both motion settings; pending guards, focused visible failure, exact task binding                | Pending                 |
-| Work product versions, editing, artifact preview  | `WorkProductsSection`, `ArtifactPreviewModal` | Light/dark; three sizes; both motion settings; text/image/HTML controls; PDF download-only workflow (#1448)               | Pending                 |
-| Git PR, merge, worktree removal                   | `PRDialog`, `WorktreeStatus`                  | Light/dark; three sizes; normal/reduced motion; pending dismissal, retained drafts, inline failures                       | Pending                 |
-| Workflows                                         | `WorkflowSection`, `WorkflowStartDialog`      | Chooser and start form: light/dark, three sizes, both motion settings, pending guards, visible failures, retained context | Pending                 |
-| Task metrics export                               | `ExportDialog`                                | Light/dark; three sizes; normal/reduced motion; pending guards, retained filters, failed then successful fixture download | Pending                 |
+| Family                                            | Source                                        | Browser geometry evidence                                                                                                 | Release evidence                     |
+| ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Task root                                         | `TaskDetailPanel`, `UiTaskSurface`            | Expanded mode retains section, scroll, board opener                                                                       | Final matrix and focused gate passed |
+| Create task                                       | `CreateTaskDialog`                            | Light/dark; three sizes; normal/reduced motion; pending guards, retained draft, focused failure, safe retry boundary      | Final matrix and focused gate passed |
+| Apply template                                    | `ApplyTemplateDialog`                         | Light/dark; 1700×900 at 16px, 1180×760 and 900×480 at 20px; fixed footer, parent inert, exact opener                      | Final matrix and focused gate passed |
+| Preview                                           | `PreviewPanel`                                | Light/dark; 900×480 at 20px; fixed Start control and parent focus restoration                                             | Final matrix and focused gate passed |
+| Conflict resolver and Abort                       | `ConflictResolver`                            | Light/dark; 900×480 at 20px; fixed Abort, nested inert parents, successive Escape ownership                               | Final matrix and focused gate passed |
+| Task deletion                                     | `TaskDetailsTab`                              | Light/dark; three sizes; normal/reduced motion; pending dismissal and failed-request recovery                             | Final matrix and focused gate passed |
+| Task stopping                                     | `TaskWorkView`                                | Light/dark; three sizes; normal/reduced motion; pending guards, visible failures, exact opener                            | Final matrix and focused gate passed |
+| Attachments, comments, deliverables, observations | Respective task sections                      | Light/dark; three sizes; normal/reduced motion; pending dismissal and failed-request recovery                             | Final matrix and focused gate passed |
+| Manual time                                       | `TimeTrackingSection`                         | Light/dark; three sizes; normal/reduced motion; pending dismissal, failed-request recovery, retained draft                | Final matrix and focused gate passed |
+| Agent stop and readiness override                 | `AgentPanel`                                  | Both: light/dark, three sizes, both motion settings, pending/failure recovery, retained override reason                   | Final matrix and focused gate passed |
+| Approval decisions                                | `AgentRunTimelinePanel`                       | Approve/reject: light/dark, three sizes, both motion settings, pending guards, visible failure/hash, exact bindings       | Final matrix and focused gate passed |
+| Review merge                                      | `ReviewPanel`                                 | Light/dark; three sizes; both motion settings, pending guards, focused visible failure, exact task binding                | Final matrix and focused gate passed |
+| Work product versions, editing, artifact preview  | `WorkProductsSection`, `ArtifactPreviewModal` | Light/dark; three sizes; both motion settings, text/image/HTML controls, PDF download-only workflow (#1448)               | Final matrix and focused gate passed |
+| Git PR, merge, worktree removal                   | `PRDialog`, `WorktreeStatus`                  | Light/dark; three sizes; normal/reduced motion; pending dismissal, retained drafts, inline failures                       | Final matrix and focused gate passed |
+| Workflows                                         | `WorkflowSection`, `WorkflowStartDialog`      | Chooser and start form: light/dark, three sizes, both motion settings, pending guards, visible failures, retained context | Final matrix and focused gate passed |
+| Task metrics export                               | `ExportDialog`                                | Light/dark; three sizes; normal/reduced motion; pending guards, retained filters, failed then successful fixture download | Final matrix and focused gate passed |
 
-## Diagnostic evidence
+The `Release evidence` column combines the exact signed native matrix with the named focused browser gate for each family. It does not claim that the native runner independently performs destructive task, Git, provider, or workflow operations. Those operations remain synthetic and failure-focused in browser tests; the native matrix proves the integrated packaged presentation and control behavior.
+
+## Historical diagnostic evidence
 
 - Web typecheck and changed-source ESLint passed.
 - `ui-overlay.test.tsx`: 12 tests passed, including three-level task/utility/confirmation ownership, exact opener restoration, retained draft DOM identity, and content-only task sizing classes.
 - Seven existing task-family component slices: 59 tests passed. They cover task detail, review/preview/conflict actions, Git/workflow actions, agent/template/metrics, supporting sections, work products, and artifact previews. Component tests do not prove rendered geometry.
 - `task-detail.spec.ts` expanded-workspace case passed. `task-popout-stack.spec.ts` adds template and nested-utility browser checks. Fixtures do not launch agents, start preview servers, resolve conflicts, or create managed worktrees; managed ownership exists only in intercepted browser reads.
-- Independent standards and specification source reviews identified scrolling utility controls and non-quiet Cancel actions. Both were corrected and cleared on recheck. Remaining evidence gaps are explicit above.
+- Independent standards and specification source reviews identified scrolling utility controls and non-quiet Cancel actions. Both were corrected and cleared on recheck. The sections below preserve the incremental evidence and limitations that preceded final release acceptance.
 
 ### Create Task submission
 
@@ -147,8 +149,12 @@ The component regression first reproduced an editable reason during launch. The 
 
 The initial component regression reproduced immediate dismissal after dispatch. The handler now synchronously owns the pending request, rechecks approved/worktree eligibility, catches inline errors, and invokes completion only after a successful response. Eight component tests passed, including failure without completion and successful mocked retry, along with web typecheck, changed-source lint, formatting, and both source review axes. Light normal-motion and dark reduced-motion captures were inspected at minimum size/enlarged text. Native acceptance remains pending.
 
-## Remaining acceptance
+## Final v6.1.7 acceptance
 
-Shared loading buttons retain a static centering transform when reduced-motion transitions omit their styles. Normal-motion transitions continue to own their animated transform. The HTML artifact Refresh regression checks a held request at normal and enlarged text sizes, requiring the loading indicator to remain centered and fully inside its button. The original packaged-candidate clipping remains historical evidence; fresh affected native verification is required after integration and rebuilding.
+Shared loading buttons retain a static centering transform when reduced-motion transitions omit their styles. Normal-motion transitions continue to own their animated transform. The HTML artifact Refresh regression checks a held request at normal and enlarged text sizes, requiring the loading indicator to remain centered and fully inside its button. The original packaged-candidate clipping remains historical evidence.
 
-Complete every family in both themes, normal and enlarged text, minimum native window size, keyboard entry/dismissal, reduced motion, pending-operation states, and viewport/footer reachability. Rebuild the packaged application with the complete family and inspect native captures. Reconcile the consumer inventory only against that evidence. Final installed-app verification and the maintained documentation screenshots/GIF refresh remain separate, unfinished work.
+Signed capture run [`33926469724`](https://github.com/BradGroux/veritas-kanban/actions/runs/33926469724) tested the integrated v6.1.7 candidate from exact build commit `ed5094c6a5f9dd6958ceb952d8d018a40135bf33`. All 144 ordinary native states passed and all six seeded defects were detected. The matrix covers task drawer, expanded workspace, task chat, Preview, confirmations, both themes, normal and minimum native sizes, compact-shell collapse, computed insets, visible controls, and the final HTTP ledger. Focused browser gates retain the enlarged-text, reduced-motion, pending-operation, retry, keyboard, nested-inertness, exact-binding, and fixed-footer cases that would be unsafe or nondeterministic to execute against real task data in the native runner.
+
+The retained signed candidate was then used for a [ten-image task mode audit](../assets/v6.1.7/task-mode-audit/README.md). Overview, Plan, Run, Results, and History were captured and inspected in both drawer and expanded presentations while the same task remained mounted. No capture showed horizontal overflow, clipped navigation, blank unused regions, or a presentation-specific surface change.
+
+The 14 maintained screenshots and GIFs were captured from that same signed candidate and published in commit `6befd39cbc1264b18fa272d25bc64642f2b60383`. PDF work products intentionally use authenticated download-only delivery and the system viewer; no inline renderer is part of this acceptance. Installed Homebrew first launch remains separately tracked under #1389 and is not implied by this packaged-candidate result.
