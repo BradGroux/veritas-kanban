@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useWorktree', () => ({
   useMergeWorktree: () => ({
     mutate: mocks.mergeWorktreeMutate,
+    mutateAsync: mocks.mergeWorktreeMutate,
     isPending: false,
   }),
 }));
@@ -106,9 +107,7 @@ describe('task detail review and preview Mantine migration', () => {
     vi.clearAllMocks();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.stubGlobal('open', vi.fn());
-    mocks.mergeWorktreeMutate.mockImplementation((_taskId, options) => {
-      options?.onSuccess?.();
-    });
+    mocks.mergeWorktreeMutate.mockReset().mockResolvedValue(undefined);
     mocks.resolveConflictMutateAsync.mockResolvedValue({ success: true });
     mocks.abortConflictMutateAsync.mockResolvedValue({ success: true });
     mocks.continueConflictMutateAsync.mockResolvedValue({ success: true });
@@ -182,6 +181,47 @@ describe('task detail review and preview Mantine migration', () => {
     vi.unstubAllGlobals();
   });
 
+  it('retains review merge until completion and recovers from failure', async () => {
+    let rejectMerge!: (error: Error) => void;
+    mocks.mergeWorktreeMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectMerge = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    const onMergeComplete = vi.fn();
+    const task = createMockTask({
+      id: 'task-review-merge',
+      git: { repo: 'fixture', branch: 'feature', baseBranch: 'main', worktreePath: '/tmp' },
+      review: { decision: 'approved' },
+    });
+    renderWithProviders(
+      <ReviewPanel task={task} onReview={vi.fn()} onMergeComplete={onMergeComplete} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Merge & Close Task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Merge changes to main?' });
+    const submit = within(dialog).getByRole('button', { name: 'Merge & Close' });
+    fireEvent.click(submit);
+    expect(screen.queryByRole('dialog', { name: 'Merge changes to main?' })).toBe(dialog);
+    fireEvent.click(submit);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(
+      (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledExactlyOnceWith(task.id);
+    expect(onMergeComplete).not.toHaveBeenCalled();
+    await act(async () => rejectMerge(new Error('Fixture merge failed')));
+    expect(within(dialog).getByRole('alert').textContent).toContain('Fixture merge failed');
+    expect(onMergeComplete).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledTimes(2);
+    expect(onMergeComplete).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog', { name: 'Merge changes to main?' })).toBeNull();
+  });
+
   it('renders review decisions and merge confirmation through direct Mantine controls', async () => {
     const user = userEvent.setup();
     const onReview = vi.fn();
@@ -247,9 +287,7 @@ describe('task detail review and preview Mantine migration', () => {
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     await user.click(within(dialog).getByRole('button', { name: 'Merge & Close' }));
 
-    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledWith('task-review', {
-      onSuccess: expect.any(Function),
-    });
+    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledWith('task-review');
     expect(onMergeComplete).toHaveBeenCalled();
   });
 

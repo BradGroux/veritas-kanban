@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction } from '@/components/ui/UiVocabulary';
 import {
@@ -49,12 +49,48 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
   const [summary, setSummary] = useState('');
   const [pendingDecision, setPendingDecision] = useState<ReviewDecision | null>(null);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const mergeInFlight = useRef(false);
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const mergeErrorRef = useRef<HTMLParagraphElement | null>(null);
 
   const mergeWorktree = useMergeWorktree();
   const hasWorktree = !!task.git?.worktreePath;
   const comments = task.reviewComments || [];
   const currentReview = task.review;
   const isApproved = currentReview?.decision === 'approved';
+
+  useEffect(() => {
+    if (mergeError) {
+      mergeErrorRef.current?.focus({ preventScroll: true });
+      mergeErrorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [mergeError]);
+
+  const closeMerge = () => {
+    if (!mergeInFlight.current) {
+      setMergeDialogOpen(false);
+      setMergeError(null);
+    }
+  };
+
+  const handleMerge = async () => {
+    if (mergeInFlight.current || !isApproved || !hasWorktree) return;
+    mergeInFlight.current = true;
+    setIsMerging(true);
+    setMergeError(null);
+    try {
+      await mergeWorktree.mutateAsync(task.id);
+    } catch (error) {
+      setMergeError(error instanceof Error ? error.message : 'Unable to merge the worktree.');
+      return;
+    } finally {
+      mergeInFlight.current = false;
+      setIsMerging(false);
+    }
+    setMergeDialogOpen(false);
+    onMergeComplete?.();
+  };
 
   const handleDecision = (decision: ReviewDecision) => {
     if (decision === 'changes-requested' || decision === 'rejected') {
@@ -122,16 +158,16 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
           fullWidth
           color="green"
           onClick={() => setMergeDialogOpen(true)}
-          disabled={mergeWorktree.isPending}
+          disabled={isMerging}
           leftSection={
-            mergeWorktree.isPending ? (
+            isMerging ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <GitMerge className="h-4 w-4" />
             )
           }
         >
-          {mergeWorktree.isPending ? 'Merging...' : 'Merge & Close Task'}
+          {isMerging ? 'Merging...' : 'Merge & Close Task'}
         </Button>
       )}
 
@@ -214,7 +250,7 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
         variant="confirm"
         compound
         opened={mergeDialogOpen}
-        onClose={() => setMergeDialogOpen(false)}
+        onClose={closeMerge}
         title={`Merge changes to ${task.git?.baseBranch || 'main'}?`}
         centered
       >
@@ -224,20 +260,20 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
             <Code>{task.git?.baseBranch || 'main'}</Code>, delete the worktree, and mark this task
             as done.
           </Text>
+          {mergeError && (
+            <Text ref={mergeErrorRef} role="alert" tabIndex={-1} size="sm" c="red" mt="sm">
+              {mergeError}
+            </Text>
+          )}
         </div>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setMergeDialogOpen(false)}>
+          <UiAction variant="quiet" onClick={closeMerge} disabled={isMerging}>
             Cancel
           </UiAction>
           <UiAction
-            onClick={() => {
-              mergeWorktree.mutate(task.id, {
-                onSuccess: () => {
-                  onMergeComplete?.();
-                },
-              });
-              setMergeDialogOpen(false);
-            }}
+            onClick={handleMerge}
+            disabled={isMerging || !isApproved || !hasWorktree}
+            loading={isMerging}
           >
             Merge & Close
           </UiAction>
