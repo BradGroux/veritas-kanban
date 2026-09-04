@@ -1,3 +1,4 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction, UiPill, UiIconAction } from '@/components/ui/UiVocabulary';
 import { SettingsNotice, SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 /**
@@ -8,7 +9,7 @@ import { SettingsNotice, SettingsGroup } from '@/components/settings/shared/Sett
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Group, Modal, Stack, Text, TextInput, Textarea } from '@mantine/core';
+import { Stack, Text, TextInput, Textarea } from '@mantine/core';
 import { apiFetch } from '@/lib/api/helpers';
 import { useToast } from '@/hooks/useToast';
 import { Edit, Info, Plus, Trash2 } from 'lucide-react';
@@ -266,20 +267,21 @@ export function ToolPoliciesTab() {
       </SettingsSection>
 
       <Modal
+        variant="authoring"
+        compound
         opened={editDialogOpen}
         onClose={() => setEditDialogOpen(false)}
         title={isNew ? 'Create Tool Policy' : `Edit Policy: ${formRole}`}
-        size="lg"
-        radius="md"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             Define tool access restrictions for an agent role. Denied tools take precedence over
             allowed tools.
           </Text>
 
           <TextInput
+            data-autofocus={isNew || undefined}
             label="Role Name"
             description="Role name (lowercase, no spaces). Cannot be changed after creation."
             value={formRole}
@@ -291,6 +293,7 @@ export function ToolPoliciesTab() {
           />
 
           <TextInput
+            data-autofocus={!isNew || undefined}
             label="Allowed Tools"
             description="Comma-separated list of tool names. Use * to allow all tools."
             value={formAllowed}
@@ -319,16 +322,15 @@ export function ToolPoliciesTab() {
             size="sm"
             radius="md"
           />
-
-          <Group justify="flex-end" gap="sm">
-            <UiAction variant="secondary" type="button" onClick={() => setEditDialogOpen(false)}>
-              Cancel
-            </UiAction>
-            <UiAction variant="primary" type="button" onClick={handleSavePolicy}>
-              {isNew ? 'Create' : 'Save Changes'}
-            </UiAction>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" type="button" onClick={() => setEditDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction variant="primary" type="button" onClick={handleSavePolicy}>
+            {isNew ? 'Create' : 'Save Changes'}
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </SettingsPage>
   );
