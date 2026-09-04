@@ -40,6 +40,10 @@ modes, and why broader gates are or are not required.
 # Add test commands here
 ```
 
+**Desktop and release evidence (when relevant):**
+
+State each boundary as passed, failed, blocked, pending, or not applicable, with its evidence: browser; packaged macOS candidate; installed app; signing/notarization; refreshed documentation images/GIFs; publication. Include the native report path, candidate commit, package version/digest, tested themes, and window sizes. A browser-only or source-preflight pass cannot close a packaged/installed requirement. A manual exception cannot mark a failed native matrix passed.
+
 ## Checklist
 
 - [ ] This PR contains one coherent, independently shippable behavior

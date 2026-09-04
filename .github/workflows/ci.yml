@@ -89,6 +89,8 @@ jobs:
           scripts/check-tracked-ignore.test.mjs
           scripts/select-ci-test-scope.test.mjs
           scripts/ci-pr-label-state.test.mjs
+          scripts/validate-release-native.test.mjs
+          scripts/native-ui/contract.test.mjs
 
       - name: Guard delivery cadence
         run: node scripts/check-delivery-cadence.mjs

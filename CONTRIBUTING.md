@@ -332,12 +332,14 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
   pnpm test:load:smoke
   ```
 
-- **Release readiness** checks workspace versions, changelog, README badge, build outputs, and optional GitHub tag/release state:
+- **Release readiness** checks workspace versions, changelog, README badge, build outputs, candidate-bound packaged macOS evidence, and optional GitHub tag/release state:
 
   ```bash
-  pnpm validate:release
-  pnpm validate:release -- --github
+  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app
+  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --github
   ```
+
+  Use `--source-only` for source preflight before packaging. It cannot establish release acceptance. See [desktop release verification](docs/DESKTOP-RELEASE.md#native-gate-before-macos-upload) for evidence capture and the remaining signing, installation, media, and publication gates.
 
 - Write tests for new features and bug fixes.
 - Ensure existing tests pass before submitting.

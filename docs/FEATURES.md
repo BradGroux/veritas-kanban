@@ -2338,7 +2338,7 @@ Production-ready deployment and development tooling.
 - **Fast pull-request jobs** — Source-policy selection, lint and warning budget, typecheck, production build, dependency audit, CodeQL, and gitleaks
 - **Milestone jobs** — Workspace tests, critical-path coverage, Playwright, desktop artifacts, load checks, and Docker contracts run for `ci:full`, scheduled, or manual milestones
 - **Scheduled QA** — Weekly and manually triggered Playwright and k6 gates run outside the fast PR path
-- **Release validation** — `pnpm validate:release` checks root/shared/server/web/CLI/MCP/desktop versions, the release-major document set, built artifacts, and optional GitHub tag/release state
+- **Release validation** — `pnpm validate:release` requires `--native-evidence` and `--native-app` for the clean packaged macOS candidate and checks root/shared/server/web/CLI/MCP/desktop versions, the release-major document set, built artifacts, and optional GitHub tag/release state. `--source-only` reports source preflight, not release acceptance.
 - **pnpm caching** — Dependency cache for faster CI runs
 
 ### Development

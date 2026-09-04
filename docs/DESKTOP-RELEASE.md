@@ -29,8 +29,7 @@ metadata for PR validation. `desktop:package:linux:unsigned` creates preview
 x64 AppImage, deb, and rpm artifacts. `desktop:package:windows:unsigned`
 creates preview x64 NSIS installer and ZIP artifacts.
 
-`desktop:release:mac` expects Apple signing and notarization credentials and
-publishes update metadata through electron-builder. `desktop:release:linux` is
+`desktop:release:mac` expects Apple signing and notarization credentials and stages artifacts with publishing disabled. It does not upload a release; the `Desktop Release` workflow owns the verified upload path. `desktop:release:linux` is
 reserved for post-GA Linux preview validation until checksum, provenance,
 install, and update policy requirements are promoted. `desktop:release:windows`
 expects a Windows code-signing certificate available to electron-builder before
@@ -73,6 +72,22 @@ and publishes update metadata with the GitHub provider. A published-release run
 first verifies that the live GitHub body exactly matches
 `docs/releases/vX.Y.Z.md`; a mismatch stops the workflow before signing or
 packaging.
+
+### Native gate before macOS upload
+
+The signed workflow uses `--publish never`, finalizes the distribution assets, then extracts the actual release ZIP into a temporary directory. Signature and Gatekeeper checks precede the packaged macOS matrix. The runner records the exact app digest, commit, version, native window dimensions, 144 states, and six injected fault probes. Native screenshots and distribution checksums are retained as workflow artifacts even when a check fails.
+
+Immediately before `gh release upload`, the workflow rechecks all staged distribution checksums and invokes full release validation against the extracted app and its native report. Missing, stale, failed, incomplete, wrong-commit, changed-package, or modified-screenshot evidence stops upload. A dirty candidate checkout also fails. The destination release tag must resolve to this same candidate commit, including annotated-tag peeling; manually dispatching a later commit with the same package version cannot replace that release's assets. Retaining diagnostic artifacts does not turn a failed matrix into a passing release.
+
+Full local release validation now requires explicit candidate paths:
+
+```bash
+pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app
+```
+
+For source and published-body checks before a candidate exists, use `--source-only --skip-build-output` (plus `--github` when checking the published body). Its success message is explicitly source preflight, never release acceptance. `--skip-build-output` alone does not bypass native evidence.
+
+Browser verification, packaged candidate verification, installed-app verification, signing/notarization, documentation-media review, and publication are separate results. Report the exact boundary and evidence for each; pending or blocked work remains pending or blocked. Documentation media freshness is still tracked separately in #1388 and #1387 and is not established by this native upload gate.
 
 ## Homebrew Cask
 
@@ -192,7 +207,7 @@ policy is tracked in
 - Apply `ci:full` to the release-candidate pull request, then download the
   uploaded DMG/ZIP/update metadata from its `Desktop Artifacts` run.
 - Edit `docs/releases/vX.Y.Z.md`, run
-  `pnpm validate:release -- --version X.Y.Z`, and publish that exact file with
+  `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app`, and publish that exact file with
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
   hand-author or repair the live body separately.
 - Use one logical source line per prose paragraph and let GitHub wrap it to the
@@ -222,8 +237,7 @@ policy is tracked in
 - For a Homebrew upgrade, confirm `open -a` followed by
   `pnpm desktop:wait:ready -- --expected-version <version>` tolerates normal
   startup delay and proves the packaged server owns `3001`.
-- Confirm `pnpm validate:release` passes and verifies root/shared/server/web,
-  CLI, MCP, and desktop package versions plus required v6 release docs.
+- Confirm full `pnpm validate:release` passes with `--native-evidence` and `--native-app`, verifying candidate-bound macOS evidence, root/shared/server/web/CLI/MCP/desktop package versions, and required v6 release docs. A source-only preflight is not this gate.
 
 ## Smoke Tests
 

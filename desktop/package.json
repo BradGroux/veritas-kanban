@@ -20,7 +20,7 @@
     "package:linux:unsigned": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --linux AppImage deb rpm --x64 --publish never",
     "package:win:dir": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --win dir --x64 --publish never",
     "package:win:unsigned": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --win nsis zip --x64 --publish never",
-    "release:mac": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --mac dmg zip --publish always",
+    "release:mac": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --mac dmg zip --publish never",
     "release:linux": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --linux AppImage deb rpm --x64 --publish always",
     "release:win": "node ../scripts/prepare-desktop-release.mjs && node ../scripts/run-desktop-builder.mjs --win nsis zip --x64 --publish always",
     "typecheck": "tsc --noEmit",

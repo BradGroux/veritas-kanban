@@ -841,8 +841,10 @@ pnpm lint:budget # ESLint with current warning budget
 pnpm test       # Canonical unit gate (server, web, CLI, MCP)
 pnpm test:e2e   # E2E tests (Playwright)
 pnpm test:load:smoke # k6 API smoke test
-pnpm validate:release # Release readiness checks
+pnpm validate:release -- --source-only # Source preflight, not release acceptance
 ```
+
+Packaged macOS release validation also requires candidate-bound native evidence. See [desktop release verification](docs/DESKTOP-RELEASE.md#native-gate-before-macos-upload).
 
 ---
 
