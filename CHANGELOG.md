@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.7] - 2026-09-04
+
+Veritas Kanban 6.1.7 corrects desktop and compact-window layout, popout interactions, and task-editing failures found during the broader UI audit.
+
+### Changed
+
+- Standardized page headings, action controls, Settings navigation, popout padding, and dialog sizing. Settings units now stay inside uniformly sized fields, and policy action labels remain readable (#1391-#1395, #1405, #1406, #1454).
+- Removed bottom Workbench docking. Board, Squad, and Task Chat share a consistent surface, while compact layouts collapse sidebars and adapt Chat without discarding drafts (#1390, #1397, #1422, #1466).
+- Made PDF work products download-only through the authorized artifact path. The app no longer attempts inline PDF rendering or automatically opens a downloaded file (#1448, #1449, #1458).
+- Require candidate-bound native and documentation-media evidence before release upload. Reviewed media can be published unchanged in a later documentation-only commit; application changes require a fresh build and capture (#1387, #1388, #1456, #1489).
+
+### Fixed
+
+- Kept task, Settings, workflow, approval, Git, and review popouts open while their requests settle, preserved failed-request context, and restored focus to visible controls after dismissal or responsive layout changes (#1424, #1436, #1444, #1445).
+- Prevented stale close cleanup from removing a rapidly reopened task workspace, and removed unintended reduced-motion layout transitions that changed footer geometry during resizing (#1482, #1490).
+- Contained mobile Board, Activity rows, tooltips, and enlarged-text navigation; kept status menus and Chat controls clear of task content (#1462, #1463, #1465, #1476, #1479).
+- Preserved template task fields, supported critical priority consistently in task creation, retained optional-field clearing, and protected configured workspace run budgets (#1410, #1419, #1429, #1431).
+- Drained active HTTP requests before disposing server storage during desktop shutdown (#1473).
+
+### Compatibility
+
+- All maintained packages move together to 6.1.7. The public REST API remains `v1`, with no new database migration; valid 6.1.6 workspaces remain compatible.
+- Legacy bottom-dock preferences resolve to supported Chat placement. PDF files remain downloadable deliverables and can be opened manually in the system viewer.
+
 ## [6.1.6] - 2026-09-03
 
 Veritas Kanban 6.1.6 is a focused desktop reliability and interface consistency release based on issues found while exercising the compiled 6.1.5 macOS app.
