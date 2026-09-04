@@ -13,7 +13,8 @@ import type {
   PolicyResponseAction,
 } from '@veritas-kanban/shared';
 import { Edit, ExternalLink, FlaskConical, Plus, Trash2 } from 'lucide-react';
-import { Group, Modal, Select, Switch, Textarea, TextInput } from '@mantine/core';
+import { Group, Select, Switch, Textarea, TextInput } from '@mantine/core';
+import { UiModal } from '@/components/ui/UiOverlay';
 import { useToast } from '@/hooks/useToast';
 import {
   useCreatePolicy,
@@ -548,11 +549,10 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
         )}
       </div>
 
-      <Modal
+      <UiModal
         opened={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        size="xl"
-        centered
+        variant="authoring"
         title={
           <div>
             <div className="text-lg font-semibold">
@@ -901,13 +901,12 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
             </UiAction>
           </Group>
         </div>
-      </Modal>
+      </UiModal>
 
-      <Modal
+      <UiModal
         opened={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        size="lg"
-        centered
+        variant="form"
         title={
           <div>
             <div className="text-lg font-semibold">Test Policy Evaluation</div>
@@ -1026,7 +1025,7 @@ export function PolicyManager({ onBack }: PolicyManagerProps) {
             {evaluatePolicies.isPending ? 'Evaluating...' : 'Run Preview'}
           </UiAction>
         </Group>
-      </Modal>
+      </UiModal>
     </PrimaryPageShell>
   );
 }

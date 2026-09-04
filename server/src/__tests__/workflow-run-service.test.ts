@@ -97,6 +97,8 @@ describe('WorkflowRunService', () => {
 
   afterEach(async () => {
     service.dispose();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
@@ -258,10 +260,28 @@ describe('WorkflowRunService', () => {
   });
 
   it('handles retry, retry_step, skip, block, and workflow failure', async () => {
-    const delaySpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any) => {
-      queueMicrotask(fn);
-      return { unref: vi.fn() } as any;
-    }) as any);
+    // Advance recovery time explicitly; real filesystem work must still settle.
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    let markPending!: () => void;
+    let markBlocked!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      markPending = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      markBlocked = resolve;
+    });
+    const scheduleRecovery = service.scheduleWorkflowRecovery.bind(service);
+    const scheduleSpy = vi
+      .spyOn(service, 'scheduleWorkflowRecovery')
+      .mockImplementation((...args) => {
+        scheduleRecovery(...args);
+        markPending();
+      });
+    const saveRun = service.saveRun.bind(service);
+    vi.spyOn(service, 'saveRun').mockImplementation(async (...args) => {
+      await saveRun(...args);
+      if ((args[0] as { status: string }).status === 'blocked') markBlocked();
+    });
 
     mockLoadWorkflow.mockResolvedValue(
       makeWorkflow({
@@ -318,15 +338,28 @@ describe('WorkflowRunService', () => {
     });
 
     const run = await service.startRun('wf-1');
-    await vi.waitFor(async () => {
-      const saved = await service.getRun(run.id);
-      expect(saved.status).toBe('blocked');
-      expect(saved.error).toBe('Need help');
-      expect(saved.steps.find((s: any) => s.stepId === 'retryable').retries).toBe(1);
-      expect(saved.steps.find((s: any) => s.stepId === 'skippable').status).toBe('skipped');
-      expect(saved.context._retryContext.failedStep).toBe('reroute');
-    });
-    delaySpy.mockRestore();
+    await pending;
+    const scheduled = await service.getRun(run.id);
+    const retry = scheduled.steps.find((s: any) => s.stepId === 'retryable').runRetry;
+    const delay = Date.parse(retry.notBefore) - Date.now();
+    expect(scheduled.status).toBe('pending');
+    expect(delay).toBeGreaterThan(0);
+    expect(retry.backoffMs).toBeGreaterThanOrEqual(100);
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(delay - 1);
+    expect(counts.retryable).toBe(1);
+    expect((await service.getRun(run.id)).status).toBe('pending');
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await blocked;
+    const saved = await service.getRun(run.id);
+    expect(saved.status).toBe('blocked');
+    expect(saved.error).toBe('Need help');
+    expect(saved.steps.find((s: any) => s.stepId === 'retryable').retries).toBe(1);
+    expect(saved.steps.find((s: any) => s.stepId === 'skippable').status).toBe('skipped');
+    expect(saved.context._retryContext.failedStep).toBe('reroute');
+    expect(counts).toEqual({ prep: 2, retryable: 2, reroute: 2, skippable: 1, blocking: 1 });
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
   });
 
   it('routes an exhausted transient step to a validated fallback agent', async () => {
