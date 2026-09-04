@@ -1,3 +1,5 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useState } from 'react';
 import { FileText, Pencil, Trash2, X, Check, Plus, ExternalLink } from 'lucide-react';
 import {
@@ -6,7 +8,6 @@ import {
   Box,
   Button,
   Group,
-  Modal,
   Paper,
   Select,
   SimpleGrid,
@@ -270,27 +271,29 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
       </Paper>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         title="Delete deliverable?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm">Remove "{deliverable.title}" from this task's deliverables?</Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                void handleDelete();
-              }}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            onClick={() => {
+              void handleDelete();
+            }}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

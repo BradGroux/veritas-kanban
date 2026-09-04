@@ -5,9 +5,9 @@ import {
   UiHeading,
   semanticToneForLegacyColor,
 } from '@/components/ui/UiVocabulary';
-import { OVERLAY_VARIANTS } from '@/components/ui/UiOverlay';
+import { UiTaskSurface } from '@/components/ui/UiOverlay';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Drawer, Group, Select, Stack, Tabs, Text, TextInput } from '@mantine/core';
+import { Group, Select, Stack, Tabs, Text, TextInput } from '@mantine/core';
 import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
@@ -282,319 +282,285 @@ export function TaskDetailPanel({
   };
 
   return (
-    <>
-      <Drawer.Root
-        closeOnEscape={!nestedOverlayOpen}
-        lockScroll
-        onClose={() => onOpenChange(false)}
-        opened={open}
-        position="right"
-        returnFocus
-        size={
-          expanded
-            ? '100vw'
-            : `min(100vw, calc(${OVERLAY_VARIANTS.task.width} + ${taskChatOpen ? OVERLAY_VARIANTS.chat.width : '0rem'}))`
-        }
-        trapFocus={!previewOpen && !applyTemplateOpen && !workflowOpen && !chatModalOpen}
-      >
-        <Drawer.Overlay className="veritas-overlay fixed inset-0 z-50" />
-        <Drawer.Content
-          aria-label={`Task workspace: ${localTask.title}`}
-          data-presentation={expanded ? 'expanded' : 'drawer'}
-          data-testid="task-detail-panel"
-          data-chat-open={taskChatOpen || undefined}
-          classNames={{
-            content:
-              'veritas-overlay-surface vk-task-workspace flex h-full min-h-0 max-h-[100dvh] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg',
-          }}
-        >
-          <Drawer.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-            <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
-              <header className="vk-task-workspace-header flex-shrink-0 border-b">
-                <Group
-                  gap="xs"
-                  justify="space-between"
-                  wrap="wrap"
-                  className="text-muted-foreground"
-                >
-                  <Group gap="xs" wrap="nowrap">
-                    {TypeIconComponent && <TypeIconComponent className="h-4 w-4" />}
-                    <Text size="sm">{typeLabel} Task</Text>
-                  </Group>
+    <UiTaskSurface
+      closeOnEscape={!nestedOverlayOpen}
+      onClose={() => onOpenChange(false)}
+      opened={open}
+      label={`Task workspace: ${localTask.title}`}
+      expanded={expanded}
+      chatOpen={taskChatOpen}
+      trapFocus={!previewOpen && !applyTemplateOpen && !workflowOpen && !chatModalOpen}
+    >
+      <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
+        <header className="vk-task-workspace-header flex-shrink-0 border-b">
+          <Group gap="xs" justify="space-between" wrap="wrap" className="text-muted-foreground">
+            <Group gap="xs" wrap="nowrap">
+              {TypeIconComponent && <TypeIconComponent className="h-4 w-4" />}
+              <Text size="sm">{typeLabel} Task</Text>
+            </Group>
+            <Group gap="xs" wrap="wrap">
+              {readOnly && <UiPill leftSection={<Archive className="h-3 w-3" />}>Archived</UiPill>}
+              {!readOnly && isDirty && (
+                <Text size="xs" c="yellow.5">
+                  {isSaving ? 'Saving...' : 'Unsaved changes'}
+                </Text>
+              )}
+              <UiAction
+                ref={chatTriggerRef}
+                variant="quiet"
+                onClick={(event) => openTaskChat(event.currentTarget)}
+                leftSection={<MessageSquare className="h-3.5 w-3.5" />}
+              >
+                Chat
+              </UiAction>
+              <UiIconAction
+                variant="quiet"
+                aria-label={expanded ? 'Exit expanded task workspace' : 'Expand task workspace'}
+                aria-pressed={expanded}
+                title={expanded ? 'Exit expanded workspace' : 'Expand workspace'}
+                onClick={() => setExpanded((current) => !current)}
+              >
+                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </UiIconAction>
+              <UiIconAction
+                variant="quiet"
+                aria-label="Close task workspace"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="h-4 w-4" />
+              </UiIconAction>
+            </Group>
+          </Group>
+          <div className="mt-1 text-lg font-semibold text-foreground">
+            {readOnly ? (
+              <Text component="span" size="lg" fw={600} className="break-words">
+                {localTask.title}
+              </Text>
+            ) : (
+              <TextInput
+                value={localTask.title}
+                onChange={(e) => updateField('title', e.currentTarget.value)}
+                variant="unstyled"
+                placeholder="Task title..."
+                aria-label="Task title"
+                classNames={{
+                  input: 'text-lg font-semibold text-foreground',
+                }}
+              />
+            )}
+          </div>
+        </header>
+
+        {conflict && (
+          <TaskConflictAlert
+            conflict={conflict}
+            taskTitle={localTask.title}
+            onRetry={retryConflict}
+            onDiscard={discardConflict}
+            onDismiss={() => resolveTaskConflict(localTask.id)}
+          />
+        )}
+
+        <div className="vk-task-workspace-layout flex min-h-0 flex-1 overflow-hidden">
+          <div className="vk-task-workspace-main flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <nav
+              aria-label="Task workspace modes"
+              data-testid="task-workspace-mode-navigation"
+              className="veritas-overlay-scroll vk-task-workspace-navigation flex-shrink-0 flex-col gap-1 overflow-y-auto border-r"
+            >
+              <Text size="sm" c="dimmed" className="mb-1 px-2">
+                Workspace
+              </Text>
+              {workspaceModes.map((mode) => {
+                const Icon = WORKSPACE_MODE_ICONS[mode.id];
+                const active = mode.id === activeMode;
+                return (
+                  <UiAction
+                    variant="quiet"
+                    key={mode.id}
+                    type="button"
+                    disabled={mode.disabled}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => selectWorkspaceMode(mode.id)}
+                    className="vk-ui-nav-action w-full text-left"
+                  >
+                    <Icon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                    <span>{mode.label}</span>
+                  </UiAction>
+                );
+              })}
+            </nav>
+
+            <Tabs
+              value={activeTab}
+              onChange={(value) => {
+                if (isTaskDetailTabId(value)) setActiveTab(value);
+              }}
+              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+            >
+              <div className="vk-task-workspace-section-header flex-shrink-0 border-b">
+                <Select
+                  label="Task workspace mode"
+                  value={activeMode}
+                  data={workspaceModes.map((mode) => ({
+                    value: mode.id,
+                    label: mode.label,
+                    disabled: mode.disabled,
+                  }))}
+                  onChange={(value) => {
+                    if (isTaskWorkspaceModeId(value)) selectWorkspaceMode(value);
+                  }}
+                  allowDeselect={false}
+                  className="vk-task-workspace-selector mb-3"
+                />
+
+                <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
+                  <div className="min-w-0">
+                    <UiHeading id="task-workspace-mode-heading">
+                      {activeModeMetadata?.label ?? 'Workspace'}
+                    </UiHeading>
+                    <Text size="sm" c="dimmed" className="mt-0.5 max-w-xl">
+                      {activeModeMetadata?.description}
+                    </Text>
+                  </div>
                   <Group gap="xs" wrap="wrap">
-                    {readOnly && (
-                      <UiPill leftSection={<Archive className="h-3 w-3" />}>Archived</UiPill>
+                    {activeMode === 'run' && (
+                      <UiPill>Task: {localTask.status.replaceAll('-', ' ')}</UiPill>
                     )}
-                    {!readOnly && isDirty && (
-                      <Text size="xs" c="yellow.5">
-                        {isSaving ? 'Saving...' : 'Unsaved changes'}
-                      </Text>
+                    {activeMode === 'results' && resultsReviewStatus && (
+                      <>
+                        <UiPill
+                          kind="status"
+                          tone={semanticToneForLegacyColor(resultsReviewStatus.color)}
+                        >
+                          Review: {resultsReviewStatus.label}
+                        </UiPill>
+                        {openFindingCount > 0 && (
+                          <UiPill kind="status" tone="warning">
+                            {openFindingCount} open finding{openFindingCount === 1 ? '' : 's'}
+                          </UiPill>
+                        )}
+                      </>
                     )}
-                    <UiAction
-                      ref={chatTriggerRef}
-                      variant="quiet"
-                      onClick={(event) => openTaskChat(event.currentTarget)}
-                      leftSection={<MessageSquare className="h-3.5 w-3.5" />}
-                    >
-                      Chat
-                    </UiAction>
-                    <UiIconAction
-                      variant="quiet"
-                      aria-label={
-                        expanded ? 'Exit expanded task workspace' : 'Expand task workspace'
-                      }
-                      aria-pressed={expanded}
-                      title={expanded ? 'Exit expanded workspace' : 'Expand workspace'}
-                      onClick={() => setExpanded((current) => !current)}
-                    >
-                      {expanded ? (
-                        <Minimize2 className="h-4 w-4" />
-                      ) : (
-                        <Maximize2 className="h-4 w-4" />
+                    {!readOnly && activeMode === 'plan' && (
+                      <UiAction
+                        variant="secondary"
+                        onClick={() => setApplyTemplateOpen(true)}
+                        leftSection={<FileCode className="h-3 w-3" />}
+                      >
+                        Template
+                      </UiAction>
+                    )}
+                    {!readOnly &&
+                      activeMode === 'run' &&
+                      activeTab === 'git' &&
+                      isCodeTask &&
+                      localTask.git?.repo &&
+                      agentSettings.enablePreview &&
+                      canUseLocalAgentControls && (
+                        <UiAction
+                          variant="secondary"
+                          onClick={() => setPreviewOpen(true)}
+                          leftSection={<Monitor className="h-3 w-3" />}
+                        >
+                          Preview
+                        </UiAction>
                       )}
-                    </UiIconAction>
-                    <UiIconAction
-                      variant="quiet"
-                      aria-label="Close task workspace"
-                      onClick={() => onOpenChange(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </UiIconAction>
                   </Group>
                 </Group>
-                <Drawer.Title className="mt-1 text-lg font-semibold text-foreground">
-                  {readOnly ? (
-                    <Text component="span" size="lg" fw={600} className="break-words">
-                      {localTask.title}
-                    </Text>
-                  ) : (
-                    <TextInput
-                      value={localTask.title}
-                      onChange={(e) => updateField('title', e.currentTarget.value)}
-                      variant="unstyled"
-                      placeholder="Task title..."
-                      aria-label="Task title"
-                      classNames={{
-                        input: 'text-lg font-semibold text-foreground',
-                      }}
-                    />
-                  )}
-                </Drawer.Title>
-              </header>
 
-              {conflict && (
-                <TaskConflictAlert
-                  conflict={conflict}
-                  taskTitle={localTask.title}
-                  onRetry={retryConflict}
-                  onDiscard={discardConflict}
-                  onDismiss={() => resolveTaskConflict(localTask.id)}
-                />
-              )}
-
-              <div className="vk-task-workspace-layout flex min-h-0 flex-1 overflow-hidden">
-                <div className="vk-task-workspace-main flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                  <nav
-                    aria-label="Task workspace modes"
-                    data-testid="task-workspace-mode-navigation"
-                    className="veritas-overlay-scroll vk-task-workspace-navigation flex-shrink-0 flex-col gap-1 overflow-y-auto border-r"
-                  >
-                    <Text size="sm" c="dimmed" className="mb-1 px-2">
-                      Workspace
-                    </Text>
-                    {workspaceModes.map((mode) => {
-                      const Icon = WORKSPACE_MODE_ICONS[mode.id];
-                      const active = mode.id === activeMode;
-                      return (
-                        <UiAction
-                          variant="quiet"
-                          key={mode.id}
-                          type="button"
-                          disabled={mode.disabled}
-                          aria-current={active ? 'page' : undefined}
-                          onClick={() => selectWorkspaceMode(mode.id)}
-                          className="vk-ui-nav-action w-full text-left"
-                        >
-                          <Icon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                          <span>{mode.label}</span>
-                        </UiAction>
-                      );
-                    })}
-                  </nav>
-
-                  <Tabs
-                    value={activeTab}
-                    onChange={(value) => {
-                      if (isTaskDetailTabId(value)) setActiveTab(value);
-                    }}
-                    className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-                  >
-                    <div className="vk-task-workspace-section-header flex-shrink-0 border-b">
-                      <Select
-                        label="Task workspace mode"
-                        value={activeMode}
-                        data={workspaceModes.map((mode) => ({
-                          value: mode.id,
-                          label: mode.label,
-                          disabled: mode.disabled,
-                        }))}
-                        onChange={(value) => {
-                          if (isTaskWorkspaceModeId(value)) selectWorkspaceMode(value);
-                        }}
-                        allowDeselect={false}
-                        className="vk-task-workspace-selector mb-3"
-                      />
-
-                      <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
-                        <div className="min-w-0">
-                          <UiHeading id="task-workspace-mode-heading">
-                            {activeModeMetadata?.label ?? 'Workspace'}
-                          </UiHeading>
-                          <Text size="sm" c="dimmed" className="mt-0.5 max-w-xl">
-                            {activeModeMetadata?.description}
-                          </Text>
-                        </div>
-                        <Group gap="xs" wrap="wrap">
-                          {activeMode === 'run' && (
-                            <UiPill>Task: {localTask.status.replaceAll('-', ' ')}</UiPill>
-                          )}
-                          {activeMode === 'results' && resultsReviewStatus && (
-                            <>
-                              <UiPill
-                                kind="status"
-                                tone={semanticToneForLegacyColor(resultsReviewStatus.color)}
-                              >
-                                Review: {resultsReviewStatus.label}
-                              </UiPill>
-                              {openFindingCount > 0 && (
-                                <UiPill kind="status" tone="warning">
-                                  {openFindingCount} open finding{openFindingCount === 1 ? '' : 's'}
-                                </UiPill>
-                              )}
-                            </>
-                          )}
-                          {!readOnly && activeMode === 'plan' && (
-                            <UiAction
-                              variant="secondary"
-                              onClick={() => setApplyTemplateOpen(true)}
-                              leftSection={<FileCode className="h-3 w-3" />}
-                            >
-                              Template
-                            </UiAction>
-                          )}
-                          {!readOnly &&
-                            activeMode === 'run' &&
-                            activeTab === 'git' &&
-                            isCodeTask &&
-                            localTask.git?.repo &&
-                            agentSettings.enablePreview &&
-                            canUseLocalAgentControls && (
-                              <UiAction
-                                variant="secondary"
-                                onClick={() => setPreviewOpen(true)}
-                                leftSection={<Monitor className="h-3 w-3" />}
-                              >
-                                Preview
-                              </UiAction>
-                            )}
-                        </Group>
-                      </Group>
-
-                      {activeModeTabs.length > 1 && (
-                        <>
-                          <Tabs.List
-                            aria-label={`${activeModeMetadata?.label ?? 'Workspace'} sections`}
-                            className="vk-task-workspace-sections mt-3 w-full justify-start"
-                          >
-                            {activeModeTabs.map((tab) => {
-                              const Icon = tab.Icon;
-                              return (
-                                <Tabs.Tab
-                                  key={tab.id}
-                                  value={tab.id}
-                                  disabled={tab.disabled}
-                                  className="flex-none px-3"
-                                  leftSection={Icon ? <Icon className="h-3 w-3" /> : undefined}
-                                >
-                                  {tab.label}
-                                </Tabs.Tab>
-                              );
-                            })}
-                          </Tabs.List>
-                          <Select
-                            label={`${activeModeMetadata?.label ?? 'Workspace'} section`}
-                            value={activeTab}
-                            data={activeModeTabs.map((tab) => ({
-                              value: tab.id,
-                              label: tab.label,
-                              disabled: tab.disabled,
-                            }))}
-                            onChange={(value) => {
-                              if (isTaskDetailTabId(value)) setActiveTab(value);
-                            }}
-                            allowDeselect={false}
-                            className="vk-task-workspace-selector mt-3"
-                          />
-                        </>
-                      )}
-                    </div>
-
-                    <div
-                      className="veritas-overlay-scroll vk-task-workspace-body min-h-0 flex-1 overflow-y-scroll overscroll-contain"
-                      data-testid="task-detail-scroll-region"
-                      aria-labelledby="task-workspace-mode-heading task-workspace-section-heading"
-                      tabIndex={0}
+                {activeModeTabs.length > 1 && (
+                  <>
+                    <Tabs.List
+                      aria-label={`${activeModeMetadata?.label ?? 'Workspace'} sections`}
+                      className="vk-task-workspace-sections mt-3 w-full justify-start"
                     >
-                      <Text id="task-workspace-section-heading" component="h3" className="sr-only">
-                        {activeTabMetadata?.label ?? 'Task details'}
-                      </Text>
-                      {visibleTabs.map((tab) => {
-                        const tabContent = (
-                          <Suspense
-                            fallback={
-                              <Text size="sm" c="dimmed">
-                                Loading {tab.label}...
-                              </Text>
-                            }
-                          >
-                            {tab.render(tabRenderContext)}
-                          </Suspense>
-                        );
-
+                      {activeModeTabs.map((tab) => {
+                        const Icon = tab.Icon;
                         return (
-                          <Tabs.Panel key={tab.id} value={tab.id} className="mt-0 min-h-full">
-                            {tab.fallbackTitle ? (
-                              <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
-                                {tabContent}
-                              </FeatureErrorBoundary>
-                            ) : (
-                              tabContent
-                            )}
-                          </Tabs.Panel>
+                          <Tabs.Tab
+                            key={tab.id}
+                            value={tab.id}
+                            disabled={tab.disabled}
+                            className="flex-none px-3"
+                            leftSection={Icon ? <Icon className="h-3 w-3" /> : undefined}
+                          >
+                            {tab.label}
+                          </Tabs.Tab>
                         );
                       })}
-                    </div>
-                  </Tabs>
-                </div>
-                <aside
-                  className="vk-task-chat-dock"
-                  hidden={!taskChatOpen}
-                  aria-label="Task conversation dock"
-                >
-                  <ChatPanel
-                    key={localTask.id}
-                    open={taskChatOpen}
-                    onOpenChange={setTaskChatOpen}
-                    onModalOpenChange={setChatModalOpen}
-                    taskId={localTask.id}
-                    variant="inline"
-                  />
-                </aside>
+                    </Tabs.List>
+                    <Select
+                      label={`${activeModeMetadata?.label ?? 'Workspace'} section`}
+                      value={activeTab}
+                      data={activeModeTabs.map((tab) => ({
+                        value: tab.id,
+                        label: tab.label,
+                        disabled: tab.disabled,
+                      }))}
+                      onChange={(value) => {
+                        if (isTaskDetailTabId(value)) setActiveTab(value);
+                      }}
+                      allowDeselect={false}
+                      className="vk-task-workspace-selector mt-3"
+                    />
+                  </>
+                )}
               </div>
-            </Stack>
-          </Drawer.Body>
-        </Drawer.Content>
-      </Drawer.Root>
+
+              <div
+                className="veritas-overlay-scroll vk-task-workspace-body min-h-0 flex-1 overflow-y-scroll overscroll-contain"
+                data-testid="task-detail-scroll-region"
+                aria-labelledby="task-workspace-mode-heading task-workspace-section-heading"
+                tabIndex={0}
+              >
+                <Text id="task-workspace-section-heading" component="h3" className="sr-only">
+                  {activeTabMetadata?.label ?? 'Task details'}
+                </Text>
+                {visibleTabs.map((tab) => {
+                  const tabContent = (
+                    <Suspense
+                      fallback={
+                        <Text size="sm" c="dimmed">
+                          Loading {tab.label}...
+                        </Text>
+                      }
+                    >
+                      {tab.render(tabRenderContext)}
+                    </Suspense>
+                  );
+
+                  return (
+                    <Tabs.Panel key={tab.id} value={tab.id} className="mt-0 min-h-full">
+                      {tab.fallbackTitle ? (
+                        <FeatureErrorBoundary fallbackTitle={tab.fallbackTitle}>
+                          {tabContent}
+                        </FeatureErrorBoundary>
+                      ) : (
+                        tabContent
+                      )}
+                    </Tabs.Panel>
+                  );
+                })}
+              </div>
+            </Tabs>
+          </div>
+          <aside
+            className="vk-task-chat-dock"
+            hidden={!taskChatOpen}
+            aria-label="Task conversation dock"
+          >
+            <ChatPanel
+              key={localTask.id}
+              open={taskChatOpen}
+              onOpenChange={setTaskChatOpen}
+              onModalOpenChange={setChatModalOpen}
+              taskId={localTask.id}
+              variant="inline"
+            />
+          </aside>
+        </div>
+      </Stack>
 
       {/* Preview Panel */}
       {localTask && (
@@ -614,6 +580,6 @@ export function TaskDetailPanel({
       {localTask && (
         <WorkflowSection task={localTask} open={workflowOpen} onOpenChange={setWorkflowOpen} />
       )}
-    </>
+    </UiTaskSurface>
   );
 }

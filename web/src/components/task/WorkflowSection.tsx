@@ -8,8 +8,8 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Badge, Button, Group, Loader, Modal, Paper, ScrollArea, Stack, Text } from '@mantine/core';
-import { useMediaQuery } from '@mantine/hooks';
+import { Badge, Button, Group, Loader, Paper, Stack, Text } from '@mantine/core';
+import { UiModal as Modal } from '@/components/ui/UiOverlay';
 import { Play, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { useIdentity } from '@/hooks/useIdentity';
@@ -145,7 +145,6 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   const ownsHistoryEntryRef = useRef(false);
   const { toast } = useToast();
   const { hasPermission } = useIdentity();
-  const isMobile = useMediaQuery('(max-width: 767px)', false);
   const canExecuteWorkflows = hasPermission('workflow:execute');
   const historyId = `${task.id}:workflow`;
 
@@ -264,14 +263,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   };
 
   return (
-    <Modal
-      opened={open}
-      onClose={handleClose}
-      title="Run Workflow"
-      centered
-      size="xl"
-      fullScreen={isMobile}
-    >
+    <Modal opened={open} onClose={handleClose} title="Run Workflow" centered variant="authoring">
       <Stack gap="md">
         <Text size="sm" c="dimmed">
           Select a workflow to run against this task
@@ -300,7 +292,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
             </Stack>
           </Paper>
         ) : (
-          <ScrollArea.Autosize mah="65vh" type="auto">
+          <>
             <Stack gap="lg">
               {/* Active Runs */}
               {activeRuns.length > 0 && (
@@ -399,7 +391,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                 )}
               </Stack>
             </Stack>
-          </ScrollArea.Autosize>
+          </>
         )}
       </Stack>
     </Modal>

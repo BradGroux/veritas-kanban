@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   Alert,
   Button,
   Code,
   Group,
-  Modal,
   Paper,
   Select,
   Stack,
@@ -304,6 +305,7 @@ export function ApplyTemplateDialog({
 
   return (
     <Modal
+      compound
       opened={open}
       onClose={() => onOpenChange(false)}
       title={
@@ -312,9 +314,8 @@ export function ApplyTemplateDialog({
           <Text fw={600}>Apply Template to Task</Text>
         </Group>
       }
-      size="lg"
     >
-      <Stack gap="md">
+      <Stack gap="md" className="vk-overlay-scroll">
         <Group justify="flex-end">
           <Button
             variant="subtle"
@@ -500,16 +501,15 @@ export function ApplyTemplateDialog({
             </Text>
           )}
         </Stack>
-
-        <Group justify="flex-end" gap="xs">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleApply} disabled={!template || updateTask.isPending}>
-            {updateTask.isPending ? 'Applying...' : 'Apply Template'}
-          </Button>
-        </Group>
       </Stack>
+      <OverlayFooter>
+        <UiAction type="button" variant="quiet" onClick={() => onOpenChange(false)}>
+          Cancel
+        </UiAction>
+        <UiAction type="button" onClick={handleApply} disabled={!template || updateTask.isPending}>
+          {updateTask.isPending ? 'Applying...' : 'Apply Template'}
+        </UiAction>
+      </OverlayFooter>
     </Modal>
   );
 }

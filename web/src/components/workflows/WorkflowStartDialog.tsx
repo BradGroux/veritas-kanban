@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { WorkflowDefinition } from '@veritas-kanban/shared';
-import { Alert, Button, Group, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { Alert, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { AlertTriangle, Play } from 'lucide-react';
 import { workflowsApi, type WorkflowRunStartResponse } from '@/lib/api/workflows';
 
@@ -69,13 +71,18 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
 
   return (
     <Modal
+      compound
       opened={workflow !== null}
-      onClose={onClose}
+      onClose={() => {
+        if (!isStarting) onClose();
+      }}
+      closeOnEscape={!isStarting}
+      closeOnClickOutside={!isStarting}
+      closeButtonProps={{ disabled: isStarting }}
       title={workflow ? `Start ${workflow.name}` : 'Start workflow'}
       centered
-      size="lg"
     >
-      <Stack gap="md">
+      <Stack gap="md" className="vk-overlay-scroll">
         <Text size="sm" c="dimmed">
           Review the task association and run context before execution. Starting a run is separate
           from viewing or editing the workflow.
@@ -104,20 +111,19 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
             {error}
           </Alert>
         )}
-
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose} disabled={isStarting}>
-            Cancel
-          </Button>
-          <Button
-            leftSection={<Play className="h-4 w-4" />}
-            loading={isStarting}
-            onClick={() => void startRun()}
-          >
-            Start Run
-          </Button>
-        </Group>
       </Stack>
+      <OverlayFooter>
+        <UiAction variant="quiet" onClick={onClose} disabled={isStarting}>
+          Cancel
+        </UiAction>
+        <UiAction
+          leftSection={<Play className="h-4 w-4" />}
+          loading={isStarting}
+          onClick={() => void startRun()}
+        >
+          Start Run
+        </UiAction>
+      </OverlayFooter>
     </Modal>
   );
 }

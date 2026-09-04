@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   ActionIcon,
   Alert,
@@ -6,7 +8,6 @@ import {
   Button,
   Code,
   Group,
-  Modal,
   Paper,
   Select,
   Stack,
@@ -628,12 +629,14 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
         <RunSessionSharesSection task={task} isAgentRunning={isAgentRunning} />
 
         <Modal
+          variant="confirm"
+          compound
           opened={stopDialogOpen}
           onClose={() => setStopDialogOpen(false)}
           title="Stop the agent?"
           centered
         >
-          <Stack gap="md">
+          <Stack gap="md" className="vk-overlay-scroll">
             <Text size="sm" c="dimmed">
               This will terminate the running agent. The attempt will be marked as failed.
             </Text>
@@ -642,29 +645,30 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                 Stop unavailable: {stopReason}
               </Alert>
             )}
-            <Group justify="flex-end" gap="xs">
-              <Button variant="default" onClick={() => setStopDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                color="red"
-                disabled={!canStop || stopAgent.isPending}
-                title={canStop ? 'Stop Agent' : stopReason}
-                onClick={handleStop}
-              >
-                Stop Agent
-              </Button>
-            </Group>
           </Stack>
+          <OverlayFooter>
+            <UiAction variant="quiet" onClick={() => setStopDialogOpen(false)}>
+              Cancel
+            </UiAction>
+            <UiAction
+              variant="destructive"
+              disabled={!canStop || stopAgent.isPending}
+              title={canStop ? 'Stop Agent' : stopReason}
+              onClick={handleStop}
+            >
+              Stop Agent
+            </UiAction>
+          </OverlayFooter>
         </Modal>
 
         <Modal
+          compound
           opened={readinessOverrideOpen}
           onClose={() => setReadinessOverrideOpen(false)}
           title="Start with readiness override?"
           centered
         >
-          <Stack gap="md">
+          <Stack gap="md" className="vk-overlay-scroll">
             <Stack gap={6}>
               {readinessSummary.missingRequired.map((check) => (
                 <Group key={check.id} gap="xs" align="flex-start" wrap="nowrap">
@@ -687,19 +691,18 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
               rows={3}
               placeholder="Why is this task safe to start before it is ready?"
             />
-            <Group justify="flex-end" gap="xs">
-              <Button variant="default" onClick={() => setReadinessOverrideOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                color="yellow"
-                onClick={handleReadinessOverride}
-                disabled={readinessOverrideReason.trim().length < 8 || startAgent.isPending}
-              >
-                Start Anyway
-              </Button>
-            </Group>
           </Stack>
+          <OverlayFooter>
+            <UiAction variant="quiet" onClick={() => setReadinessOverrideOpen(false)}>
+              Cancel
+            </UiAction>
+            <UiAction
+              onClick={handleReadinessOverride}
+              disabled={readinessOverrideReason.trim().length < 8 || startAgent.isPending}
+            >
+              Start Anyway
+            </UiAction>
+          </OverlayFooter>
         </Modal>
       </Stack>
     </FeatureErrorBoundary>

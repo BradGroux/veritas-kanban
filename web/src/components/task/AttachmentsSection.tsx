@@ -1,3 +1,5 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useState, useRef } from 'react';
 import { API_BASE } from '../../lib/config';
 import {
@@ -14,18 +16,7 @@ import {
   ChevronUp,
   AlertTriangle,
 } from 'lucide-react';
-import {
-  ActionIcon,
-  Alert,
-  Box,
-  Button,
-  Group,
-  Modal,
-  Paper,
-  Stack,
-  Text,
-  ThemeIcon,
-} from '@mantine/core';
+import { ActionIcon, Alert, Box, Group, Paper, Stack, Text, ThemeIcon } from '@mantine/core';
 import { useUploadAttachment, useDeleteAttachment } from '@/hooks/useAttachments';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -170,30 +161,32 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
         )}
       </Paper>
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         title="Delete attachment?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will permanently delete "{attachment.originalName}". This action cannot be undone.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                void handleDelete();
-              }}
-              loading={deleteAttachment.isPending}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            onClick={() => {
+              void handleDelete();
+            }}
+            loading={deleteAttachment.isPending}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

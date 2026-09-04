@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   UiModal,
   UiDrawer,
+  UiTaskSurface,
   OVERLAY_VARIANTS,
   OverlayFooter,
   useOverlayHandoff,
@@ -13,6 +14,88 @@ import { renderWithProviders } from './test-utils';
 afterEach(cleanup);
 
 describe('shared popout contract', () => {
+  it('keeps task content mounted across presentation changes and stacks nested utilities', async () => {
+    const closeTask = vi.fn();
+    function Probe() {
+      const [expanded, setExpanded] = useState(false);
+      const [utility, setUtility] = useState(false);
+      const [confirm, setConfirm] = useState(false);
+      return (
+        <UiTaskSurface
+          opened
+          onClose={closeTask}
+          label="Task workspace"
+          expanded={expanded}
+          chatOpen={false}
+        >
+          <input aria-label="Retained draft" defaultValue="Unsaved work" />
+          <button onClick={() => setExpanded(!expanded)}>Change presentation</button>
+          <button onClick={() => setUtility(true)}>Open utility</button>
+          {utility && (
+            <UiDrawer opened onClose={() => setUtility(false)} title="Task utility">
+              <button onClick={() => setConfirm(true)}>Open confirmation</button>
+              {confirm && (
+                <UiModal opened onClose={() => setConfirm(false)} title="Confirm task action">
+                  <input aria-label="Confirmation reason" />
+                </UiModal>
+              )}
+            </UiDrawer>
+          )}
+        </UiTaskSurface>
+      );
+    }
+    renderWithProviders(
+      <StrictMode>
+        <Probe />
+      </StrictMode>
+    );
+    const task = screen.getByRole('dialog', { name: 'Task workspace' });
+    // Drawer.Content forwards className to both content and its positioning
+    // wrapper; the size-container class must only be on the visible content.
+    expect(task.classList.contains('vk-task-workspace')).toBe(true);
+    expect(task.parentElement?.classList.contains('vk-task-workspace')).toBe(false);
+    const draft = screen.getByRole('textbox', { name: 'Retained draft' });
+    fireEvent.change(draft, { target: { value: 'Changed without saving' } });
+    for (const presentation of ['expanded', 'drawer']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Change presentation' }));
+      expect(task.getAttribute('data-presentation')).toBe(presentation);
+      expect(screen.getByRole('textbox', { name: 'Retained draft' })).toBe(draft);
+      expect((draft as HTMLInputElement).value).toBe('Changed without saving');
+    }
+    const opener = screen.getByRole('button', { name: 'Open utility' });
+    vi.spyOn(opener, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
+    opener.focus();
+    fireEvent.click(opener);
+    expect(task.hasAttribute('inert')).toBe(true);
+    const utility = screen.getByRole('dialog', { name: 'Task utility' });
+    expect(
+      utility.closest('[data-overlay-presentation]')?.getAttribute('data-overlay-presentation')
+    ).toBe('dialog');
+    const confirmationOpener = screen.getByRole('button', { name: 'Open confirmation' });
+    vi.spyOn(confirmationOpener, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
+    confirmationOpener.focus();
+    fireEvent.click(confirmationOpener);
+    expect(utility.closest('[data-overlay-variant]')?.hasAttribute('inert')).toBe(true);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Confirmation reason' }), {
+      key: 'Escape',
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Confirm task action' })).toBeNull()
+    );
+    await waitFor(() => expect(document.activeElement).toBe(confirmationOpener));
+    expect(task.hasAttribute('inert')).toBe(true);
+    fireEvent.keyDown(confirmationOpener, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Task utility' })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(task.hasAttribute('inert')).toBe(false);
+    expect(closeTask).not.toHaveBeenCalled();
+    fireEvent.keyDown(opener, { key: 'Escape' });
+    expect(closeTask).toHaveBeenCalledOnce();
+  });
   it('cancels queued handoffs on reopen and unmount, and executes only the latest selection', () => {
     const frames: FrameRequestCallback[] = [];
     const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {

@@ -1,5 +1,7 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useState } from 'react';
-import { Badge, Box, Button, Group, Modal, Paper, Stack, Text, Textarea } from '@mantine/core';
+import { Badge, Box, Button, Group, Paper, Stack, Text, Textarea } from '@mantine/core';
 import { tasksApi } from '@/lib/api/tasks';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
@@ -252,22 +254,24 @@ export function TaskDetailsTab({
       </Box>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
         title="Delete this task?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm">This will permanently delete "{task.title}".</Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setDeleteConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={handleDelete}>
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setDeleteConfirmOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction variant="destructive" onClick={handleDelete}>
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </Stack>
   );

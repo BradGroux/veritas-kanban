@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   Button,
   Code,
   Group,
-  Modal,
   Paper,
   SimpleGrid,
   Stack,
@@ -210,36 +211,37 @@ export function ReviewPanel({ task, onReview, onMergeComplete }: ReviewPanelProp
       <DecisionReviewSessionsSection task={task} />
 
       <Modal
+        variant="confirm"
+        compound
         opened={mergeDialogOpen}
         onClose={() => setMergeDialogOpen(false)}
         title={`Merge changes to ${task.git?.baseBranch || 'main'}?`}
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will merge the branch <Code>{task.git?.branch}</Code> into{' '}
             <Code>{task.git?.baseBranch || 'main'}</Code>, delete the worktree, and mark this task
             as done.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setMergeDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="green"
-              onClick={() => {
-                mergeWorktree.mutate(task.id, {
-                  onSuccess: () => {
-                    onMergeComplete?.();
-                  },
-                });
-                setMergeDialogOpen(false);
-              }}
-            >
-              Merge & Close
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setMergeDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            onClick={() => {
+              mergeWorktree.mutate(task.id, {
+                onSuccess: () => {
+                  onMergeComplete?.();
+                },
+              });
+              setMergeDialogOpen(false);
+            }}
+          >
+            Merge & Close
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </Stack>
   );

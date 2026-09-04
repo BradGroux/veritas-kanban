@@ -4,12 +4,20 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { Group, Modal, getDefaultZIndex, type GroupProps, type ModalProps } from '@mantine/core';
+import {
+  Drawer,
+  Group,
+  Modal,
+  getDefaultZIndex,
+  type GroupProps,
+  type ModalProps,
+} from '@mantine/core';
 import { cn } from '@/lib/utils';
 
 export const OVERLAY_VARIANTS = {
@@ -74,6 +82,53 @@ export type UiModalProps = Omit<ModalProps, 'variant' | 'size' | 'withinPortal'>
   compound?: boolean;
 };
 
+function useOverlayRegistration(
+  opened: boolean,
+  returnFocus: boolean,
+  onExitTransitionEnd?: () => void
+) {
+  const id = useId();
+  const depth = useContext(OverlayDepth);
+  const stack = useContext(OverlayStack);
+  const register = stack?.register;
+  const opener = useRef<HTMLElement | null | undefined>(undefined);
+  // Register before paint so a rapidly reopened surface is never inert for
+  // the next keyboard event while a passive registration effect is pending.
+  useLayoutEffect(() => {
+    if (!opened) return;
+    // Effect replay (including a lazy surface reveal) must not replace the
+    // original opener with a field or background heading focused during mount.
+    if (opener.current === undefined) {
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    const trigger = returnFocus ? opener.current : null;
+    return register?.({ id, depth, trigger });
+  }, [opened, register, id, depth, returnFocus]);
+  const index = stack?.entries.findIndex((entry) => entry.id === id) ?? 0;
+  const active = !stack || stack.entries.at(-1)?.id === id;
+  return {
+    active,
+    depth,
+    zIndex: getDefaultZIndex('modal') + Math.max(index, 0),
+    onExitTransitionEnd: () => {
+      // An interrupted exit retains its opener. Restore before a new surface
+      // captures the target during an explicit overlay handoff.
+      const target = opener.current;
+      if (
+        returnFocus &&
+        onExitTransitionEnd &&
+        target?.isConnected &&
+        target.getClientRects().length
+      ) {
+        target.focus({ preventScroll: true });
+      }
+      opener.current = undefined;
+      onExitTransitionEnd?.();
+    },
+  };
+}
+
 export function UiModal({
   variant = 'form',
   compound = false,
@@ -85,24 +140,8 @@ export function UiModal({
   returnFocus = true,
   ...props
 }: UiModalProps) {
-  const id = useId();
-  const depth = useContext(OverlayDepth);
-  const stack = useContext(OverlayStack);
-  const register = stack?.register;
-  const opener = useRef<HTMLElement | null | undefined>(undefined);
-  useEffect(() => {
-    if (!props.opened) return;
-    // Effect replay (including a lazy surface reveal) must not replace the
-    // original opener with a field or background heading focused during mount.
-    if (opener.current === undefined) {
-      opener.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    }
-    const trigger = returnFocus ? opener.current : null;
-    return register?.({ id, depth, trigger });
-  }, [props.opened, register, id, depth, returnFocus]);
-  const index = stack?.entries.findIndex((entry) => entry.id === id) ?? 0;
-  const active = !stack || stack.entries.at(-1)?.id === id;
+  const overlay = useOverlayRegistration(props.opened, returnFocus, props.onExitTransitionEnd);
+  const { active, depth } = overlay;
   const definition = OVERLAY_VARIANTS[variant];
 
   return (
@@ -127,23 +166,9 @@ export function UiModal({
           inner: cn('vk-overlay-inner', extra?.inner),
         };
       }}
-      zIndex={getDefaultZIndex('modal') + Math.max(index, 0)}
+      zIndex={overlay.zIndex}
       transitionProps={{ transition: 'fade', duration: 150, ...props.transitionProps }}
-      onExitTransitionEnd={() => {
-        // An interrupted exit keeps the same opener. Completed handoffs must
-        // restore it before the next surface captures its return-focus target.
-        const target = opener.current;
-        if (
-          returnFocus &&
-          props.onExitTransitionEnd &&
-          target?.isConnected &&
-          target.getClientRects().length
-        ) {
-          target.focus({ preventScroll: true });
-        }
-        opener.current = undefined;
-        props.onExitTransitionEnd?.();
-      }}
+      onExitTransitionEnd={overlay.onExitTransitionEnd}
       lockScroll
       closeOnEscape={active && closeOnEscape}
       closeOnClickOutside={active && (props.closeOnClickOutside ?? true)}
@@ -158,6 +183,71 @@ export function UiModal({
     >
       <OverlayDepth.Provider value={depth + 1}>{children}</OverlayDepth.Provider>
     </Modal>
+  );
+}
+
+interface UiTaskSurfaceProps {
+  opened: boolean;
+  onClose: () => void;
+  label: string;
+  expanded: boolean;
+  chatOpen: boolean;
+  closeOnEscape?: boolean;
+  trapFocus?: boolean;
+  children: ReactNode;
+}
+
+/** Stateful task workspace geometry participates in the same stack as its tools. */
+export function UiTaskSurface({
+  opened,
+  onClose,
+  label,
+  expanded,
+  chatOpen,
+  closeOnEscape = true,
+  trapFocus = true,
+  children,
+}: UiTaskSurfaceProps) {
+  const overlay = useOverlayRegistration(opened, true);
+  return (
+    <OverlayDepth.Provider value={overlay.depth + 1}>
+      <Drawer.Root
+        opened={opened}
+        onClose={onClose}
+        position="right"
+        size={
+          expanded
+            ? '100vw'
+            : `min(100vw, calc(${OVERLAY_VARIANTS.task.width} + ${chatOpen ? OVERLAY_VARIANTS.chat.width : '0rem'}))`
+        }
+        zIndex={overlay.zIndex}
+        lockScroll
+        returnFocus={false}
+        trapFocus={overlay.active && trapFocus}
+        closeOnEscape={overlay.active && closeOnEscape}
+        closeOnClickOutside={overlay.active}
+        onExitTransitionEnd={overlay.onExitTransitionEnd}
+      >
+        <Drawer.Overlay className="veritas-overlay" />
+        <Drawer.Content
+          aria-label={label}
+          data-overlay-variant="task"
+          data-overlay-active={overlay.active || undefined}
+          data-presentation={expanded ? 'expanded' : 'drawer'}
+          data-testid="task-detail-panel"
+          data-chat-open={chatOpen || undefined}
+          inert={!overlay.active || undefined}
+          classNames={{
+            content:
+              'veritas-overlay-surface vk-task-workspace flex h-full min-h-0 max-h-[100dvh] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg',
+          }}
+        >
+          <Drawer.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+            {children}
+          </Drawer.Body>
+        </Drawer.Content>
+      </Drawer.Root>
+    </OverlayDepth.Provider>
   );
 }
 

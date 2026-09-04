@@ -1,3 +1,5 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useState } from 'react';
 import { Eye, Trash2, Plus } from 'lucide-react';
 import {
@@ -5,7 +7,6 @@ import {
   Badge,
   Button,
   Group,
-  Modal,
   Paper,
   Select,
   SimpleGrid,
@@ -116,29 +117,31 @@ function ObservationItem({
       </Paper>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         title="Delete Observation"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             Are you sure you want to delete this observation? This action cannot be undone.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                void handleDelete();
-              }}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            onClick={() => {
+              void handleDelete();
+            }}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

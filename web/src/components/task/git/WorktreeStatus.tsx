@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Code, Group, Modal, Stack, Text, Textarea } from '@mantine/core';
+import { Alert, Badge, Button, Code, Group, Stack, Text, Textarea } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   useWorktreeStatus,
   useCreateWorktree,
@@ -372,42 +374,45 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
       <PRDialog task={task} open={prDialogOpen} onOpenChange={setPrDialogOpen} />
 
       <Modal
+        variant="confirm"
+        compound
         opened={mergeDialogOpen}
         onClose={() => setMergeDialogOpen(false)}
         title={`Merge to ${task.git?.baseBranch}?`}
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will merge {task.git?.branch} into {task.git?.baseBranch}, push to remote, delete
             the worktree, and mark the task as Done. Integration runs in a dedicated temporary
             worktree and does not change your primary checkout.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setMergeDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="green"
-              onClick={() => {
-                mergeWorktree.mutate(task.id);
-                setMergeDialogOpen(false);
-              }}
-              disabled={mergeWorktree.isPending}
-            >
-              {mergeWorktree.isPending ? 'Merging...' : 'Merge & Complete'}
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setMergeDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            onClick={() => {
+              mergeWorktree.mutate(task.id);
+              setMergeDialogOpen(false);
+            }}
+            disabled={mergeWorktree.isPending}
+          >
+            {mergeWorktree.isPending ? 'Merging...' : 'Merge & Complete'}
+          </UiAction>
+        </OverlayFooter>
       </Modal>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         title="Delete worktree?"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="md" className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will remove the worktree but keep the branch.
           </Text>
@@ -432,35 +437,35 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
               required
             />
           )}
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                deleteWorktree.mutate({
-                  taskId: task.id,
-                  force: (status?.cleanupPreview?.blockedReasons.length ?? 0) > 0,
-                  reason: status?.cleanupPreview?.requiresOverride
-                    ? cleanupOverrideReason.trim()
-                    : undefined,
-                });
-                setDeleteDialogOpen(false);
-                setCleanupOverrideReason('');
-              }}
-              disabled={
-                Boolean(
-                  status?.cleanupPreview?.blockedReasons.some((reason) => !reason.overrideable)
-                ) ||
-                (Boolean(status?.cleanupPreview?.requiresOverride) &&
-                  cleanupOverrideReason.trim().length === 0)
-              }
-            >
-              Delete
-            </Button>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            onClick={() => {
+              deleteWorktree.mutate({
+                taskId: task.id,
+                force: (status?.cleanupPreview?.blockedReasons.length ?? 0) > 0,
+                reason: status?.cleanupPreview?.requiresOverride
+                  ? cleanupOverrideReason.trim()
+                  : undefined,
+              });
+              setDeleteDialogOpen(false);
+              setCleanupOverrideReason('');
+            }}
+            disabled={
+              Boolean(
+                status?.cleanupPreview?.blockedReasons.some((reason) => !reason.overrideable)
+              ) ||
+              (Boolean(status?.cleanupPreview?.requiresOverride) &&
+                cleanupOverrideReason.trim().length === 0)
+            }
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </Stack>
   );

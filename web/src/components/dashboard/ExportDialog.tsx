@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, Group, Loader, Modal, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Group, Loader, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { Download } from 'lucide-react';
 import { API_BASE, apiResponse } from '@/lib/api/helpers';
 
@@ -107,7 +109,7 @@ export function ExportDialog({
     <Modal
       opened={open}
       onClose={handleClose}
-      size="md"
+      compound
       centered
       title={
         <Group gap="sm">
@@ -118,7 +120,7 @@ export function ExportDialog({
         </Group>
       }
     >
-      <Stack gap="md">
+      <Stack gap="md" className="vk-overlay-scroll">
         <Text size="sm" c="dimmed">
           Export telemetry data as CSV or JSON for reporting and analysis.
         </Text>
@@ -184,22 +186,21 @@ export function ExportDialog({
           value={toDate}
           onChange={(e) => setToDate(e.target.value)}
         />
-
-        <Group justify="flex-end" mt="sm">
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleExport}
-            disabled={
-              isExporting || (scope === 'task' && !taskId) || (scope === 'project' && !project)
-            }
-            leftSection={isExporting ? <Loader size={14} /> : <Download className="h-4 w-4" />}
-          >
-            {isExporting ? 'Exporting...' : 'Export'}
-          </Button>
-        </Group>
       </Stack>
+      <OverlayFooter>
+        <UiAction variant="quiet" onClick={handleClose}>
+          Cancel
+        </UiAction>
+        <UiAction
+          onClick={handleExport}
+          disabled={
+            isExporting || (scope === 'task' && !taskId) || (scope === 'project' && !project)
+          }
+          leftSection={isExporting ? <Loader size={14} /> : <Download className="h-4 w-4" />}
+        >
+          {isExporting ? 'Exporting...' : 'Export'}
+        </UiAction>
+      </OverlayFooter>
     </Modal>
   );
 }

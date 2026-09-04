@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   Badge,
   Button,
   Code,
   Group,
   Loader,
-  Modal,
   Paper,
   ScrollArea,
   Select,
@@ -1371,60 +1372,64 @@ export function AgentRunTimelinePanel({
         </Paper>
       ))}
       <Modal
+        compound
         opened={pendingDecision !== null}
         onClose={() => setPendingDecision(null)}
         title={pendingDecision?.decision === 'approved' ? 'Approve exact action' : 'Reject action'}
         centered
       >
         {pendingDecision && (
-          <Stack gap="md">
-            <Text fw={700}>{pendingDecision.approval.action}</Text>
-            <Text size="sm">{pendingDecision.approval.details || 'No additional details.'}</Text>
-            {pendingDecision.approval.workingDirectory && (
-              <Text size="sm">
-                Working directory: <Code>{pendingDecision.approval.workingDirectory}</Code>
-              </Text>
-            )}
-            {pendingDecision.approval.resourceScope.length > 0 && (
-              <Stack gap={4}>
-                <Text size="sm" fw={600}>
-                  Resource scope
+          <>
+            <Stack gap="md" className="vk-overlay-scroll">
+              <Text fw={700}>{pendingDecision.approval.action}</Text>
+              <Text size="sm">{pendingDecision.approval.details || 'No additional details.'}</Text>
+              {pendingDecision.approval.workingDirectory && (
+                <Text size="sm">
+                  Working directory: <Code>{pendingDecision.approval.workingDirectory}</Code>
                 </Text>
-                {pendingDecision.approval.resourceScope.map((resource) => (
-                  <Code key={resource} block>
-                    {resource}
-                  </Code>
-                ))}
-              </Stack>
-            )}
-            {pendingDecision.approval.policyReason && (
-              <Text size="sm">Policy reason: {pendingDecision.approval.policyReason}</Text>
-            )}
-            {pendingDecision.approval.phase && (
-              <Text size="sm">
-                Phase-bound authority: sequence {pendingDecision.approval.phase.transitionSequence},{' '}
-                {pendingDecision.approval.phase.requirements
-                  .map(
-                    (requirement) =>
-                      `${requirement.dimension}=${requirement.requestedScopes.join('|')}`
-                  )
-                  .join(', ')}
-              </Text>
-            )}
-            <Code block>{pendingDecision.approval.actionHash}</Code>
-            {decideApproval.error && (
-              <Text size="sm" c="red">
-                {decideApproval.error instanceof Error
-                  ? decideApproval.error.message
-                  : 'Approval decision failed.'}
-              </Text>
-            )}
-            <Group justify="flex-end">
-              <Button variant="default" onClick={() => setPendingDecision(null)}>
+              )}
+              {pendingDecision.approval.resourceScope.length > 0 && (
+                <Stack gap={4}>
+                  <Text size="sm" fw={600}>
+                    Resource scope
+                  </Text>
+                  {pendingDecision.approval.resourceScope.map((resource) => (
+                    <Code key={resource} block>
+                      {resource}
+                    </Code>
+                  ))}
+                </Stack>
+              )}
+              {pendingDecision.approval.policyReason && (
+                <Text size="sm">Policy reason: {pendingDecision.approval.policyReason}</Text>
+              )}
+              {pendingDecision.approval.phase && (
+                <Text size="sm">
+                  Phase-bound authority: sequence{' '}
+                  {pendingDecision.approval.phase.transitionSequence},{' '}
+                  {pendingDecision.approval.phase.requirements
+                    .map(
+                      (requirement) =>
+                        `${requirement.dimension}=${requirement.requestedScopes.join('|')}`
+                    )
+                    .join(', ')}
+                </Text>
+              )}
+              <Code block>{pendingDecision.approval.actionHash}</Code>
+              {decideApproval.error && (
+                <Text size="sm" c="red">
+                  {decideApproval.error instanceof Error
+                    ? decideApproval.error.message
+                    : 'Approval decision failed.'}
+                </Text>
+              )}
+            </Stack>
+            <OverlayFooter>
+              <UiAction variant="quiet" onClick={() => setPendingDecision(null)}>
                 Cancel
-              </Button>
-              <Button
-                color={pendingDecision.decision === 'approved' ? 'green' : 'red'}
+              </UiAction>
+              <UiAction
+                variant={pendingDecision.decision === 'approved' ? 'primary' : 'destructive'}
                 loading={decideApproval.isPending}
                 onClick={async () => {
                   await decideApproval.mutateAsync({
@@ -1439,9 +1444,9 @@ export function AgentRunTimelinePanel({
                 }}
               >
                 Confirm {pendingDecision.decision === 'approved' ? 'approval' : 'rejection'}
-              </Button>
-            </Group>
-          </Stack>
+              </UiAction>
+            </OverlayFooter>
+          </>
         )}
       </Modal>
       <Paper withBorder p="md" radius="md">

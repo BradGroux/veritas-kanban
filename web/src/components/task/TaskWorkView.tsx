@@ -1,3 +1,4 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import {
   UiSurface,
   UiHeading,
@@ -12,7 +13,6 @@ import {
   Code,
   Group,
   Loader,
-  Modal,
   Progress,
   ScrollArea,
   SimpleGrid,
@@ -1053,31 +1053,33 @@ export function TaskWorkView({
       />
 
       <Modal
+        variant="confirm"
+        compound
         opened={stopConfirmOpen}
         onClose={() => setStopConfirmOpen(false)}
         title="Stop the active run?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This stops the running agent attempt and marks it failed so it can be inspected or
             retried from the Agent tab.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <UiAction variant="secondary" onClick={() => setStopConfirmOpen(false)}>
-              Cancel
-            </UiAction>
-            <UiAction
-              variant="destructive"
-              loading={stopAgent.isPending}
-              onClick={handleStopAgent}
-              disabled={!canStop}
-              title={canStop ? 'Stop agent' : stopReason}
-            >
-              Stop Agent
-            </UiAction>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setStopConfirmOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            loading={stopAgent.isPending}
+            onClick={handleStopAgent}
+            disabled={!canStop}
+            title={canStop ? 'Stop agent' : stopReason}
+          >
+            Stop Agent
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

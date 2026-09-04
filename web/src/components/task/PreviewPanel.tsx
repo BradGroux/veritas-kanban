@@ -1,9 +1,9 @@
 import { useState } from 'react';
+import { UiDrawer as Drawer } from '@/components/ui/UiOverlay';
 import {
   ActionIcon,
   Button,
   Code,
-  Drawer,
   Group,
   Loader,
   Paper,
@@ -73,8 +73,7 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
       opened={open}
       onClose={() => onOpenChange(false)}
       position="right"
-      size="min(800px, 92vw)"
-      padding={0}
+      compound
       title={
         <Group gap="xs">
           <Monitor className="h-5 w-5" />
@@ -82,8 +81,8 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
         </Group>
       }
     >
-      <Stack gap={0} className="h-[calc(100vh-64px)]">
-        <Group justify="space-between" align="center" className="border-b px-6 py-4">
+      <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
+        <Group justify="space-between" align="center" className="shrink-0 border-b p-4">
           <Text size="sm" c="dimmed">
             {task.git?.repo ? `Dev server for ${task.git.repo}` : 'No repository configured'}
           </Text>
@@ -152,7 +151,7 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
         </Group>
 
         {/* Content Area */}
-        <Stack gap={0} className="min-h-0 flex-1 overflow-hidden">
+        <Stack gap={0} className="vk-overlay-scroll">
           {/* Loading state */}
           {(isLoading || isStarting) && (
             <Stack align="center" justify="center" gap="sm" className="flex-1">

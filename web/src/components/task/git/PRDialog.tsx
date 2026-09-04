@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Button, Checkbox, Group, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { Checkbox, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useCreatePR } from '@/hooks/useGitHub';
 import { Loader2, GitPullRequest } from 'lucide-react';
 import type { Task } from '@veritas-kanban/shared';
@@ -35,13 +37,13 @@ export function PRDialog({ task, open, onOpenChange }: PRDialogProps) {
 
   return (
     <Modal
+      compound
       opened={open}
       onClose={() => onOpenChange(false)}
       title="Create Pull Request"
       centered
-      size="lg"
     >
-      <Stack gap="md">
+      <Stack gap="md" className="vk-overlay-scroll">
         <Text size="sm" c="dimmed">
           Create a PR from {task.git?.branch} to {task.git?.baseBranch}
         </Text>
@@ -71,27 +73,27 @@ export function PRDialog({ task, open, onOpenChange }: PRDialogProps) {
             {(createPR.error as Error).message}
           </Text>
         )}
-        <Group justify="flex-end" gap="xs">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              void handleCreatePR();
-            }}
-            disabled={createPR.isPending || !prTitle}
-            leftSection={
-              createPR.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <GitPullRequest className="h-4 w-4" />
-              )
-            }
-          >
-            {createPR.isPending ? 'Creating...' : 'Create PR'}
-          </Button>
-        </Group>
       </Stack>
+      <OverlayFooter>
+        <UiAction variant="quiet" onClick={() => onOpenChange(false)}>
+          Cancel
+        </UiAction>
+        <UiAction
+          onClick={() => {
+            void handleCreatePR();
+          }}
+          disabled={createPR.isPending || !prTitle}
+          leftSection={
+            createPR.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <GitPullRequest className="h-4 w-4" />
+            )
+          }
+        >
+          {createPR.isPending ? 'Creating...' : 'Create PR'}
+        </UiAction>
+      </OverlayFooter>
     </Modal>
   );
 }
