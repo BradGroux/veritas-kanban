@@ -22,7 +22,7 @@ Task confirmations and forms use shared widths and insets, a primary scrolling b
 | Approval decisions                                | `AgentRunTimelinePanel`                       | Every-family checks pending                                                                                | Pending                 |
 | Review merge                                      | `ReviewPanel`                                 | Every-family checks pending                                                                                | Pending                 |
 | Work product versions, editing, artifact preview  | `WorkProductsSection`, `ArtifactPreviewModal` | Light/dark; three sizes; normal/reduced motion; editor pending/failure recovery; text preview only         | Pending                 |
-| Git PR, merge, worktree removal                   | `PRDialog`, `WorktreeStatus`                  | Every-family checks pending                                                                                | Pending                 |
+| Git PR, merge, worktree removal                   | `PRDialog`, `WorktreeStatus`                  | Light/dark; three sizes; normal/reduced motion; pending dismissal, retained drafts, inline failures        | Pending                 |
 | Workflows                                         | `WorkflowSection`, `WorkflowStartDialog`      | Every-family checks pending                                                                                | Pending                 |
 | Task metrics export                               | `ExportDialog`                                | Every-family checks pending                                                                                | Pending                 |
 
@@ -49,6 +49,14 @@ The initial browser run exposed task container classes accidentally applied to M
 `task-product-popouts.spec.ts` exercises a 30-version history, a long Markdown editor, and a long text artifact preview in both themes and motion settings at the same three viewport/text combinations. Checks cover viewport bounds, horizontal overflow, fixed footers, actionable footer hit targets, inert parent workspace, keyboard entry, and exact opener restoration. A deferred synthetic failed save tests Escape and header-close guards, one submission, preserved Markdown, and retry availability. It does not prove a successful save. Reads and save requests are intercepted; no work product is mutated on the backend.
 
 Measurements wait for two animation frames after viewport/font changes so textarea row recalculation settles before comparing footer positions across scrolling. The failed-save notification is explicitly dismissed before preview capture; the initial capture showed that notification obscuring the next surface even though the footer was inside the viewport. This is why hit-target checks supplement viewport checks. Text preview coverage does not establish image/PDF zoom or HTML refresh geometry. These remain pending, as does packaged macOS verification for all three dialogs.
+
+### Git confirmations
+
+`task-git-popouts.spec.ts` covers PR creation, merge, and worktree cleanup in both themes and motion settings at the three viewport/text combinations. Browser checks exercise footer hit targets and fixed geometry, parent inertness, exact opener restoration, Escape/header-close/backdrop attempts while pending, single submission, inline error recovery, retained PR/cleanup drafts, and exact request payloads. All Git writes are intercepted and fail synthetically; no PR, merge, or worktree removal occurs on the backend. Managed ownership is added only to intercepted reads.
+
+All three initial pending-request cases failed: PR creation allowed Escape dismissal, while merge and cleanup closed immediately after dispatch. The handlers now acquire synchronous ref locks before dispatch, wait for completion, and release in `finally`. Controls are disabled while pending; errors remain in the dialog. Cleanup clears its reason only after success. Component tests deliberately keep mutation `isPending` false and verify duplicate prevention, retained drafts on failure, and closing after a successful mocked retry. Those unit-level successes do not prove live Git operations.
+
+Independent specification and standards reviews found no actionable source issue in this increment. Browser captures were inspected for PR and cleanup at enlarged text/minimum size. Packaged macOS acceptance remains pending for all three.
 
 ## Remaining acceptance
 

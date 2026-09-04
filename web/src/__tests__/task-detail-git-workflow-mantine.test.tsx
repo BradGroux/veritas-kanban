@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { GitSection } from '@/components/task/GitSection';
@@ -51,7 +51,7 @@ vi.mock('@/hooks/useWorktree', () => ({
     error: null,
   }),
   useDeleteWorktree: () => ({
-    mutate: mocks.deleteWorktreeMutate,
+    mutateAsync: mocks.deleteWorktreeMutate,
     isPending: false,
   }),
   useRebaseWorktree: () => ({
@@ -59,7 +59,7 @@ vi.mock('@/hooks/useWorktree', () => ({
     isPending: false,
   }),
   useMergeWorktree: () => ({
-    mutate: mocks.mergeWorktreeMutate,
+    mutateAsync: mocks.mergeWorktreeMutate,
     isPending: false,
   }),
 }));
@@ -283,6 +283,83 @@ describe('task detail Git and workflow Mantine migration', () => {
       reason: 'Operator reviewed and accepted the retained branch risk.',
     });
   });
+
+  it.each([
+    ['PR', 'Create PR', 'Create Pull Request', 'Create PR'],
+    ['merge', 'Merge', 'Merge to main?', 'Merge & Complete'],
+    ['cleanup', 'Delete Worktree', 'Delete worktree?', 'Delete'],
+  ])(
+    'retains %s confirmation through failure and closes only after successful retry',
+    async (kind, opener, title, submit) => {
+      const user = userEvent.setup();
+      const mutation =
+        kind === 'PR'
+          ? mocks.createPRMutateAsync
+          : kind === 'merge'
+            ? mocks.mergeWorktreeMutate
+            : mocks.deleteWorktreeMutate;
+      let rejectRequest!: (error: Error) => void;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRequest = reject;
+          })
+      );
+      renderWithProviders(
+        <WorktreeStatus
+          task={createMockTask({
+            id: 'task-pending-git',
+            git: {
+              repo: 'veritas',
+              baseBranch: 'main',
+              branch: 'feature/pending',
+              worktreePath: '/tmp/pending-fixture',
+              worktreeManifestId: 'fixture',
+            },
+          })}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: opener }));
+      const dialog = await screen.findByRole('dialog', { name: title });
+      const draftLabel =
+        kind === 'PR' ? 'Description' : kind === 'cleanup' ? 'Override reason' : null;
+      if (draftLabel)
+        fireEvent.change(within(dialog).getByRole('textbox', { name: draftLabel }), {
+          target: { value: 'Retain this reviewed draft.' },
+        });
+      const submitButton = within(dialog).getByRole('button', { name: submit });
+      // Mutation mocks deliberately never report isPending: the local guard must
+      // acquire ownership synchronously rather than relying on query notification.
+      fireEvent.click(submitButton);
+      fireEvent.click(submitButton);
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('dialog', { name: title })).toBe(dialog);
+      expect(
+        (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+      ).toBe(true);
+      if (draftLabel)
+        expect(
+          (within(dialog).getByRole('textbox', { name: draftLabel }) as HTMLTextAreaElement)
+            .disabled
+        ).toBe(true);
+      await act(async () => rejectRequest(new Error('Fixture operation failed')));
+      expect(within(dialog).getByText('Fixture operation failed').getAttribute('role')).toBe(
+        'alert'
+      );
+      if (draftLabel)
+        expect(
+          (within(dialog).getByRole('textbox', { name: draftLabel }) as HTMLTextAreaElement).value
+        ).toBe('Retain this reviewed draft.');
+      mutation.mockResolvedValueOnce(
+        kind === 'PR' ? { url: 'https://github.com/example/pr/2' } : undefined
+      );
+      await user.click(within(dialog).getByRole('button', { name: submit }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: title })).toBeNull());
+      expect(mutation).toHaveBeenCalledTimes(2);
+    }
+  );
 
   it('offers admin adoption for a pre-6.0 worktree without running status actions', async () => {
     const user = userEvent.setup();

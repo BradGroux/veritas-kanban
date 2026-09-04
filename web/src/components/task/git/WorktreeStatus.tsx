@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Badge, Button, Code, Group, Stack, Text, Textarea } from '@mantine/core';
 import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction } from '@/components/ui/UiVocabulary';
@@ -55,6 +55,62 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cleanupOverrideReason, setCleanupOverrideReason] = useState('');
   const [staleBaseReason, setStaleBaseReason] = useState('');
+  const [pendingOperation, setPendingOperation] = useState<'merge' | 'delete' | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const operationInFlight = useRef(false);
+  const deleteBlocked =
+    Boolean(status?.cleanupPreview?.blockedReasons.some((reason) => !reason.overrideable)) ||
+    (Boolean(status?.cleanupPreview?.requiresOverride) &&
+      cleanupOverrideReason.trim().length === 0);
+
+  const closeMergeDialog = () => {
+    if (operationInFlight.current) return;
+    setMergeDialogOpen(false);
+    setOperationError(null);
+  };
+
+  const closeDeleteDialog = () => {
+    if (operationInFlight.current) return;
+    setDeleteDialogOpen(false);
+    setOperationError(null);
+  };
+
+  const handleMerge = async () => {
+    if (operationInFlight.current) return;
+    operationInFlight.current = true;
+    setPendingOperation('merge');
+    setOperationError(null);
+    try {
+      await mergeWorktree.mutateAsync(task.id);
+      setMergeDialogOpen(false);
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : 'Unable to merge worktree.');
+    } finally {
+      operationInFlight.current = false;
+      setPendingOperation(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (operationInFlight.current || deleteBlocked) return;
+    operationInFlight.current = true;
+    setPendingOperation('delete');
+    setOperationError(null);
+    try {
+      await deleteWorktree.mutateAsync({
+        taskId: task.id,
+        force: (status?.cleanupPreview?.blockedReasons.length ?? 0) > 0,
+        reason: status?.cleanupPreview?.requiresOverride ? cleanupOverrideReason.trim() : undefined,
+      });
+      setDeleteDialogOpen(false);
+      setCleanupOverrideReason('');
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : 'Unable to delete worktree.');
+    } finally {
+      operationInFlight.current = false;
+      setPendingOperation(null);
+    }
+  };
 
   const handleOpenInVSCode = () => {
     if (task.git?.worktreePath) {
@@ -377,7 +433,7 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
         variant="confirm"
         compound
         opened={mergeDialogOpen}
-        onClose={() => setMergeDialogOpen(false)}
+        onClose={closeMergeDialog}
         title={`Merge to ${task.git?.baseBranch}?`}
         centered
       >
@@ -387,19 +443,23 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
             the worktree, and mark the task as Done. Integration runs in a dedicated temporary
             worktree and does not change your primary checkout.
           </Text>
+          {operationError && (
+            <Text size="sm" c="red" role="alert">
+              {operationError}
+            </Text>
+          )}
         </div>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setMergeDialogOpen(false)}>
+          <UiAction variant="quiet" onClick={closeMergeDialog} disabled={pendingOperation !== null}>
             Cancel
           </UiAction>
           <UiAction
             onClick={() => {
-              mergeWorktree.mutate(task.id);
-              setMergeDialogOpen(false);
+              void handleMerge();
             }}
-            disabled={mergeWorktree.isPending}
+            disabled={pendingOperation !== null}
           >
-            {mergeWorktree.isPending ? 'Merging...' : 'Merge & Complete'}
+            {pendingOperation === 'merge' ? 'Merging...' : 'Merge & Complete'}
           </UiAction>
         </OverlayFooter>
       </Modal>
@@ -408,7 +468,7 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
         variant="confirm"
         compound
         opened={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete worktree?"
         centered
       >
@@ -432,38 +492,34 @@ export function WorktreeStatus({ task }: WorktreeStatusProps) {
               label="Override reason"
               description="This reason is stored in the worktree manifest."
               value={cleanupOverrideReason}
+              disabled={pendingOperation !== null}
               onChange={(event) => setCleanupOverrideReason(event.currentTarget.value)}
               minRows={2}
               required
             />
           )}
+          {operationError && (
+            <Text size="sm" c="red" role="alert">
+              {operationError}
+            </Text>
+          )}
         </Stack>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+          <UiAction
+            variant="quiet"
+            onClick={closeDeleteDialog}
+            disabled={pendingOperation !== null}
+          >
             Cancel
           </UiAction>
           <UiAction
             variant="destructive"
             onClick={() => {
-              deleteWorktree.mutate({
-                taskId: task.id,
-                force: (status?.cleanupPreview?.blockedReasons.length ?? 0) > 0,
-                reason: status?.cleanupPreview?.requiresOverride
-                  ? cleanupOverrideReason.trim()
-                  : undefined,
-              });
-              setDeleteDialogOpen(false);
-              setCleanupOverrideReason('');
+              void handleDelete();
             }}
-            disabled={
-              Boolean(
-                status?.cleanupPreview?.blockedReasons.some((reason) => !reason.overrideable)
-              ) ||
-              (Boolean(status?.cleanupPreview?.requiresOverride) &&
-                cleanupOverrideReason.trim().length === 0)
-            }
+            disabled={pendingOperation !== null || deleteBlocked}
           >
-            Delete
+            {pendingOperation === 'delete' ? 'Deleting...' : 'Delete'}
           </UiAction>
         </OverlayFooter>
       </Modal>
