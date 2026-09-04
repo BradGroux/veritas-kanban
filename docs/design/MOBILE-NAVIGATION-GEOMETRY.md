@@ -13,3 +13,9 @@ These browser checks do not establish packaged macOS, signed-release, or documen
 Activity rows must fit the viewport rather than expanding the mobile layout viewport around fixed navigation. Below the small-screen breakpoint, timestamp/status controls may wrap and task identity occupies a separate line with a wrapping ID and title. Wider layouts retain the existing single-row arrangement. No status, ID, or title is hidden to make the row fit.
 
 `e2e/mobile-navigation-hit-target.spec.ts` supplies populated Activity records with realistic-length IDs independently of prior tests. It checks layout width, all navigation and Chat hit targets, and pointer/keyboard return to Board at narrow widths, enlarged text, and both motion preferences. The original 320px case expanded the layout viewport to 424px while the visual viewport remained 320px; increasing navigation z-index would not fix that mismatch.
+
+## Enlarged navigation labels
+
+Tracking: #1465. Narrow navigation buttons give their full grid-cell width to the label, with spacing between buttons supplied by the grid gap. Do not spend that width on horizontal button padding or shrink the text to fit. The Settings label needs more space with wider platform fonts; the 320px, 20px-text regression measured a 72px word in a 67px content box.
+
+`e2e/mobile-readable.spec.ts` includes a wider-platform-font case in addition to the default-font size/theme matrix. It checks every full label, 44px minimum touch targets, hit testing, and content clearance. This remains browser coverage, not final documentation-media or packaged-app acceptance.
