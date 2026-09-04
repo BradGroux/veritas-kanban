@@ -42,6 +42,12 @@ Apply Template owns submission and dismissal until both the task update and non-
 
 The verification contract includes immediate duplicate prevention, retained inputs, deliberate retry and delayed logging failure. `task-template-pending.spec.ts` checks pending and failed states in both themes and motion settings at 1700×900/16px, 1180×760/20px and 900×480/20px, with fixed/reachable footers, exact intercepted update payloads, disabled dismissal/inputs and opener restoration. Fixture-backed browser checks do not establish native utility-operation or final documentation-media acceptance. Delivery evidence is tracked in #1503.
 
+### Preview operations
+
+Start, Stop and Try Again share one synchronous operation guard. Competing controls and dismissal remain disabled until the request settles. Failures focus a visible inline error and release the guard for a deliberate retry without replacing the backend preview status or removing existing output and iframe behavior.
+
+The verification contract covers immediate duplicate prevention, pending dismissal, failed Start and Stop, successful mocked retry and exact task bindings. `task-preview-pending.spec.ts` checks both themes and motion settings at 1700×900/16px, 1180×760/20px and 900×480/20px, including initial error visibility, fixed/reachable controls and opener restoration. Browser fixtures intercept preview writes and reject unexpected worktree writes; they never start or stop a real development server. Native operation acceptance remains separate. Delivery evidence is tracked in #1505.
+
 ### Supporting task dialogs
 
 `task-support-popouts.spec.ts` covers task, comment, attachment, observation, and deliverable deletion plus manual time entry. Each family is exercised in light/dark, normal/reduced motion, and 1700×900 at 16px, 1180×760 at 20px, and 900×480 at 20px. Checks cover bounded bodies, fixed/reachable footers, no horizontal overflow, keyboard opening, trapped focus, exact opener restoration, and retained task title. Delayed synthetic failed requests exercise Escape, header-close, and backdrop dismissal guards, one submission, inline error recovery, and preserved manual-time drafts. This proves retry availability, not a successful retry. No supporting-record mutation reaches the backend.
