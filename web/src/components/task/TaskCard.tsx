@@ -220,6 +220,7 @@ export const TaskCard = memo(function TaskCard({
   });
   const { isSelecting, toggleSelect, isSelected: isBulkSelected } = useBulkActions();
   const [tooltipDismissed, setTooltipDismissed] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const isChecked = isBulkSelected(task.id);
   const { settings: featureSettings } = useFeatureSettings();
   const boardSettings = featureSettings.board;
@@ -340,8 +341,9 @@ export const TaskCard = memo(function TaskCard({
   const readinessAria = readinessSummary ? `, Readiness: ${readinessSummary.percent}%` : '';
   const isVerified = allVerificationDone;
 
-  // Suppress the outer card tooltip entirely during any drag operation
-  const suppressCardTooltip = isDragActive || isDragging || isCurrentlyDragging || tooltipDismissed;
+  // Keep card help out of drag operations and the active status menu.
+  const suppressCardTooltip =
+    isDragActive || isDragging || isCurrentlyDragging || tooltipDismissed || statusMenuOpen;
 
   return (
     <Tooltip
@@ -785,6 +787,8 @@ export const TaskCard = memo(function TaskCard({
               size="sm"
               allowDeselect={false}
               checkIconPosition="right"
+              onDropdownOpen={() => setStatusMenuOpen(true)}
+              onDropdownClose={() => setStatusMenuOpen(false)}
             />
           </div>
         )}
