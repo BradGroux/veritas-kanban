@@ -9,6 +9,7 @@ import { getDelegationService } from '../services/delegation-service.js';
 import { getProgressService } from '../services/progress-service.js';
 import {
   BOARD_COLUMN_ID_PATTERN,
+  TASK_PRIORITIES,
   type CreateTaskInput,
   type UpdateTaskInput,
   type Task,
@@ -194,7 +195,7 @@ const createTaskSchema = z.object({
   description: z.string().optional().default(''),
   type: z.string().optional().default('code'),
   status: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN).optional(),
-  priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+  priority: z.enum(TASK_PRIORITIES).optional().default('medium'),
   project: z.string().optional(),
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(), // "auto" | agent type slug
@@ -352,7 +353,7 @@ const updateTaskSchema = z.object({
   description: z.string().optional(),
   type: z.string().optional(),
   status: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN).optional(),
-  priority: z.enum(['low', 'medium', 'high']).optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
   agent: z.string().max(50).optional(),
