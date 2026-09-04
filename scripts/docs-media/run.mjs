@@ -120,12 +120,12 @@ async function capture() {
       png: (await win.capturePage()).toPNG().toString('base64'),
     };
   });
-  assert.equal(native.contentBounds.width, 1700);
-  assert.equal(native.contentBounds.height, 1000);
+  assert.equal(native.contentBounds.width, contentSizes.normal.width);
+  assert.equal(native.contentBounds.height, contentSizes.normal.height);
   return {
     bytes: Buffer.from(native.png, 'base64'),
-    width: 1700,
-    height: 1000,
+    width: contentSizes.normal.width,
+    height: contentSizes.normal.height,
     scaleFactor: native.scaleFactor,
     nativeWindow: { bounds: native.bounds, contentBounds: native.contentBounds },
   };
