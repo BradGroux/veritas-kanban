@@ -73,6 +73,7 @@
     "prepare": "node scripts/prepare-husky.mjs",
     "demo": "docker compose -f demo/docker-compose.demo.yml up --build",
     "docs:capture-media": "node scripts/docs-media/run.mjs",
+    "docs:verify-media": "node scripts/docs-media/publish.mjs",
     "desktop:smoke:mac:local": "node scripts/check-desktop-local-packaging-smoke.mjs"
   },
   "devDependencies": {

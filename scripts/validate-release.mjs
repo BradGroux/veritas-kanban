@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyNativeEvidence } from './native-ui/verify.mjs';
 import { packageDigest } from './native-ui/contract.mjs';
-import { verifyMediaEvidence } from './docs-media/verify.mjs';
+import { loadMediaPublication, verifyPublishedMedia } from './docs-media/publication.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -161,7 +161,7 @@ Options:
   --skip-build-output      Skip local dist artifact checks.
   --native-evidence <file> Candidate-bound packaged macOS evidence report.
   --native-app <path>      Exact .app verified by that report.
-  --media-evidence <file>  Candidate-bound documentation capture manifest.
+  --media-evidence <file>  Build-bound documentation publication manifest.
   --source-only           Source preflight only; never release acceptance.
   --docker-build           Build the production Docker image as part of validation.
   --help                   Show this help text.
@@ -501,10 +501,19 @@ async function main() {
     );
     try {
       if (!head.ok) throw new Error('Cannot resolve candidate commit');
+      // Media may be committed after capture, but only a verified docs-only
+      // delta may reuse native evidence for the original, unchanged app build.
+      const media = options.mediaEvidence
+        ? await loadMediaPublication({
+            evidencePath: path.resolve(options.mediaEvidence),
+            root: rootDir,
+            publicationCommit: head.stdout,
+          })
+        : undefined;
       const errors = await verifyNativeEvidence({
         evidencePath: path.resolve(options.nativeEvidence),
         appPath: path.resolve(options.nativeApp),
-        commit: head.stdout,
+        commit: media?.capture.commit ?? head.stdout,
         version: expectedVersion,
       });
       check('Packaged macOS evidence', errors.length === 0, errors.join('; ') || head.stdout);
@@ -530,11 +539,17 @@ async function main() {
         const bytes = await readFile(path.join(rootDir, file));
         if (!bytes.includes(0)) maintainedContents.push([file, bytes.toString('utf8')]);
       }
-      const errors = await verifyMediaEvidence({
+      const publication = await loadMediaPublication({
+        evidencePath: path.resolve(options.mediaEvidence),
+        root: rootDir,
+        publicationCommit: head.stdout,
+      });
+      const errors = await verifyPublishedMedia({
         evidencePath: path.resolve(options.mediaEvidence),
         root: rootDir,
         expected: {
-          commit: head.stdout,
+          commit: publication.capture.commit,
+          publicationCommit: head.stdout,
           version: expectedVersion,
           packageDigest: await packageDigest(path.resolve(options.nativeApp)),
         },
