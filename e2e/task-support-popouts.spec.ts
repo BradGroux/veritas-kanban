@@ -97,6 +97,12 @@ for (const theme of ['light', 'dark']) {
             }, geometry.fontSize);
             const footer = dialog.locator('.vk-overlay-footer');
             const scroll = dialog.locator('.vk-overlay-scroll');
+            if (reducedMotion === 'reduce') {
+              // A tiny nonzero duration introduces default `all` transitions,
+              // deferring rem-based padding and width changes by a frame.
+              await expect(footer).toHaveCSS('transition-duration', '0s');
+              await expect(footer).toHaveCSS('transition-delay', '0s');
+            }
             for (const action of actions) {
               await expect(
                 footer.getByRole('button', { name: action, exact: true })
