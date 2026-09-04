@@ -3,7 +3,7 @@
 Complete feature reference for Veritas Kanban, including the v6 release surfaces. Every feature, every API endpoint, every configuration option.
 
 For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different).
-For current release screenshots and GIFs captured from 6.1.6, see the
+For current release screenshots and GIFs captured from 6.1.7, see the
 [v6 Visual Tour](V6-VISUAL-TOUR.md). For troubleshooting, see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -89,15 +89,15 @@ For current release screenshots and GIFs captured from 6.1.6, see the
 
 The Kanban board is the central interface — a drag-and-drop workspace that reflects your project's state in real time.
 
-![6.1.6 board to task-workspace tour](assets/v6.1.6/board-to-workspace.gif)
+![6.1.7 board to task-workspace tour](assets/v6.1.7/board-to-workspace.gif)
 
 | Settings navigation                                      | Board overview                                   |
 | -------------------------------------------------------- | ------------------------------------------------ |
-| ![6.1.6 settings](assets/v6.1.6/settings-navigation.png) | ![6.1.6 board](assets/v6.1.6/board-overview.png) |
+| ![6.1.7 settings](assets/v6.1.7/settings-navigation.png) | ![6.1.7 board](assets/v6.1.7/board-overview.png) |
 
 | Workbench panel                                       | Mobile/PWA board                                      |
 | ----------------------------------------------------- | ----------------------------------------------------- |
-| ![6.1.6 Workbench](assets/v6.1.6/workbench-panel.png) | ![6.1.6 mobile board](assets/v6.1.6/mobile-board.png) |
+| ![6.1.7 Workbench](assets/v6.1.7/workbench-panel.png) | ![6.1.7 mobile board](assets/v6.1.7/mobile-board.png) |
 
 - **Kanban columns** — Four default columns for compatibility: To Do, In Progress, Blocked, Done; board columns and the default create status can be customized in Settings -> Board & Display
 - **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; keyboard users press Space to pick up or drop, use spatial arrow-key movement across populated or empty columns, and press Escape to cancel; custom collision detection (pointerWithin + rectIntersection fallback) supports pointer and keyboard moves; tooltips are suppressed during drag; local state provides real-time column updates
@@ -105,11 +105,11 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Task CRUD** — Create, read, update, and delete tasks through the UI or API
 - **Create task dialog** — Quick-create with title, type, priority, project, sprint, and description
 
-  ![Task workspace](assets/v6.1.6/task-workspace.png)
+  ![Task workspace](assets/v6.1.7/task-workspace.png)
 
 - **Progressive task workspace** — A quick drawer and full-width expanded presentation share Overview, Plan, Run, Results, and History navigation without losing the selected section, attempt, event, edits, scroll position, or board focus
 
-  ![Task workspace details](assets/v6.1.6/task-workspace.png)
+  ![Task workspace details](assets/v6.1.7/task-workspace.png)
 
 - **Task types** — Configurable type system with icons and color-coded card borders (code, research, content, automation, and custom types)
 - **Priority levels** — Low, medium, and high with visual indicators on cards
@@ -279,9 +279,9 @@ Integrated git workflow from branch creation to merge.
 
 First-class support for autonomous coding agents.
 
-![Task workspace demo](assets/v6.1.6/task-workspace.png)
+![Task workspace demo](assets/v6.1.7/task-workspace.png)
 
-![Agent provider settings](assets/v6.1.6/agent-providers.png)
+![Agent provider settings](assets/v6.1.7/agent-providers.png)
 
 - **Agent orchestration** — Start, stop, and monitor AI agents on code tasks from the UI or API
 - **Multi-agent support** — Ships with Codex CLI, Codex SDK, Codex app-server, Codex Cloud, Hermes Agent, Claude Code, a generic ACP stdio provider, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
@@ -634,7 +634,7 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 
 | Threaded Squad Chat coordination                               | Human reply adapter settings                                                      |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| ![6.1.6 Squad Chat coordination](assets/v6.1.6/squad-chat.png) | ![6.1.6 notification and reply adapters](assets/v6.1.6/notification-adapters.png) |
+| ![6.1.7 Squad Chat coordination](assets/v6.1.7/squad-chat.png) | ![6.1.7 notification and reply adapters](assets/v6.1.7/notification-adapters.png) |
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
 - **Resizable Workbench dock** — Board Chat and Squad Chat share one bounded right-side dock that isolates chat scrolling and keeps Close, Escape, Back, and Reset Layout recovery available
@@ -2084,7 +2084,7 @@ Optimizations spanning server, frontend, and data lifecycle.
 
 Modular settings system with focused, permission-aware sections.
 
-![6.1.6 Maintenance Center settings surface](assets/v6.1.6/maintenance-center.png)
+![6.1.7 Maintenance Center settings surface](assets/v6.1.7/maintenance-center.png)
 
 The Maintenance API and CLI include governed SQLite journal conversion:
 non-mutating previews, admin scheduling, restart-time exclusive execution,

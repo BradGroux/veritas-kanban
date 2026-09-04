@@ -10,16 +10,16 @@ Squad Chat stores and streams messages. It does not wake an external agent proce
 
 ## Demo Screenshots
 
-These release-safe captures use dummy content from the current 6.1.6 app
+These release-safe captures use dummy content from the current 6.1.7 app
 surfaces.
 
-![Squad Chat coordination in Veritas Kanban 6.1.6](../assets/v6.1.6/squad-chat.png)
+![Squad Chat coordination in Veritas Kanban 6.1.7](../assets/v6.1.7/squad-chat.png)
 
 The Workbench view shows threaded agent coordination with search, unread count,
 pinned decision state, acknowledgements, task/run chips, model attribution, a
 human reply, and system lifecycle events.
 
-![Notification and reply adapter settings in Veritas Kanban 6.1.6](../assets/v6.1.6/notification-adapters.png)
+![Notification and reply adapter settings in Veritas Kanban 6.1.7](../assets/v6.1.7/notification-adapters.png)
 
 The Notifications view shows local Squad Chat health, outbound webhook posture,
 inbound wake/reply health, payload redaction, and the Microsoft Teams adapter

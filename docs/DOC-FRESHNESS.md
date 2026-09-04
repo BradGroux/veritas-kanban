@@ -67,6 +67,7 @@ update the authoritative registry record.
 
 | Date       | Scope                                                                                          | Agent   |
 | ---------- | ---------------------------------------------------------------------------------------------- | ------- |
+| 2026-09-04 | v6.1.7 desktop, compact layout, task workspace, Settings, and release media refresh            | Release |
 | 2026-09-03 | v6.1.6 completed release, signed distribution, Homebrew install, docs audit, and current media | Release |
 | 2026-09-03 | v6.1.5 candidate, release, install, compatibility, evidence, and current visual media          | Release |
 | 2026-09-02 | v6.1.4 release, install, compatibility, runtime, distribution, and evidence docs               | Release |
