@@ -321,7 +321,7 @@ describe('Mantine-backed shared UI primitives', () => {
       document.querySelector(".veritas-notifications[data-position='bottom-right']")
     ).not.toBeNull();
     expect(globalStyles).toMatch(
-      /\.veritas-notifications\[data-position\^='bottom-'\]\s*\{[^}]*bottom:\s*calc\(5\.5rem \+ env\(safe-area-inset-bottom\)\);/s
+      /\.veritas-notifications\[data-position\^='bottom-'\]\s*\{[^}]*bottom:\s*calc\(var\(--vk-mobile-nav-height, 5rem\) \+ 1rem\);/s
     );
   });
 
