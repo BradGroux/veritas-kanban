@@ -84,6 +84,7 @@ jobs:
         run: >-
           node --test
           scripts/check-actions-pinned.test.mjs
+          scripts/check-browser-milestone.test.mjs
           scripts/check-delivery-cadence.test.mjs
           scripts/check-security-gates.test.mjs
           scripts/check-tracked-ignore.test.mjs

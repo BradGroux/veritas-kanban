@@ -326,6 +326,13 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
   Playwright does not retry failures. Screenshots and traces from the first
   failure are retained in `test-results/` and uploaded by Scheduled QA.
 
+  Scheduled QA splits the complete browser inventory across two isolated runners,
+  each with its own server/data directory and one worker. Both shards must pass;
+  a failing shard does not cancel the other. Existing test timeouts and the
+  25-minute job limit are unchanged. Download `playwright-artifacts-1` and
+  `playwright-artifacts-2` for their separate reports and failure evidence.
+  A cancelled or incomplete shard is not a passing milestone.
+
 - **Load smoke tests** use [k6](https://k6.io/):
 
   ```bash
