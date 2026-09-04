@@ -114,29 +114,41 @@ function useOverlayRegistration(
   const depth = useContext(OverlayDepth);
   const stack = useContext(OverlayStack);
   const register = stack?.register;
-  const opener = useRef<HTMLElement | null | undefined>(undefined);
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpened = useRef(false);
   // Register before paint so a rapidly reopened surface is never inert for
   // the next keyboard event while a passive registration effect is pending.
   useLayoutEffect(() => {
-    if (!opened) return;
+    if (!opened) {
+      wasOpened.current = false;
+      return;
+    }
     // Effect replay (including a lazy surface reveal) must not replace the
     // original opener with a field or background heading focused during mount.
-    if (opener.current === undefined) {
-      opener.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // A committed close starts a new cycle even if its exit is interrupted.
+    if (!wasOpened.current) {
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      // Shortcut reopening can beat deferred focus restoration. An exiting
+      // control is not a new logical opener for its own surface.
+      if (focused?.closest('[data-overlay-id]')?.getAttribute('data-overlay-id') !== id) {
+        opener.current = focused;
+      }
     }
+    wasOpened.current = true;
     const trigger = returnFocus ? opener.current : null;
     return register?.({ id, depth, trigger });
   }, [opened, register, id, depth, returnFocus]);
   const index = stack?.entries.findIndex((entry) => entry.id === id) ?? 0;
   const active = !stack || stack.entries.at(-1)?.id === id;
   return {
+    id,
     active,
     depth,
     zIndex: getDefaultZIndex('modal') + Math.max(index, 0),
     onExitTransitionEnd: () => {
-      // An interrupted exit retains its opener. Restore before a new surface
-      // captures the target during an explicit overlay handoff.
+      // An old transition must not clear a reopened surface's current opener.
+      if (wasOpened.current) return;
+      // Restore before an explicit overlay handoff captures its target.
       const target = resolveFocusTarget(opener.current);
       const anotherOverlayOpen = stack?.entries.some((entry) => entry.id !== id);
       if (
@@ -147,7 +159,7 @@ function useOverlayRegistration(
       ) {
         target.focus({ preventScroll: true });
       }
-      opener.current = undefined;
+      opener.current = null;
       onExitTransitionEnd?.();
     },
   };
@@ -173,6 +185,7 @@ export function UiModal({
       {...props}
       size={definition.width}
       data-overlay-variant={variant}
+      data-overlay-id={overlay.id}
       data-overlay-presentation={definition.presentation}
       data-overlay-compound={compound || undefined}
       data-overlay-active={active || undefined}
@@ -256,6 +269,7 @@ export function UiTaskSurface({
         <Drawer.Content
           aria-label={label}
           data-overlay-variant="task"
+          data-overlay-id={overlay.id}
           data-overlay-active={overlay.active || undefined}
           data-presentation={expanded ? 'expanded' : 'drawer'}
           data-testid="task-detail-panel"

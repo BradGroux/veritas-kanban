@@ -1,4 +1,5 @@
 import { StrictMode, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { MantineProvider } from '@mantine/core';
 import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +16,86 @@ import { renderWithProviders } from './test-utils';
 afterEach(cleanup);
 
 describe('shared popout contract', () => {
+  it('retains the external opener when a shortcut reopens before deferred restoration', async () => {
+    function Probe() {
+      const [opened, setOpened] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpened(true)}>External opener</button>
+          <UiModal
+            opened={opened}
+            onClose={() => setOpened(false)}
+            title="Shortcut decision"
+            keepMounted
+            transitionProps={{ duration: 10_000 }}
+          >
+            <button
+              onClick={() => {
+                flushSync(() => setOpened(false));
+                flushSync(() => setOpened(true));
+              }}
+            >
+              Reopen immediately
+            </button>
+            <button onClick={() => setOpened(false)}>Close shortcut decision</button>
+          </UiModal>
+        </>
+      );
+    }
+    renderWithProviders(
+      <MantineProvider env="default">
+        <Probe />
+      </MantineProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'External opener' });
+    vi.spyOn(trigger, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
+    trigger.focus();
+    fireEvent.click(trigger);
+    const reopen = await screen.findByRole('button', { name: 'Reopen immediately' });
+    reopen.focus();
+    fireEvent.click(reopen);
+    fireEvent.click(screen.getByRole('button', { name: 'Close shortcut decision' }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+  it('captures the new opener when a mounted dialog reopens before its exit completes', async () => {
+    function Probe() {
+      const [opened, setOpened] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpened(true)}>Approve opener</button>
+          <button onClick={() => setOpened(true)}>Reject opener</button>
+          <UiModal
+            opened={opened}
+            onClose={() => setOpened(false)}
+            title="Reused decision"
+            keepMounted
+            transitionProps={{ duration: 10_000 }}
+          >
+            <button onClick={() => setOpened(false)}>Close decision</button>
+          </UiModal>
+        </>
+      );
+    }
+    renderWithProviders(
+      <StrictMode>
+        <MantineProvider env="default">
+          <Probe />
+        </MantineProvider>
+      </StrictMode>
+    );
+    for (const name of ['Approve opener', 'Reject opener']) {
+      const trigger = screen.getByRole('button', { name });
+      vi.spyOn(trigger, 'getClientRects').mockReturnValue([
+        new DOMRect(0, 0, 100, 32),
+      ] as unknown as DOMRectList);
+      trigger.focus();
+      fireEvent.click(trigger);
+      fireEvent.click(await screen.findByRole('button', { name: 'Close decision' }));
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+    }
+  });
   it('keeps task content mounted across presentation changes and stacks nested utilities', async () => {
     const closeTask = vi.fn();
     function Probe() {
