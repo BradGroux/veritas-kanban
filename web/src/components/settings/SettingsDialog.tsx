@@ -1,6 +1,7 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
 import { useState, useRef, useCallback, lazy, Suspense, useEffect, useMemo } from 'react';
-import { Group, Menu, Modal, ScrollArea, Select, Skeleton, Stack, Text } from '@mantine/core';
+import { Group, Menu, Select, Skeleton, Stack, Text } from '@mantine/core';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
@@ -290,17 +291,8 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   const { toast } = useToast();
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
-  const firstTabButtonRef = useRef<HTMLButtonElement>(null);
   const keyboardTabChange = useRef(false);
   const [resetAllOpen, setResetAllOpen] = useState(false);
-
-  // Focus first tab when dialog opens
-  useEffect(() => {
-    if (open && firstTabButtonRef.current) {
-      // Small delay to ensure dialog is fully rendered
-      setTimeout(() => firstTabButtonRef.current?.focus(), 100);
-    }
-  }, [open]);
 
   // Focus content area when switching tabs
   useEffect(() => {
@@ -426,53 +418,6 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     [activeTab, canUseTab]
   );
 
-  const handleDialogKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Tab') return;
-
-    const container = dialogContentRef.current;
-    if (!container) return;
-
-    const focusable = Array.from(
-      container.querySelectorAll<HTMLElement>(
-        [
-          'a[href]',
-          'button:not([disabled])',
-          'input:not([type="hidden"]):not([disabled])',
-          'select:not([disabled])',
-          'textarea:not([disabled])',
-          '[role="button"]:not([aria-disabled="true"])',
-          '[role="combobox"]:not([aria-disabled="true"])',
-          '[role="tab"]:not([aria-disabled="true"])',
-          '[tabindex]:not([tabindex="-1"])',
-        ].join(',')
-      )
-    ).filter((element) => {
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
-    });
-
-    if (focusable.length === 0) return;
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-
-    if (!active || !container.contains(active)) {
-      e.preventDefault();
-      first.focus();
-      return;
-    }
-
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }, []);
-
   const renderTab = () => {
     return (
       <Suspense fallback={<TabSkeleton />}>
@@ -582,6 +527,8 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
 
   return (
     <Modal
+      variant="authoring"
+      compound
       opened={open}
       onClose={() => onOpenChange(false)}
       title={
@@ -592,29 +539,18 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           {isBoardOnly && <UiPill>Board Only</UiPill>}
         </Group>
       }
-      size={1040}
-      padding={0}
       centered
       trapFocus
       returnFocus
       closeButtonProps={{ 'aria-label': 'Close settings' }}
       classNames={{
-        content: 'settings-dialog-content',
-        header: 'settings-dialog-header border-b border-border',
+        content: 'settings-dialog-content h-dvh',
+        header: 'settings-dialog-header',
         body: 'settings-dialog-body',
-      }}
-      styles={{
-        content: { height: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-        header: { minHeight: '3rem', padding: '0.5rem 0.75rem 0.5rem 1rem' },
-        body: { flex: 1, minHeight: 0, padding: 0 },
       }}
     >
       <ErrorBoundary level="section">
-        <div
-          ref={dialogContentRef}
-          className="settings-dialog flex h-full min-h-0"
-          onKeyDown={handleDialogKeyDown}
-        >
+        <div ref={dialogContentRef} className="settings-dialog flex h-full min-h-0">
           {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
           <div className="hidden min-h-0 w-56 shrink-0 flex-col border-r bg-muted/25 py-4 sm:flex">
             <div className="px-4 pb-3">
@@ -658,7 +594,6 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                             className="settings-nav-action"
                             key={tab.id}
                             id={`tab-${tab.id}`}
-                            ref={tab.id === 'general' ? firstTabButtonRef : undefined}
                             type="button"
                             role="tab"
                             aria-label={tab.label}
@@ -786,41 +721,43 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                 </Menu.Dropdown>
               </Menu>
             </div>
-            <ScrollArea className="flex-1 min-h-0">
+            <div className="vk-overlay-scroll" data-settings-content-scroll>
               <div
                 id="settings-tab-content"
                 ref={contentAreaRef}
-                className="mx-auto w-full max-w-3xl px-4 py-4 focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 sm:px-6 sm:py-6"
+                className="mx-auto w-full max-w-3xl focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2"
                 role="tabpanel"
                 tabIndex={-1}
                 aria-labelledby={`tab-${activeTab}`}
               >
                 {renderTab()}
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </div>
       </ErrorBoundary>
       <Modal
+        variant="confirm"
+        compound
         opened={resetAllOpen}
         onClose={() => setResetAllOpen(false)}
         title="Reset all settings?"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will reset ALL feature settings across every section back to their default values.
             This cannot be undone.
           </Text>
-          <Group justify="flex-end">
-            <UiAction variant="quiet" onClick={() => setResetAllOpen(false)}>
-              Cancel
-            </UiAction>
-            <UiAction variant="destructive" onClick={handleResetAll}>
-              Reset Everything
-            </UiAction>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" data-autofocus onClick={() => setResetAllOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction variant="destructive" onClick={handleResetAll}>
+            Reset Everything
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </Modal>
   );
