@@ -296,11 +296,18 @@ export function KanbanBoard() {
     const handlePopState = () => {
       if (!detailOpen || taskIdFromHistory() === selectedTask?.id) return;
       setDetailOpen(false);
-      setTimeout(() => setSelectedTask(null), 200);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [detailOpen, selectedTask?.id]);
+
+  // Retain the closing task for its exit transition, but cancel that cleanup
+  // when a task is reopened before the transition finishes.
+  useEffect(() => {
+    if (detailOpen || !selectedTask) return;
+    const timer = window.setTimeout(() => setSelectedTask(null), 200);
+    return () => window.clearTimeout(timer);
+  }, [detailOpen, selectedTask]);
 
   // Apply the configured default saved view only when the current URL has no board filters.
   useEffect(() => {
@@ -558,8 +565,6 @@ export function KanbanBoard() {
     }
     setDetailOpen(open);
     if (!open) {
-      // Small delay to allow animation to complete
-      setTimeout(() => setSelectedTask(null), 200);
       returnFromTask();
     }
   };
