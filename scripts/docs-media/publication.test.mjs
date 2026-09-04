@@ -47,7 +47,7 @@ async function fixture(t) {
         boundary: name.startsWith('mobile-') ? 'mobile-browser' : 'packaged-macos',
         packaged: !name.startsWith('mobile-'),
         width: name.startsWith('mobile-') ? 390 : 1700,
-        height: name.startsWith('mobile-') ? 844 : 1000,
+        height: name.startsWith('mobile-') ? 844 : 760,
         scaleFactor: 1,
         method: name.endsWith('.gif') ? 'interaction-recording' : 'window-capture',
         capturedAt: new Date(Date.now() - 2000).toISOString(),

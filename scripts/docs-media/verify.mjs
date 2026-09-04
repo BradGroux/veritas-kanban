@@ -1,6 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { fileDigest } from '../native-ui/contract.mjs';
+import { contentSizes, fileDigest } from '../native-ui/contract.mjs';
 
 export const mediaSchema = 'documentation-media-capture/v1';
 export const maintainedAssets = [
@@ -100,8 +100,12 @@ export function mediaEvidenceFailures(report, expected, now = Date.now()) {
     if (capture?.boundary !== boundary) errors.push(`${name}: wrong capture boundary`);
     if (boundary === 'packaged-macos' && capture?.packaged !== true)
       errors.push(`${name}: desktop capture did not use the packaged application`);
-    if (boundary === 'mobile-browser' && (capture?.width !== 390 || capture?.height !== 844))
-      errors.push(`${name}: wrong supported mobile viewport`);
+    const viewport =
+      boundary === 'mobile-browser' ? { width: 390, height: 844 } : contentSizes.normal;
+    if (capture?.width !== viewport.width || capture?.height !== viewport.height)
+      errors.push(
+        `${name}: wrong supported ${boundary === 'mobile-browser' ? 'mobile' : 'packaged macOS'} viewport`
+      );
     if (
       ![capture?.width, capture?.height, capture?.scaleFactor].every(
         (n) => Number.isFinite(n) && n > 0
