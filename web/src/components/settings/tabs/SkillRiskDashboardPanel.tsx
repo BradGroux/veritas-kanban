@@ -1,3 +1,4 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import {
   UiPill,
   semanticToneForLegacyColor,
@@ -9,7 +10,6 @@ import { useMemo, useState } from 'react';
 import {
   Group,
   Loader,
-  Modal,
   SimpleGrid,
   Stack,
   Table,
@@ -337,12 +337,15 @@ export function SkillRiskDashboardPanel() {
       </Stack>
 
       <Modal
+        variant="form"
+        compound
         opened={Boolean(exceptionSkill)}
         onClose={() => setExceptionSkill(null)}
         title={exceptionSkill ? `Exception for ${exceptionSkill.name}` : 'Skill exception'}
       >
-        <Stack gap="sm">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <TextInput
+            data-autofocus
             label="Owner"
             value={exceptionOwner}
             onChange={(event) => setExceptionOwner(event.currentTarget.value)}
@@ -361,19 +364,19 @@ export function SkillRiskDashboardPanel() {
             onChange={(event) => setExceptionReason(event.currentTarget.value)}
             placeholder="Why this skill is allowed temporarily"
           />
-          <Group justify="flex-end">
-            <UiAction variant="quiet" onClick={() => setExceptionSkill(null)}>
-              Cancel
-            </UiAction>
-            <UiAction
-              variant="primary"
-              loading={createException.isPending}
-              onClick={handleCreateException}
-            >
-              Save Exception
-            </UiAction>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setExceptionSkill(null)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="primary"
+            loading={createException.isPending}
+            onClick={handleCreateException}
+          >
+            Save Exception
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </SettingsGroup>
   );

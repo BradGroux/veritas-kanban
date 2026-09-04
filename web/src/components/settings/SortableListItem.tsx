@@ -1,8 +1,9 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiIconAction, UiAction } from '@/components/ui/UiVocabulary';
 import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState, memo } from 'react';
 import type { ManagedListItem } from '@veritas-kanban/shared';
-import { Group, Modal, Stack, Text, TextInput } from '@mantine/core';
+import { Stack, Text, TextInput } from '@mantine/core';
 import { Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -168,12 +169,14 @@ export const SortableListItem = memo(function SortableListItem<T extends Managed
       </SettingsGroup>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         title={deleteInfo && !deleteInfo.allowed ? 'Cannot Delete' : 'Delete Item?'}
         centered
       >
-        <Stack gap="md">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             {deleteInfo && deleteInfo.referenceCount > 0 && !deleteInfo.allowed ? (
               <>
@@ -187,17 +190,17 @@ export const SortableListItem = memo(function SortableListItem<T extends Managed
               </>
             )}
           </Text>
-          <Group justify="flex-end">
-            <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </UiAction>
-            {(!deleteInfo || deleteInfo.allowed) && (
-              <UiAction variant="destructive" onClick={handleDeleteConfirm}>
-                Delete
-              </UiAction>
-            )}
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" data-autofocus onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </UiAction>
+          {(!deleteInfo || deleteInfo.allowed) && (
+            <UiAction variant="destructive" onClick={handleDeleteConfirm}>
+              Delete
+            </UiAction>
+          )}
+        </OverlayFooter>
       </Modal>
     </>
   );

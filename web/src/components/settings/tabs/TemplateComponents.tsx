@@ -1,7 +1,8 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction, UiPill, UiIconAction } from '@/components/ui/UiVocabulary';
 import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import { Group, Modal, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { Group, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import {
   type TaskTemplate,
   useCreateTemplate,
@@ -249,30 +250,32 @@ export function TemplateItem({ template }: { template: TaskTemplate }) {
         </UiIconAction>
       </Group>
       <Modal
+        variant="confirm"
+        compound
         opened={deleteOpen}
         onClose={() => setDeleteOpen(false)}
         title="Delete template?"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will delete "{template.name}".
           </Text>
-          <Group justify="flex-end">
-            <UiAction variant="quiet" onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </UiAction>
-            <UiAction
-              variant="destructive"
-              onClick={() => {
-                deleteTemplate.mutate(template.id);
-                setDeleteOpen(false);
-              }}
-            >
-              Delete
-            </UiAction>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" data-autofocus onClick={() => setDeleteOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            onClick={() => {
+              deleteTemplate.mutate(template.id);
+              setDeleteOpen(false);
+            }}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </SettingsGroup>
   );

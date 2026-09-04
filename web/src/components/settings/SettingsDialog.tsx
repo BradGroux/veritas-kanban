@@ -1,6 +1,8 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
 import { useState, useRef, useCallback, lazy, Suspense, useEffect, useMemo } from 'react';
-import { Group, Menu, Modal, ScrollArea, Select, Skeleton, Stack, Text } from '@mantine/core';
+import { Group, Menu, Select, Skeleton, Stack, Text } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
@@ -250,6 +252,9 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  // Only mount the visible navigation: CSS-hidden controls are still counted
+  // by the focus trap while a lazy tab has no controls of its own.
+  const showSidebar = useMediaQuery('(min-width: 40em)');
   const { hasPermission } = useIdentity();
   const { settings: currentSettings } = useFeatureSettings();
   const canWriteSettings = hasPermission('settings:write');
@@ -290,17 +295,8 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
   const { toast } = useToast();
   const dialogContentRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
-  const firstTabButtonRef = useRef<HTMLButtonElement>(null);
   const keyboardTabChange = useRef(false);
   const [resetAllOpen, setResetAllOpen] = useState(false);
-
-  // Focus first tab when dialog opens
-  useEffect(() => {
-    if (open && firstTabButtonRef.current) {
-      // Small delay to ensure dialog is fully rendered
-      setTimeout(() => firstTabButtonRef.current?.focus(), 100);
-    }
-  }, [open]);
 
   // Focus content area when switching tabs
   useEffect(() => {
@@ -426,53 +422,6 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     [activeTab, canUseTab]
   );
 
-  const handleDialogKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Tab') return;
-
-    const container = dialogContentRef.current;
-    if (!container) return;
-
-    const focusable = Array.from(
-      container.querySelectorAll<HTMLElement>(
-        [
-          'a[href]',
-          'button:not([disabled])',
-          'input:not([type="hidden"]):not([disabled])',
-          'select:not([disabled])',
-          'textarea:not([disabled])',
-          '[role="button"]:not([aria-disabled="true"])',
-          '[role="combobox"]:not([aria-disabled="true"])',
-          '[role="tab"]:not([aria-disabled="true"])',
-          '[tabindex]:not([tabindex="-1"])',
-        ].join(',')
-      )
-    ).filter((element) => {
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
-    });
-
-    if (focusable.length === 0) return;
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-
-    if (!active || !container.contains(active)) {
-      e.preventDefault();
-      first.focus();
-      return;
-    }
-
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }, []);
-
   const renderTab = () => {
     return (
       <Suspense fallback={<TabSkeleton />}>
@@ -582,6 +531,8 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
 
   return (
     <Modal
+      variant="authoring"
+      compound
       opened={open}
       onClose={() => onOpenChange(false)}
       title={
@@ -592,235 +543,238 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           {isBoardOnly && <UiPill>Board Only</UiPill>}
         </Group>
       }
-      size={1040}
-      padding={0}
       centered
       trapFocus
       returnFocus
       closeButtonProps={{ 'aria-label': 'Close settings' }}
       classNames={{
-        content: 'settings-dialog-content',
-        header: 'settings-dialog-header border-b border-border',
+        content: 'settings-dialog-content h-dvh',
+        header: 'settings-dialog-header',
         body: 'settings-dialog-body',
-      }}
-      styles={{
-        content: { height: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-        header: { minHeight: '3rem', padding: '0.5rem 0.75rem 0.5rem 1rem' },
-        body: { flex: 1, minHeight: 0, padding: 0 },
       }}
     >
       <ErrorBoundary level="section">
-        <div
-          ref={dialogContentRef}
-          className="settings-dialog flex h-full min-h-0"
-          onKeyDown={handleDialogKeyDown}
-        >
-          {/* Sidebar Tabs — hidden on narrow screens, shown as dropdown instead */}
-          <div className="hidden min-h-0 w-56 shrink-0 flex-col border-r bg-muted/25 py-4 sm:flex">
-            <div className="px-4 pb-3">
-              <Text size="xs" c="dimmed" mt={4}>
-                Workspace preferences and controls.
-              </Text>
-            </div>
-            <nav
-              className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pr-1"
-              role="tablist"
-              aria-orientation="vertical"
-              onKeyDown={handleKeyDown}
-            >
-              <Stack gap="sm">
-                {SETTINGS_NAVIGATION_GROUPS.map((group) => (
-                  <div
-                    key={group.id}
-                    role="group"
-                    aria-labelledby={`settings-group-${group.id}`}
-                    data-settings-nav-group={group.id}
-                  >
-                    <Text
-                      id={`settings-group-${group.id}`}
-                      size="xs"
-                      c="dimmed"
-                      fw={700}
-                      tt="uppercase"
-                      px="xs"
-                      mb={3}
+        <div ref={dialogContentRef} className="settings-dialog flex h-full min-h-0">
+          <input
+            ref={settingsFileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleImportSettings}
+            className="hidden"
+            tabIndex={-1}
+            aria-label="Import settings file"
+          />
+          {showSidebar && (
+            <div className="flex min-h-0 w-56 shrink-0 flex-col border-r bg-muted/25 py-4">
+              <div className="px-4 pb-3">
+                <Text size="xs" c="dimmed" mt={4}>
+                  Workspace preferences and controls.
+                </Text>
+              </div>
+              <nav
+                className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pr-1"
+                role="tablist"
+                aria-orientation="vertical"
+                onKeyDown={handleKeyDown}
+              >
+                <Stack gap="sm">
+                  {SETTINGS_NAVIGATION_GROUPS.map((group) => (
+                    <div
+                      key={group.id}
+                      role="group"
+                      aria-labelledby={`settings-group-${group.id}`}
+                      data-settings-nav-group={group.id}
                     >
-                      {group.label}
-                    </Text>
-                    <Stack gap={2}>
-                      {group.tabs.map((tab) => {
-                        const Icon = tab.icon;
-                        const allowed = canUseTab(tab);
-                        const active = activeTab === tab.id;
-                        return (
-                          <UiAction
-                            variant="quiet"
-                            className="settings-nav-action"
-                            key={tab.id}
-                            id={`tab-${tab.id}`}
-                            ref={tab.id === 'general' ? firstTabButtonRef : undefined}
-                            type="button"
-                            role="tab"
-                            aria-label={tab.label}
-                            aria-selected={active}
-                            aria-controls="settings-tab-content"
-                            tabIndex={active ? 0 : -1}
-                            onClick={() => setActiveTab(tab.id)}
-                            disabled={!allowed}
-                            title={
-                              allowed ? tab.label : `${tab.requiredPermission} permission required`
-                            }
-                            fullWidth
-                            justify="flex-start"
-                            leftSection={<Icon className="h-4 w-4 flex-shrink-0" />}
-                          >
-                            <span className="min-w-0 whitespace-normal text-left">{tab.label}</span>
-                          </UiAction>
-                        );
-                      })}
-                    </Stack>
-                  </div>
-                ))}
-              </Stack>
-            </nav>
+                      <Text
+                        id={`settings-group-${group.id}`}
+                        size="xs"
+                        c="dimmed"
+                        fw={700}
+                        tt="uppercase"
+                        px="xs"
+                        mb={3}
+                      >
+                        {group.label}
+                      </Text>
+                      <Stack gap={2}>
+                        {group.tabs.map((tab) => {
+                          const Icon = tab.icon;
+                          const allowed = canUseTab(tab);
+                          const active = activeTab === tab.id;
+                          return (
+                            <UiAction
+                              variant="quiet"
+                              className="settings-nav-action"
+                              key={tab.id}
+                              id={`tab-${tab.id}`}
+                              type="button"
+                              role="tab"
+                              aria-label={tab.label}
+                              aria-selected={active}
+                              aria-controls="settings-tab-content"
+                              tabIndex={active ? 0 : -1}
+                              onClick={() => setActiveTab(tab.id)}
+                              disabled={!allowed}
+                              title={
+                                allowed
+                                  ? tab.label
+                                  : `${tab.requiredPermission} permission required`
+                              }
+                              fullWidth
+                              justify="flex-start"
+                              leftSection={<Icon className="h-4 w-4 flex-shrink-0" />}
+                            >
+                              <span className="min-w-0 whitespace-normal text-left">
+                                {tab.label}
+                              </span>
+                            </UiAction>
+                          );
+                        })}
+                      </Stack>
+                    </div>
+                  ))}
+                </Stack>
+              </nav>
 
-            {/* Import/Export/Reset */}
-            <Stack gap="sm" className="mt-auto shrink-0 border-t px-3 pt-3 pb-6">
-              <input
-                ref={settingsFileInputRef}
-                type="file"
-                accept="application/json,.json"
-                onChange={handleImportSettings}
-                className="hidden"
-                aria-label="Import settings file"
-              />
-              <SettingsActionGroup label="Transfer">
-                <UiAction
-                  variant="quiet"
-                  type="button"
-                  onClick={handleExportSettings}
-                  aria-label="Export settings as JSON file"
-                  fullWidth
-                  justify="flex-start"
-                  leftSection={
-                    <Download className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                  }
-                >
-                  Export Settings
-                </UiAction>
-                <UiAction
-                  variant="quiet"
-                  type="button"
-                  onClick={() => settingsFileInputRef.current?.click()}
-                  disabled={!canWriteSettings}
-                  aria-label="Import settings from JSON file"
-                  fullWidth
-                  justify="flex-start"
-                  leftSection={<Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
-                >
-                  Import Settings
-                </UiAction>
-              </SettingsActionGroup>
-              <SettingsActionGroup label="Danger zone" tone="danger">
-                <UiAction
-                  variant="quiet"
-                  type="button"
-                  disabled={!canWriteSettings}
-                  fullWidth
-                  justify="flex-start"
-                  leftSection={<RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />}
-                  onClick={() => setResetAllOpen(true)}
-                >
-                  Reset All
-                </UiAction>
-              </SettingsActionGroup>
-            </Stack>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div
-              data-settings-mobile-header
-              className="flex items-center gap-2 shrink-0 border-b px-4 py-3 sm:hidden"
-            >
-              <Select
-                value={activeTab}
-                onChange={(value) => {
-                  if (value) setActiveTab(value as TabId);
-                }}
-                data={mobileTabOptions}
-                aria-label="Select settings section"
-                size="sm"
-                checkIconPosition="right"
-                className="min-w-0 flex-1 w-full"
-                styles={{ input: { minHeight: '2.75rem' } }}
-              />
-              <Menu position="bottom-end" withinPortal>
-                <Menu.Target>
-                  <UiIconAction aria-label="Settings actions">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </UiIconAction>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Label>Transfer</Menu.Label>
-                  <Menu.Item leftSection={<Download size={16} />} onClick={handleExportSettings}>
+              {/* Import/Export/Reset */}
+              <Stack gap="sm" className="mt-auto shrink-0 border-t px-3 pt-3 pb-6">
+                <SettingsActionGroup label="Transfer">
+                  <UiAction
+                    variant="quiet"
+                    type="button"
+                    onClick={handleExportSettings}
+                    aria-label="Export settings as JSON file"
+                    fullWidth
+                    justify="flex-start"
+                    leftSection={
+                      <Download className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                    }
+                  >
                     Export Settings
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<Upload size={16} />}
-                    disabled={!canWriteSettings}
+                  </UiAction>
+                  <UiAction
+                    variant="quiet"
+                    type="button"
                     onClick={() => settingsFileInputRef.current?.click()}
+                    disabled={!canWriteSettings}
+                    aria-label="Import settings from JSON file"
+                    fullWidth
+                    justify="flex-start"
+                    leftSection={
+                      <Upload className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                    }
                   >
                     Import Settings
-                  </Menu.Item>
-                  <Menu.Divider />
-                  <Menu.Label>Danger zone</Menu.Label>
-                  <Menu.Item
-                    color="red"
-                    leftSection={<RotateCcw size={16} />}
+                  </UiAction>
+                </SettingsActionGroup>
+                <SettingsActionGroup label="Danger zone" tone="danger">
+                  <UiAction
+                    variant="quiet"
+                    type="button"
                     disabled={!canWriteSettings}
+                    fullWidth
+                    justify="flex-start"
+                    leftSection={<RotateCcw className="h-3.5 w-3.5 flex-shrink-0" />}
                     onClick={() => setResetAllOpen(true)}
                   >
                     Reset All
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+                  </UiAction>
+                </SettingsActionGroup>
+              </Stack>
             </div>
-            <ScrollArea className="flex-1 min-h-0">
+          )}
+
+          {/* Content */}
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            {!showSidebar && (
+              <div
+                data-settings-mobile-header
+                className="flex items-center gap-2 shrink-0 border-b px-4 py-3"
+              >
+                <Select
+                  value={activeTab}
+                  onChange={(value) => {
+                    if (value) setActiveTab(value as TabId);
+                  }}
+                  data={mobileTabOptions}
+                  aria-label="Select settings section"
+                  size="sm"
+                  checkIconPosition="right"
+                  className="min-w-0 flex-1 w-full"
+                  styles={{ input: { minHeight: '2.75rem' } }}
+                />
+                <Menu position="bottom-end" withinPortal>
+                  <Menu.Target>
+                    <UiIconAction aria-label="Settings actions">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </UiIconAction>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Label>Transfer</Menu.Label>
+                    <Menu.Item leftSection={<Download size={16} />} onClick={handleExportSettings}>
+                      Export Settings
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<Upload size={16} />}
+                      disabled={!canWriteSettings}
+                      onClick={() => settingsFileInputRef.current?.click()}
+                    >
+                      Import Settings
+                    </Menu.Item>
+                    <Menu.Divider />
+                    <Menu.Label>Danger zone</Menu.Label>
+                    <Menu.Item
+                      color="red"
+                      leftSection={<RotateCcw size={16} />}
+                      disabled={!canWriteSettings}
+                      onClick={() => setResetAllOpen(true)}
+                    >
+                      Reset All
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              </div>
+            )}
+            <div className="vk-overlay-scroll" data-settings-content-scroll>
               <div
                 id="settings-tab-content"
                 ref={contentAreaRef}
-                className="mx-auto w-full max-w-3xl px-4 py-4 focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2 sm:px-6 sm:py-6"
+                className="mx-auto w-full max-w-3xl focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2"
                 role="tabpanel"
                 tabIndex={-1}
-                aria-labelledby={`tab-${activeTab}`}
+                aria-labelledby={showSidebar ? `tab-${activeTab}` : undefined}
+                aria-label={
+                  showSidebar ? undefined : TABS.find((tab) => tab.id === activeTab)?.label
+                }
               >
                 {renderTab()}
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </div>
       </ErrorBoundary>
       <Modal
+        variant="confirm"
+        compound
         opened={resetAllOpen}
         onClose={() => setResetAllOpen(false)}
         title="Reset all settings?"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will reset ALL feature settings across every section back to their default values.
             This cannot be undone.
           </Text>
-          <Group justify="flex-end">
-            <UiAction variant="quiet" onClick={() => setResetAllOpen(false)}>
-              Cancel
-            </UiAction>
-            <UiAction variant="destructive" onClick={handleResetAll}>
-              Reset Everything
-            </UiAction>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" data-autofocus onClick={() => setResetAllOpen(false)}>
+            Cancel
+          </UiAction>
+          <UiAction variant="destructive" onClick={handleResetAll}>
+            Reset Everything
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </Modal>
   );

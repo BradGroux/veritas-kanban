@@ -8,6 +8,12 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn(),
   toast: vi.fn(),
   productMode: { selectedMode: 'advanced' as string },
+  showSidebar: true,
+}));
+
+vi.mock('@mantine/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@mantine/hooks')>()),
+  useMediaQuery: () => mocks.showSidebar,
 }));
 
 vi.mock('@/hooks/useFeatureSettings', () => ({
@@ -101,6 +107,7 @@ describe('SettingsDialog Mantine shell', () => {
   beforeEach(() => {
     mocks.hasPermission.mockReturnValue(true);
     mocks.productMode.selectedMode = 'advanced';
+    mocks.showSidebar = true;
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
@@ -114,10 +121,9 @@ describe('SettingsDialog Mantine shell', () => {
 
     expect(await screen.findByText('General settings loaded')).toBeDefined();
     expect(screen.getByRole('tab', { name: 'General' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getAllByLabelText('Select settings section').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByLabelText('Select settings section')).toBeNull();
     expect(baseElement.querySelector('.mantine-Button-root')).toBeDefined();
-    expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
-    expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
+    expect(baseElement.querySelector('[data-settings-content-scroll]')).not.toBeNull();
 
     const closeButton = screen.getByRole('button', { name: 'Close settings' });
     const modalHeader = closeButton.closest('.mantine-Modal-header');
@@ -169,6 +175,7 @@ describe('SettingsDialog Mantine shell', () => {
   });
 
   it('exposes transfer and reset confirmation through compact actions', async () => {
+    mocks.showSidebar = false;
     renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
     await screen.findByText('General settings loaded');
     fireEvent.click(screen.getByRole('button', { name: 'Settings actions' }));
@@ -181,13 +188,14 @@ describe('SettingsDialog Mantine shell', () => {
   });
 
   it('keeps compact section navigation in the mobile header flow', async () => {
+    mocks.showSidebar = false;
     renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
 
     const selector = screen.getByRole('combobox', { name: 'Select settings section' });
     const mobileHeader = selector.closest('[data-settings-mobile-header]');
 
     expect(mobileHeader).not.toBeNull();
-    expect(mobileHeader?.className).toContain('sm:hidden');
+    expect(screen.queryByRole('tablist')).toBeNull();
     expect(mobileHeader?.className).not.toContain('absolute');
     expect(selector.closest('.mantine-Select-root')?.className).toContain('w-full');
 
