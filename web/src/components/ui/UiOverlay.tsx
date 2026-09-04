@@ -35,6 +35,26 @@ interface Entry {
   depth: number;
   trigger: HTMLElement | null;
 }
+
+/** Toolbar actions may be replaced (or hidden) by a responsive layout. */
+function resolveFocusTarget(trigger: HTMLElement | null | undefined): HTMLElement | undefined {
+  if (!trigger) return undefined;
+  const available = (element: HTMLElement | null | undefined) =>
+    element?.isConnected &&
+    element.getClientRects().length > 0 &&
+    !element.closest('[inert], [aria-hidden="true"]') &&
+    !element.matches(':disabled');
+  if (available(trigger)) return trigger;
+  const key = trigger.dataset.overlayFocusKey;
+  if (!key) return undefined;
+  // Compare values directly: keys are identifiers, not arbitrary CSS selectors.
+  const current = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-overlay-focus-key]')
+  ).find((element) => element.dataset.overlayFocusKey === key && available(element));
+  if (current) return current;
+  const fallback = document.querySelector<HTMLElement>('[data-overlay-focus-fallback]');
+  return fallback && available(fallback) ? fallback : undefined;
+}
 const OverlayDepth = createContext(0);
 const OverlayStack = createContext<{
   entries: Entry[];
@@ -66,8 +86,11 @@ export function UiOverlayProvider({ children }: { children: ReactNode }) {
       // If a whole subtree closes, restore the outer opener, not a child
       // control that is disappearing. Re-registered StrictMode entries do not restore.
       const target = closed
-        .map((entry) => entry.trigger)
-        .find((element) => element?.isConnected && element.getClientRects().length);
+        .map((entry) => resolveFocusTarget(entry.trigger))
+        .find(
+          (element) =>
+            element && (!entries.length || element.closest('[data-overlay-active="true"]'))
+        );
       target?.focus({ preventScroll: true });
     }, 0);
     return () => window.clearTimeout(timer);
@@ -114,12 +137,13 @@ function useOverlayRegistration(
     onExitTransitionEnd: () => {
       // An interrupted exit retains its opener. Restore before a new surface
       // captures the target during an explicit overlay handoff.
-      const target = opener.current;
+      const target = resolveFocusTarget(opener.current);
+      const anotherOverlayOpen = stack?.entries.some((entry) => entry.id !== id);
       if (
         returnFocus &&
         onExitTransitionEnd &&
-        target?.isConnected &&
-        target.getClientRects().length
+        target &&
+        (!anotherOverlayOpen || target.closest('[data-overlay-active="true"]'))
       ) {
         target.focus({ preventScroll: true });
       }

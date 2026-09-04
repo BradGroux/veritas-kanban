@@ -1,4 +1,5 @@
 import { StrictMode, useEffect, useState } from 'react';
+import { MantineProvider } from '@mantine/core';
 import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -46,7 +47,10 @@ describe('shared popout contract', () => {
     }
     renderWithProviders(
       <StrictMode>
-        <Probe />
+        {/* Production portals keep child dialogs outside their inert ancestors. */}
+        <MantineProvider env="default">
+          <Probe />
+        </MantineProvider>
       </StrictMode>
     );
     const task = screen.getByRole('dialog', { name: 'Task workspace' });
