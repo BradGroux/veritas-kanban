@@ -1121,6 +1121,47 @@ export function AgentRunTimelinePanel({
     approval: AgentApprovalRequest;
     decision: 'approved' | 'rejected';
   } | null>(null);
+  const decisionInFlight = useRef(false);
+  const [isDeciding, setIsDeciding] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const decisionErrorRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    if (decisionError) {
+      decisionErrorRef.current?.focus({ preventScroll: true });
+      decisionErrorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [decisionError]);
+
+  const closeDecision = () => {
+    if (!decisionInFlight.current) {
+      setPendingDecision(null);
+      setDecisionError(null);
+    }
+  };
+
+  const confirmDecision = async () => {
+    if (!pendingDecision || decisionInFlight.current) return;
+    decisionInFlight.current = true;
+    setIsDeciding(true);
+    setDecisionError(null);
+    try {
+      await decideApproval.mutateAsync({
+        approvalId: pendingDecision.approval.id,
+        decision: {
+          decision: pendingDecision.decision,
+          expectedRevision: pendingDecision.approval.revision,
+          expectedActionHash: pendingDecision.approval.actionHash,
+        },
+      });
+      setPendingDecision(null);
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : 'Approval decision failed.');
+    } finally {
+      decisionInFlight.current = false;
+      setIsDeciding(false);
+    }
+  };
   const { data: activeRuns = [], isLoading: activeRunsLoading } = useActiveRuns();
   const { data: recentRuns = [], isLoading: recentRunsLoading } = useRecentRuns();
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(
@@ -1374,13 +1415,13 @@ export function AgentRunTimelinePanel({
       <Modal
         compound
         opened={pendingDecision !== null}
-        onClose={() => setPendingDecision(null)}
+        onClose={closeDecision}
         title={pendingDecision?.decision === 'approved' ? 'Approve exact action' : 'Reject action'}
         centered
       >
         {pendingDecision && (
           <>
-            <Stack gap="md" className="vk-overlay-scroll">
+            <Stack gap="md" className="vk-overlay-scroll [&>*]:shrink-0">
               <Text fw={700}>{pendingDecision.approval.action}</Text>
               <Text size="sm">{pendingDecision.approval.details || 'No additional details.'}</Text>
               {pendingDecision.approval.workingDirectory && (
@@ -1416,32 +1457,28 @@ export function AgentRunTimelinePanel({
                 </Text>
               )}
               <Code block>{pendingDecision.approval.actionHash}</Code>
-              {decideApproval.error && (
-                <Text size="sm" c="red">
-                  {decideApproval.error instanceof Error
-                    ? decideApproval.error.message
-                    : 'Approval decision failed.'}
+              {decisionError && (
+                <Text
+                  ref={decisionErrorRef}
+                  role="alert"
+                  tabIndex={-1}
+                  size="sm"
+                  c="red"
+                  className="shrink-0"
+                >
+                  {decisionError}
                 </Text>
               )}
             </Stack>
             <OverlayFooter>
-              <UiAction variant="quiet" onClick={() => setPendingDecision(null)}>
+              <UiAction variant="quiet" onClick={closeDecision} disabled={isDeciding}>
                 Cancel
               </UiAction>
               <UiAction
                 variant={pendingDecision.decision === 'approved' ? 'primary' : 'destructive'}
-                loading={decideApproval.isPending}
-                onClick={async () => {
-                  await decideApproval.mutateAsync({
-                    approvalId: pendingDecision.approval.id,
-                    decision: {
-                      decision: pendingDecision.decision,
-                      expectedRevision: pendingDecision.approval.revision,
-                      expectedActionHash: pendingDecision.approval.actionHash,
-                    },
-                  });
-                  setPendingDecision(null);
-                }}
+                loading={isDeciding}
+                disabled={isDeciding}
+                onClick={confirmDecision}
               >
                 Confirm {pendingDecision.decision === 'approved' ? 'approval' : 'rejection'}
               </UiAction>

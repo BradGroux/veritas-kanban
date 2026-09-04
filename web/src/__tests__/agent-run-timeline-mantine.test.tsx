@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
@@ -343,6 +343,8 @@ const workflowRun = {
 describe('agent run timeline Mantine surface', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.decideApprovalMutateAsync.mockReset();
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.useAgentRunTraces.mockReturnValue({ data: [trace], isLoading: false });
     mocks.useActiveRuns.mockReturnValue({ data: [workflowRun], isLoading: false });
     mocks.usePendingAgentApprovals.mockReturnValue({ data: [approval], isLoading: false });
@@ -358,6 +360,56 @@ describe('agent run timeline Mantine surface', () => {
   afterEach(() => {
     cleanup();
   });
+
+  it.each(['approved', 'rejected'] as const)(
+    'keeps the exact %s decision owned until its request settles',
+    async (decision) => {
+      let rejectDecision!: (error: Error) => void;
+      mocks.decideApprovalMutateAsync
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectDecision = reject;
+            })
+        )
+        .mockResolvedValueOnce(approval);
+      renderWithProviders(<AgentRunTimelinePanel task={task} />);
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: decision === 'approved' ? 'Approve once' : 'Reject',
+        })
+      );
+      const name = decision === 'approved' ? 'Approve exact action' : 'Reject action';
+      const dialog = screen.getByRole('dialog', { name });
+      const submit = within(dialog).getByRole('button', {
+        name: decision === 'approved' ? 'Confirm approval' : 'Confirm rejection',
+      });
+      fireEvent.click(submit);
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+      expect(screen.queryByRole('dialog', { name })).toBe(dialog);
+      fireEvent.click(submit);
+      expect(mocks.decideApprovalMutateAsync).toHaveBeenCalledExactlyOnceWith({
+        approvalId: approval.id,
+        decision: {
+          decision,
+          expectedRevision: approval.revision,
+          expectedActionHash: approval.actionHash,
+        },
+      });
+      expect(
+        (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+      ).toBe(true);
+      await act(async () => rejectDecision(new Error('Fixture decision failed')));
+      expect(within(dialog).getByRole('alert').textContent).toContain('Fixture decision failed');
+      await act(async () => fireEvent.click(submit));
+      expect(mocks.decideApprovalMutateAsync).toHaveBeenCalledTimes(2);
+      expect(mocks.decideApprovalMutateAsync.mock.calls[1]).toEqual(
+        mocks.decideApprovalMutateAsync.mock.calls[0]
+      );
+      expect(screen.queryByRole('dialog', { name })).toBeNull();
+    }
+  );
 
   it('builds chronological timeline events with trace, telemetry, and work product context', () => {
     const events = buildAgentRunTimelineEvents({
