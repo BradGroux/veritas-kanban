@@ -535,6 +535,55 @@ describe('task detail Git and workflow Mantine migration', () => {
     expect(screen.queryByText('This section encountered an error')).toBeNull();
   });
 
+  it('retains workflow ownership while starting and exposes a recoverable failure', async () => {
+    let rejectStart!: (error: Error) => void;
+    const starts = vi.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectStart = reject;
+        })
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, options?: RequestInit) => {
+        if (options?.method === 'POST') return starts();
+        const url = String(input);
+        return Promise.resolve(
+          createJsonResponse(
+            url.endsWith('/workflows')
+              ? [
+                  { id: 'first', name: 'First workflow', version: 1 },
+                  { id: 'second', name: 'Second workflow', version: 1 },
+                ]
+              : url.includes('launch-recommendations')
+                ? { recommendations: [] }
+                : []
+          )
+        );
+      })
+    );
+    const onOpenChange = vi.fn();
+    const task = createMockTask({ id: 'task-pending-workflow' });
+    renderWithProviders(<WorkflowSection task={task} open onOpenChange={onOpenChange} />);
+    const buttons = await screen.findAllByRole('button', { name: 'Start' });
+    fireEvent.click(buttons[0]);
+    fireEvent.click(buttons[1]);
+    expect(starts).toHaveBeenCalledTimes(1);
+    const historyBack = vi.spyOn(window.history, 'back');
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(historyBack).not.toHaveBeenCalled();
+    window.history.replaceState({ veritasTaskDetail: task.id }, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(window.history.state.veritasTaskWorkflow).toBe(`${task.id}:workflow`);
+    await act(async () => rejectStart(new Error('Launch fixture failed')));
+    expect(screen.getByRole('alert').textContent).toContain('Launch fixture failed');
+    for (const button of buttons) expect((button as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(historyBack).toHaveBeenCalledOnce();
+    historyBack.mockRestore();
+  });
+
   it('uses browser Back to close Workflow and preserve the originating task route', async () => {
     const onOpenChange = vi.fn();
     const task = createMockTask({ id: 'task-workflow-history' });
