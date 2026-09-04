@@ -88,10 +88,9 @@ test.describe('Desktop board shell containment', () => {
     const workbench = page.getByRole('region', { name: 'Workbench right dock' });
     await expect(workbench).toBeVisible();
     await expect(workbench).toHaveAttribute('id', 'workbench-right-dock');
-    await expect(page.getByRole('button', { name: 'Close Board Chat' })).toHaveAttribute(
-      'aria-controls',
-      'workbench-right-dock'
-    );
+    await expect(
+      page.getByRole('button', { name: 'Close Board Chat', exact: true })
+    ).toHaveAttribute('aria-controls', 'workbench-right-dock');
     await expect(workbench.getByRole('radiogroup', { name: 'Dock position' })).toHaveCount(0);
 
     const readViewport = () =>

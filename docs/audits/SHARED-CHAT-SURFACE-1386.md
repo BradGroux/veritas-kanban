@@ -1,6 +1,6 @@
 # Shared chat surface: implementation checkpoint
 
-Issue: #1386. This implementation is stacked on the responsive task shell in #1421. It is not packaged macOS acceptance and does not close #1386.
+Issue: #1386. This implementation is stacked on the responsive task shell in #1421. Scoped packaged macOS checks are recorded below; full acceptance remains open and this checkpoint does not close #1386.
 
 ## Behavior
 
@@ -19,11 +19,11 @@ Chat transcripts scroll their own element. Appending a message or jumping to a S
 - Spec review: all Chat entry points now capture the invoking element; failed focus on an inactive mode falls back to the header.
 - Combined integration: the activity/chat, Squad, layout-chrome, and shared-overlay unit slices passed. Task Chat browser scenarios passed in light/dark, including non-header opener focus, draft retention, compact takeover, nested confirmation Escape, and exact task/session identity on mocked send.
 - Compact Workbench browser scenarios passed in light/dark at minimum dock width and enlarged text. The first integration run targeted the Board's identically named filter before the Squad popover appeared; the locator now scopes the named Squad dialog. That exposed a real Escape-ordering defect: the parent Popover capture handler dismissed the filters before the Select, and Workbench ignored only modal dialogs. Filters now defer Escape to the nested Select, Workbench recognizes nonmodal dialogs, and Escape from the filters trigger also dismisses filters. Regression checks cover dropdown then popover dismissal, exact focus restoration, keyboard trigger open/close, menu bounds, draft retention, and resize cycles.
-- Packaged macOS normal/minimum-window interaction: pending.
+- Packaged macOS candidate `80e5bc6d`: Board/Squad filter and sender Escape/focus, channel draft retention, and responsive minimization passed in light/dark. Task Chat opener/fallback focus, Tab containment, nested confirmation Escape, draft/Results retention, transcript/composer bounds, and mocked task/session send identity also passed in light/dark. The actual native minimum is 1180×760: 16px text retains the task sidecar; 20px text activates body takeover. The unsigned arm64 candidate was built with the repository package command and verified as packaged in an isolated temporary profile; the installed app was not used.
 - Installed-app replacement, final screenshots/GIFs, version bump, and release: pending.
 
-These local results are scoped integration evidence, not a passing full CI gate or native-app acceptance. No real chat was dispatched. Both review axes rechecked the Escape correction without remaining findings.
+These results cover the listed browser/native interactions, not a passing full CI gate or whole-app acceptance. No real chat was dispatched. Both review axes rechecked the Escape correction without remaining findings. Combined browser QA passed 63 tests and skipped one, but an older containment test matched both the toolbar's “Close Board Chat” and panel's “Close Board Chat panel”; its toolbar selector now requires an exact accessible name. The full focused containment-and-drag scenario passed after that correction.
 
 ## Acceptance still required
 
-Run the combined integration suite and inspect the native desktop at normal and minimum sizes with enlarged text. Verify Tab across task and chat, close and Escape ordering, filter/sender menu bounds, transcript scrolling, pending edits, Board/Squad switching, and task-to-task session isolation. Refresh maintained documentation media only from the final accepted UI under #1388. Keep #1386 open until that evidence exists.
+Complete the combined integration gate, stable final visual inspection, and remaining task-to-task isolation/pending-edit checks. Refresh maintained documentation media only from the final accepted UI under #1388, then verify the installed application. Keep #1386 open until that evidence exists.
