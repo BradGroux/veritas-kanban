@@ -109,6 +109,15 @@ for (const width of [320, 390, 430]) {
   }
 }
 
+test('enlarged navigation labels fit wider platform fonts', async ({ page }) => {
+  await page.goto('/');
+  await page.addStyleTag({
+    content: `:root { font-size: 20px !important; }
+      [aria-label="Mobile navigation"] { font-family: Verdana, 'DejaVu Sans', sans-serif; }`,
+  });
+  await assertNavigationFits(page);
+});
+
 test('navigation height follows window and text resizing', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#mobile-board-columns')).toBeVisible();

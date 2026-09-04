@@ -175,7 +175,7 @@ export function MobileShell({ showChat = true }: { showChat?: boolean }) {
                   disabled={item.disabled}
                   onClick={item.onClick}
                   className={[
-                    'flex min-h-12 min-w-0 flex-col items-center justify-center rounded-md px-1 text-sm leading-tight text-muted-foreground transition-colors',
+                    'flex min-h-12 min-w-0 flex-col items-center justify-center rounded-md px-0 text-sm leading-tight text-muted-foreground transition-colors',
                     item.active
                       ? 'bg-primary/15 text-primary'
                       : 'hover:bg-muted hover:text-foreground',
