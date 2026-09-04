@@ -11,7 +11,7 @@ const ChatPanel = lazy(() =>
 );
 
 /**
- * Floating chat bubble — bottom-right corner.
+ * Board chat entry: mobile navigation control, floating bubble on wider screens.
  * Opens a board-level ChatPanel (no taskId).
  * Pulses when a new response arrives while closed.
  */
@@ -54,7 +54,7 @@ export function FloatingChat() {
         size={56}
         radius="xl"
         variant="filled"
-        style={{ position: 'fixed' }}
+        classNames={{ icon: 'floating-chat-icon' }}
         className={cn(
           'floating-chat-trigger z-40 h-14 w-14 rounded-full shadow-lg',
           'bg-primary hover:bg-primary/90 text-primary-foreground',
@@ -64,6 +64,7 @@ export function FloatingChat() {
         aria-label="Open chat"
       >
         <MessageSquare className="h-6 w-6" />
+        <span className="text-sm md:hidden">Chat</span>
         {hasUnread && (
           <span className="absolute -top-1 -right-1 flex h-4 w-4" aria-hidden="true">
             <span className="inline-flex h-4 w-4 rounded-full bg-emerald-500" />

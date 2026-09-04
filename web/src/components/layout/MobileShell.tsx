@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActionIcon, Badge, Drawer, Group, Stack } from '@mantine/core';
 import { Bell, Columns3, Files, Home, Settings, Workflow } from 'lucide-react';
 import { NeedsAttentionQueue } from '@/components/dashboard/NeedsAttentionQueue';
+import { FloatingChat } from '@/components/chat/FloatingChat';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useView } from '@/contexts/ViewContext';
 
@@ -11,9 +12,9 @@ function scrollToBoardColumns() {
   }, 0);
 }
 
-export function MobileShell() {
+export function MobileShell({ showChat = true }: { showChat?: boolean }) {
   const [inboxOpen, setInboxOpen] = useState(false);
-  const navigationRef = useRef<HTMLElement>(null);
+  const navigationRef = useRef<HTMLDivElement>(null);
   const { authContext, hasPermission } = useIdentity();
   const { navigateToTask, setView, view } = useView();
   const clientMode = authContext?.clientMode;
@@ -107,46 +108,49 @@ export function MobileShell() {
 
   return (
     <>
-      <nav
+      <div
         ref={navigationRef}
-        aria-label="Mobile navigation"
-        className="fixed inset-x-0 bottom-0 z-[100] border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1.5 shadow-lg backdrop-blur md:hidden"
+        data-mobile-navigation-surface
+        className="mobile-navigation-surface fixed inset-x-0 bottom-0 z-[100] flex items-stretch gap-1 border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1.5 shadow-lg backdrop-blur md:contents"
       >
-        {clientMode && (
-          <div className="mb-1 flex justify-center">
-            <Badge size="xs" variant="light" color="gray">
-              {clientMode}
-            </Badge>
+        <nav aria-label="Mobile navigation" className="min-w-0 flex-1 md:hidden">
+          {clientMode && (
+            <div className="mb-1 flex justify-center">
+              <Badge size="xs" variant="light" color="gray">
+                {clientMode}
+              </Badge>
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-label={`Mobile ${item.label.toLowerCase()}`}
+                  aria-current={item.active ? 'page' : undefined}
+                  disabled={item.disabled}
+                  onClick={item.onClick}
+                  className={[
+                    'flex min-h-12 min-w-0 flex-col items-center justify-center rounded-md px-1 text-sm leading-tight text-muted-foreground transition-colors',
+                    item.active
+                      ? 'bg-primary/15 text-primary'
+                      : 'hover:bg-muted hover:text-foreground',
+                    item.disabled ? 'cursor-not-allowed opacity-40' : '',
+                  ].join(' ')}
+                >
+                  <Icon className="mb-0.5 h-4 w-4" aria-hidden="true" />
+                  <span data-mobile-nav-label className="block w-full text-center">
+                    {'compactLabel' in item ? item.compactLabel : item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
-        <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.label}
-                type="button"
-                aria-label={`Mobile ${item.label.toLowerCase()}`}
-                aria-current={item.active ? 'page' : undefined}
-                disabled={item.disabled}
-                onClick={item.onClick}
-                className={[
-                  'flex min-h-12 min-w-0 flex-col items-center justify-center rounded-md px-1 text-sm leading-tight text-muted-foreground transition-colors',
-                  item.active
-                    ? 'bg-primary/15 text-primary'
-                    : 'hover:bg-muted hover:text-foreground',
-                  item.disabled ? 'cursor-not-allowed opacity-40' : '',
-                ].join(' ')}
-              >
-                <Icon className="mb-0.5 h-4 w-4" aria-hidden="true" />
-                <span data-mobile-nav-label className="block w-full text-center">
-                  {'compactLabel' in item ? item.compactLabel : item.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+        </nav>
+        {showChat && <FloatingChat />}
+      </div>
 
       <Drawer
         opened={inboxOpen}

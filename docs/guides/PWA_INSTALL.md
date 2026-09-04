@@ -23,7 +23,7 @@ Chrome shows the install prompt only when the manifest and service worker are re
 
 On narrow screens, use **More views** in the header to reach Activity, Backlog, Archive, and other views. Their separate wide-screen shortcuts are omitted to preserve room for the logo, connection status, and task controls. Dropdown menus remain anchored to their controls without changing the page scale.
 
-The bottom navigation uses two rows on narrow phones so Home, Board, Alerts, Runs, Work, and Settings retain readable labels. Content and floating chat controls leave room for its actual height, including larger text and the device safe area. Task Overview actions move below their summary when the panel is too narrow for a readable side-by-side layout.
+The bottom navigation uses two rows on narrow phones so Home, Board, Alerts, Runs, Work, and Settings retain readable labels. Chat sits beside these destinations in the same reserved area instead of floating over task cards. Content and bottom notifications leave room for that area's actual height, including larger text and the device safe area. Wider browser windows retain the floating chat button. Task Overview actions move below their summary when the panel is too narrow for a readable side-by-side layout.
 
 ## Offline Behavior
 

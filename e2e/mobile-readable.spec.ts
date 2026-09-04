@@ -37,16 +37,16 @@ async function assertNavigationFits(page: Page) {
   }
   await expect
     .poll(async () => {
-      const nav = await navigation.boundingBox();
+      const nav = await page.locator('[data-mobile-navigation-surface]').boundingBox();
       const chat = await page.getByRole('button', { name: 'Open chat', exact: true }).boundingBox();
-      return !!nav && !!chat && chat.y + chat.height < nav.y;
+      return !!nav && !!chat && chat.y >= nav.y && chat.y + chat.height <= nav.y + nav.height;
     })
     .toBe(true);
   expect(
     await page
       .locator('#main-content')
       .evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom))
-  ).toBeGreaterThan((await navigation.boundingBox())!.height);
+  ).toBeGreaterThan((await page.locator('[data-mobile-navigation-surface]').boundingBox())!.height);
 }
 
 for (const width of [320, 390, 430]) {
@@ -113,12 +113,13 @@ test('navigation height follows window and text resizing', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#mobile-board-columns')).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Mobile navigation' });
+  const surface = page.locator('[data-mobile-navigation-surface]');
   for (const width of [320, 680, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await assertNavigationFits(page);
     await expect
       .poll(async () => {
-        const height = (await navigation.boundingBox())!.height;
+        const height = (await surface.boundingBox())!.height;
         const reserved = await page.evaluate(() =>
           parseFloat(document.documentElement.style.getPropertyValue('--vk-mobile-nav-height'))
         );
@@ -129,12 +130,12 @@ test('navigation height follows window and text resizing', async ({ page }) => {
   await page.addStyleTag({ content: ':root { font-size: 20px !important; }' });
   await assertNavigationFits(page);
   // Safe-area changes can alter padding without changing the content box.
-  await navigation.evaluate((el) => {
+  await surface.evaluate((el) => {
     el.style.paddingBottom = '42px';
   });
   await expect
     .poll(async () => {
-      const height = (await navigation.boundingBox())!.height;
+      const height = (await surface.boundingBox())!.height;
       const reserved = await page.evaluate(() =>
         parseFloat(document.documentElement.style.getPropertyValue('--vk-mobile-nav-height'))
       );

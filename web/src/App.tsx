@@ -43,12 +43,6 @@ const UiVocabularyGallery = lazy(() =>
   }))
 );
 
-const FloatingChat = lazy(() =>
-  import('./components/chat/FloatingChat').then((mod) => ({
-    default: mod.FloatingChat,
-  }))
-);
-
 const DesktopOnboardingDialog = lazy(() =>
   import('./components/auth/DesktopOnboarding').then((mod) => ({
     default: mod.DesktopOnboardingDialog,
@@ -175,12 +169,9 @@ function DesktopAwareAppShell({
       </div>
       <Toaster />
       <CommandPalette />
-      {!isDesktopClient && !bottomPanel && (
-        <Suspense fallback={null}>
-          <FloatingChat />
-        </Suspense>
-      )}
-      <Suspense fallback={null}>{!isDesktopClient && <MobileShell />}</Suspense>
+      <Suspense fallback={null}>
+        {!isDesktopClient && <MobileShell showChat={!bottomPanel} />}
+      </Suspense>
       {showDesktopOnboarding && (
         <Suspense fallback={null}>
           <DesktopOnboardingDialog
