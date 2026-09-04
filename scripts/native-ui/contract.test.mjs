@@ -1,3 +1,4 @@
+/* global structuredClone */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -6,8 +7,11 @@ import {
   modes,
   requiredEntries,
   requiresOverlay,
+  requiredOverlayParts,
   packageDigest,
   schema,
+  routes,
+  seededCases,
 } from './contract.mjs';
 import { crc32, deflateSync } from 'node:zlib';
 import { screenshotSize } from './png.mjs';
@@ -33,7 +37,7 @@ test('bundle identity includes web resources and rejects external symlinks', asy
   await assert.rejects(packageDigest(bundle), /escapes bundle/);
 });
 function report() {
-  return {
+  const value = {
     schema,
     status: 'passed',
     boundary: 'packaged-macos',
@@ -49,6 +53,12 @@ function report() {
       osVersion: '26.0',
     },
     completedAt: new Date(now).toISOString(),
+    seededFailures: seededCases.map(([id, reason]) => ({
+      id: `seed/${id}`,
+      status: 'detected',
+      observedFailures: [reason],
+      screenshot: { path: `seed--${id}.png`, sha256: digest },
+    })),
     entries: requiredEntries.map((id) => {
       const mode = modes.find((mode) => id.startsWith(`${mode.id}/`));
       return {
@@ -62,6 +72,7 @@ function report() {
           scaleFactor: 2,
         },
         completionGeometry: {
+          rem: 16,
           width: mode.width,
           height: mode.height,
           scrollWidth: mode.width,
@@ -70,6 +81,19 @@ function report() {
           overlays: [],
         },
         geometry: {
+          rem: 16,
+          primaryHeader: {
+            header: { x: 0, y: 0, width: 1000, height: 82, right: 1000, bottom: 82 },
+            title: { x: 52, y: 0, width: 200, height: 32, right: 252, bottom: 32 },
+            back: { x: 0, y: 2, width: 40, height: 40, right: 40, bottom: 42 },
+            content: { x: 0, y: 82, width: 1000, height: 500, right: 1000, bottom: 582 },
+            titleText: routes.find(([name]) => id.endsWith(`/route-${name}`))?.[2],
+            titleCount: 1,
+            backText: '',
+            boardRailControls: 0,
+            fontSize: 24,
+            lineHeight: 32,
+          },
           width: mode.width,
           height: mode.height,
           scrollWidth: mode.width,
@@ -86,16 +110,26 @@ function report() {
                   bottom: mode.height - 1,
                   overflow: 0,
                   opacity: 1,
-                  parts: ['header', 'body'].map((name) => ({
+                  parts: requiredOverlayParts(id).map((kind) => ({
                     x: 2,
                     y: 2,
                     width: 100,
                     height: 30,
                     right: 102,
                     bottom: 32,
-                    name,
+                    name: kind.includes('header')
+                      ? 'header'
+                      : kind === 'footer'
+                        ? 'footer'
+                        : 'body',
+                    insetKind: kind,
                     visible: true,
-                    padding: [16, 16, 16, 16],
+                    padding:
+                      kind === 'header'
+                        ? [10, 16, 10, 16]
+                        : kind === 'task-body'
+                          ? [0, 0, 0, 0]
+                          : [16, 16, 16, 16],
                   })),
                 },
               ]
@@ -104,6 +138,39 @@ function report() {
       };
     }),
   };
+  for (const seed of value.seededFailures) {
+    const state = ['seed/clipped-modal', 'seed/overlay-padding'].includes(seed.id)
+      ? 'create-task'
+      : 'route-activity';
+    seed.geometry = structuredClone(
+      value.entries.find((entry) => entry.id === `light-normal/${state}`).geometry
+    );
+    if (seed.id === 'seed/shell-blank') seed.geometry.shell.height -= 100;
+    if (seed.id === 'seed/clipped-modal') {
+      const overlay = seed.geometry.overlays[0];
+      overlay.x += 1700;
+      overlay.right += 1700;
+    }
+    if (seed.id === 'seed/heading-offset') {
+      seed.geometry.primaryHeader.title.y += 16;
+      seed.geometry.primaryHeader.title.bottom += 16;
+    }
+    if (seed.id === 'seed/context-invalid-header')
+      seed.geometry.primaryHeader.boardRailControls = 1;
+    if (seed.id === 'seed/overlay-padding')
+      seed.geometry.overlays[0].parts[0].padding = [0, 0, 0, 0];
+    if (seed.id === 'seed/dead-header')
+      seed.behavior = {
+        control: 'New Task',
+        visibleBefore: true,
+        enabledBefore: true,
+        dialogVisibleBefore: false,
+        clickCompleted: true,
+        waitedMs: 1000,
+        dialogVisibleAfter: false,
+      };
+  }
+  return value;
 }
 const failures = (value) =>
   evidenceFailures(value, { commit, packageDigest: digest, version: '6.1.6' }, now);
@@ -114,6 +181,8 @@ test('partial, duplicate and failed matrices cannot pass', () => {
     (r) => r.entries.pop(),
     (r) => (r.entries[1] = r.entries[0]),
     (r) => (r.entries[0].status = 'failed'),
+    (r) => r.seededFailures.pop(),
+    (r) => (r.seededFailures[0].observedFailures = []),
   ]) {
     const r = report();
     mutate(r);
@@ -155,12 +224,123 @@ test('seeded clipped overlay and unreachable footer fail', () => {
     },
   ];
   assert.deepEqual(geometryFailures(g), [
+    'inconsistent overlay footer padding',
     'unmeasured overlay',
     'transparent or unmeasured overlay',
     'missing overlay header/body',
     'clipped overlay',
     'unreachable or unmeasured overlay footer',
   ]);
+});
+test('heading, Back, context-invalid controls and inconsistent route baselines fail closed', () => {
+  for (const mutate of [
+    (h) => {
+      h.title.y += 8;
+    },
+    (h) => {
+      h.back.width = 20;
+    },
+    (h) => {
+      h.fontSize = 12;
+    },
+    (h) => {
+      h.backText = 'Back';
+    },
+    (h) => {
+      h.boardRailControls = 1;
+    },
+    (h) => {
+      h.content.y += 20;
+    },
+    (h) => {
+      for (const key of ['header', 'title', 'back', 'content']) {
+        h[key].x -= 2000;
+        h[key].right -= 2000;
+      }
+    },
+    (h) => {
+      h.back.right = 999;
+    },
+    (h) => {
+      h.title.width = 1200;
+      h.title.right = h.title.x + 1200;
+    },
+  ]) {
+    const r = report();
+    mutate(
+      r.entries.find((entry) => entry.id === 'light-normal/route-workflows').geometry.primaryHeader
+    );
+    assert(failures(r).length);
+  }
+});
+test('insets use the shared rem contract, including zero-padding compound bodies', () => {
+  const r = report();
+  const g = r.entries.find((entry) => entry.id === 'light-normal/create-task').geometry;
+  const overlay = g.overlays[0];
+  overlay.parts[1].padding = [0, 0, 0, 0];
+  assert(geometryFailures(g).includes('inconsistent overlay body padding'));
+  overlay.compound = true;
+  assert.deepEqual(geometryFailures(g), []);
+  overlay.parts[0].padding[1] = 4;
+  assert(geometryFailures(g).includes('inconsistent overlay header padding'));
+});
+test('claimed seed detection requires retained defective measurements and behavioral evidence', () => {
+  for (const seedIndex of seededCases.keys()) {
+    const r = report();
+    const seed = r.seededFailures[seedIndex];
+    delete seed.geometry;
+    assert(failures(r).some((error) => error.startsWith(seed.id)));
+  }
+  for (const seedIndex of seededCases.keys()) {
+    const r = report();
+    const seed = r.seededFailures[seedIndex];
+    seed.geometry = structuredClone(
+      r.entries.find((entry) => entry.id === 'light-normal/route-activity').geometry
+    );
+    delete seed.behavior;
+    assert(failures(r).some((error) => error.startsWith(seed.id)));
+  }
+  for (const mutate of [
+    (b) => {
+      b.clickCompleted = false;
+    },
+    (b) => {
+      b.visibleBefore = false;
+    },
+    (b) => {
+      b.enabledBefore = false;
+    },
+    (b) => {
+      b.dialogVisibleBefore = true;
+    },
+    (b) => {
+      b.dialogVisibleAfter = true;
+    },
+    (b) => {
+      b.waitedMs = 10;
+    },
+  ]) {
+    const r = report();
+    mutate(r.seededFailures.find((seed) => seed.id === 'seed/dead-header').behavior);
+    assert(failures(r).some((error) => error.startsWith('seed/dead-header')));
+  }
+});
+test('required footer and compound scroll measurements cannot disappear', () => {
+  for (const [state, kind] of [
+    ['confirmation', 'footer'],
+    ['create-task', 'scroll'],
+    ['settings-general', 'scroll'],
+  ]) {
+    const r = report();
+    const overlay = r.entries.find((entry) => entry.id === `light-normal/${state}`).geometry
+      .overlays[0];
+    overlay.parts = overlay.parts.filter((part) => part.insetKind !== kind);
+    assert(failures(r).some((error) => error.includes(`missing required overlay ${kind}`)));
+  }
+  const g = report().entries.find((entry) => entry.id === 'light-normal/create-task').geometry;
+  g.overlays[0].compound = true;
+  g.overlays[0].parts = g.overlays[0].parts.filter((part) => part.insetKind !== 'scroll');
+  assert(geometryFailures(g).includes('missing compound overlay scroll'));
 });
 test('missing overlay measurements and invalid native bounds fail closed', () => {
   for (const mutate of [
