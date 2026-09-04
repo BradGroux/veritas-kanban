@@ -239,10 +239,31 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
           await dialog.locator('.vk-overlay-scroll').evaluate((el) => {
             el.scrollTop = 0;
           });
+          await dialog.evaluate(async (el) => {
+            await Promise.all(
+              el
+                .getAnimations({ subtree: true })
+                .map((animation) => animation.finished.catch(() => {}))
+            );
+          });
           await page.screenshot({ path: test.info().outputPath(`${kind}-preview.png`) });
           await page.setViewportSize({ width: 1700, height: 900 });
           await page.evaluate(() => {
             document.documentElement.style.fontSize = '16px';
+          });
+          await expect(dialog.getByRole('button', { name: 'Close dialog' })).toHaveCSS(
+            'width',
+            '34px'
+          );
+          await dialog.evaluate(async (el) => {
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+            );
+            await Promise.all(
+              el
+                .getAnimations({ subtree: true })
+                .map((animation) => animation.finished.catch(() => {}))
+            );
           });
           await page.screenshot({ path: test.info().outputPath(`${kind}-preview-large.png`) });
           await page.keyboard.press('Escape');
