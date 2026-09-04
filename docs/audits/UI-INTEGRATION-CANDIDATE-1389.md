@@ -4,7 +4,7 @@ This is a verification branch for #1389, not completion of the whole audit or a 
 
 Keep this integration PR draft and unmerged. Independently reviewed implementation PRs remain the delivery units. The full-CI label requests workspace tests, coverage, browser QA, security, and packaging contracts against one combined tree. Local integration checks concentrate on the changed rendered interactions; they do not substitute for the broad CI gate.
 
-Runtime and packaged macOS results are pending at creation. Remaining overlay consumers and task-content convergence under #1383/#1385 are not silently accepted by a passing candidate. The installed application is unchanged. Final maintained screenshots/GIFs, installed-app acceptance, version bump, changelog, signed release, and release readback remain outstanding.
+Scoped runtime and packaged macOS results are recorded below. Remaining overlay consumers and task-content convergence under #1383/#1385 are not silently accepted by a passing candidate. The installed application is unchanged. Final maintained screenshots/GIFs, installed-app acceptance, version bump, changelog, signed release, and release readback remain outstanding.
 
 ## Integration checkpoint
 
@@ -12,4 +12,18 @@ Local browser checks passed for repeated early-Escape/Cancel in Policy dialogs, 
 
 Full CI on candidate d26f040b passed build, lint/typecheck, critical coverage, CodeQL, Gitleaks, Docker contract, load smoke, and unsigned macOS packaging. Workspace unit tests passed all 331 server files, then failed on the same four Template expectations now corrected. The production dependency audit timed out contacting the npm advisory endpoint; this is missing security evidence, not a clean audit. Browser QA was still running at this checkpoint. The earlier workflow branch run separately timed out in the SQLite device-session auth test; the combined server pass does not erase that diagnostic follow-up.
 
-These findings do not establish packaged UI acceptance. Keep the candidate draft and the audit goal open.
+## Packaged macOS checkpoint: 80e5bc6d
+
+`pnpm build` and `pnpm --filter @veritas-kanban/desktop package:mac:dir` passed. The local unsigned arm64 Electron application was launched from `desktop/release/mac-arm64/veritas-kanban.app`, with `app.isPackaged` asserted and an isolated temporary user-data directory. The packaged web index SHA-256 is `0de9c5eeae79083f40c74e2dcb99dc7dbf3e53131edf112b069289899d337499`. This is a candidate build still reporting version 6.1.6, not a signed release or replacement of the installed app.
+
+Actual native-window checks passed in light and dark themes:
+
+- Policy Edit/Test keyboard activation and immediate Escape, repeated twice, restore the exact opener at 1180×760 with 20px root text.
+- Compact Board/Squad Chat retains drafts across channel switching. Filter-trigger Escape, nested Select Escape, parent-popover Escape, and sender-menu focus restoration pass. Resizing from 1700×900 to 1180×760 minimizes Workbench and sidebars.
+- Task Chat restores non-header opener focus, preserves drafts and Results selection, handles nested confirmation Escape, and keeps Tab within the combined task/chat workspace. At the native minimum 1180×760, 16px text retains the sidecar and 20px text activates body takeover. Transcript/composer bounds and horizontal-overflow assertions pass. Mocked send verifies exact task ID, deterministic session ID, and message; no real provider message was sent.
+
+The native minimum is 1180×760. Smaller browser viewport tests are not native coverage. Stable Task Chat captures were inspected at normal and enlarged text; transient Board/Squad captures are diagnostic artifacts, not maintained documentation media. Local harness and captures are under `/private/tmp/vk-native-ui-1389.8cJNtK/`; the successful task run used `NATIVE_SCOPE=task node verify.mjs` and exited zero. One harness assertion was corrected to check the retained Results heading instead of requiring a compact mode selector after chat closes and the normal navigation returns.
+
+For this same source tree, CI run [33820019372](https://github.com/BradGroux/veritas-kanban/actions/runs/33820019372) passed workspace unit tests, critical coverage, build, lint/typecheck, changed tests, and scope selection. Security Audit failed because all three npm advisory-service requests timed out, so dependency security acceptance remains missing. Unsigned macOS, Windows, and Linux artifact jobs passed in [33820019250](https://github.com/BradGroux/veritas-kanban/actions/runs/33820019250). Browser QA [33820019232](https://github.com/BradGroux/veritas-kanban/actions/runs/33820019232) finished with 63 passing tests, one skipped, and one ambiguous containment-test locator: “Close Board Chat” also matched “Close Board Chat panel”. Requiring the exact toolbar accessible name corrected that locator; the complete focused containment-and-drag scenario passed locally afterward. The first local attempt used the alternate server port without overriding the helper's API base and failed before seeding; the corrected invocation sets both port variables and `API_BASE_URL` to the isolated endpoint.
+
+These findings establish only the listed packaged interactions. Native Template authoring, remaining overlays/task content, final media, installed-app acceptance, and release work remain open. Keep the candidate draft and the audit goal open.
