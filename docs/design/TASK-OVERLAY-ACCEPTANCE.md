@@ -48,6 +48,12 @@ Start, Stop and Try Again share one synchronous operation guard. Competing contr
 
 The verification contract covers immediate duplicate prevention, pending dismissal, failed Start and Stop, successful mocked retry and exact task bindings. `task-preview-pending.spec.ts` checks both themes and motion settings at 1700×900/16px, 1180×760/20px and 900×480/20px, including initial error visibility, fixed/reachable controls and opener restoration. Browser fixtures intercept preview writes and reject unexpected worktree writes; they never start or stop a real development server. Native operation acceptance remains separate. Delivery evidence is tracked in #1505.
 
+### Conflict operations
+
+Resolve, Continue and confirmed Abort share one synchronous operation guard. File selection, navigation, editing, competing actions and dismissal remain disabled until settlement. Abort failures stay in the nested confirmation. Other failures stay in the resolver. Both focus a visible inline error and release the guard for deliberate retry. A same-file background refresh does not replace a manual draft, and the client consumes the server's `{ aborted: true }` response shape.
+
+The verification contract covers immediate duplicate prevention, nested pending dismissal, all three failure paths, successful mocked retries and retained manual input. `task-conflict-pending.spec.ts` checks both themes and motion settings at 1700×900/16px, 1180×760/20px and 900×480/20px, including focused errors, fixed/reachable controls, exact intercepted writes and opener restoration. Fixture-backed browser checks do not mutate real worktrees or establish packaged native operation acceptance. Delivery evidence is tracked in #1507.
+
 ### Supporting task dialogs
 
 `task-support-popouts.spec.ts` covers task, comment, attachment, observation, and deliverable deletion plus manual time entry. Each family is exercised in light/dark, normal/reduced motion, and 1700×900 at 16px, 1180×760 at 20px, and 900×480 at 20px. Checks cover bounded bodies, fixed/reachable footers, no horizontal overflow, keyboard opening, trapped focus, exact opener restoration, and retained task title. Delayed synthetic failed requests exercise Escape, header-close, and backdrop dismissal guards, one submission, inline error recovery, and preserved manual-time drafts. This proves retry availability, not a successful retry. No supporting-record mutation reaches the backend.

@@ -112,9 +112,11 @@ describe('task detail review and preview Mantine migration', () => {
     mocks.mergeWorktreeMutate.mockReset().mockResolvedValue(undefined);
     mocks.startPreviewMutate.mockReset().mockResolvedValue(undefined);
     mocks.stopPreviewMutate.mockReset().mockResolvedValue(undefined);
-    mocks.resolveConflictMutateAsync.mockResolvedValue({ success: true });
-    mocks.abortConflictMutateAsync.mockResolvedValue({ success: true });
-    mocks.continueConflictMutateAsync.mockResolvedValue({ success: true });
+    mocks.resolveConflictMutateAsync
+      .mockReset()
+      .mockResolvedValue({ success: true, remainingConflicts: [] });
+    mocks.abortConflictMutateAsync.mockReset().mockResolvedValue({ aborted: true });
+    mocks.continueConflictMutateAsync.mockReset().mockResolvedValue({ success: true });
     mocks.useDecisionReviews.mockReturnValue({ data: [], isLoading: false });
     mocks.createDecisionReviewMutateAsync.mockResolvedValue({
       id: 'decision_review_new',
@@ -170,7 +172,7 @@ describe('task detail review and preview Mantine migration', () => {
     });
     mocks.useFileConflict.mockReturnValue({
       data: {
-        filePath: 'src/App.tsx',
+        path: 'src/App.tsx',
         content: 'resolved content',
         oursContent: 'ours content',
         theirsContent: 'theirs content',
@@ -604,6 +606,169 @@ describe('task detail review and preview Mantine migration', () => {
       'noopener,noreferrer'
     );
     expect(mocks.stopPreviewMutate).toHaveBeenCalledWith('task-preview');
+  });
+
+  it.each(['resolve', 'abort', 'continue'] as const)(
+    'retains conflict %s ownership and recovers without losing the draft',
+    async (operation) => {
+      let rejectRequest!: (error: Error) => void;
+      const mutation =
+        operation === 'resolve'
+          ? mocks.resolveConflictMutateAsync
+          : operation === 'abort'
+            ? mocks.abortConflictMutateAsync
+            : mocks.continueConflictMutateAsync;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRequest = reject;
+          })
+      );
+      if (operation === 'continue')
+        mocks.useConflictStatus.mockReturnValue({
+          data: {
+            hasConflicts: false,
+            conflictingFiles: [],
+            rebaseInProgress: true,
+            mergeInProgress: false,
+          },
+          isLoading: false,
+        });
+      const onOpenChange = vi.fn();
+      const props = {
+        task: createMockTask({ id: 'task-conflict-pending' }),
+        open: true,
+        onOpenChange,
+      };
+      const view = renderWithProviders(<ConflictResolver {...props} />);
+      const resolver = screen.getByRole('dialog', { name: 'Merge Conflicts' });
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          within(resolver).getByRole('button', { name: 'Close dialog' })
+        )
+      );
+      if (operation !== 'continue') {
+        fireEvent.click(within(resolver).getByRole('tab', { name: 'Manual Edit' }));
+        fireEvent.change(
+          screen.getByPlaceholderText('Edit the file content to resolve conflicts...'),
+          { target: { value: 'Keep my resolution' } }
+        );
+      }
+      if (operation === 'abort')
+        fireEvent.click(within(resolver).getByRole('button', { name: 'Abort' }));
+      const owner =
+        operation === 'abort' ? screen.getByRole('dialog', { name: 'Abort Rebase?' }) : resolver;
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          within(owner).getByRole('button', { name: 'Close dialog' })
+        )
+      );
+      const submit = within(owner).getByRole('button', {
+        name:
+          operation === 'resolve'
+            ? 'Save Resolution'
+            : operation === 'abort'
+              ? 'Abort'
+              : 'Continue Rebase',
+      });
+      fireEvent.click(submit);
+      fireEvent.click(submit);
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      fireEvent.click(within(owner).getByRole('button', { name: 'Close dialog' }));
+      if (operation === 'abort')
+        fireEvent.click(within(owner).getByRole('button', { name: 'Cancel' }));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(owner.isConnected).toBe(true);
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect((submit as HTMLButtonElement).disabled).toBe(true);
+      if (operation === 'resolve') {
+        expect(
+          (within(resolver).getByRole('tab', { name: 'Manual Edit' }) as HTMLButtonElement).disabled
+        ).toBe(true);
+        expect(
+          (within(resolver).getByRole('tab', { name: 'Side by Side' }) as HTMLButtonElement)
+            .disabled
+        ).toBe(true);
+        expect(
+          (
+            screen.getByPlaceholderText(
+              'Edit the file content to resolve conflicts...'
+            ) as HTMLTextAreaElement
+          ).disabled
+        ).toBe(true);
+        expect(
+          (
+            within(resolver).getByRole('button', {
+              name: 'Abort',
+            }) as HTMLButtonElement
+          ).disabled
+        ).toBe(true);
+        mocks.useFileConflict.mockReturnValue({
+          data: {
+            path: 'src/App.tsx',
+            content: 'Background refresh',
+            oursContent: 'ours',
+            theirsContent: 'theirs',
+            markers: [],
+          },
+          isLoading: false,
+        });
+        view.rerender(<ConflictResolver {...props} />);
+      }
+      await act(async () => rejectRequest(new Error('Fixture conflict request failed')));
+      const error = within(owner).getByRole('alert', { name: 'Conflict operation failed' });
+      await waitFor(() => expect(document.activeElement).toBe(error));
+      expect(error.textContent).toContain('Fixture conflict request failed');
+      expect((submit as HTMLButtonElement).disabled).toBe(false);
+      if (operation === 'resolve')
+        expect(
+          (
+            screen.getByPlaceholderText(
+              'Edit the file content to resolve conflicts...'
+            ) as HTMLTextAreaElement
+          ).value
+        ).toBe('Keep my resolution');
+      await act(async () => fireEvent.click(submit));
+      expect(mutation).toHaveBeenCalledTimes(2);
+      if (operation === 'resolve') {
+        expect(mutation).toHaveBeenLastCalledWith({
+          taskId: props.task.id,
+          filePath: 'src/App.tsx',
+          resolution: 'manual',
+          manualContent: 'Keep my resolution',
+        });
+        expect(onOpenChange).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Save Resolution' })).toBeNull();
+      } else expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  );
+
+  it('keeps Abort open when a fulfilled response does not confirm the abort', async () => {
+    mocks.abortConflictMutateAsync.mockResolvedValueOnce({ aborted: false });
+    const onOpenChange = vi.fn();
+    renderWithProviders(
+      <ConflictResolver
+        task={createMockTask({ id: 'task-abort-unconfirmed' })}
+        open
+        onOpenChange={onOpenChange}
+      />
+    );
+    const resolver = screen.getByRole('dialog', { name: 'Merge Conflicts' });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(resolver).getByRole('button', { name: 'Close dialog' })
+      )
+    );
+    fireEvent.click(within(resolver).getByRole('button', { name: 'Abort' }));
+    const confirmation = screen.getByRole('dialog', { name: 'Abort Rebase?' });
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Abort' }));
+    const error = await within(confirmation).findByRole('alert', {
+      name: 'Conflict operation failed',
+    });
+    expect(error.textContent).toContain('was not aborted');
+    await waitFor(() => expect(document.activeElement).toBe(error));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(confirmation.isConnected).toBe(true);
   });
 
   it('renders conflict resolution drawer and abort modal through direct Mantine controls', async () => {
