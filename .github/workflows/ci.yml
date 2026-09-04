@@ -91,6 +91,11 @@ jobs:
           scripts/ci-pr-label-state.test.mjs
           scripts/validate-release-native.test.mjs
           scripts/native-ui/contract.test.mjs
+          scripts/docs-media/verify.test.mjs
+          scripts/docs-media/record.test.mjs
+          scripts/docs-media/finalize.test.mjs
+          scripts/docs-media/publication.test.mjs
+          scripts/docs-media/restore-candidate.test.mjs
 
       - name: Guard delivery cadence
         run: node scripts/check-delivery-cadence.mjs
