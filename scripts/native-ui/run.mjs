@@ -10,6 +10,7 @@ import {
   fileDigest,
   evidenceFailures,
   geometryFailures,
+  contentSizes,
   modes,
   packageDigest,
   routes,
@@ -513,13 +514,13 @@ async function exercise(state, mode, shot) {
     await shot();
     await dismiss(dialog);
   } else if (state === 'responsive-collapse') {
-    await resize(1700, 1000);
+    await resize(contentSizes.normal.width, contentSizes.normal.height);
     if (await button('Expand left sidebar').isVisible())
       await button('Expand left sidebar').click();
     if (await button('Expand right sidebar').isVisible())
       await button('Expand right sidebar').click();
     await button('Open Board Chat').click();
-    await resize(1180, 760);
+    await resize(contentSizes.minimum.width, contentSizes.minimum.height);
     await expect(page.getByRole('region', { name: 'Workbench right dock' })).toBeHidden();
     await expect(button('Expand left sidebar')).toBeVisible();
     await expect(button('Expand right sidebar')).toBeVisible();

@@ -7,7 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { chromium, expect } from '@playwright/test';
 import { createNativeSession } from '../native-ui/session.mjs';
-import { fileDigest, packageDigest } from '../native-ui/contract.mjs';
+import { contentSizes, fileDigest, packageDigest } from '../native-ui/contract.mjs';
 import { maintainedAssets, mediaSchema, mediaEvidenceFailures } from './verify.mjs';
 import { encodeInteraction, recordInteraction } from './record.mjs';
 import { finalizeCapture } from './finalize.mjs';
@@ -245,11 +245,14 @@ try {
   const launched = await session.launch();
   ({ app, page } = launched);
   report.identity = launched.identity;
-  await app.evaluate(({ BrowserWindow }) => {
+  await app.evaluate(({ BrowserWindow }, sizes) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.isVisible());
     win.webContents.setZoomFactor(1);
-    win.setContentSize(1700, 1000);
-  });
+    win.setContentSize(sizes.normal.width, sizes.normal.height);
+  }, contentSizes);
+  await expect
+    .poll(() => page.evaluate(() => [innerWidth, innerHeight]))
+    .toEqual([contentSizes.normal.width, contentSizes.normal.height]);
   await theme();
   // Use the actual isolated packaged API and its authenticated cookie, no auth bypass.
   for (const [name, status, type] of [
