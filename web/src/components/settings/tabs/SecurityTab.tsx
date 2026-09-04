@@ -1,8 +1,9 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction } from '@/components/ui/UiVocabulary';
 import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Group, Modal, PasswordInput, Stack, Text } from '@mantine/core';
+import { PasswordInput, Stack, Text } from '@mantine/core';
 import { Eye, EyeOff, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { authApi } from '@/lib/api/auth';
@@ -171,43 +172,45 @@ export function SecurityTab() {
             Reset All Security
           </UiAction>
           <Modal
+            variant="confirm"
+            compound
             opened={resetOpen}
             onClose={() => setResetOpen(false)}
             title="Reset all security settings?"
             centered
           >
-            <Stack gap="md">
+            <Stack gap="1rem" className="vk-overlay-scroll">
               <Text size="sm" c="dimmed">
                 This action cannot be undone. Your password and recovery key will be deleted. You'll
                 need to set up a new password on the next page load.
               </Text>
-              <Group justify="flex-end">
-                <UiAction variant="quiet" onClick={() => setResetOpen(false)}>
-                  Cancel
-                </UiAction>
-                <UiAction
-                  variant="destructive"
-                  onClick={async () => {
-                    // Call the reset endpoint
-                    try {
-                      await authApi.reset();
-                      window.location.reload();
-                    } catch (err) {
-                      console.error('[Security] Auth reset failed:', err);
-                      toast({
-                        title: 'Reset failed',
-                        description: 'Please use the CLI command instead.',
-                        duration: 5000,
-                      });
-                    } finally {
-                      setResetOpen(false);
-                    }
-                  }}
-                >
-                  Reset Everything
-                </UiAction>
-              </Group>
             </Stack>
+            <OverlayFooter>
+              <UiAction variant="quiet" data-autofocus onClick={() => setResetOpen(false)}>
+                Cancel
+              </UiAction>
+              <UiAction
+                variant="destructive"
+                onClick={async () => {
+                  // Call the reset endpoint
+                  try {
+                    await authApi.reset();
+                    window.location.reload();
+                  } catch (err) {
+                    console.error('[Security] Auth reset failed:', err);
+                    toast({
+                      title: 'Reset failed',
+                      description: 'Please use the CLI command instead.',
+                      duration: 5000,
+                    });
+                  } finally {
+                    setResetOpen(false);
+                  }
+                }}
+              >
+                Reset Everything
+              </UiAction>
+            </OverlayFooter>
           </Modal>
         </SettingsGroup>
       </SettingsSection>

@@ -1,7 +1,8 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction, UiHeading } from '@/components/ui/UiVocabulary';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Group, Modal, Stack, Text } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
 import { RotateCcw } from 'lucide-react';
 
 export function SectionHeader({
@@ -63,24 +64,26 @@ export function SectionHeader({
                 Reset
               </UiAction>
               <Modal
+                variant="confirm"
+                compound
                 opened={resetOpen}
                 onClose={() => setResetOpen(false)}
                 title="Reset to defaults?"
                 centered
               >
-                <Stack gap="md">
+                <Stack gap="1rem" className="vk-overlay-scroll">
                   <Text size="sm" c="dimmed">
                     This will reset all {title.toLowerCase()} settings to their default values.
                   </Text>
-                  <Group justify="flex-end">
-                    <UiAction variant="quiet" onClick={() => setResetOpen(false)}>
-                      Cancel
-                    </UiAction>
-                    <UiAction variant="primary" onClick={handleReset}>
-                      Reset
-                    </UiAction>
-                  </Group>
                 </Stack>
+                <OverlayFooter>
+                  <UiAction variant="quiet" data-autofocus onClick={() => setResetOpen(false)}>
+                    Cancel
+                  </UiAction>
+                  <UiAction variant="primary" onClick={handleReset}>
+                    Reset
+                  </UiAction>
+                </OverlayFooter>
               </Modal>
             </>
           )}

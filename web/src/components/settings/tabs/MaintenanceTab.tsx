@@ -1,3 +1,4 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiPill, semanticToneForLegacyColor, UiAction } from '@/components/ui/UiVocabulary';
 import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 import { useEffect, useMemo, useState } from 'react';
@@ -7,7 +8,6 @@ import {
   Code,
   Group,
   Loader,
-  Modal,
   NumberInput,
   Progress,
   Select,
@@ -588,31 +588,34 @@ export function MaintenanceTab() {
       </SettingsSection>
 
       <Modal
+        variant="form"
+        compound
         opened={cleanupOpen}
         onClose={() => setCleanupOpen(false)}
         title="Review cleanup"
         centered
       >
-        <Stack gap="md">
+        <Stack gap="1rem" className="vk-overlay-scroll">
           <CleanupPreviewList items={summary.cleanupPreview.items} />
           <Text size="xs" c="dimmed">
             {summary.cleanupPreview.notes.join(' ')}
           </Text>
           <TextInput
+            data-autofocus
             label="Confirmation"
             value={cleanupConfirm}
             onChange={(event) => setCleanupConfirm(event.currentTarget.value)}
             placeholder="Type DELETE"
           />
-          <Group justify="flex-end">
-            <UiAction variant="quiet" onClick={() => setCleanupOpen(false)}>
-              Close
-            </UiAction>
-            <UiAction variant="destructive" disabled={!cleanupEnabled}>
-              Delete Previewed Items
-            </UiAction>
-          </Group>
         </Stack>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={() => setCleanupOpen(false)}>
+            Close
+          </UiAction>
+          <UiAction variant="destructive" disabled={!cleanupEnabled}>
+            Delete Previewed Items
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </SettingsPage>
   );

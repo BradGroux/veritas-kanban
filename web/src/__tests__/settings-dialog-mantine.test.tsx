@@ -116,7 +116,7 @@ describe('SettingsDialog Mantine shell', () => {
     expect(screen.getByRole('tab', { name: 'General' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getAllByLabelText('Select settings section').length).toBeGreaterThanOrEqual(1);
     expect(baseElement.querySelector('.mantine-Button-root')).toBeDefined();
-    expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
+    expect(baseElement.querySelector('[data-settings-content-scroll]')).not.toBeNull();
     expect(baseElement.querySelector('.mantine-Select-root')).toBeDefined();
 
     const closeButton = screen.getByRole('button', { name: 'Close settings' });

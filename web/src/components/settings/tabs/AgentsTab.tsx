@@ -1,3 +1,4 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import {
   UiHeading,
   UiAction,
@@ -8,7 +9,7 @@ import {
 import { SettingsGroup, SettingsNotice } from '@/components/settings/shared/SettingsLayout';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Modal, NumberInput, Select, Switch, Text, Textarea, TextInput } from '@mantine/core';
+import { NumberInput, Select, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import {
   useAgentProfiles,
   useCodexHealth,
@@ -2328,17 +2329,21 @@ function AgentItem({
 
       {!isDefault && (
         <Modal
+          variant="confirm"
+          compound
           opened={confirmRemoveOpen}
           onClose={() => setConfirmRemoveOpen(false)}
           title="Remove agent?"
           centered
         >
-          <Text size="sm" c="dimmed">
-            This will remove &ldquo;{agent.name}&rdquo; ({agent.type}) from your agent
-            configuration.
-          </Text>
-          <div className="mt-4 flex justify-end gap-2">
-            <UiAction variant="quiet" onClick={() => setConfirmRemoveOpen(false)}>
+          <div className="vk-overlay-scroll">
+            <Text size="sm" c="dimmed">
+              This will remove &ldquo;{agent.name}&rdquo; ({agent.type}) from your agent
+              configuration.
+            </Text>
+          </div>
+          <OverlayFooter>
+            <UiAction variant="quiet" data-autofocus onClick={() => setConfirmRemoveOpen(false)}>
               Cancel
             </UiAction>
             <UiAction
@@ -2350,7 +2355,7 @@ function AgentItem({
             >
               Remove
             </UiAction>
-          </div>
+          </OverlayFooter>
         </Modal>
       )}
     </>

@@ -1,7 +1,8 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
 import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import { Group, Modal, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Group, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import {
   useConfig,
   useAddRepo,
@@ -401,24 +402,26 @@ function RepoItem({ repo }: { repo: RepoConfig }) {
           <Trash2 className="h-4 w-4" />
         </UiIconAction>
         <Modal
+          variant="confirm"
+          compound
           opened={removeOpen}
           onClose={() => setRemoveOpen(false)}
           title="Remove repository?"
           centered
         >
-          <Stack gap="md">
+          <Stack gap="1rem" className="vk-overlay-scroll">
             <Text size="sm" c="dimmed">
               This will remove "{repo.name}" from your configuration.
             </Text>
-            <Group justify="flex-end">
-              <UiAction variant="quiet" onClick={() => setRemoveOpen(false)}>
-                Cancel
-              </UiAction>
-              <UiAction variant="destructive" onClick={handleRemove}>
-                Remove
-              </UiAction>
-            </Group>
           </Stack>
+          <OverlayFooter>
+            <UiAction variant="quiet" data-autofocus onClick={() => setRemoveOpen(false)}>
+              Cancel
+            </UiAction>
+            <UiAction variant="destructive" onClick={handleRemove}>
+              Remove
+            </UiAction>
+          </OverlayFooter>
         </Modal>
       </div>
     </SettingsGroup>
