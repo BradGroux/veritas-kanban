@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FilterBar, type FilterState } from '@/components/board/FilterBar';
 import { BulkActionsBar } from '@/components/board/BulkActionsBar';
+import { ArchiveSuggestionBanner } from '@/components/board/ArchiveSuggestionBanner';
 import {
   createMockProject,
   createMockTask,
@@ -23,6 +24,7 @@ const agents: AgentConfig[] = [
 ];
 
 const mocks = vi.hoisted(() => ({
+  archiveSprint: vi.fn(),
   bulkArchiveByIds: vi.fn(),
   bulkDemote: vi.fn(),
   bulkUpdate: vi.fn(),
@@ -60,6 +62,11 @@ vi.mock('@/hooks/useBulkActions', () => ({
 }));
 
 vi.mock('@/hooks/useTasks', () => ({
+  useArchiveSuggestions: () => ({
+    data: [{ sprint: 'Release Sprint', taskCount: 3 }],
+    isLoading: false,
+  }),
+  useArchiveSprint: () => ({ mutateAsync: mocks.archiveSprint, isPending: false }),
   useBulkArchiveByIds: () => ({
     mutateAsync: mocks.bulkArchiveByIds,
   }),
@@ -110,6 +117,7 @@ describe('Board chrome Mantine migration', () => {
     mocks.bulkDemote.mockResolvedValue({ demoted: ['VK-1'], failed: [] });
     mocks.bulkUpdate.mockResolvedValue({ updated: ['VK-1'], failed: [] });
     mocks.deleteTask.mockResolvedValue(undefined);
+    mocks.archiveSprint.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -263,7 +271,81 @@ describe('Board chrome Mantine migration', () => {
     expect(onApplySavedView).toHaveBeenCalledWith('view-review');
   });
 
-  it('renders bulk selection actions through direct Mantine primitives', () => {
+  it.each(['Save view', 'Rename saved view', 'Delete saved view'])(
+    'uses shared geometry and restores the %s opener on Escape',
+    async (label) => {
+      const user = userEvent.setup();
+      const save = vi.fn();
+      const rename = vi.fn();
+      const remove = vi.fn();
+      renderWithProviders(
+        <FilterBar
+          tasks={[]}
+          filters={defaultFilters()}
+          onFiltersChange={vi.fn()}
+          savedViews={[
+            {
+              id: 'view-long',
+              name: 'LongView'.repeat(10),
+              filters: defaultFilters(),
+              createdAt: '2026-06-03T12:00:00.000Z',
+              updatedAt: '2026-06-03T12:00:00.000Z',
+            },
+          ]}
+          selectedSavedViewId="view-long"
+          onSaveSavedView={save}
+          onRenameSavedView={rename}
+          onDeleteSavedView={remove}
+        />
+      );
+      const opener = screen.getByRole('button', { name: label });
+      vi.spyOn(opener, 'getClientRects').mockReturnValue([
+        new DOMRect(0, 0, 100, 32),
+      ] as unknown as DOMRectList);
+      await user.click(opener);
+      const dialog = screen.getByRole('dialog');
+      const destructive = label === 'Delete saved view';
+      expect(dialog.closest('[data-overlay-variant]')?.getAttribute('data-overlay-variant')).toBe(
+        destructive ? 'confirm' : 'form'
+      );
+      const footer = dialog.querySelector('.vk-overlay-footer');
+      expect(footer).not.toBeNull();
+      expect(dialog.querySelector('.vk-overlay-scroll')?.contains(footer)).toBe(false);
+      const initial = destructive
+        ? within(dialog).getByRole('button', { name: 'Cancel' })
+        : within(dialog).getByRole('textbox', { name: 'View name' });
+      expect(initial.hasAttribute('data-autofocus')).toBe(true);
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      await waitFor(() => expect(document.activeElement).toBe(opener));
+      expect(save).not.toHaveBeenCalled();
+      expect(rename).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps sprint archive cancellation safe and submits only the confirmed sprint', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ArchiveSuggestionBanner />);
+    const opener = screen.getByRole('button', { name: 'Archive Sprint' });
+    await user.click(opener);
+    let dialog = screen.getByRole('dialog', { name: 'Archive sprint "Release Sprint"?' });
+    expect(dialog.closest('[data-overlay-variant]')?.getAttribute('data-overlay-variant')).toBe(
+      'confirm'
+    );
+    expect(dialog.querySelector('.vk-overlay-footer')).not.toBeNull();
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
+    expect(cancel.hasAttribute('data-autofocus')).toBe(true);
+    await user.click(cancel);
+    expect(mocks.archiveSprint).not.toHaveBeenCalled();
+    await user.click(opener);
+    dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Archive Sprint' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(mocks.archiveSprint).toHaveBeenCalledExactlyOnceWith('Release Sprint');
+  });
+
+  it('renders bulk selection actions and only deletes after confirmation', async () => {
     mocks.useBulkActions.mockReturnValue({
       selectedIds: new Set(['VK-1']),
       isSelecting: true,
@@ -308,5 +390,17 @@ describe('Board chrome Mantine migration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(screen.queryByText('Delete 1 task?')).toBeNull();
+    expect(mocks.deleteTask).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete 1 task?' });
+    expect(dialog.closest('[data-overlay-variant]')?.getAttribute('data-overlay-variant')).toBe(
+      'confirm'
+    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Cancel' }).hasAttribute('data-autofocus')
+    ).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(mocks.deleteTask).toHaveBeenCalledExactlyOnceWith('VK-1'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
