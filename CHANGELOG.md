@@ -20,7 +20,7 @@ Veritas Kanban 6.1.7 corrects desktop and compact-window layout, popout interact
 
 ### Fixed
 
-- Kept task, Settings, workflow, approval, Git, and review popouts open while their requests settle, preserved failed-request context, and restored focus to visible controls after dismissal or responsive layout changes (#1424, #1436, #1444, #1445).
+- Kept Create Task, template application, previews, conflict resolution, Settings, workflow, approval, Git, and review popouts in control while requests settle. Drafts and errors remain available for safe retries, partial blueprint creation cannot be blindly repeated, and visible controls regain focus after dismissal or responsive layout changes (#1383, #1424, #1436, #1444, #1445, #1503, #1505, #1507).
 - Prevented stale close cleanup from removing a rapidly reopened task workspace, and removed unintended reduced-motion layout transitions that changed footer geometry during resizing (#1482, #1490).
 - Contained mobile Board, Activity rows, tooltips, and enlarged-text navigation; kept status menus and Chat controls clear of task content (#1462, #1463, #1465, #1476, #1479).
 - Preserved template task fields, supported critical priority consistently in task creation, retained optional-field clearing, and protected configured workspace run budgets (#1410, #1419, #1429, #1431).
