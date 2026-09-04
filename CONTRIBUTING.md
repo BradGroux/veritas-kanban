@@ -335,11 +335,11 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
 - **Release readiness** checks workspace versions, changelog, README badge, build outputs, candidate-bound packaged macOS evidence, documentation-media freshness, and optional GitHub tag/release state:
 
   ```bash
-  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/media-capture.json
-  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/media-capture.json --github
+  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/publication.json
+  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/publication.json --github
   ```
 
-  Use `--source-only` for source preflight before packaging. It cannot establish release acceptance. See [desktop release verification](docs/DESKTOP-RELEASE.md#native-gate-before-macos-upload) for evidence capture and the remaining signing, installation, media, and publication gates.
+  Capture media once from the verified release build, commit those exact files in a docs-only publication commit, then generate `publication.json` with `pnpm docs:verify-media`. The publication manifest preserves the original capture manifest and build identity; it is not a second recording. Any intervening application change requires a new build and capture. Use `--source-only` for source preflight before packaging. It cannot establish release acceptance. See [desktop release verification](docs/DESKTOP-RELEASE.md#native-gate-before-macos-upload) for evidence capture and the remaining signing, installation, media, and publication gates.
 
 - Write tests for new features and bug fixes.
 - Ensure existing tests pass before submitting.

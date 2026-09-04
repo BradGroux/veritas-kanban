@@ -117,7 +117,7 @@ test('source-only preflight is explicitly not release acceptance and cannot cons
   );
 });
 
-test('full validator rejects stale documentation metadata independently of native evidence', async (t) => {
+test('full validator rejects legacy capture metadata without a publication manifest', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'media-release-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const app = path.join(directory, 'fixture.app');
@@ -139,9 +139,8 @@ test('full validator rejects stale documentation metadata independently of nativ
   assert.equal(result.code, 1);
   assert.match(
     result.output,
-    /FAIL Documentation media freshness.*stale documentation candidate commit/
+    /FAIL Documentation media freshness.*Missing documentation publication manifest/
   );
-  assert.match(result.output, /missing or duplicate maintained media decisions/);
 });
 
 test('full validator delegates to candidate, freshness, and matrix validation', async (t) => {
@@ -188,12 +187,12 @@ test('macOS publication stages without upload and verifies the distribution befo
   const upload = steps.find((step) => step.includes('name: Upload macOS release assets'));
   const retention = steps.find((step) => step.includes('name: Retain native macOS evidence'));
   const media = steps.find((step) =>
-    step.includes('name: Capture final candidate documentation media')
+    step.includes('name: Capture candidate documentation media once')
   );
   assert(native && upload && retention && media);
   assert(workflow.indexOf(native) < workflow.indexOf(media));
   assert(workflow.indexOf(media) < workflow.indexOf(upload));
-  assert.match(media, /node scripts\/docs-media\/run.mjs.* verify/);
+  assert.match(media, /node scripts\/docs-media\/run.mjs.* capture/);
   assert.doesNotMatch(media, /--source-only|continue-on-error| prepare/);
   assert.match(retention, /documentation-media/);
   assert(
@@ -210,13 +209,22 @@ test('macOS publication stages without upload and verifies the distribution befo
   assert.match(retention, /native-ui-evidence/);
   assert.doesNotMatch(native + upload, /continue-on-error|if:|\|\| true|--source-only/);
   const checksum = upload.indexOf('shasum -a 256 -c');
-  const verification = upload.indexOf('node ../scripts/validate-release.mjs --native-evidence');
+  const verification = upload.indexOf(
+    'scripts/validate-release.mjs" --skip-build-output --native-evidence'
+  );
   const publication = upload.indexOf('gh release upload');
   assert(checksum >= 0 && verification > checksum && publication > verification);
   assert.match(upload, /--native-app "\$\{VERIFIED_NATIVE_APP\}"/);
   assert.match(
     upload,
-    /--native-app "\$\{VERIFIED_NATIVE_APP\}" --media-evidence "\$\{RUNNER_TEMP\}\/documentation-media\/evidence.json" --github/
+    /--native-app "\$\{VERIFIED_NATIVE_APP\}" --media-evidence "\$\{RUNNER_TEMP\}\/retained-macos-candidate\/documentation-media\/publication.json" --github/
   );
   assert.match(workflow, /fetch-depth: 0/);
+  const [captureJob, promotionJob] = workflow.split('  promote-mac:');
+  assert.match(captureJob, /if: inputs.promote_run_id == ''/);
+  assert.match(promotionJob, /if: inputs.promote_run_id != ''/);
+  assert.doesNotMatch(captureJob, /gh release upload/);
+  assert.doesNotMatch(promotionJob, /docs-media\/run.mjs|electron-builder|pnpm build/);
+  assert.match(promotionJob, /docs-media\/restore-candidate.mjs/);
+  assert.match(promotionJob, /docs-media\/publish.mjs/);
 });

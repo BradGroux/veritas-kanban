@@ -13,10 +13,10 @@ import { encodeInteraction, recordInteraction } from './record.mjs';
 import { finalizeCapture } from './finalize.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const [appArgument, outputArgument, mode = 'verify'] = process.argv.slice(2);
+const [appArgument, outputArgument, mode = 'capture'] = process.argv.slice(2);
 assert(
-  appArgument?.endsWith('.app') && outputArgument && ['prepare', 'verify'].includes(mode),
-  'Usage: node scripts/docs-media/run.mjs <candidate.app> <new-external-directory> [prepare|verify]'
+  appArgument?.endsWith('.app') && outputArgument && mode === 'capture',
+  'Usage: node scripts/docs-media/run.mjs <candidate.app> <new-external-directory> [capture]'
 );
 assert.equal(process.platform, 'darwin', 'Desktop documentation captures require macOS');
 const output = path.join(
@@ -241,7 +241,7 @@ async function theme() {
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark');
 }
 try {
-  if (mode === 'verify') assert(!report.dirty, 'Final capture requires a clean candidate checkout');
+  assert(!report.dirty, 'Capture requires a clean build checkout');
   const launched = await session.launch();
   ({ app, page } = launched);
   report.identity = launched.identity;
@@ -338,21 +338,6 @@ try {
   report.completedAt = new Date().toISOString();
   report.status = 'captured';
   assert.deepEqual(mediaEvidenceFailures(report, report), []);
-  if (mode === 'verify') {
-    for (const asset of report.assets)
-      assert.equal(
-        await fileDigest(path.join(root, asset.path)),
-        asset.sha256,
-        `${asset.name}: fresh capture differs from committed media; rebuild after reviewing changes`
-      );
-    for (const file of ['assets/demo-overview.mp4', 'docs/assets/demo-overview.mp4'])
-      assert.equal(
-        await fileDigest(path.join(root, file)),
-        report.demoVideo.sha256,
-        `${file}: fresh interaction video differs from committed media`
-      );
-    report.committedBytesMatch = true;
-  }
 } catch (error) {
   report.status = 'failed';
   report.error = error.message;

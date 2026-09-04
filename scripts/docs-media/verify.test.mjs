@@ -18,8 +18,7 @@ function fixture() {
   return {
     schema: mediaSchema,
     status: 'captured',
-    mode: 'verify',
-    committedBytesMatch: true,
+    mode: 'capture',
     dirty: false,
     ...expected,
     completedAt: '2026-09-04T09:00:00Z',
@@ -64,11 +63,11 @@ test('seeded stale documentation identity and changed capture bytes fail closed'
     maintainedContents: [['README.md', 'assets/v6.1.7/board-overview.png']],
   };
   assert.deepEqual(await verifyMediaEvidence(args), []);
-  for (const change of [{ mode: 'prepare' }, { dirty: true }, { committedBytesMatch: false }]) {
+  for (const change of [{ mode: 'prepare' }, { mode: 'verify' }, { dirty: true }]) {
     await writeFile(evidencePath, JSON.stringify({ ...report, ...change }));
     assert(
       (await verifyMediaEvidence(args)).includes(
-        'documentation media requires a final clean capture matching committed bytes'
+        'documentation media requires an original clean capture'
       )
     );
   }
