@@ -13,6 +13,7 @@ Reduced-motion preferences make CSS transitions immediate, with no transition de
 | Family                                            | Source                                        | Browser geometry evidence                                                                                                 | Packaged macOS evidence |
 | ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | Task root                                         | `TaskDetailPanel`, `UiTaskSurface`            | Expanded mode retains section, scroll, board opener                                                                       | Pending                 |
+| Create task                                       | `CreateTaskDialog`                            | Light/dark; three sizes; normal/reduced motion; pending guards, retained draft, focused failure, safe retry boundary      | Pending                 |
 | Apply template                                    | `ApplyTemplateDialog`                         | Light/dark; 1700×900 at 16px, 1180×760 and 900×480 at 20px; fixed footer, parent inert, exact opener                      | Pending                 |
 | Preview                                           | `PreviewPanel`                                | Light/dark; 900×480 at 20px; fixed Start control and parent focus restoration                                             | Pending                 |
 | Conflict resolver and Abort                       | `ConflictResolver`                            | Light/dark; 900×480 at 20px; fixed Abort, nested inert parents, successive Escape ownership                               | Pending                 |
@@ -35,6 +36,12 @@ Reduced-motion preferences make CSS transitions immediate, with no transition de
 - Seven existing task-family component slices: 59 tests passed. They cover task detail, review/preview/conflict actions, Git/workflow actions, agent/template/metrics, supporting sections, work products, and artifact previews. Component tests do not prove rendered geometry.
 - `task-detail.spec.ts` expanded-workspace case passed. `task-popout-stack.spec.ts` adds template and nested-utility browser checks. Fixtures do not launch agents, start preview servers, resolve conflicts, or create managed worktrees; managed ownership exists only in intercepted browser reads.
 - Independent standards and specification source reviews identified scrolling utility controls and non-quiet Cancel actions. Both were corrected and cleared on recheck. Remaining evidence gaps are explicit above.
+
+### Create Task submission
+
+Create Task owns submission and dismissal from the first submit event until the complete single-task or blueprint operation settles. Every form control, template control, duplicate-result action, Cancel action and close route remains disabled while pending. Failure retains the complete draft and selected template state and focuses a visible inline error. A single-task failure or a blueprint failure before any write releases the guard for deliberate retry. A partially written blueprint reports the completed count and blocks blind retry so the operator can reconcile the board first. Form and template state reset only after successful creation.
+
+`create-task-pending.spec.ts` checks fixed-footer geometry in both themes and motion settings at 1700×900/16px, 1180×760/20px and 900×480/20px. At the compact size it also checks disabled dismissal and fields while pending, one-request ownership, a visible focused error, retained title and description, successful same-payload retry and exact opener restoration. The browser fixture accepts only the expected create endpoint; it does not create a real task, exercise a blueprint or establish packaged macOS acceptance. Component coverage checks the partial-blueprint retry block. Delivery remains under parent #1383.
 
 ### Apply Template submission
 

@@ -355,15 +355,21 @@ describe('#780 — Bounded retry_step cycles', () => {
   it('retryRouteCount is persisted across saves', async () => {
     mockLoadWorkflow.mockResolvedValue(retryWorkflow(1));
     mockExecuteStep.mockImplementation(async (step: { id: string }) => {
+      if (step.id === 'stepA') {
+        await new Promise((resolve) => setTimeout(resolve, 1_100));
+      }
       if (step.id === 'stepB') throw new Error('always fails');
       return { output: {}, outputPath: '/tmp/x.json' };
     });
 
     const run = await service.startRun('wf-retry');
-    await vi.waitFor(async () => {
-      const saved = await service.getRun(run.id);
-      expect(['failed', 'blocked'].includes(saved.status)).toBe(true);
-    });
+    await vi.waitFor(
+      async () => {
+        const saved = await service.getRun(run.id);
+        expect(['failed', 'blocked'].includes(saved.status)).toBe(true);
+      },
+      { timeout: 5_000 }
+    );
 
     const mod = await import('../services/workflow-run-service.js');
     const service2 = new mod.WorkflowRunService({
