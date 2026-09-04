@@ -131,7 +131,9 @@ export async function exerciseDiscoveryPopouts(
   await query.fill('fixture');
   await query.press('Enter');
   await search.getByRole('button', { name: /Fixture result 1\b/ }).press('Enter');
-  const settingsFromSearch = page.getByRole('dialog', { name: 'Settings', exact: true });
+  // Packaged Board Only mode adds its badge to the accessible dialog title.
+  const settingsName = /^Settings(?: Board Only)?$/;
+  const settingsFromSearch = page.getByRole('dialog', { name: settingsName });
   await expect(settingsFromSearch).toBeVisible();
   await expect
     .poll(() => settingsFromSearch.evaluate((element) => element.contains(document.activeElement)))
@@ -148,7 +150,10 @@ export async function exerciseDiscoveryPopouts(
     await openPalette();
     await input.fill(command);
     await input.press('Enter');
-    const target = page.getByRole('dialog', { name: destination, exact: true });
+    const target = page.getByRole('dialog', {
+      name: destination === 'Settings' ? settingsName : destination,
+      exact: true,
+    });
     await expect(target).toBeVisible();
     await expect
       .poll(() => target.evaluate((element) => element.contains(document.activeElement)))
