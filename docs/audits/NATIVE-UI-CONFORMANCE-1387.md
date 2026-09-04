@@ -26,6 +26,8 @@ The diagnostic run completed at `2026-09-04T06:38:33.197Z` with 144 recorded sta
 
 The first signed 6.1.7 capture run then proved the 1700×1000 target itself was not portable: the hosted macOS window manager returned 1700×760 for every normal resize, so that single failed precondition cascaded across the normal matrix and all seeded probes. The current contract centralizes runner-safe content sizes for native verification and documentation capture. This is a harness correction, not accepted evidence; a new commit-bound signed candidate must pass the complete matrix.
 
+The next signed capture run, `33917249628`, passed 142 of 144 ordinary states and all seeded probes. Only the light-normal and dark-normal relaunch entries failed: after quitting a minimum-width matrix process, the hosted window manager restored 1180×760 instead of the following entry's 1700×760 target. Relaunch exists to prove persisted renderer state and clean process recovery, not a runner-specific window-restoration policy. The runner now reapplies the declared matrix size immediately after launch before checking the persisted theme, task, geometry, and HTTP ledger. This remains diagnostic evidence; final acceptance requires another exact-commit signed candidate.
+
 These diagnostic runs use an unsigned 6.1.6 package built from `afb447156fd77d24ee4616bdd7f8e556371c4925`, with whole-bundle SHA-256 `52dad82a58e5352c77577d9547323f1ff1cece318e94a22ea415bd93104bc183`. The harness checkout was dirty. They are not clean-commit release acceptance, installed-app verification, or refreshed documentation media. Committing this harness changes HEAD and requires a newly built candidate for final acceptance; old evidence must not be relabeled.
 
 ## Remaining acceptance work
