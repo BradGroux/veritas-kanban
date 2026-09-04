@@ -6,11 +6,11 @@ test.beforeEach(async ({ page }) => bypassAuth(page));
 test.afterEach(async ({ page }) => cleanupRoutes(page));
 
 test('mobile chat entry does not cover task content', async ({ page }, testInfo) => {
-  const task = await seedTestTask(page, { title: 'Readable task summary', type: 'code' });
+  const task = await seedTestTask(page, { title: 'Mobile chat entry fixture', type: 'code' });
   try {
     await page.goto('/');
     await page.addStyleTag({ content: ':root { font-size: 20px !important; }' });
-    const title = page.getByRole('heading', { name: 'Readable task summary', exact: true });
+    const title = page.getByRole('heading', { name: 'Mobile chat entry fixture', exact: true });
     await expect(title).toBeVisible();
     const trigger = page.getByRole('button', { name: 'Open chat', exact: true });
     await expect(trigger).toBeVisible();
@@ -44,7 +44,7 @@ test('mobile chat entry does not cover task content', async ({ page }, testInfo)
       ).toBe(true);
     }
     const status = page.getByRole('combobox', {
-      name: 'Change status for Readable task summary',
+      name: 'Change status for Mobile chat entry fixture',
       exact: true,
     });
     await status.evaluate((el) => {
@@ -71,13 +71,9 @@ test('mobile chat entry does not cover task content', async ({ page }, testInfo)
       body: await page.screenshot(),
       contentType: 'image/png',
     });
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await expect(composer).toHaveValue('Unsent mobile draft');
     await page.getByRole('button', { name: 'Close Board Chat panel', exact: true }).click();
     await expect(composer).not.toBeVisible();
     await expect(trigger).toBeVisible();
-    expect(await trigger.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
-    await page.setViewportSize({ width: 320, height: 844 });
     await trigger.click();
     await expect(composer).toHaveValue('Unsent mobile draft');
     await page.getByRole('button', { name: 'Close Board Chat panel', exact: true }).click();
@@ -88,6 +84,30 @@ test('mobile chat entry does not cover task content', async ({ page }, testInfo)
 
 test.describe('wide browser chat entry', () => {
   test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
+  test('retains drafts and actionable controls through narrow-wide-narrow window resizing', async ({
+    page,
+  }) => {
+    // Desktop window resizing must not retain a phone-emulation pinch-zoom viewport.
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.goto('/');
+    await page.addStyleTag({ content: ':root { font-size: 20px !important; }' });
+    const trigger = page.getByRole('button', { name: 'Open chat', exact: true });
+    await trigger.click();
+    const composer = page.getByRole('textbox', { name: 'Message Board Chat', exact: true });
+    await composer.fill('Unsent resizing draft');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(composer).toHaveValue('Unsent resizing draft');
+    await page.getByRole('button', { name: 'Close Board Chat panel', exact: true }).click();
+    await expect(composer).not.toBeVisible();
+    await expect(trigger).toBeVisible();
+    expect(await trigger.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
+    await page.setViewportSize({ width: 320, height: 844 });
+    await trigger.click();
+    await expect(composer).toHaveValue('Unsent resizing draft');
+    await page.getByRole('button', { name: 'Close Board Chat panel', exact: true }).click();
+    await expect(composer).not.toBeVisible();
+  });
+
   test('retains the floating chat control without mobile navigation', async ({ page }) => {
     await page.goto('/');
     const trigger = page.getByRole('button', { name: 'Open chat', exact: true });
