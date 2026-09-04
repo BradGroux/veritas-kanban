@@ -109,7 +109,7 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 - Prefer compact, natural paragraphs over bullet-per-sentence formatting. Use lists only for
   genuinely parallel items. Keep rendered prose blocks concise so they do not become walls of
   text on GitHub's release index.
-- Run `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app` against the clean packaged candidate; the post-publication `--github` form also requires the published GitHub body to match the reviewed file exactly. `--source-only` is a separate source preflight, not release acceptance; `--skip-build-output` does not bypass native evidence.
+- Run `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/media-capture.json` against the clean packaged candidate; the post-publication `--github` form also requires the published GitHub body to match the reviewed file exactly. `--source-only` is a separate source preflight, not release acceptance; `--skip-build-output` does not bypass native or documentation-media evidence.
 - After publication, inspect both the releases index and tag page. Raw Markdown validation does
   not replace a rendered-format check.
 

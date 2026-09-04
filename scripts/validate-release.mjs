@@ -5,6 +5,8 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyNativeEvidence } from './native-ui/verify.mjs';
+import { packageDigest } from './native-ui/contract.mjs';
+import { verifyMediaEvidence } from './docs-media/verify.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -159,6 +161,7 @@ Options:
   --skip-build-output      Skip local dist artifact checks.
   --native-evidence <file> Candidate-bound packaged macOS evidence report.
   --native-app <path>      Exact .app verified by that report.
+  --media-evidence <file>  Candidate-bound documentation capture manifest.
   --source-only           Source preflight only; never release acceptance.
   --docker-build           Build the production Docker image as part of validation.
   --help                   Show this help text.
@@ -174,6 +177,7 @@ function parseArgs(argv) {
     version: undefined,
     nativeEvidence: undefined,
     nativeApp: undefined,
+    mediaEvidence: undefined,
     sourceOnly: false,
   };
 
@@ -203,13 +207,18 @@ function parseArgs(argv) {
       options.sourceOnly = true;
       continue;
     }
-    if (arg === '--native-evidence' || arg === '--native-app') {
+    if (arg === '--native-evidence' || arg === '--native-app' || arg === '--media-evidence') {
       const value = argv[++index];
       if (!value || value.startsWith('--')) {
         fail('CLI options', `${arg} requires a path`);
         continue;
       }
-      options[arg === '--native-evidence' ? 'nativeEvidence' : 'nativeApp'] = value;
+      const key = {
+        '--native-evidence': 'nativeEvidence',
+        '--native-app': 'nativeApp',
+        '--media-evidence': 'mediaEvidence',
+      }[arg];
+      options[key] = value;
       continue;
     }
 
@@ -473,7 +482,7 @@ async function main() {
   if (options.sourceOnly) {
     check(
       'Source-only preflight does not consume candidate evidence',
-      !options.nativeEvidence && !options.nativeApp,
+      !options.nativeEvidence && !options.nativeApp && !options.mediaEvidence,
       'Remove --source-only to validate a packaged candidate'
     );
     skip('Packaged macOS evidence', 'source-only preflight is not release acceptance');
@@ -501,6 +510,39 @@ async function main() {
       check('Packaged macOS evidence', errors.length === 0, errors.join('; ') || head.stdout);
     } catch (error) {
       fail('Packaged macOS evidence', error.message);
+    }
+  }
+  if (options.sourceOnly) {
+    skip('Documentation media freshness', 'source-only preflight is not release acceptance');
+  } else if (!options.mediaEvidence || !options.nativeApp) {
+    fail(
+      'Documentation media freshness',
+      '--media-evidence and --native-app are required; a browser capture or source preflight cannot bypass this gate'
+    );
+  } else {
+    try {
+      const head = run('git', ['rev-parse', 'HEAD']);
+      const tracked = run('git', ['ls-files', '-z', '--', 'README.md', 'docs']);
+      if (!head.ok || !tracked.ok)
+        throw new Error('Cannot resolve candidate commit or maintained documentation inventory');
+      const maintainedContents = [];
+      for (const file of tracked.stdout.split('\0').filter(Boolean)) {
+        const bytes = await readFile(path.join(rootDir, file));
+        if (!bytes.includes(0)) maintainedContents.push([file, bytes.toString('utf8')]);
+      }
+      const errors = await verifyMediaEvidence({
+        evidencePath: path.resolve(options.mediaEvidence),
+        root: rootDir,
+        expected: {
+          commit: head.stdout,
+          version: expectedVersion,
+          packageDigest: await packageDigest(path.resolve(options.nativeApp)),
+        },
+        maintainedContents,
+      });
+      check('Documentation media freshness', errors.length === 0, errors.join('; ') || head.stdout);
+    } catch (error) {
+      fail('Documentation media freshness', error.message);
     }
   }
   const requiredReleaseDocs = releaseDocsForVersion(expectedVersion);
@@ -724,7 +766,7 @@ async function main() {
   console.log(
     options.sourceOnly
       ? '\nSource preflight passed. Packaged, installed, signing, documentation-media, and publication acceptance are not established.'
-      : '\nRelease validation passed. Installed-app, signing, documentation-media, and publication acceptance require their separate evidence.'
+      : '\nRelease validation passed. Installed-app, signing, media visual/playback review, and publication acceptance require their separate evidence.'
   );
 }
 

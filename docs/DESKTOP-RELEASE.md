@@ -82,12 +82,12 @@ Immediately before `gh release upload`, the workflow rechecks all staged distrib
 Full local release validation now requires explicit candidate paths:
 
 ```bash
-pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app
+pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/media-capture.json
 ```
 
-For source and published-body checks before a candidate exists, use `--source-only --skip-build-output` (plus `--github` when checking the published body). Its success message is explicitly source preflight, never release acceptance. `--skip-build-output` alone does not bypass native evidence.
+For source and published-body checks before a candidate exists, use `--source-only --skip-build-output` (plus `--github` when checking the published body). Its success message is explicitly source preflight, never release acceptance. `--skip-build-output` alone does not bypass native or media evidence. Source-only mode rejects candidate evidence arguments instead of silently ignoring them.
 
-Browser verification, packaged candidate verification, installed-app verification, signing/notarization, documentation-media review, and publication are separate results. Report the exact boundary and evidence for each; pending or blocked work remains pending or blocked. Documentation media freshness is still tracked separately in #1388 and #1387 and is not established by this native upload gate.
+Browser verification, packaged candidate verification, installed-app verification, signing/notarization, documentation-media review, and publication are separate results. Report the exact boundary and evidence for each; pending or blocked work remains pending or blocked. The [documentation media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md) requires current capture provenance, file hashes, and a maintained-reference scan. This proves freshness, not visual quality or GIF semantics. Actual playback and visual inspection remain required. The automated release capture producer is not integrated yet; upload must remain blocked until the workflow supplies genuine candidate-bound media evidence. Do not generate a passing manifest for the old browser screenshots or still-image montages.
 
 ## Homebrew Cask
 
@@ -207,7 +207,7 @@ policy is tracked in
 - Apply `ci:full` to the release-candidate pull request, then download the
   uploaded DMG/ZIP/update metadata from its `Desktop Artifacts` run.
 - Edit `docs/releases/vX.Y.Z.md`, run
-  `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app`, and publish that exact file with
+  `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/media-capture.json`, and publish that exact file with
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
   hand-author or repair the live body separately.
 - Use one logical source line per prose paragraph and let GitHub wrap it to the
@@ -237,7 +237,7 @@ policy is tracked in
 - For a Homebrew upgrade, confirm `open -a` followed by
   `pnpm desktop:wait:ready -- --expected-version <version>` tolerates normal
   startup delay and proves the packaged server owns `3001`.
-- Confirm full `pnpm validate:release` passes with `--native-evidence` and `--native-app`, verifying candidate-bound macOS evidence, root/shared/server/web/CLI/MCP/desktop package versions, and required v6 release docs. A source-only preflight is not this gate.
+- Confirm full `pnpm validate:release` passes with `--native-evidence`, `--native-app`, and `--media-evidence`, verifying candidate-bound macOS evidence, documentation-media freshness, root/shared/server/web/CLI/MCP/desktop package versions, and required v6 release docs. A source-only preflight is not this gate.
 
 ## Smoke Tests
 

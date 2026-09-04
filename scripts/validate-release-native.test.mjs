@@ -30,6 +30,10 @@ test('full release validation cannot bypass absent evidence by skipping builds',
     /FAIL Packaged macOS evidence.*Both --native-evidence and --native-app are required/
   );
   assert.doesNotMatch(result.output, /Release validation passed/);
+  assert.match(
+    result.output,
+    /FAIL Documentation media freshness.*--media-evidence and --native-app are required/
+  );
 });
 
 test('destination release tags resolve to their commit, not an annotated tag object', () => {
@@ -105,6 +109,32 @@ test('source-only preflight is explicitly not release acceptance and cannot cons
   const ambiguous = validate(['--source-only', '--native-app', '/not-a-candidate']);
   assert.equal(ambiguous.code, 1);
   assert.match(ambiguous.output, /FAIL Source-only preflight does not consume candidate evidence/);
+  const ambiguousMedia = validate(['--source-only', '--media-evidence', '/not-a-capture']);
+  assert.equal(ambiguousMedia.code, 1);
+  assert.match(
+    ambiguousMedia.output,
+    /FAIL Source-only preflight does not consume candidate evidence/
+  );
+});
+
+test('full validator rejects stale documentation metadata independently of native evidence', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'media-release-test-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const app = path.join(directory, 'fixture.app');
+  const media = path.join(directory, 'media.json');
+  await mkdir(app);
+  await writeFile(path.join(app, 'fixture.txt'), 'not a release app');
+  await writeFile(
+    media,
+    JSON.stringify({ schema: 'documentation-media-capture/v1', commit: '0'.repeat(40), assets: [] })
+  );
+  const result = validate(['--native-app', app, '--media-evidence', media]);
+  assert.equal(result.code, 1);
+  assert.match(
+    result.output,
+    /FAIL Documentation media freshness.*stale documentation candidate commit/
+  );
+  assert.match(result.output, /missing or duplicate maintained media decisions/);
 });
 
 test('full validator delegates to candidate, freshness, and matrix validation', async (t) => {
