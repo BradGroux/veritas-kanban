@@ -21,7 +21,7 @@ Task confirmations and forms use shared widths and insets, a primary scrolling b
 | Agent stop and readiness override                 | `AgentPanel`                                  | Every-family checks pending                                                                                | Pending                 |
 | Approval decisions                                | `AgentRunTimelinePanel`                       | Every-family checks pending                                                                                | Pending                 |
 | Review merge                                      | `ReviewPanel`                                 | Every-family checks pending                                                                                | Pending                 |
-| Work product versions, editing, artifact preview  | `WorkProductsSection`, `ArtifactPreviewModal` | Every-family checks pending                                                                                | Pending                 |
+| Work product versions, editing, artifact preview  | `WorkProductsSection`, `ArtifactPreviewModal` | Light/dark; three sizes; normal/reduced motion; editor pending/failure recovery; text preview only         | Pending                 |
 | Git PR, merge, worktree removal                   | `PRDialog`, `WorktreeStatus`                  | Every-family checks pending                                                                                | Pending                 |
 | Workflows                                         | `WorkflowSection`, `WorkflowStartDialog`      | Every-family checks pending                                                                                | Pending                 |
 | Task metrics export                               | `ExportDialog`                                | Every-family checks pending                                                                                | Pending                 |
@@ -43,6 +43,12 @@ The original delayed-request test reproduced dismissal during submission. A guar
 The focused keyboard, task-detail, and supporting-section slices passed 43 tests after this change, along with web typecheck and changed-source lint. Independent specification and standards rechecks found no remaining source issue in this increment. Representative light manual-time and dark attachment captures were inspected; these are browser diagnostics, not refreshed documentation media or packaged macOS evidence.
 
 The initial browser run exposed task container classes accidentally applied to Mantine's outer positioning layer. Content-only `classNames` fixed the collapsed workspace; the expanded-workspace browser case and a DOM-placement assertion guard it. Earlier test setup failures included an incorrect isolated API port and missing synthetic repository/managed-worktree read fixtures; these are not accepted product checks.
+
+### Work-product dialogs
+
+`task-product-popouts.spec.ts` exercises a 30-version history, a long Markdown editor, and a long text artifact preview in both themes and motion settings at the same three viewport/text combinations. Checks cover viewport bounds, horizontal overflow, fixed footers, actionable footer hit targets, inert parent workspace, keyboard entry, and exact opener restoration. A deferred synthetic failed save tests Escape and header-close guards, one submission, preserved Markdown, and retry availability. It does not prove a successful save. Reads and save requests are intercepted; no work product is mutated on the backend.
+
+Measurements wait for two animation frames after viewport/font changes so textarea row recalculation settles before comparing footer positions across scrolling. The failed-save notification is explicitly dismissed before preview capture; the initial capture showed that notification obscuring the next surface even though the footer was inside the viewport. This is why hit-target checks supplement viewport checks. Text preview coverage does not establish image/PDF zoom or HTML refresh geometry. These remain pending, as does packaged macOS verification for all three dialogs.
 
 ## Remaining acceptance
 
