@@ -8,6 +8,8 @@ The task workspace retains one mounted content tree through drawer, expanded, an
 
 Task confirmations and forms use shared widths and insets, a primary scrolling body, fixed action footers, and quiet Cancel actions. Nested Preview and Conflict Resolver panels become authoring dialogs. Their control bars remain outside the primary scroller. Conflict Resolver's Abort confirmation is inside the shared depth provider, so closing it reactivates the resolver rather than the task behind it.
 
+Reduced-motion preferences make CSS transitions immediate, with no transition delay. A tiny nonzero duration on every element would introduce default `all` transitions and temporarily retain old modal widths, padding, and gaps when text size changes. Footer checks retain exact before/after-scroll geometry rather than waiting away that layout regression. Explicit keyframe animations retain their finite reduced duration for animation-event compatibility.
+
 | Family                                            | Source                                        | Browser geometry evidence                                                                                                 | Packaged macOS evidence |
 | ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | Task root                                         | `TaskDetailPanel`, `UiTaskSurface`            | Expanded mode retains section, scroll, board opener                                                                       | Pending                 |
