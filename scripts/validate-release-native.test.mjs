@@ -228,3 +228,24 @@ test('macOS publication stages without upload and verifies the distribution befo
   assert.match(promotionJob, /docs-media\/restore-candidate.mjs/);
   assert.match(promotionJob, /docs-media\/publish.mjs/);
 });
+
+test('settings captures wait for rendered page content instead of the loading skeleton', async () => {
+  const documentationCapture = await readFile(
+    path.join(root, 'scripts/docs-media/run.mjs'),
+    'utf8'
+  );
+  const nativeCapture = await readFile(path.join(root, 'scripts/native-ui/run.mjs'), 'utf8');
+
+  const documentationReady = documentationCapture.indexOf(
+    "settings.getByRole('heading', { name: 'General', exact: true })"
+  );
+  const documentationShot = documentationCapture.indexOf("still('settings-navigation.png')");
+  assert(documentationReady >= 0 && documentationReady < documentationShot);
+
+  const selectedTab = nativeCapture.indexOf("'aria-selected',\n      'true'");
+  const renderedHeading = nativeCapture.indexOf(
+    "dialog.getByRole('heading', { name: tab, exact: true })"
+  );
+  const settingsShot = nativeCapture.indexOf('await shot();', renderedHeading);
+  assert(selectedTab >= 0 && selectedTab < renderedHeading && renderedHeading < settingsShot);
+});
