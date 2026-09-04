@@ -146,6 +146,8 @@ export const veritasMantineTheme = createTheme({
     Select: {
       defaultProps: {
         radius: 'sm',
+        // Portaled menus must not expand the mobile document while positioning.
+        comboboxProps: { floatingStrategy: 'fixed' },
       },
       styles: {
         input: {

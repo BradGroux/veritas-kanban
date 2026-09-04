@@ -21,6 +21,8 @@ iOS uses Safari's Add to Home Screen flow instead of the browser install prompt.
 
 Chrome shows the install prompt only when the manifest and service worker are reachable from the current origin.
 
+On narrow screens, use **More views** in the header to reach Activity, Backlog, Archive, and other views. Their separate wide-screen shortcuts are omitted to preserve room for the logo, connection status, and task controls. Dropdown menus remain anchored to their controls without changing the page scale.
+
 ## Offline Behavior
 
 The service worker caches only the static app shell, manifest, icons, and same-origin static assets. It does not cache `/api` responses, WebSocket traffic, task data, work products, tokens, comments, or mutation responses.
