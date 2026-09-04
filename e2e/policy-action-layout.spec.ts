@@ -64,14 +64,25 @@ for (const theme of ['light', 'dark']) {
     }
     await page.screenshot({ path: testInfo.outputPath(`policy-${theme}.png`) });
     const edit = page.getByRole('button', { name: 'Edit', exact: true }).first();
+    const editDialog = page.getByRole('dialog', {
+      name: 'Edit Policy Define when the policy applies, what it checks, and how the agent should respond.',
+      exact: true,
+    });
     await edit.click();
-    await expect(page.getByRole('dialog')).toContainText('Edit Policy');
+    await expect(editDialog).toBeVisible();
     await page.keyboard.press('Escape');
+    // Focus returns before the exit animation finishes. Wait for dismissal too.
+    await expect(editDialog).toHaveCount(0);
     await expect(edit).toBeFocused();
     const preview = page.getByRole('button', { name: 'Test', exact: true }).first();
+    const testDialog = page.getByRole('dialog', {
+      name: 'Test Policy Evaluation Preview how the guard engine would evaluate an action before an agent executes it.',
+      exact: true,
+    });
     await preview.click();
-    await expect(page.getByRole('dialog')).toContainText('Test Policy');
+    await expect(testDialog).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(testDialog).toHaveCount(0);
     await expect(preview).toBeFocused();
     await cleanupRoutes(page);
   });
