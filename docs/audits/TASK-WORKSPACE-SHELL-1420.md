@@ -23,4 +23,6 @@ Verified locally:
 
 Browser checks used temporary test data and isolated API/web ports 3194/5194, then shut down. They do not constitute packaged macOS acceptance.
 
-The existing Drawer primitive is deliberately retained in this slice. Shared overlay-stack migration, nested Template/Preview/Workflow surfaces, per-mode content convergence, and Task Chat remain under #1385/#1386. Packaged macOS acceptance (#1387) and all maintained documentation images/GIFs (#1388) remain pending. No installed application or release is updated by this change.
+The combined unsigned macOS candidate passed native task workspace checks in both themes at 1180×760: Results selection and the same workspace survive Task Chat presentation changes, 16px text uses the sidecar and 20px text uses body takeover, controls remain bounded, and keyboard focus stays inside the active task/chat workspace. These are scoped native checks, not final installed-app acceptance. Combined candidate `169f7628` also passed full CI and browser QA in runs 33821267360 and 33821267373, including workspace tests and critical coverage.
+
+The existing Drawer primitive is deliberately retained in this slice. Shared overlay-stack migration, nested Template/Preview/Workflow surfaces, per-mode content convergence, and remaining Task Chat acceptance stay under #1385/#1386. Final installed-app acceptance (#1387) and all maintained documentation images/GIFs (#1388) remain pending. No installed application or release is updated by this change.

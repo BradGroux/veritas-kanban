@@ -1,0 +1,9 @@
+# Workflow recovery test clock
+
+Issue #1399 began with a full coverage failure: the combined retry/reroute/skip/block scenario observed `running` instead of `blocked` within `vi.waitFor`'s default deadline. The unchanged focused file passed all 16 tests locally, and a later full coverage run also passed. Those passes did not explain the earlier failure.
+
+A bounded probe around the existing scheduler recorded 547 calls to `scheduleWorkflowRecovery` during a 30 ms real-time observation, where one scheduled callback was expected. The test replaced every global `setTimeout` with `queueMicrotask`, so callbacks ignored the persisted `notBefore` deadline and repeatedly rescheduled. This directly demonstrates a harness defect and unnecessary asynchronous work. It does not independently reproduce the original CI timeout or prove that no other source of CI latency exists.
+
+The test now controls Date, setTimeout, and clearTimeout together. Filesystem work remains real. It observes completion of the real scheduler and blocked-state save instead of relying on a one-second wall-clock polling deadline. Assertions cover the persisted pending state, the production minimum backoff, no launch one millisecond before the due time, one scheduler registration, and exact retry/reroute/skip/block execution counts. Cleanup disposes owned timers before restoring the clock and spies. No production recovery behavior or timeout configuration changes.
+
+The focused command is `pnpm --filter @veritas-kanban/server exec vitest run src/__tests__/workflow-run-service.test.ts --coverage --coverage.include=src/services/workflow-run-service.ts --coverage.reporter=text-summary`. The whole file passed all 16 tests, including cancellation and restart evidence handling. Server typecheck passed; changed-file lint had no errors and retained existing explicit-any warnings. The issue still requires a passing full coverage milestone for the changed revision before closure.

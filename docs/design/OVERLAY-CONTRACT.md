@@ -32,8 +32,8 @@ Line numbers identify the audited opening and may move during migration. A share
 | [AdmissionQueuePanel.tsx](../../web/src/components/digest/AdmissionQueuePanel.tsx)                |          315 | form             | Migration pending                                    |
 | [WorkflowStartDialog.tsx](../../web/src/components/workflows/WorkflowStartDialog.tsx)             |           71 | form             | Migration pending; migrate with nested consumers     |
 | [CreateTaskDialog.tsx](../../web/src/components/task/CreateTaskDialog.tsx)                        |          267 | form             | Migration pending; migrate with nested consumers     |
-| [PolicyManager.tsx](../../web/src/components/policies/PolicyManager.tsx)                          |          550 | authoring        | Migration pending; migrate with nested consumers     |
-| [PolicyManager.tsx](../../web/src/components/policies/PolicyManager.tsx)                          |          906 | authoring        | Migration pending; migrate with nested consumers     |
+| [PolicyManager.tsx](../../web/src/components/policies/PolicyManager.tsx)                          |          552 | authoring        | Shared modal; runtime acceptance pending in #1423    |
+| [PolicyManager.tsx](../../web/src/components/policies/PolicyManager.tsx)                          |          906 | form             | Shared modal; runtime acceptance pending in #1423    |
 | [TimeTrackingSection.tsx](../../web/src/components/task/TimeTrackingSection.tsx)                  |          243 | form             | Migration pending                                    |
 | [BulkActionsBar.tsx](../../web/src/components/board/BulkActionsBar.tsx)                           |          366 | confirm          | Migration pending                                    |
 | [ArchiveSuggestionBanner.tsx](../../web/src/components/board/ArchiveSuggestionBanner.tsx)         |           92 | confirm          | Migration pending                                    |

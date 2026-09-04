@@ -151,17 +151,17 @@ export interface CreateTemplateInput {
   launch?: LaunchTemplateMetadata;
 }
 
-/** Input for updating an existing template */
+/** Omitted optional fields are preserved; explicit null clears the field. */
 export interface UpdateTemplateInput {
   name?: string;
-  description?: string;
-  category?: string;
+  description?: string | null;
+  category?: string | null;
   taskDefaults?: {
-    type?: TaskType;
-    priority?: TaskPriority;
-    project?: string;
-    descriptionTemplate?: string;
-    agent?: AgentType;
+    type?: TaskType | null;
+    priority?: TaskPriority | null;
+    project?: string | null;
+    descriptionTemplate?: string | null;
+    agent?: AgentType | null;
   };
   subtaskTemplates?: SubtaskTemplate[];
   blueprint?: BlueprintTask[];
