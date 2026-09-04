@@ -245,4 +245,26 @@ describe('TemplateEditorDialog', () => {
     expect(screen.queryByRole('button', { name: 'Clear category' })).toBeNull();
     expect(document.activeElement).toBe(category);
   });
+
+  it('offers Critical and preserves its shared priority value on save', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TemplateEditorDialog
+        template={{ ...template, taskDefaults: { ...template.taskDefaults, priority: 'critical' } }}
+        open
+        onOpenChange={vi.fn()}
+      />
+    );
+    expect(
+      (screen.getByRole('combobox', { name: 'Default Priority' }) as HTMLInputElement).value
+    ).toBe('Critical');
+    await user.click(screen.getByRole('button', { name: 'Update Template' }));
+    expect(mocks.updateTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          taskDefaults: expect.objectContaining({ priority: 'critical' }),
+        }),
+      })
+    );
+  });
 });
