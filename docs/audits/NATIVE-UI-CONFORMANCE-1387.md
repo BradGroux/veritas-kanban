@@ -1,6 +1,10 @@
 # Packaged macOS UI conformance (#1387)
 
-Status: in development. This gate is not yet release acceptance and #1387 remains open.
+Status: accepted for v6.1.7. Signed capture run
+[`33926469724`](https://github.com/BradGroux/veritas-kanban/actions/runs/33926469724)
+passed the complete packaged macOS gate from build commit
+`ed5094c6a5f9dd6958ceb952d8d018a40135bf33`. Installed Homebrew first-launch
+verification remains a separate release-train boundary under #1389.
 
 ## Boundary
 
@@ -18,7 +22,7 @@ Final verification also examines the complete recorded HTTP-failure ledger after
 
 After the normal matrix, the disposable renderer receives six deliberately injected faults: blank shell space, a clipped modal, a shifted heading, a board-only rail control on Activity, wrong popout padding, and a visible New Task button with its handler removed. Each fault must be detected by the corresponding geometry or behavioral assertion, retains a native screenshot, and is removed by reloading before the next fault. These expected-failure probes are separate from the ordinary matrix and cannot waive an ordinary failed state. Missing fault probes fail verification.
 
-## Development checkpoint
+## Historical development checkpoints
 
 The first complete development matrix reproduced Session menu Escape dismissal failure in both themes and both native window sizes. This is tracked separately in #1451; the runner must not waive it. Preview capture timing also exposed a harness defect: DOM content and geometry could pass while the native screenshot caught a transparent opening modal. Opacity measurement and paint synchronization address that defect, and the normal/minimum light-theme preview captures were visually rechecked.
 
@@ -30,12 +34,18 @@ The next signed capture run, `33917249628`, passed 142 of 144 ordinary states an
 
 Signed capture run `33919618642` passed the complete 144-state matrix and all six seeded probes from clean commit `6e3c6d3a549cc7f9b9e0d519ead2f865c2ded27f`. Documentation capture then failed before writing its first asset because its native capture helper still asserted and recorded the obsolete 1000px height even though the shared launcher target was 760px. The capture and verifier now consume the same centralized desktop viewport, with regression coverage for stale desktop dimensions. The run proves the native matrix, but it did not retain a promotable candidate or publishable media; final acceptance requires another exact-commit signed capture.
 
-These diagnostic runs use an unsigned 6.1.6 package built from `afb447156fd77d24ee4616bdd7f8e556371c4925`, with whole-bundle SHA-256 `52dad82a58e5352c77577d9547323f1ff1cece318e94a22ea415bd93104bc183`. The harness checkout was dirty. They are not clean-commit release acceptance, installed-app verification, or refreshed documentation media. Committing this harness changes HEAD and requires a newly built candidate for final acceptance; old evidence must not be relabeled.
+The earliest diagnostic runs used an unsigned 6.1.6 package built from `afb447156fd77d24ee4616bdd7f8e556371c4925`, with whole-bundle SHA-256 `52dad82a58e5352c77577d9547323f1ff1cece318e94a22ea415bd93104bc183`. The harness checkout was dirty. They were not clean-commit release acceptance, installed-app verification, or refreshed documentation media, and they have not been relabeled as such.
 
-## Remaining acceptance work
+## Final v6.1.7 acceptance
 
-- Integrate the Session menu fix from #1453 and rerun the newly strengthened matrix. Its preceding 144-state clean candidate passed, but predates the new geometry fields and seeded renderer requirements.
-- Bind refreshed maintained screenshots/GIFs to their capture candidate and reject stale media. Do not relabel the existing browser captures as native evidence.
-- Integrate mandatory evidence verification into release validation and signed packaging before any upload. The current workflow uses `electron-builder --publish always`; adding a check after that command would be too late.
-- Update release and issue templates to distinguish browser, packaged candidate, installed app, signing, documentation, and publication boundaries.
-- Review the complete change and rerun the final clean, commit-bound candidate. Current development runs do not qualify for a release.
+The final run closed the diagnostic gaps without weakening the contract:
+
+- 144 of 144 ordinary states passed across both themes, both declared native window sizes, all required routes, task surfaces, Workbench modes, and relaunch checks.
+- All six seeded defects were detected: blank shell space, clipped modal, shifted heading, board-only rail leakage, wrong popout padding, and a dead New Task handler.
+- The packaged app reported v6.1.7 and the exact build commit. Its whole-bundle SHA-256 was `a23df6443940aff4d9b5013b97ab753b986a63f3bb15dc0d3a8c6aaace866f94` on macOS 15.7.9 arm64.
+- The HTTP ledger contained no 429 or 5xx responses. Optional task-chat 404 responses were retained and accepted under the documented boundary.
+- Signature, notarization, Gatekeeper assessment, and stapling checks passed before publication.
+- The run retained the signed release candidate, native evidence, and documentation media. The 14 maintained assets were published from those exact captures in commit `6befd39cbc1264b18fa272d25bc64642f2b60383`.
+- Promotion run [`33928175193`](https://github.com/BradGroux/veritas-kanban/actions/runs/33928175193) published v6.1.7, and the post-publication release validator passed against the live tag, release body, and assets.
+
+The packaged-candidate gate is complete. Browser fixtures remain diagnostic, and the Homebrew-installed copy is not counted as opened until the operator accepts macOS's first-launch confirmation and the launched app is checked separately under #1389.

@@ -1,0 +1,70 @@
+{
+  "schema": "task-mode-audit/v1",
+  "status": "verified",
+  "verifiedAt": "2026-09-04T23:41:33Z",
+  "boundary": "packaged-macos",
+  "version": "6.1.7",
+  "buildCommit": "ed5094c6a5f9dd6958ceb952d8d018a40135bf33",
+  "packageDigest": "a23df6443940aff4d9b5013b97ab753b986a63f3bb15dc0d3a8c6aaace866f94",
+  "bundleId": "io.digitalmeld.veritas-kanban",
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.9"
+  },
+  "window": {
+    "width": 1180,
+    "height": 900,
+    "theme": "dark"
+  },
+  "capture": {
+    "method": "macos-window-capture",
+    "retinaSourceWidth": 2584,
+    "retinaSourceHeight": 2024,
+    "publishedWidth": 1292,
+    "publishedHeight": 1012,
+    "cropped": false
+  },
+  "files": [
+    {
+      "name": "drawer-overview.png",
+      "sha256": "884f24534d800c682d059d29fe85f4140d29ef4360d2dddd237a7f423b465c66"
+    },
+    {
+      "name": "drawer-plan.png",
+      "sha256": "dd190ee54f11d4e23420b61fe4c5cb2f4189fad28c390a4202bd367b01e56c62"
+    },
+    {
+      "name": "drawer-run.png",
+      "sha256": "dc97345f7682ab1e63d3808917aa7cbe916dfaf1bdd9578c6902e07109340bd2"
+    },
+    {
+      "name": "drawer-results.png",
+      "sha256": "026c5b0b553aa22f2ec483cd60906cf16cbb0a015ee0b97f8f706ab93ec51f05"
+    },
+    {
+      "name": "drawer-history.png",
+      "sha256": "08a65033768f2de4bfd6cb20e937a084d7ab67ce1bbd2ab078788dee4c7d0490"
+    },
+    {
+      "name": "expanded-overview.png",
+      "sha256": "b2cf05c29d253ea73642cb37d300d9547afee892046a2a785a5a2620eb277b89"
+    },
+    {
+      "name": "expanded-plan.png",
+      "sha256": "738827bd974fddef471bc51105f8eff2c28230caa08c530b1ff940550bd7d22f"
+    },
+    {
+      "name": "expanded-run.png",
+      "sha256": "ac7b48a32bc218a2cdc6f9781db34c05f06ddd355ea75e43682ea22661ce2855"
+    },
+    {
+      "name": "expanded-results.png",
+      "sha256": "395c79aa66591543b5fad531fe179d39363d079d20c0ead5f848427e7d373234"
+    },
+    {
+      "name": "expanded-history.png",
+      "sha256": "30c4427b0abb33a5406e2167777201f1351b35c800ae8875b755b7cf670b3528"
+    }
+  ]
+}
