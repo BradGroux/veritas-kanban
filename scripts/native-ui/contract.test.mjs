@@ -45,6 +45,7 @@ function report() {
     packageDigest: digest,
     version: '6.1.6',
     dirty: false,
+    httpFailures: [],
     identity: {
       packaged: true,
       platform: 'darwin',
@@ -176,6 +177,35 @@ const failures = (value) =>
   evidenceFailures(value, { commit, packageDigest: digest, version: '6.1.6' }, now);
 test('complete candidate-bound matrix is accepted by the structural validator', () =>
   assert.deepEqual(failures(report()), []));
+test('late rate limits and server failures reject otherwise passing native evidence', () => {
+  for (const status of [429, 500, 503]) {
+    for (const state of ['startup', 'light-normal/board', 'seed/dead-header', 'teardown']) {
+      const r = report();
+      r.httpFailures.push({ state, path: '/api/tasks', method: 'GET', status });
+      assert(
+        failures(r).includes(`${state}: HTTP ${status} GET /api/tasks`),
+        `accepted late HTTP ${status} in ${state}`
+      );
+    }
+  }
+});
+test('missing or malformed HTTP evidence fails closed', () => {
+  for (const httpFailures of [undefined, null, {}, [{ status: '500' }]]) {
+    const r = report();
+    r.httpFailures = httpFailures;
+    assert(failures(r).includes('missing or malformed native HTTP evidence'));
+  }
+});
+test('a missing optional chat session is not a server failure', () => {
+  const r = report();
+  r.httpFailures.push({
+    state: 'light-normal/task-chat',
+    path: '/api/chat/sessions/task_fixture',
+    method: 'GET',
+    status: 404,
+  });
+  assert.deepEqual(failures(r), []);
+});
 test('partial, duplicate and failed matrices cannot pass', () => {
   for (const mutate of [
     (r) => r.entries.pop(),
