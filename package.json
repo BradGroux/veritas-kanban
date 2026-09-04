@@ -61,6 +61,8 @@
     "smoke:cli-mcp": "node scripts/smoke-cli-mcp-compat.mjs",
     "test:release-format": "node --test scripts/validate-release-format.test.mjs",
     "validate:release": "node scripts/validate-release.mjs",
+    "desktop:ui:mac": "node scripts/native-ui/run.mjs",
+    "desktop:ui:verify": "node scripts/native-ui/verify.mjs",
     "clean": "pnpm -r clean && rm -rf node_modules",
     "audit": "pnpm audit --prod",
     "audit:all": "pnpm audit",
