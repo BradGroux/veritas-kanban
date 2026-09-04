@@ -20,15 +20,14 @@ describe('command and shortcut dialogs Mantine migration', () => {
     cleanup();
   });
 
-  it('opens the command palette through direct Mantine modal primitives', async () => {
+  it('opens the command palette with shared geometry and a visible close action', async () => {
     const { baseElement } = renderCommandSurface(<CommandPalette />);
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
 
     expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeDefined();
     expect(screen.getByLabelText('Search commands')).toBeDefined();
-    expect(screen.getByText('Command center')).toBeDefined();
-    expect(screen.getByText('Run a command')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Close dialog' })).toBeDefined();
     expect(screen.queryByRole('button', { name: /Restart Local Server/ })).toBeNull();
     expect(screen.getByText(/ready · \d+ unavailable/)).toBeDefined();
     const selectedCommand = screen.getByRole('button', { name: /New Task/ });
@@ -36,7 +35,9 @@ describe('command and shortcut dialogs Mantine migration', () => {
     expect(selectedCommand.className).toContain('text-white');
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();
-    expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeDefined();
+    expect(baseElement.querySelector('.vk-overlay-scroll')).not.toBeNull();
+    expect(baseElement.querySelector('.vk-overlay-footer')).not.toBeNull();
+    expect(baseElement.querySelector('.mantine-ScrollArea-root')).toBeNull();
     expect(baseElement.querySelector('[data-slot="dialog-content"]')).toBeNull();
     expect(baseElement.querySelector('[data-slot="dialog-title"]')).toBeNull();
   });
@@ -88,12 +89,17 @@ describe('command and shortcut dialogs Mantine migration', () => {
       </>
     );
     const trigger = screen.getByRole('button', { name: 'Palette trigger' });
+    vi.spyOn(trigger, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
     trigger.focus();
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
 
     const input = await screen.findByRole('textbox', { name: 'Search commands' });
     await waitFor(() => expect(document.activeElement).toBe(input));
-    expect(screen.getByTestId('command-palette-surface').className).toContain('100dvh');
+    expect(
+      screen.getByTestId('command-palette-surface').closest('[data-overlay-compound]')
+    ).not.toBeNull();
 
     const viewport = screen.getByLabelText('Available commands');
     Object.defineProperties(viewport, {

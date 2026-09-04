@@ -1,4 +1,5 @@
-import { Group, Kbd, Modal, Stack, Text } from '@mantine/core';
+import { Group, Kbd, Stack, Text } from '@mantine/core';
+import { OverlayFooter, UiModal as Modal } from '@/components/ui/UiOverlay';
 import { Keyboard } from 'lucide-react';
 import { useKeyboard } from '@/hooks/useKeyboard';
 
@@ -50,7 +51,8 @@ export function KeyboardShortcutsDialog() {
     <Modal
       opened={isHelpOpen}
       onClose={closeHelpDialog}
-      size="md"
+      variant="form"
+      compound
       title={
         <Group gap="xs">
           <Keyboard className="h-4 w-4" aria-hidden="true" />
@@ -58,7 +60,7 @@ export function KeyboardShortcutsDialog() {
         </Group>
       }
     >
-      <Stack gap="lg" py="xs">
+      <Stack gap="md" className="vk-overlay-scroll">
         {shortcuts.map((section) => (
           <section key={section.category} aria-label={`${section.category} shortcuts`}>
             <Text component="h3" size="sm" fw={600} c="dimmed" mb="sm">
@@ -66,9 +68,9 @@ export function KeyboardShortcutsDialog() {
             </Text>
             <dl className="space-y-2">
               {section.items.map((shortcut, i) => (
-                <div key={i} className="flex items-center justify-between">
+                <div key={i} className="flex flex-wrap items-center justify-between gap-2">
                   <dt className="text-sm">{shortcut.description}</dt>
-                  <dd className="flex items-center gap-1">
+                  <dd className="flex shrink-0 items-center gap-1">
                     {shortcut.keys.map((key, j) => (
                       <span key={j} className="flex items-center gap-1">
                         {j > 0 && (
@@ -85,11 +87,12 @@ export function KeyboardShortcutsDialog() {
             </dl>
           </section>
         ))}
-
-        <div className="text-xs text-muted-foreground text-center pt-2 border-t">
-          Press <KeyBadge>?</KeyBadge> anytime to toggle this help
-        </div>
       </Stack>
+      <OverlayFooter>
+        <div className="text-xs text-muted-foreground">
+          Press <KeyBadge>Esc</KeyBadge> to close this help
+        </div>
+      </OverlayFooter>
     </Modal>
   );
 }

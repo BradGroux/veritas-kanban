@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -89,10 +90,18 @@ export function UiModal({
   const depth = useContext(OverlayDepth);
   const stack = useContext(OverlayStack);
   const register = stack?.register;
-  useEffect(() => {
+  const opener = useRef<HTMLElement | null | undefined>(undefined);
+  // Reopened overlays must join the Escape/focus stack before the browser can
+  // deliver another key event to their still-mounted transition content.
+  useLayoutEffect(() => {
     if (!props.opened) return;
-    const trigger =
-      returnFocus && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Effect replay (including a lazy surface reveal) must not replace the
+    // original opener with a field or background heading focused during mount.
+    if (opener.current === undefined) {
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    const trigger = returnFocus ? opener.current : null;
     return register?.({ id, depth, trigger });
   }, [props.opened, register, id, depth, returnFocus]);
   const index = stack?.entries.findIndex((entry) => entry.id === id) ?? 0;
@@ -123,6 +132,21 @@ export function UiModal({
       }}
       zIndex={getDefaultZIndex('modal') + Math.max(index, 0)}
       transitionProps={{ transition: 'fade', duration: 150, ...props.transitionProps }}
+      onExitTransitionEnd={() => {
+        // An interrupted exit keeps the same opener. Completed handoffs must
+        // restore it before the next surface captures its return-focus target.
+        const target = opener.current;
+        if (
+          returnFocus &&
+          props.onExitTransitionEnd &&
+          target?.isConnected &&
+          target.getClientRects().length
+        ) {
+          target.focus({ preventScroll: true });
+        }
+        opener.current = undefined;
+        props.onExitTransitionEnd?.();
+      }}
       lockScroll
       closeOnEscape={active && closeOnEscape}
       closeOnClickOutside={active && (props.closeOnClickOutside ?? true)}
@@ -154,4 +178,33 @@ export function OverlayFooter({ className, ...props }: GroupProps & { children: 
   return (
     <Group {...props} justify="flex-end" gap="sm" className={cn('vk-overlay-footer', className)} />
   );
+}
+
+/** Sequence in-app navigation after a closing overlay, retaining its outer opener. */
+export function useOverlayHandoff<T>(opened: boolean, execute: (target: T) => void) {
+  const pending = useRef<{ target: T } | null>(null);
+  useEffect(() => {
+    if (opened) pending.current = null;
+  }, [opened]);
+  useEffect(
+    () => () => {
+      pending.current = null;
+    },
+    []
+  );
+  return {
+    queue: (target: T) => {
+      pending.current = { target };
+    },
+    onExitTransitionEnd: () => {
+      const handoff = pending.current;
+      if (!handoff) return;
+      window.requestAnimationFrame(() => {
+        // Reopening, unmounting, or a newer selection invalidates this handoff.
+        if (pending.current !== handoff) return;
+        pending.current = null;
+        execute(handoff.target);
+      });
+    },
+  };
 }
