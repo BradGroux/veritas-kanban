@@ -50,6 +50,7 @@ const report = {
   packageDigest: await packageDigest(packagePath),
   startedAt: new Date().toISOString(),
   entries: [],
+  httpFailures: [],
 };
 const persist = () =>
   writeFile(path.join(output, 'evidence.json'), JSON.stringify(report, null, 2) + '\n');
@@ -59,15 +60,15 @@ const { origin } = session;
 let app;
 let page;
 let fixtureTask;
+let activeState = 'startup';
 async function launch() {
   const launched = await session.launch();
   ({ app, page } = launched);
   report.identity = launched.identity;
   page.on('response', (response) => {
     if (response.status() >= 400) {
-      report.httpFailures ??= [];
       report.httpFailures.push({
-        state: report.entries.at(-1)?.id ?? 'startup',
+        state: activeState,
         path: new URL(response.url()).pathname,
         method: response.request().method(),
         status: response.status(),
@@ -544,6 +545,7 @@ async function checkSeededRendererFailures() {
   report.seededFailures = [];
   for (const [id, expectedFailure] of seededCases) {
     const entry = { id: `seed/${id}`, status: 'running' };
+    activeState = entry.id;
     report.seededFailures.push(entry);
     try {
       await configure(modes[0]);
@@ -650,6 +652,7 @@ try {
   for (const mode of modes) {
     for (const state of states) {
       const entry = { id: `${mode.id}/${state}`, status: 'running' };
+      activeState = entry.id;
       report.entries.push(entry);
       let captured = false;
       try {
@@ -715,6 +718,7 @@ try {
   report.status = 'failed';
   report.error = error.message;
 } finally {
+  activeState = 'teardown';
   if (app) await app.close();
   report.completedAt = new Date().toISOString();
   report.validationErrors = evidenceFailures(report, {

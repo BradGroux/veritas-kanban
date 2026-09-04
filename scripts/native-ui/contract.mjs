@@ -228,6 +228,27 @@ export function evidenceFailures(report, expected, now = Date.now()) {
   const errors = [];
   if (report?.schema !== schema) return ['unknown or missing native evidence schema'];
   if (report.status !== 'passed') errors.push('native run did not pass');
+  // Responses can arrive after a scenario's completion check, including while
+  // the app closes. Validate the final ledger, not only the per-state verdicts.
+  if (
+    !Array.isArray(report.httpFailures) ||
+    report.httpFailures.some(
+      (failure) =>
+        !Number.isInteger(failure?.status) ||
+        failure.status < 400 ||
+        failure.status > 599 ||
+        ![failure.state, failure.method, failure.path].every(
+          (value) => typeof value === 'string' && value.length > 0
+        )
+    )
+  ) {
+    errors.push('missing or malformed native HTTP evidence');
+  } else {
+    for (const failure of report.httpFailures) {
+      if (failure.status === 429 || failure.status >= 500)
+        errors.push(`${failure.state}: HTTP ${failure.status} ${failure.method} ${failure.path}`);
+    }
+  }
   if (
     report.boundary !== 'packaged-macos' ||
     report.identity?.packaged !== true ||

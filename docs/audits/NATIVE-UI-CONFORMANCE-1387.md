@@ -14,6 +14,8 @@ The report hashes the entire bundle, including server/web resources and framewor
 
 Primary routes also record heading, Back, header, and content rectangles. Checks enforce the shared typography, icon-only Back sizing/placement, route-title semantics, and cross-route alignment. Overlay parts record their actual computed padding against the shared rem-based inset contract, including intentionally unpadded compound/task containers. The runner's final status includes structural verification; an unexpected viewport or invalid recorded layout cannot remain a passing run merely because its clicks succeeded.
 
+Final verification also examines the complete recorded HTTP-failure ledger after the app closes. A recorded rate limit (429) or server error (5xx) rejects the run even if every scenario had already passed. Seeded-renderer checks and teardown have their own active-state labels. Missing or malformed HTTP evidence fails closed; an optional chat session returning 404 is not treated as a server failure. Shutdown errors must be fixed, not discarded to obtain a passing report.
+
 After the normal matrix, the disposable renderer receives six deliberately injected faults: blank shell space, a clipped modal, a shifted heading, a board-only rail control on Activity, wrong popout padding, and a visible New Task button with its handler removed. Each fault must be detected by the corresponding geometry or behavioral assertion, retains a native screenshot, and is removed by reloading before the next fault. These expected-failure probes are separate from the ordinary matrix and cannot waive an ordinary failed state. Missing fault probes fail verification.
 
 ## Development checkpoint
