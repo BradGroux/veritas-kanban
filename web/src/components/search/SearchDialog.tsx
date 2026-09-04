@@ -21,8 +21,6 @@ import {
   Checkbox,
   Divider,
   Group,
-  Modal,
-  ScrollArea,
   Select,
   Stack,
   Text,
@@ -41,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { VIEW_BY_ID, type AppView } from '@/lib/views';
 import type { TaskDetailNavigationTarget, TaskDetailTabId } from '@/lib/task-detail-tabs';
 import { isTaskDetailTabId } from '@/lib/task-detail-tabs';
+import { UiModal as Modal, useOverlayHandoff } from '@/components/ui/UiOverlay';
 
 const COLLECTIONS: { id: SearchCollection; label: string }[] = [
   { id: 'tasks-active', label: 'Active' },
@@ -238,16 +237,14 @@ export function SearchDialog({
     });
   };
 
-  const openTarget = (target: SearchTarget) => {
+  const executeTarget = (target: SearchTarget) => {
     if (target.type === 'task') {
       onTaskOpen?.(target.taskId, taskNavigationTarget(target));
-      onOpenChange(false);
       return;
     }
 
     if (target.type === 'view' && isAppView(target.view)) {
       onViewOpen?.(target.view);
-      onOpenChange(false);
       return;
     }
 
@@ -259,7 +256,6 @@ export function SearchDialog({
           new CustomEvent('veritas:open-settings', { detail: { section: target.section } })
         );
       }
-      onOpenChange(false);
       return;
     }
 
@@ -269,22 +265,29 @@ export function SearchDialog({
       } else {
         window.dispatchEvent(new CustomEvent('veritas:open-diagnostics'));
       }
-      onOpenChange(false);
       return;
     }
 
     if (target.type === 'url' && target.href) {
       window.open(target.href, '_blank', 'noopener,noreferrer');
-      onOpenChange(false);
     }
+  };
+
+  const handoff = useOverlayHandoff(open, executeTarget);
+  const openTarget = (target: SearchTarget) => {
+    // External links need the original user gesture. In-app destinations wait
+    // until Search releases its focus trap and restores the outer opener.
+    if (target.type === 'url') executeTarget(target);
+    else handoff.queue(target);
+    onOpenChange(false);
   };
 
   return (
     <Modal
       opened={open}
       onClose={() => onOpenChange(false)}
-      size="xl"
-      padding={0}
+      variant="authoring"
+      onExitTransitionEnd={handoff.onExitTransitionEnd}
       title={
         <Group gap="xs">
           <span className="flex items-center gap-2 text-base font-semibold">
@@ -293,9 +296,8 @@ export function SearchDialog({
           </span>
         </Group>
       }
-      classNames={{ header: 'border-b px-5 py-4', body: 'p-0' }}
     >
-      <Stack gap="md" className="px-5 py-4">
+      <Stack gap="md">
         <form
           className="flex flex-col gap-3 sm:flex-row"
           onSubmit={(event) => {
@@ -311,6 +313,7 @@ export function SearchDialog({
               aria-label="Search Veritas"
               leftSection={<Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
               autoFocus
+              data-autofocus
             />
           </div>
           <Select
@@ -336,14 +339,14 @@ export function SearchDialog({
           </Button>
         </form>
 
-        <div className="flex max-h-28 flex-wrap items-center gap-2 overflow-y-auto pr-1">
+        <div className="flex flex-wrap items-center gap-2">
           {COLLECTIONS.map((collection) => (
             <Checkbox
               key={collection.id}
               checked={collections.includes(collection.id)}
               onChange={(event) => toggleCollection(collection.id, event.currentTarget.checked)}
               label={collection.label}
-              className="flex h-8 items-center rounded-md border px-3"
+              className="flex min-h-8 items-center rounded-md border px-3 py-1"
               classNames={{ label: 'text-sm font-normal' }}
             />
           ))}
@@ -365,7 +368,7 @@ export function SearchDialog({
           </div>
         )}
 
-        <ScrollArea h={500} className="rounded-md border">
+        <div className="rounded-md border" aria-label="Search results">
           {!response && !error ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">
               No search has run yet.
@@ -377,7 +380,7 @@ export function SearchDialog({
           ) : (
             groupedResults.map((group) => (
               <div key={group.collection}>
-                <div className="sticky top-0 z-10 border-b bg-card/95 px-4 py-2 backdrop-blur">
+                <div className="border-b bg-card/95 px-4 py-2">
                   <Text size="xs" fw={700} c="dimmed" tt="uppercase" className="tracking-wider">
                     {collectionLabel(group.collection)}
                   </Text>
@@ -405,7 +408,9 @@ export function SearchDialog({
                       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium text-foreground">{result.title}</span>
+                          <span className="break-words font-medium text-foreground">
+                            {result.title}
+                          </span>
                           <Badge variant="light" color="gray">
                             {collectionLabel(result.collection)}
                           </Badge>
@@ -417,7 +422,7 @@ export function SearchDialog({
                           {result.path}
                         </span>
                         {result.snippet && (
-                          <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+                          <span className="mt-2 block break-words text-sm leading-6 text-muted-foreground">
                             {result.snippet}
                           </span>
                         )}
@@ -432,7 +437,7 @@ export function SearchDialog({
               </div>
             ))
           )}
-        </ScrollArea>
+        </div>
 
         {response?.degraded && response.reason && (
           <p className="text-xs text-muted-foreground">{response.reason}</p>
