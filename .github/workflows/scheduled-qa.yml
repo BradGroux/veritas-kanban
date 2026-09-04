@@ -38,18 +38,23 @@ env:
 
 jobs:
   playwright:
-    name: Playwright E2E
+    name: Playwright E2E (${{ matrix.shard }}/2)
     if: >-
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Record milestone selection
         run: |
           {
             echo "### Playwright E2E milestone"
             echo
+            echo "- Shard: ${{ matrix.shard }}/2 (isolated runner, one worker)"
             echo "- Trigger: \`$GITHUB_EVENT_NAME\`"
             echo "- Reason: explicit \`ci:full\`, scheduled, or manual milestone"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -81,13 +86,13 @@ jobs:
         env:
           PLAYWRIGHT_HTML_REPORT: '1'
           PLAYWRIGHT_HTML_OPEN: never
-        run: pnpm test:e2e
+        run: pnpm test:e2e --shard=${{ matrix.shard }}/2
 
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/

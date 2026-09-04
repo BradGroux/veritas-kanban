@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
+import { useState, useRef } from 'react';
 import { MessageSquare, Pencil, Trash2, X, Check } from 'lucide-react';
 import {
   ActionIcon,
@@ -6,7 +8,6 @@ import {
   Box,
   Button,
   Group,
-  Modal,
   Paper,
   Stack,
   Text,
@@ -60,6 +61,11 @@ function CommentItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletionInFlight = useRef(false);
+  const closeDeleteDialog = () => {
+    if (!deletionInFlight.current) setDeleteDialogOpen(false);
+  };
 
   const editComment = useEditComment();
   const deleteComment = useDeleteComment();
@@ -80,8 +86,17 @@ function CommentItem({
   };
 
   const handleDelete = async () => {
-    await deleteComment.mutateAsync({ taskId, commentId: comment.id });
-    setDeleteDialogOpen(false);
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleteError(false);
+    try {
+      await deleteComment.mutateAsync({ taskId, commentId: comment.id });
+      setDeleteDialogOpen(false);
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletionInFlight.current = false;
+    }
   };
 
   return (
@@ -188,30 +203,38 @@ function CommentItem({
       </Paper>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete comment?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this comment. Try again.
+            </Text>
+          )}
           <Text size="sm" c="dimmed">
             This will permanently delete this comment by {comment.author}. This action cannot be
             undone.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                void handleDelete();
-              }}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" disabled={deleteComment.isPending} onClick={closeDeleteDialog}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            loading={deleteComment.isPending}
+            onClick={() => {
+              void handleDelete();
+            }}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

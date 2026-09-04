@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useWorktree', () => ({
   useMergeWorktree: () => ({
     mutate: mocks.mergeWorktreeMutate,
+    mutateAsync: mocks.mergeWorktreeMutate,
     isPending: false,
   }),
 }));
@@ -43,11 +44,13 @@ vi.mock('@/hooks/usePreview', () => ({
   usePreviewOutput: mocks.usePreviewOutput,
   useStartPreview: () => ({
     mutate: mocks.startPreviewMutate,
+    mutateAsync: mocks.startPreviewMutate,
     isPending: false,
     error: null,
   }),
   useStopPreview: () => ({
     mutate: mocks.stopPreviewMutate,
+    mutateAsync: mocks.stopPreviewMutate,
     isPending: false,
   }),
 }));
@@ -106,12 +109,14 @@ describe('task detail review and preview Mantine migration', () => {
     vi.clearAllMocks();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.stubGlobal('open', vi.fn());
-    mocks.mergeWorktreeMutate.mockImplementation((_taskId, options) => {
-      options?.onSuccess?.();
-    });
-    mocks.resolveConflictMutateAsync.mockResolvedValue({ success: true });
-    mocks.abortConflictMutateAsync.mockResolvedValue({ success: true });
-    mocks.continueConflictMutateAsync.mockResolvedValue({ success: true });
+    mocks.mergeWorktreeMutate.mockReset().mockResolvedValue(undefined);
+    mocks.startPreviewMutate.mockReset().mockResolvedValue(undefined);
+    mocks.stopPreviewMutate.mockReset().mockResolvedValue(undefined);
+    mocks.resolveConflictMutateAsync
+      .mockReset()
+      .mockResolvedValue({ success: true, remainingConflicts: [] });
+    mocks.abortConflictMutateAsync.mockReset().mockResolvedValue({ aborted: true });
+    mocks.continueConflictMutateAsync.mockReset().mockResolvedValue({ success: true });
     mocks.useDecisionReviews.mockReturnValue({ data: [], isLoading: false });
     mocks.createDecisionReviewMutateAsync.mockResolvedValue({
       id: 'decision_review_new',
@@ -167,7 +172,7 @@ describe('task detail review and preview Mantine migration', () => {
     });
     mocks.useFileConflict.mockReturnValue({
       data: {
-        filePath: 'src/App.tsx',
+        path: 'src/App.tsx',
         content: 'resolved content',
         oursContent: 'ours content',
         theirsContent: 'theirs content',
@@ -180,6 +185,47 @@ describe('task detail review and preview Mantine migration', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('retains review merge until completion and recovers from failure', async () => {
+    let rejectMerge!: (error: Error) => void;
+    mocks.mergeWorktreeMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectMerge = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    const onMergeComplete = vi.fn();
+    const task = createMockTask({
+      id: 'task-review-merge',
+      git: { repo: 'fixture', branch: 'feature', baseBranch: 'main', worktreePath: '/tmp' },
+      review: { decision: 'approved' },
+    });
+    renderWithProviders(
+      <ReviewPanel task={task} onReview={vi.fn()} onMergeComplete={onMergeComplete} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Merge & Close Task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Merge changes to main?' });
+    const submit = within(dialog).getByRole('button', { name: 'Merge & Close' });
+    fireEvent.click(submit);
+    expect(screen.queryByRole('dialog', { name: 'Merge changes to main?' })).toBe(dialog);
+    fireEvent.click(submit);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(
+      (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledExactlyOnceWith(task.id);
+    expect(onMergeComplete).not.toHaveBeenCalled();
+    await act(async () => rejectMerge(new Error('Fixture merge failed')));
+    expect(within(dialog).getByRole('alert').textContent).toContain('Fixture merge failed');
+    expect(onMergeComplete).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledTimes(2);
+    expect(onMergeComplete).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog', { name: 'Merge changes to main?' })).toBeNull();
   });
 
   it('renders review decisions and merge confirmation through direct Mantine controls', async () => {
@@ -247,9 +293,7 @@ describe('task detail review and preview Mantine migration', () => {
     expect(baseElement.querySelector('.mantine-Modal-content')).toBeDefined();
     await user.click(within(dialog).getByRole('button', { name: 'Merge & Close' }));
 
-    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledWith('task-review', {
-      onSuccess: expect.any(Function),
-    });
+    expect(mocks.mergeWorktreeMutate).toHaveBeenCalledWith('task-review');
     expect(onMergeComplete).toHaveBeenCalled();
   });
 
@@ -461,6 +505,67 @@ describe('task detail review and preview Mantine migration', () => {
     expect(container.querySelector('.veritas-secondary-action')).toBe(addComment);
   });
 
+  it.each(['start', 'stop'] as const)(
+    'retains preview %s ownership through failure and retry',
+    async (operation) => {
+      let rejectRequest!: (error: Error) => void;
+      const mutation = operation === 'start' ? mocks.startPreviewMutate : mocks.stopPreviewMutate;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRequest = reject;
+          })
+      );
+      mocks.usePreviewStatus.mockReturnValue({
+        data:
+          operation === 'start'
+            ? { status: 'error', error: 'Previous preview failed' }
+            : { status: 'running', url: 'http://localhost:4321', output: [] },
+        isLoading: false,
+      });
+      const onOpenChange = vi.fn();
+      renderWithProviders(
+        <PreviewPanel
+          task={createMockTask({
+            id: 'task-preview-pending',
+            git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main' },
+          })}
+          open
+          onOpenChange={onOpenChange}
+        />
+      );
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close dialog' }))
+      );
+      const submit = screen.getByRole('button', {
+        name: operation === 'start' ? 'Start Preview' : 'Stop preview',
+      });
+      fireEvent.click(submit);
+      fireEvent.click(submit);
+      if (operation === 'start') fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(mutation).toHaveBeenCalledExactlyOnceWith('task-preview-pending');
+      expect((submit as HTMLButtonElement).disabled).toBe(true);
+      if (operation === 'stop') {
+        for (const name of ['Refresh preview', 'Open preview externally', 'Toggle preview output'])
+          expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+      }
+      await act(async () => rejectRequest(new Error(`Fixture ${operation} request failed`)));
+      const error = screen.getByRole('alert', { name: 'Preview request failed' });
+      expect(error.textContent).toContain(`Fixture ${operation} request failed`);
+      expect(document.activeElement).toBe(error);
+      expect((submit as HTMLButtonElement).disabled).toBe(false);
+      await act(async () => fireEvent.click(submit));
+      expect(mutation).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('alert', { name: 'Preview request failed' })).toBeNull();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  );
+
   it('renders preview drawer controls through direct Mantine primitives', async () => {
     const user = userEvent.setup();
     mocks.usePreviewStatus.mockReturnValue({
@@ -501,6 +606,169 @@ describe('task detail review and preview Mantine migration', () => {
       'noopener,noreferrer'
     );
     expect(mocks.stopPreviewMutate).toHaveBeenCalledWith('task-preview');
+  });
+
+  it.each(['resolve', 'abort', 'continue'] as const)(
+    'retains conflict %s ownership and recovers without losing the draft',
+    async (operation) => {
+      let rejectRequest!: (error: Error) => void;
+      const mutation =
+        operation === 'resolve'
+          ? mocks.resolveConflictMutateAsync
+          : operation === 'abort'
+            ? mocks.abortConflictMutateAsync
+            : mocks.continueConflictMutateAsync;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRequest = reject;
+          })
+      );
+      if (operation === 'continue')
+        mocks.useConflictStatus.mockReturnValue({
+          data: {
+            hasConflicts: false,
+            conflictingFiles: [],
+            rebaseInProgress: true,
+            mergeInProgress: false,
+          },
+          isLoading: false,
+        });
+      const onOpenChange = vi.fn();
+      const props = {
+        task: createMockTask({ id: 'task-conflict-pending' }),
+        open: true,
+        onOpenChange,
+      };
+      const view = renderWithProviders(<ConflictResolver {...props} />);
+      const resolver = screen.getByRole('dialog', { name: 'Merge Conflicts' });
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          within(resolver).getByRole('button', { name: 'Close dialog' })
+        )
+      );
+      if (operation !== 'continue') {
+        fireEvent.click(within(resolver).getByRole('tab', { name: 'Manual Edit' }));
+        fireEvent.change(
+          screen.getByPlaceholderText('Edit the file content to resolve conflicts...'),
+          { target: { value: 'Keep my resolution' } }
+        );
+      }
+      if (operation === 'abort')
+        fireEvent.click(within(resolver).getByRole('button', { name: 'Abort' }));
+      const owner =
+        operation === 'abort' ? screen.getByRole('dialog', { name: 'Abort Rebase?' }) : resolver;
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          within(owner).getByRole('button', { name: 'Close dialog' })
+        )
+      );
+      const submit = within(owner).getByRole('button', {
+        name:
+          operation === 'resolve'
+            ? 'Save Resolution'
+            : operation === 'abort'
+              ? 'Abort'
+              : 'Continue Rebase',
+      });
+      fireEvent.click(submit);
+      fireEvent.click(submit);
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      fireEvent.click(within(owner).getByRole('button', { name: 'Close dialog' }));
+      if (operation === 'abort')
+        fireEvent.click(within(owner).getByRole('button', { name: 'Cancel' }));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(owner.isConnected).toBe(true);
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect((submit as HTMLButtonElement).disabled).toBe(true);
+      if (operation === 'resolve') {
+        expect(
+          (within(resolver).getByRole('tab', { name: 'Manual Edit' }) as HTMLButtonElement).disabled
+        ).toBe(true);
+        expect(
+          (within(resolver).getByRole('tab', { name: 'Side by Side' }) as HTMLButtonElement)
+            .disabled
+        ).toBe(true);
+        expect(
+          (
+            screen.getByPlaceholderText(
+              'Edit the file content to resolve conflicts...'
+            ) as HTMLTextAreaElement
+          ).disabled
+        ).toBe(true);
+        expect(
+          (
+            within(resolver).getByRole('button', {
+              name: 'Abort',
+            }) as HTMLButtonElement
+          ).disabled
+        ).toBe(true);
+        mocks.useFileConflict.mockReturnValue({
+          data: {
+            path: 'src/App.tsx',
+            content: 'Background refresh',
+            oursContent: 'ours',
+            theirsContent: 'theirs',
+            markers: [],
+          },
+          isLoading: false,
+        });
+        view.rerender(<ConflictResolver {...props} />);
+      }
+      await act(async () => rejectRequest(new Error('Fixture conflict request failed')));
+      const error = within(owner).getByRole('alert', { name: 'Conflict operation failed' });
+      await waitFor(() => expect(document.activeElement).toBe(error));
+      expect(error.textContent).toContain('Fixture conflict request failed');
+      expect((submit as HTMLButtonElement).disabled).toBe(false);
+      if (operation === 'resolve')
+        expect(
+          (
+            screen.getByPlaceholderText(
+              'Edit the file content to resolve conflicts...'
+            ) as HTMLTextAreaElement
+          ).value
+        ).toBe('Keep my resolution');
+      await act(async () => fireEvent.click(submit));
+      expect(mutation).toHaveBeenCalledTimes(2);
+      if (operation === 'resolve') {
+        expect(mutation).toHaveBeenLastCalledWith({
+          taskId: props.task.id,
+          filePath: 'src/App.tsx',
+          resolution: 'manual',
+          manualContent: 'Keep my resolution',
+        });
+        expect(onOpenChange).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Save Resolution' })).toBeNull();
+      } else expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  );
+
+  it('keeps Abort open when a fulfilled response does not confirm the abort', async () => {
+    mocks.abortConflictMutateAsync.mockResolvedValueOnce({ aborted: false });
+    const onOpenChange = vi.fn();
+    renderWithProviders(
+      <ConflictResolver
+        task={createMockTask({ id: 'task-abort-unconfirmed' })}
+        open
+        onOpenChange={onOpenChange}
+      />
+    );
+    const resolver = screen.getByRole('dialog', { name: 'Merge Conflicts' });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(resolver).getByRole('button', { name: 'Close dialog' })
+      )
+    );
+    fireEvent.click(within(resolver).getByRole('button', { name: 'Abort' }));
+    const confirmation = screen.getByRole('dialog', { name: 'Abort Rebase?' });
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Abort' }));
+    const error = await within(confirmation).findByRole('alert', {
+      name: 'Conflict operation failed',
+    });
+    expect(error.textContent).toContain('was not aborted');
+    await waitFor(() => expect(document.activeElement).toBe(error));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(confirmation.isConnected).toBe(true);
   });
 
   it('renders conflict resolution drawer and abort modal through direct Mantine controls', async () => {

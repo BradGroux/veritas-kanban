@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   ActionIcon,
   Alert,
@@ -6,7 +8,6 @@ import {
   Button,
   Code,
   Group,
-  Modal,
   Paper,
   Select,
   Stack,
@@ -99,8 +100,22 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true);
   const [viewingAttemptId, setViewingAttemptId] = useState<string | null>(null);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const stopInFlight = useRef(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const [readinessOverrideOpen, setReadinessOverrideOpen] = useState(false);
   const [readinessOverrideReason, setReadinessOverrideReason] = useState('');
+  const startInFlight = useRef(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const startErrorRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    if (startError) {
+      startErrorRef.current?.focus({ preventScroll: true });
+      startErrorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [startError]);
 
   const models = ['sonnet', 'opus', 'haiku'];
 
@@ -149,26 +164,44 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
     setAutoScroll(isAtBottom);
   };
 
-  const startAgentRun = (overrideReason?: string) => {
+  const startAgentRun = async (overrideReason?: string) => {
+    if (startInFlight.current || !canStart) return;
+    startInFlight.current = true;
+    setIsStarting(true);
+    setStartError(null);
     clearOutputs();
     setViewingAttemptId(null); // Switch back to live view
-    startAgent.mutate(
-      {
+    try {
+      await startAgent.mutateAsync({
         taskId: task.id,
         agent: resolvedAgent,
         ...(overrideReason ? { overrideReason } : {}),
-      },
-      {
-        onSuccess: () => {
-          refetchAttempts();
-          setReadinessOverrideOpen(false);
-          setReadinessOverrideReason('');
-        },
+      });
+      refetchAttempts();
+      setReadinessOverrideOpen(false);
+      setReadinessOverrideReason('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to start the agent.';
+      setStartError(message);
+      if (!overrideReason) {
+        toast({ title: 'Agent not started', description: message, variant: 'destructive' });
       }
-    );
+    } finally {
+      startInFlight.current = false;
+      setIsStarting(false);
+    }
+  };
+
+  const closeReadinessOverride = () => {
+    if (!startInFlight.current) {
+      setReadinessOverrideOpen(false);
+      setStartError(null);
+    }
   };
 
   const handleStart = () => {
+    if (startInFlight.current || !canStart) return;
+    setStartError(null);
     if (!readinessSummary.ready) {
       setReadinessOverrideOpen(true);
       return;
@@ -183,10 +216,27 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
     startAgentRun(reason);
   };
 
-  const handleStop = () => {
-    if (!canStop || !agentStatus?.attemptId) return;
-    stopAgent.mutate({ taskId: task.id, attemptId: agentStatus.attemptId });
-    setStopDialogOpen(false);
+  const closeStopDialog = () => {
+    if (!stopInFlight.current) {
+      setStopDialogOpen(false);
+      setStopError(null);
+    }
+  };
+
+  const handleStop = async () => {
+    if (stopInFlight.current || !canControlAgent || !canStop || !agentStatus?.attemptId) return;
+    stopInFlight.current = true;
+    setIsStopping(true);
+    setStopError(null);
+    try {
+      await stopAgent.mutateAsync({ taskId: task.id, attemptId: agentStatus.attemptId });
+      setStopDialogOpen(false);
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : 'Unable to stop the agent.');
+    } finally {
+      stopInFlight.current = false;
+      setIsStopping(false);
+    }
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -359,6 +409,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                     data={agentOptions}
                     placeholder="Select agent..."
                     aria-label="Agent"
+                    disabled={isStarting}
                     className="w-[180px]"
                     size="xs"
                     checkIconPosition="right"
@@ -369,6 +420,7 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                     data={modelOptions}
                     placeholder="Model..."
                     aria-label="Model"
+                    disabled={isStarting}
                     className="w-[100px]"
                     size="xs"
                     checkIconPosition="right"
@@ -376,9 +428,9 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                   <Button
                     size="sm"
                     onClick={handleStart}
-                    disabled={!canStart || startAgent.isPending}
+                    disabled={!canStart || isStarting}
                     leftSection={
-                      startAgent.isPending ? (
+                      isStarting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Play className="h-4 w-4" />
@@ -628,12 +680,14 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
         <RunSessionSharesSection task={task} isAgentRunning={isAgentRunning} />
 
         <Modal
+          variant="confirm"
+          compound
           opened={stopDialogOpen}
-          onClose={() => setStopDialogOpen(false)}
+          onClose={closeStopDialog}
           title="Stop the agent?"
           centered
         >
-          <Stack gap="md">
+          <Stack gap="md" className="vk-overlay-scroll">
             <Text size="sm" c="dimmed">
               This will terminate the running agent. The attempt will be marked as failed.
             </Text>
@@ -642,29 +696,36 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
                 Stop unavailable: {stopReason}
               </Alert>
             )}
-            <Group justify="flex-end" gap="xs">
-              <Button variant="default" onClick={() => setStopDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                color="red"
-                disabled={!canStop || stopAgent.isPending}
-                title={canStop ? 'Stop Agent' : stopReason}
-                onClick={handleStop}
-              >
-                Stop Agent
-              </Button>
-            </Group>
+            {stopError && (
+              <Text role="alert" size="sm" c="red">
+                {stopError}
+              </Text>
+            )}
           </Stack>
+          <OverlayFooter>
+            <UiAction variant="quiet" onClick={closeStopDialog} disabled={isStopping}>
+              Cancel
+            </UiAction>
+            <UiAction
+              variant="destructive"
+              disabled={!canStop || !canControlAgent || isStopping}
+              loading={isStopping}
+              title={canStop ? 'Stop Agent' : stopReason}
+              onClick={handleStop}
+            >
+              Stop Agent
+            </UiAction>
+          </OverlayFooter>
         </Modal>
 
         <Modal
+          compound
           opened={readinessOverrideOpen}
-          onClose={() => setReadinessOverrideOpen(false)}
+          onClose={closeReadinessOverride}
           title="Start with readiness override?"
           centered
         >
-          <Stack gap="md">
+          <Stack gap="md" className="vk-overlay-scroll [&>*]:shrink-0">
             <Stack gap={6}>
               {readinessSummary.missingRequired.map((check) => (
                 <Group key={check.id} gap="xs" align="flex-start" wrap="nowrap">
@@ -682,24 +743,30 @@ export function AgentPanel({ task, onOpenTimeline }: AgentPanelProps) {
             </Stack>
             <Textarea
               label="Override reason"
+              disabled={isStarting}
               value={readinessOverrideReason}
               onChange={(event) => setReadinessOverrideReason(event.currentTarget.value)}
               rows={3}
               placeholder="Why is this task safe to start before it is ready?"
             />
-            <Group justify="flex-end" gap="xs">
-              <Button variant="default" onClick={() => setReadinessOverrideOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                color="yellow"
-                onClick={handleReadinessOverride}
-                disabled={readinessOverrideReason.trim().length < 8 || startAgent.isPending}
-              >
-                Start Anyway
-              </Button>
-            </Group>
+            {startError && (
+              <Text ref={startErrorRef} role="alert" tabIndex={-1} size="sm" c="red">
+                {startError}
+              </Text>
+            )}
           </Stack>
+          <OverlayFooter>
+            <UiAction variant="quiet" onClick={closeReadinessOverride} disabled={isStarting}>
+              Cancel
+            </UiAction>
+            <UiAction
+              onClick={handleReadinessOverride}
+              disabled={readinessOverrideReason.trim().length < 8 || !canStart || isStarting}
+              loading={isStarting}
+            >
+              Start Anyway
+            </UiAction>
+          </OverlayFooter>
         </Modal>
       </Stack>
     </FeatureErrorBoundary>

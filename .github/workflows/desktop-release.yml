@@ -12,11 +12,14 @@ on:
           - stable
           - beta
           - dev
-  release:
-    types: [published]
+      promote_run_id:
+        description: Successful capture run to publish after its media is committed; leave blank to build/capture only.
+        required: false
+        type: string
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,9 +33,12 @@ env:
 jobs:
   mac-signed:
     name: Signed and Notarized macOS Artifact
+    if: inputs.promote_run_id == ''
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -40,14 +46,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-
-      - name: Validate published release body
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          pnpm validate:release -- --version "${version}" --github --skip-build-output
 
       - name: Verify signing and notarization secrets are configured
         id: notarization-secrets
@@ -137,7 +135,6 @@ jobs:
       - name: Build, sign, notarize, and stage macOS artifacts
         working-directory: desktop
         env:
-          GH_TOKEN: ${{ github.token }}
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
           APPLE_API_KEY: ${{ steps.notary-key.outputs.key_path }}
@@ -146,7 +143,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: node ./node_modules/electron-builder/cli.js --mac dmg zip --publish always
+        run: node ./node_modules/electron-builder/cli.js --mac dmg zip --publish never
 
       - name: Finalize notarized macOS release assets
         env:
@@ -158,14 +155,122 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: node scripts/finalize-macos-release-assets.mjs
 
-      - name: Upload macOS release assets
-        working-directory: desktop
+      - name: Verify the distribution app in the native macOS matrix
+        id: native-ui
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./desktop/package.json').version")"
+          release_dir="${GITHUB_WORKSPACE}/desktop/release"
+          zip="${release_dir}/Veritas-Kanban-${version}-mac-arm64.zip"
+          dmg="${release_dir}/Veritas-Kanban-${version}-mac-arm64.dmg"
+          (cd "${release_dir}" && shasum -a 256 "$(basename "${zip}")" "$(basename "${dmg}")" "$(basename "${zip}").blockmap" "$(basename "${dmg}").blockmap" latest-mac.yml) > "${RUNNER_TEMP}/native-distribution.sha256"
+          candidate_dir="$(mktemp -d "${RUNNER_TEMP}/vk-distribution.XXXXXX")"
+          ditto -x -k "${zip}" "${candidate_dir}"
+          candidate_app="${candidate_dir}/veritas-kanban.app"
+          codesign --verify --deep --strict "${candidate_app}"
+          spctl --assess --type execute "${candidate_app}"
+          echo "app_path=${candidate_app}" >> "${GITHUB_OUTPUT}"
+          node scripts/native-ui/run.mjs "${candidate_app}" "${RUNNER_TEMP}/native-ui-evidence"
+          node scripts/native-ui/verify.mjs "${RUNNER_TEMP}/native-ui-evidence/evidence.json" "${candidate_app}"
+
+      - name: Capture candidate documentation media once
+        env:
+          VERIFIED_NATIVE_APP: ${{ steps.native-ui.outputs.app_path }}
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          pnpm exec playwright install chromium
+          node scripts/docs-media/run.mjs "${VERIFIED_NATIVE_APP}" "${RUNNER_TEMP}/documentation-media" capture
+
+      - name: Retain native macOS evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-macos-ui-evidence
+          path: |
+            ${{ runner.temp }}/native-ui-evidence
+            ${{ runner.temp }}/native-distribution.sha256
+            ${{ runner.temp }}/documentation-media
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Bundle verified candidate for later publication
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./desktop/package.json').version")"
+          (cd desktop/release && shasum -a 256 -c "${RUNNER_TEMP}/native-distribution.sha256")
+          node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            import { join } from "node:path";
+            writeFileSync(join(process.env.RUNNER_TEMP, "release-candidate.json"), JSON.stringify({
+              schema: "retained-macos-candidate/v1", runId: process.env.GITHUB_RUN_ID,
+              commit: process.env.GITHUB_SHA, channel: process.env.VERITAS_UPDATE_CHANNEL
+            }) + "\n", { flag: "wx" });'
+          tar -czf "${RUNNER_TEMP}/signed-macos-candidate.tar.gz" \
+            -C desktop \
+            "release/Veritas-Kanban-${version}-mac-arm64.zip" \
+            "release/Veritas-Kanban-${version}-mac-arm64.dmg" \
+            "release/Veritas-Kanban-${version}-mac-arm64.zip.blockmap" \
+            "release/Veritas-Kanban-${version}-mac-arm64.dmg.blockmap" \
+            release/latest-mac.yml \
+            -C "${RUNNER_TEMP}" release-candidate.json native-distribution.sha256 native-ui-evidence documentation-media
+
+      - name: Retain signed candidate without publishing
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-macos-release-candidate
+          path: ${{ runner.temp }}/signed-macos-candidate.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  promote-mac:
+    name: Verify and publish retained macOS candidate
+    if: inputs.promote_run_id != ''
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Retrieve the successful capture run
         env:
           GH_TOKEN: ${{ github.token }}
+          CAPTURE_RUN_ID: ${{ inputs.promote_run_id }}
+        run: node scripts/docs-media/restore-candidate.mjs
+
+      - name: Verify captured media against the publication commit
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./desktop/package.json').version")"
+          candidate_dir="${RUNNER_TEMP}/retained-macos-candidate"
+          (cd "${candidate_dir}/release" && shasum -a 256 -c "${candidate_dir}/native-distribution.sha256")
+          extracted="$(mktemp -d "${RUNNER_TEMP}/vk-promotion.XXXXXX")"
+          ditto -x -k "${candidate_dir}/release/Veritas-Kanban-${version}-mac-arm64.zip" "${extracted}"
+          candidate_app="${extracted}/veritas-kanban.app"
+          codesign --verify --deep --strict "${candidate_app}"
+          spctl --assess --type execute "${candidate_app}"
+          echo "VERIFIED_NATIVE_APP=${candidate_app}" >> "${GITHUB_ENV}"
+          node scripts/docs-media/publish.mjs "${candidate_dir}/documentation-media/evidence.json" "${candidate_app}" "${candidate_dir}/documentation-media/publication.json"
+
+      - name: Upload macOS release assets
+        working-directory: ${{ runner.temp }}/retained-macos-candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          version="$(node -p "require('./package.json').version")"
+          (cd release && shasum -a 256 -c ../native-distribution.sha256)
+          node "${GITHUB_WORKSPACE}/scripts/validate-release.mjs" --skip-build-output --native-evidence "${RUNNER_TEMP}/retained-macos-candidate/native-ui-evidence/evidence.json" --native-app "${VERIFIED_NATIVE_APP}" --media-evidence "${RUNNER_TEMP}/retained-macos-candidate/documentation-media/publication.json" --github
+
+          version="$(node -p "require('${GITHUB_WORKSPACE}/desktop/package.json').version")"
           tag="v${version}"
           dmg="release/Veritas-Kanban-${version}-mac-arm64.dmg"
           zip="release/Veritas-Kanban-${version}-mac-arm64.zip"
@@ -203,3 +308,12 @@ jobs:
           done
 
           gh release upload "${tag}" "${assets[@]}" --clobber
+
+      - name: Retain publication evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-publication-evidence
+          path: ${{ runner.temp }}/retained-macos-candidate/documentation-media/publication.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -100,6 +100,11 @@ export const veritasMantineTheme = createTheme({
         radius: 'sm',
       },
       styles: {
+        // Reduced-motion Transition omits styles, including loader positioning.
+        // Normal-motion transition styles override this static layout fallback.
+        loader: {
+          transform: 'translate(-50%, -50%)',
+        },
         root: {
           minHeight: `${VERITAS_UI_METRICS.actionMinHeight}px`,
           minWidth: `${VERITAS_UI_METRICS.actionMinHeight}px`,
@@ -152,6 +157,19 @@ export const veritasMantineTheme = createTheme({
       styles: {
         input: {
           minHeight: '2rem',
+        },
+      },
+    },
+    Tooltip: {
+      defaultProps: {
+        // Portaled hints must not expand the mobile document while positioning.
+        floatingStrategy: 'fixed',
+      },
+      styles: {
+        tooltip: {
+          maxWidth: 'calc(100vw - 1rem)',
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
         },
       },
     },

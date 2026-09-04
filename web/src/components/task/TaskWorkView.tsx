@@ -1,3 +1,4 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import {
   UiSurface,
   UiHeading,
@@ -6,13 +7,12 @@ import {
   UiAction,
   UiIconAction,
 } from '@/components/ui/UiVocabulary';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Code,
   Group,
   Loader,
-  Modal,
   Progress,
   ScrollArea,
   SimpleGrid,
@@ -431,6 +431,9 @@ export function TaskWorkView({
   onOpenWorkflow,
 }: TaskWorkViewProps) {
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const stopInFlight = useRef(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const [previewProduct, setPreviewProduct] = useState<WorkProductPreview | null>(null);
   const { data: workProducts = [], isLoading: workProductsLoading } = useTaskWorkProducts(task.id);
   const {
@@ -525,10 +528,34 @@ export function TaskWorkView({
     onOpenTab(effectiveAction.target);
   };
 
-  const handleStopAgent = () => {
-    if (!canStop || !agentStatus?.attemptId) return;
-    stopAgent.mutate({ taskId: task.id, attemptId: agentStatus.attemptId });
-    setStopConfirmOpen(false);
+  const closeStopConfirm = () => {
+    if (!stopInFlight.current) {
+      setStopConfirmOpen(false);
+      setStopError(null);
+    }
+  };
+
+  const handleStopAgent = async () => {
+    if (
+      stopInFlight.current ||
+      !canControlAgents ||
+      readOnly ||
+      !canStop ||
+      !agentStatus?.attemptId
+    )
+      return;
+    stopInFlight.current = true;
+    setIsStopping(true);
+    setStopError(null);
+    try {
+      await stopAgent.mutateAsync({ taskId: task.id, attemptId: agentStatus.attemptId });
+      setStopConfirmOpen(false);
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : 'Unable to stop the active run.');
+    } finally {
+      stopInFlight.current = false;
+      setIsStopping(false);
+    }
   };
 
   return (
@@ -540,7 +567,8 @@ export function TaskWorkView({
           data-state={overview.state}
         >
           <Group justify="space-between" align="flex-start" gap="lg" wrap="wrap">
-            <Stack gap={6} className="min-w-0 flex-1">
+            {/* Wrap the action before it squeezes the summary into a few words per line. */}
+            <Stack gap={6} className="min-w-0" style={{ flex: '1 1 20rem' }}>
               <Group gap="xs" wrap="wrap">
                 <Text size="xs" fw={700} tt="uppercase" c="dimmed">
                   Task state
@@ -1053,31 +1081,38 @@ export function TaskWorkView({
       />
 
       <Modal
+        variant="confirm"
+        compound
         opened={stopConfirmOpen}
-        onClose={() => setStopConfirmOpen(false)}
+        onClose={closeStopConfirm}
         title="Stop the active run?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This stops the running agent attempt and marks it failed so it can be inspected or
             retried from the Agent tab.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <UiAction variant="secondary" onClick={() => setStopConfirmOpen(false)}>
-              Cancel
-            </UiAction>
-            <UiAction
-              variant="destructive"
-              loading={stopAgent.isPending}
-              onClick={handleStopAgent}
-              disabled={!canStop}
-              title={canStop ? 'Stop agent' : stopReason}
-            >
-              Stop Agent
-            </UiAction>
-          </Group>
-        </Stack>
+          {stopError && (
+            <Text role="alert" size="sm" c="red" mt="sm">
+              {stopError}
+            </Text>
+          )}
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={closeStopConfirm} disabled={isStopping}>
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            loading={isStopping}
+            onClick={handleStopAgent}
+            disabled={!canStop || !canControlAgents || readOnly || isStopping}
+            title={canStop ? 'Stop agent' : stopReason}
+          >
+            Stop Agent
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

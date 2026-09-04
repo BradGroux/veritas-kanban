@@ -469,6 +469,7 @@ export function Header() {
                 onClick={openCreateDialog}
                 disabled={!canCreateTask}
                 aria-label="New Task"
+                data-overlay-focus-key="header-create-task"
                 title={canCreateTask ? 'New Task' : 'Task write permission required'}
                 className="shrink-0"
               >
@@ -482,6 +483,7 @@ export function Header() {
                 onClick={openCreateDialog}
                 disabled={!canCreateTask}
                 title={canCreateTask ? 'New Task' : 'Task write permission required'}
+                data-overlay-focus-key="header-create-task"
                 className="shrink-0"
               >
                 New Task
@@ -517,6 +519,8 @@ export function Header() {
               size={32}
               onClick={() => openSearchDialog()}
               aria-label="Search"
+              data-overlay-focus-key="header-search"
+              data-overlay-focus-fallback
               title="Search"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
@@ -557,6 +561,7 @@ export function Header() {
                 onClick={() => openSettingsDialog()}
                 disabled={!canOpenSettings}
                 aria-label="Settings"
+                data-overlay-focus-key="header-settings"
                 title={canOpenSettings ? 'Settings' : 'Settings permission required'}
               >
                 <Settings className="h-4 w-4" aria-hidden="true" />
@@ -593,6 +598,7 @@ export function Header() {
                 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
               }
               aria-label="Command palette"
+              data-overlay-focus-key="header-command-palette"
               title="Command palette (⌘K)"
               className="hidden gap-1.5 text-muted-foreground lg:inline-flex"
             >

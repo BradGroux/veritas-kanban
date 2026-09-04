@@ -178,9 +178,11 @@ pnpm desktop:dev:fresh
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
 pnpm test:release-format
-pnpm validate:release -- --version 6.1.6 --skip-build-output
-pnpm validate:release -- --version 6.1.6 --docker-build
+pnpm validate:release -- --version 6.1.6 --skip-build-output --source-only
+pnpm validate:release -- --version 6.1.6 --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --docker-build
 ```
+
+Source preflight is not release acceptance. Full validation requires the exact clean candidate's fresh native matrix and retained screenshots; signing, installed-app, documentation-media, and publication evidence remain separate gates. See [desktop release verification](DESKTOP-RELEASE.md#native-gate-before-macos-upload).
 
 Mount and inspect the unsigned DMG and ZIP, exercise the visible native
 single-instance/reopen/clean-close/quit lifecycle with an isolated profile, and
@@ -248,8 +250,9 @@ profile. Exact evidence is recorded in the release candidate evidence packet.
       `docs/releases/vX.Y.Z.md`, use one full-width Markdown line per paragraph
       or list item, reject blockquotes and overlong prose blocks, and are
       compared with GitHub during post-publication validation. Run
-      `pnpm test:release-format`, `pnpm validate:release`, and the
-      post-publication `pnpm validate:release -- --github` check.
+      `pnpm test:release-format` and `pnpm validate:release` with the candidate's
+      `--native-evidence` and `--native-app` paths, then repeat with `--github`
+      for the post-publication check.
 
 ## Provider Certification
 

@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   ActionIcon,
   Alert,
@@ -6,9 +8,7 @@ import {
   Button,
   Group,
   Loader,
-  Modal,
   Paper,
-  ScrollArea,
   Stack,
   Table,
   Text,
@@ -505,7 +505,7 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
         opened={Boolean(historyProduct)}
         onClose={() => setHistoryProduct(null)}
         title={historyProduct ? `Version history: ${historyProduct.title}` : 'Version history'}
-        size="lg"
+        variant="authoring"
       >
         {versionsLoading ? (
           <Group gap="sm">
@@ -519,7 +519,7 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
             No version history is available for this work product.
           </Text>
         ) : (
-          <ScrollArea h={320}>
+          <Table.ScrollContainer minWidth="32rem">
             <Table striped highlightOnHover withTableBorder>
               <Table.Thead>
                 <Table.Tr>
@@ -544,7 +544,7 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
                 ))}
               </Table.Tbody>
             </Table>
-          </ScrollArea>
+          </Table.ScrollContainer>
         )}
       </Modal>
 
@@ -554,39 +554,42 @@ export function WorkProductsSection({ taskId }: WorkProductsSectionProps) {
           if (!editSaving) setEditProduct(null);
         }}
         title={editProduct ? `Edit: ${editProduct.title}` : 'Edit work product'}
-        size="xl"
+        variant="authoring"
+        compound
       >
         {editLoading ? (
-          <Group gap="sm">
+          <Group gap="sm" className="vk-overlay-scroll">
             <Loader size="sm" />
             <Text size="sm" c="dimmed">
               Loading editable content...
             </Text>
           </Group>
         ) : (
-          <Stack gap="sm">
-            <TextInput
-              label="Title"
-              value={editTitle}
-              onChange={(event) => setEditTitle(event.currentTarget.value)}
-              disabled={editSaving}
-            />
-            <Textarea
-              label="Redacted markdown"
-              minRows={14}
-              value={editBody}
-              onChange={(event) => setEditBody(event.currentTarget.value)}
-              disabled={editSaving}
-            />
-            <Group justify="flex-end" gap="xs">
-              <Button variant="subtle" onClick={() => setEditProduct(null)} disabled={editSaving}>
+          <>
+            <Stack gap="sm" className="vk-overlay-scroll">
+              <TextInput
+                label="Title"
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.currentTarget.value)}
+                disabled={editSaving}
+              />
+              <Textarea
+                label="Redacted markdown"
+                minRows={14}
+                value={editBody}
+                onChange={(event) => setEditBody(event.currentTarget.value)}
+                disabled={editSaving}
+              />
+            </Stack>
+            <OverlayFooter>
+              <UiAction variant="quiet" onClick={() => setEditProduct(null)} disabled={editSaving}>
                 Cancel
-              </Button>
-              <Button onClick={saveEdit} loading={editSaving}>
+              </UiAction>
+              <UiAction onClick={saveEdit} loading={editSaving}>
                 Save Version
-              </Button>
-            </Group>
-          </Stack>
+              </UiAction>
+            </OverlayFooter>
+          </>
         )}
       </Modal>
     </>

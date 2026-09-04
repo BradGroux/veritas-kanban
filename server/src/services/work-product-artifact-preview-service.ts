@@ -375,11 +375,10 @@ export class WorkProductArtifactPreviewService {
       await document.cleanup();
       await document.loadingTask.destroy();
     }
-    return this.readyPreview(
+    return this.statusPreview(
       source,
-      'pdf',
-      { kind: 'pdf', base64: content.toString('base64'), pages },
-      { maxBytes: PDF_LIMIT, maxPages: MAX_PAGES }
+      'unsupported',
+      'Download this PDF and open it in your preferred PDF viewer. Inline PDF preview is not supported.'
     );
   }
 

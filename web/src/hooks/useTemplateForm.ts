@@ -7,7 +7,21 @@ import {
   type VariableContext,
 } from '@/lib/template-variables';
 import { nanoid } from 'nanoid';
-import type { Subtask, TaskPriority } from '@veritas-kanban/shared';
+import type { Subtask, Task, TaskPriority } from '@veritas-kanban/shared';
+
+export class PartialBlueprintCreationError extends Error {
+  constructor(
+    readonly completedCount: number,
+    readonly totalCount: number,
+    options?: ErrorOptions
+  ) {
+    super(
+      `${completedCount} of ${totalCount} blueprint tasks were created before the operation failed. Review the board before creating this blueprint again.`,
+      options
+    );
+    this.name = 'PartialBlueprintCreationError';
+  }
+}
 
 export function useTemplateForm() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
@@ -166,7 +180,7 @@ export function useTemplateForm() {
     const refIdToTaskId: Record<string, string> = {};
 
     // Create tasks in order, resolving dependencies
-    for (const blueprintTask of template.blueprint) {
+    for (const [index, blueprintTask] of template.blueprint.entries()) {
       // Interpolate title
       const taskTitle = interpolateVariables(blueprintTask.title, context);
 
@@ -199,15 +213,25 @@ export function useTemplateForm() {
         .filter(Boolean);
 
       // Create the task
-      const createdTask = await createTask.mutateAsync({
-        title: taskTitle,
-        description: taskDescription,
-        type: blueprintTask.taskDefaults.type,
-        priority: blueprintTask.taskDefaults.priority,
-        project: blueprintTask.taskDefaults.project || project.trim() || undefined,
-        subtasks: taskSubtasks,
-        blockedBy,
-      });
+      let createdTask: Task;
+      try {
+        createdTask = await createTask.mutateAsync({
+          title: taskTitle,
+          description: taskDescription,
+          type: blueprintTask.taskDefaults.type,
+          priority: blueprintTask.taskDefaults.priority,
+          project: blueprintTask.taskDefaults.project || project.trim() || undefined,
+          subtasks: taskSubtasks,
+          blockedBy,
+        });
+      } catch (error) {
+        if (index > 0) {
+          throw new PartialBlueprintCreationError(index, template.blueprint.length, {
+            cause: error,
+          });
+        }
+        throw error;
+      }
 
       // Store the mapping
       refIdToTaskId[blueprintTask.refId] = createdTask.id;

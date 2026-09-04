@@ -272,7 +272,9 @@ describe('activity and chat Mantine migration', () => {
     expect(await screen.findByText('Board Chat')).toBeDefined();
     expect(screen.getByText('Ready to help with the board.')).toBeDefined();
     const chatTrigger = screen.getByLabelText('Open chat');
-    expect(chatTrigger.style.position).toBe('fixed');
+    // Responsive CSS owns placement; inline fixed positioning would override mobile navigation.
+    expect(chatTrigger.style.position).toBe('');
+    expect(chatTrigger.textContent).toContain('Chat');
     expect(chatTrigger.className).toContain('floating-chat-trigger');
     expect(baseElement.querySelector('[data-overlay-variant="chat"]')).not.toBeNull();
     expect(baseElement.querySelector('.mantine-TextInput-root')).toBeDefined();

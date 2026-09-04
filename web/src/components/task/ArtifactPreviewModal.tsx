@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import {
   Alert,
   Badge,
@@ -6,7 +7,6 @@ import {
   Code,
   Group,
   Loader,
-  Modal,
   Paper,
   ScrollArea,
   Stack,
@@ -41,6 +41,8 @@ export function ArtifactPreviewModal({
 }: ArtifactPreviewModalProps) {
   const { navigateToTask } = useView();
   const [zoom, setZoom] = useState(1);
+  const [pendingOperation, setPendingOperation] = useState<'refresh' | 'navigate' | null>(null);
+  const operationPending = useRef(false);
   const query = useQuery({
     queryKey: ['work-products', 'artifact-preview', productId, version],
     queryFn: () => workProductsApi.previewArtifact(productId as string, version),
@@ -86,39 +88,57 @@ export function ArtifactPreviewModal({
   };
 
   const openCausalEvent = async () => {
-    if (!preview?.causalEvent) return;
+    if (!preview?.causalEvent || operationPending.current) return;
     const event = preview.causalEvent;
-    if (productId && preview.renderer === 'html') {
-      await workProductsApi
-        .recordPreviewAudit(productId, 'navigate', preview.artifact?.version ?? version)
-        .catch(() => {});
+    operationPending.current = true;
+    setPendingOperation('navigate');
+    try {
+      if (productId && preview.renderer === 'html') {
+        await workProductsApi
+          .recordPreviewAudit(productId, 'navigate', preview.artifact?.version ?? version)
+          .catch(() => {});
+      }
+      onClose();
+      navigateToTask(event.taskId, {
+        tab: 'timeline',
+        timelineAttemptId: event.attemptId,
+        timelineEventId: event.eventId,
+      });
+    } finally {
+      operationPending.current = false;
+      setPendingOperation(null);
     }
-    onClose();
-    navigateToTask(event.taskId, {
-      tab: 'timeline',
-      timelineAttemptId: event.attemptId,
-      timelineEventId: event.eventId,
-    });
   };
 
   const refreshPreview = async () => {
-    if (!productId || preview?.renderer !== 'html') return;
-    await workProductsApi
-      .recordPreviewAudit(productId, 'refresh', preview.artifact?.version ?? version)
-      .catch(() => {});
-    await query.refetch();
+    if (!productId || preview?.renderer !== 'html' || operationPending.current) return;
+    operationPending.current = true;
+    setPendingOperation('refresh');
+    try {
+      await workProductsApi
+        .recordPreviewAudit(productId, 'refresh', preview.artifact?.version ?? version)
+        .catch(() => {});
+      await query.refetch();
+    } finally {
+      operationPending.current = false;
+      setPendingOperation(null);
+    }
   };
 
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={() => {
+        if (!operationPending.current) onClose();
+      }}
+      closeButtonProps={{ disabled: pendingOperation !== null }}
       title={title ? `Preview: ${title}` : 'Artifact preview'}
-      size="xl"
+      variant="authoring"
+      compound
       centered
       returnFocus
     >
-      <Stack gap="md" aria-live="polite">
+      <Stack gap="md" aria-live="polite" className="vk-overlay-scroll [&>*]:shrink-0">
         {query.isLoading && (
           <Group gap="xs">
             <Loader size="sm" />
@@ -149,79 +169,87 @@ export function ArtifactPreviewModal({
             {preview.truncation.reasons.join(' ') || 'Server preview limits were reached.'}
           </Alert>
         )}
-        {preview && (
-          <Group justify="space-between" wrap="wrap">
-            <Group gap="xs">
-              {preview.renderer === 'html' && (
+      </Stack>
+      {preview && (
+        <OverlayFooter>
+          <Group gap="xs">
+            {preview.renderer === 'html' && (
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<RefreshCw className="h-3 w-3" />}
+                onClick={refreshPreview}
+                disabled={pendingOperation !== null}
+                loading={pendingOperation === 'refresh'}
+              >
+                Refresh
+              </Button>
+            )}
+            {preview.renderer === 'image' && (
+              <>
                 <Button
                   variant="default"
                   size="xs"
-                  leftSection={<RefreshCw className="h-3 w-3" />}
-                  onClick={refreshPreview}
+                  leftSection={<ZoomOut className="h-3 w-3" />}
+                  onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
+                  aria-label="Zoom preview out"
                 >
-                  Refresh
+                  Zoom out
                 </Button>
-              )}
-              {(preview.renderer === 'image' || preview.renderer === 'pdf') && (
-                <>
-                  <Button
-                    variant="default"
-                    size="xs"
-                    leftSection={<ZoomOut className="h-3 w-3" />}
-                    onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
-                    aria-label="Zoom preview out"
-                  >
-                    Zoom out
-                  </Button>
-                  <Text size="xs" aria-label={`Preview zoom ${Math.round(zoom * 100)} percent`}>
-                    {Math.round(zoom * 100)}%
-                  </Text>
-                  <Button
-                    variant="default"
-                    size="xs"
-                    leftSection={<ZoomIn className="h-3 w-3" />}
-                    onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
-                    aria-label="Zoom preview in"
-                  >
-                    Zoom in
-                  </Button>
-                </>
-              )}
-            </Group>
-            <Group gap="xs">
-              {preview.causalEvent && (
+                <Text size="xs" aria-label={`Preview zoom ${Math.round(zoom * 100)} percent`}>
+                  {Math.round(zoom * 100)}%
+                </Text>
                 <Button
-                  variant="subtle"
+                  variant="default"
                   size="xs"
-                  leftSection={<ExternalLink className="h-3 w-3" />}
-                  onClick={openCausalEvent}
+                  leftSection={<ZoomIn className="h-3 w-3" />}
+                  onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
+                  aria-label="Zoom preview in"
                 >
-                  Causal event
+                  Zoom in
                 </Button>
-              )}
-              <Button
-                size="xs"
-                leftSection={<Download className="h-3 w-3" />}
-                disabled={!preview.actions.downloadAllowed}
-                onClick={download}
-              >
-                Download
-              </Button>
-            </Group>
+              </>
+            )}
           </Group>
-        )}
-      </Stack>
+          <Group gap="xs">
+            {preview.causalEvent && (
+              <Button
+                variant="subtle"
+                size="xs"
+                leftSection={<ExternalLink className="h-3 w-3" />}
+                onClick={openCausalEvent}
+                disabled={pendingOperation !== null}
+                loading={pendingOperation === 'navigate'}
+              >
+                Causal event
+              </Button>
+            )}
+            <Button
+              size="xs"
+              leftSection={<Download className="h-3 w-3" />}
+              disabled={!preview.actions.downloadAllowed}
+              onClick={download}
+            >
+              Download
+            </Button>
+          </Group>
+        </OverlayFooter>
+      )}
     </Modal>
   );
 }
 
 function PreviewBody({ preview, zoom }: { preview: WorkProductArtifactPreview; zoom: number }) {
   if (preview.status !== 'ready' || !preview.content) {
+    const pdfDownload =
+      preview.status === 'unsupported' && preview.artifact?.mediaType === 'application/pdf';
     return (
       <Alert
-        color="yellow"
-        title={statusLabel(preview.status)}
-        icon={<AlertTriangle className="h-4 w-4" />}
+        color={pdfDownload ? 'blue' : 'yellow'}
+        title={pdfDownload ? 'PDF download' : statusLabel(preview.status)}
+        icon={
+          pdfDownload ? <Download className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />
+        }
       >
         {preview.message}
       </Alert>
@@ -269,21 +297,10 @@ function PreviewBody({ preview, zoom }: { preview: WorkProductArtifactPreview; z
   }
   if (preview.content.kind === 'pdf') {
     return (
-      <Paper withBorder p="xs" h={520} style={{ overflow: 'auto' }}>
-        <iframe
-          title={`${preview.artifact?.safeName ?? 'Artifact'} PDF preview`}
-          src={`data:application/pdf;base64,${preview.content.base64}`}
-          sandbox=""
-          referrerPolicy="no-referrer"
-          style={{
-            border: 0,
-            width: `${100 / zoom}%`,
-            height: `${500 / zoom}px`,
-            transform: `scale(${zoom})`,
-            transformOrigin: 'top left',
-          }}
-        />
-      </Paper>
+      <Alert title="PDF download">
+        Download this PDF and open it in your preferred PDF viewer. Inline PDF preview is not
+        supported.
+      </Alert>
     );
   }
   return (

@@ -80,7 +80,8 @@ export function PrimaryPageShell({
               id={headingId}
               order={1}
               tabIndex={-1}
-              className="m-0 min-w-0 text-2xl font-bold leading-8 tracking-[-0.012em] outline-none focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              style={{ fontSize: '1.5rem', lineHeight: '2rem' }}
+              className="m-0 min-w-0 font-bold tracking-[-0.012em] outline-none focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               {title}
             </Title>

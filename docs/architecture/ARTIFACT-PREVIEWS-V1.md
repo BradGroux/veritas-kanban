@@ -12,7 +12,7 @@ The server selects a renderer from validated bytes and normalized media type:
 
 - `text/plain` and `text/markdown` require bounded strict UTF-8 with no binary signature or null bytes. Artifact-safe Markdown omits links and referenced images and does not interpret raw HTML.
 - PNG, JPEG, GIF, and WebP require matching magic bytes, bounded encoded bytes, bounded dimensions and pixels, and bounded animation frames. SVG remains unsupported because it is active XML content.
-- PDF requires valid PDF magic, bounded bytes and pages, successful parser loading, no external links, and no JavaScript, launch actions, embedded files, forms, rich media, or other active document actions. The client places approved bytes in a sandboxed data-origin frame with no referrer.
+- PDF is download-only. Existing validation still checks magic bytes, byte/page limits, parser loading, external links, and active document actions. A valid PDF returns `unsupported`, `renderer: "none"`, and no preview bytes, with instructions to download and open it in a preferred PDF viewer. The authorized download route and immutable version binding remain unchanged. The app does not embed a PDF viewer or open a downloaded file automatically.
 - CSV uses a bounded quoted-cell parser. Open XML spreadsheets first pass archive entry, decompressed-size, compression-ratio, macro, embedding, connection, and external-link checks before workbook parsing. Both formats cap sheets, rows, columns, cell characters, and total rendered output. Formulas are displayed as inert formula text and are never evaluated.
 
 ## Isolated HTML boundary
@@ -25,7 +25,7 @@ Interactive HTML is not supported. Enabling scripts, same-origin authority, netw
 
 Preparing, opening, closing, refreshing, and navigating away from an HTML preview append bounded audit records. Records contain only the authenticated actor, opaque product and artifact IDs, version, renderer or state, and passive-mode decision. They never copy document bytes or rendered text.
 
-The JSON contract may carry base64 only for bounded raster and passive PDF bytes. The browser never receives an artifact filesystem URL.
+New responses carry base64 only for bounded raster images. The v1 PDF content shape remains readable for compatibility with older servers, but the client shows the same download instructions rather than embedding those bytes. The browser never receives an artifact filesystem URL.
 
 ## Fail-closed states
 
@@ -37,7 +37,7 @@ Truncation is distinct from failure. A ready table can be truncated while report
 
 ## Accessibility and interaction
 
-The shared modal traps and restores focus, announces loading and status changes, labels preview and download controls, supports keyboard operation, provides bounded zoom for images and PDFs, and offers a direct navigation action to the causal timeline event. The authenticated download route remains the authoritative fallback.
+The shared modal traps and restores focus, announces loading and status changes, labels preview and download controls, supports keyboard operation, provides bounded zoom for images, and offers a direct navigation action to the causal timeline event. PDFs have no zoom controls. The authenticated download route remains the authoritative fallback.
 
 ## Non-capabilities
 

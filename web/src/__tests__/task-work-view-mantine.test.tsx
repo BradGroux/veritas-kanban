@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
@@ -54,6 +54,7 @@ vi.mock('@/hooks/useAgent', () => ({
   useAgentStream: mocks.useAgentStream,
   useStopAgent: () => ({
     mutate: mocks.stopAgentMutate,
+    mutateAsync: mocks.stopAgentMutate,
     isPending: false,
   }),
 }));
@@ -175,6 +176,46 @@ describe('task work view Mantine surface', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('retains the stop confirmation until the exact request settles', async () => {
+    let rejectStop!: (error: Error) => void;
+    mocks.stopAgentMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectStop = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-1',
+        controls: { controls: [{ action: 'stop', available: true }] },
+      },
+    });
+    renderWorkView(createMockTask({ id: 'task-stop' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop active run' }));
+    const dialog = screen.getByRole('dialog', { name: 'Stop the active run?' });
+    const submit = within(dialog).getByRole('button', { name: 'Stop Agent' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(mocks.stopAgentMutate).toHaveBeenCalledExactlyOnceWith({
+      taskId: 'task-stop',
+      attemptId: 'attempt-1',
+    });
+    expect(screen.getByRole('dialog', { name: 'Stop the active run?' })).toBe(dialog);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(
+      (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    await act(async () => rejectStop(new Error('Stop fixture failed')));
+    expect(within(dialog).getByRole('alert').textContent).toContain('Stop fixture failed');
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.stopAgentMutate).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog', { name: 'Stop the active run?' })).toBeNull();
   });
 
   it('makes a blocker the dominant state and collapses irrelevant readiness detail', () => {

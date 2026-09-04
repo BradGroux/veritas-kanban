@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WorkflowDefinition } from '@veritas-kanban/shared';
-import { Alert, Button, Group, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { Alert, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { AlertTriangle, Play } from 'lucide-react';
 import { workflowsApi, type WorkflowRunStartResponse } from '@/lib/api/workflows';
 
@@ -19,8 +21,18 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
   const [contextDraft, setContextDraft] = useState(() => initialContext(workflow));
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const startInFlight = useRef(false);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (error) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (startInFlight.current) return;
     setTaskId('');
     setContextDraft(initialContext(workflow));
     setError(null);
@@ -28,7 +40,7 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
   }, [workflow]);
 
   const startRun = async () => {
-    if (!workflow) return;
+    if (!workflow || startInFlight.current) return;
     setError(null);
 
     let context: Record<string, unknown>;
@@ -49,6 +61,7 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
       return;
     }
 
+    startInFlight.current = true;
     setIsStarting(true);
     try {
       const run = await workflowsApi.startRun(workflow.id, {
@@ -63,19 +76,27 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
           : `Workflow ${workflow.name} could not be started.`
       );
     } finally {
+      startInFlight.current = false;
       setIsStarting(false);
     }
   };
 
+  const handleClose = () => {
+    if (!startInFlight.current) onClose();
+  };
+
   return (
     <Modal
+      compound
       opened={workflow !== null}
-      onClose={onClose}
+      onClose={handleClose}
+      closeOnEscape={!isStarting}
+      closeOnClickOutside={!isStarting}
+      closeButtonProps={{ disabled: isStarting }}
       title={workflow ? `Start ${workflow.name}` : 'Start workflow'}
       centered
-      size="lg"
     >
-      <Stack gap="md">
+      <Stack gap="md" className="vk-overlay-scroll">
         <Text size="sm" c="dimmed">
           Review the task association and run context before execution. Starting a run is separate
           from viewing or editing the workflow.
@@ -83,6 +104,7 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
 
         <TextInput
           label="Task ID"
+          disabled={isStarting}
           description="Optional. Associate this run with an existing task."
           placeholder="task_..."
           value={taskId}
@@ -91,6 +113,7 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
 
         <Textarea
           label="Run context"
+          disabled={isStarting}
           description="JSON object supplied to the workflow as its initial context."
           value={contextDraft}
           onChange={(event) => setContextDraft(event.currentTarget.value)}
@@ -100,24 +123,30 @@ export function WorkflowStartDialog({ workflow, onClose, onStarted }: WorkflowSt
         />
 
         {error && (
-          <Alert color="red" icon={<AlertTriangle className="h-4 w-4" />} title="Run not started">
+          <Alert
+            ref={errorRef}
+            className="shrink-0"
+            tabIndex={-1}
+            color="red"
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title="Run not started"
+          >
             {error}
           </Alert>
         )}
-
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose} disabled={isStarting}>
-            Cancel
-          </Button>
-          <Button
-            leftSection={<Play className="h-4 w-4" />}
-            loading={isStarting}
-            onClick={() => void startRun()}
-          >
-            Start Run
-          </Button>
-        </Group>
       </Stack>
+      <OverlayFooter>
+        <UiAction variant="quiet" onClick={handleClose} disabled={isStarting}>
+          Cancel
+        </UiAction>
+        <UiAction
+          leftSection={<Play className="h-4 w-4" />}
+          loading={isStarting}
+          onClick={() => void startRun()}
+        >
+          Start Run
+        </UiAction>
+      </OverlayFooter>
     </Modal>
   );
 }

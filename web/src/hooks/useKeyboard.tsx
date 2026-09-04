@@ -124,7 +124,9 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Ignore if a Mantine dialog, drawer, or alert surface is open (except Escape).
+      // Modal surfaces own every key, including Escape. A pending submit can
+      // disable the focused button and move focus to body; that must not let
+      // the board shortcut clear the task behind the still-open confirmation.
       const dialogOpen = Array.from(
         document.querySelectorAll(
           '[role="dialog"], [aria-modal="true"], [data-slot="dialog-content"], [data-slot="sheet-content"], [data-slot="alert-dialog-content"]'
@@ -133,7 +135,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         const style = window.getComputedStyle(element);
         return style.visibility !== 'hidden' && style.display !== 'none';
       });
-      if (dialogOpen && e.key !== 'Escape') {
+      if (dialogOpen) {
         return;
       }
 

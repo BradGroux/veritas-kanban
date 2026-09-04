@@ -57,8 +57,8 @@ export const conflictsApi = {
     );
   },
 
-  abort: async (taskId: string): Promise<{ success: boolean }> => {
-    return apiFetch<{ success: boolean }>(`${API_BASE}/conflicts/${taskId}/abort`, {
+  abort: async (taskId: string): Promise<{ aborted: boolean }> => {
+    return apiFetch<{ aborted: boolean }>(`${API_BASE}/conflicts/${taskId}/abort`, {
       method: 'POST',
     });
   },

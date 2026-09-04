@@ -1,3 +1,5 @@
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useState, useRef } from 'react';
 import { API_BASE } from '../../lib/config';
 import {
@@ -14,18 +16,7 @@ import {
   ChevronUp,
   AlertTriangle,
 } from 'lucide-react';
-import {
-  ActionIcon,
-  Alert,
-  Box,
-  Button,
-  Group,
-  Modal,
-  Paper,
-  Stack,
-  Text,
-  ThemeIcon,
-} from '@mantine/core';
+import { ActionIcon, Alert, Box, Group, Paper, Stack, Text, ThemeIcon } from '@mantine/core';
 import { useUploadAttachment, useDeleteAttachment } from '@/hooks/useAttachments';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -65,14 +56,28 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
   const [extractedText, setExtractedText] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletionInFlight = useRef(false);
+  const closeDeleteDialog = () => {
+    if (!deletionInFlight.current) setDeleteDialogOpen(false);
+  };
   const deleteAttachment = useDeleteAttachment();
 
   const isImage = attachment.mimeType.startsWith('image/');
   const isDocument = !isImage;
 
   const handleDelete = async () => {
-    await deleteAttachment.mutateAsync({ taskId, attachmentId: attachment.id });
-    setDeleteDialogOpen(false);
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleteError(false);
+    try {
+      await deleteAttachment.mutateAsync({ taskId, attachmentId: attachment.id });
+      setDeleteDialogOpen(false);
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletionInFlight.current = false;
+    }
   };
 
   const handleToggleExpand = async () => {
@@ -170,30 +175,41 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
         )}
       </Paper>
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete attachment?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this attachment. Try again.
+            </Text>
+          )}
           <Text size="sm" c="dimmed">
             This will permanently delete "{attachment.originalName}". This action cannot be undone.
           </Text>
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                void handleDelete();
-              }}
-              loading={deleteAttachment.isPending}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction
+            variant="quiet"
+            disabled={deleteAttachment.isPending}
+            onClick={closeDeleteDialog}
+          >
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            onClick={() => {
+              void handleDelete();
+            }}
+            loading={deleteAttachment.isPending}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

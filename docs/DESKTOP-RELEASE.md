@@ -29,8 +29,7 @@ metadata for PR validation. `desktop:package:linux:unsigned` creates preview
 x64 AppImage, deb, and rpm artifacts. `desktop:package:windows:unsigned`
 creates preview x64 NSIS installer and ZIP artifacts.
 
-`desktop:release:mac` expects Apple signing and notarization credentials and
-publishes update metadata through electron-builder. `desktop:release:linux` is
+`desktop:release:mac` expects Apple signing and notarization credentials and stages artifacts with publishing disabled. It does not upload a release; the `Desktop Release` workflow owns the verified upload path. `desktop:release:linux` is
 reserved for post-GA Linux preview validation until checksum, provenance,
 install, and update policy requirements are promoted. `desktop:release:windows`
 expects a Windows code-signing certificate available to electron-builder before
@@ -67,12 +66,23 @@ packaging paths and artifact names exercised, but they are not supported release
 deliverables and must not be linked from stable release notes as install
 targets.
 
-`Desktop Release` runs on manual dispatch or a published GitHub release. It
-requires the signing secrets below, builds signed/notarized macOS artifacts,
-and publishes update metadata with the GitHub provider. A published-release run
-first verifies that the live GitHub body exactly matches
-`docs/releases/vX.Y.Z.md`; a mismatch stops the workflow before signing or
-packaging.
+`Desktop Release` uses two explicit manual dispatches. Leave `promote_run_id` empty to build, sign, notarize, and capture the release candidate. That run retains the signed distribution, native evidence, and original documentation captures in `signed-macos-release-candidate`; it does not upload release assets. Download and inspect the captures, commit the exact reviewed media and guide references in a documentation-only commit, and create the release tag/body at that publication commit. Then dispatch from that commit with `promote_run_id` set to the successful capture run ID. Promotion verifies and uploads the retained distribution without rebuilding or recapturing. Publishing a GitHub release alone no longer starts a second build.
+
+### Native gate before macOS upload
+
+The signed workflow uses `--publish never`, finalizes the distribution assets, then extracts the actual release ZIP into a temporary directory. Signature and Gatekeeper checks precede the packaged macOS matrix. The runner records the exact app digest, commit, version, native window dimensions, 144 states, and six injected fault probes. Native screenshots and distribution checksums are retained as workflow artifacts even when a check fails.
+
+Promotion accepts only a successful explicitly dispatched capture from this repository's Desktop Release workflow. It binds the capture/native reports to that run's commit, rejects unsafe archives, rechecks the signed distribution checksums, and verifies signatures on the extracted app. Immediately before `gh release upload`, full release validation verifies the native report against the original build and the media publication record against the clean publication checkout. Only permitted documentation-only changes may separate those commits. Missing, stale, failed, incomplete, wrong-commit, changed-package, or modified-screenshot evidence stops upload. The destination release tag must resolve to publication HEAD, including annotated-tag peeling, and its body must match the reviewed release source exactly. Retaining diagnostic artifacts does not turn a failed matrix into a passing release.
+
+Full local release validation now requires explicit candidate paths:
+
+```bash
+pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/capture/publication.json
+```
+
+For source and published-body checks before a candidate exists, use `--source-only --skip-build-output` (plus `--github` when checking the published body). Its success message is explicitly source preflight, never release acceptance. `--skip-build-output` alone does not bypass native or media evidence. Source-only mode rejects candidate evidence arguments instead of silently ignoring them.
+
+Browser verification, packaged candidate verification, installed-app verification, signing/notarization, documentation-media review, and publication are separate results. Report the exact boundary and evidence for each; pending or blocked work remains pending or blocked. The [documentation media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md) requires original capture provenance, file hashes, committed-byte checks, and a maintained-reference scan. This proves freshness, not visual quality or GIF semantics. Actual playback and visual inspection remain required. The capture job records media once from the extracted distribution app and retains it even on failure. The promotion job uses `scripts/docs-media/publish.mjs` to verify those same files and refuses app-source changes, altered capture records, and changed published bytes. Follow the [capture and publication workflow](demo/README.md); do not promote old preparation output or still-image montages.
 
 ## Homebrew Cask
 
@@ -192,7 +202,7 @@ policy is tracked in
 - Apply `ci:full` to the release-candidate pull request, then download the
   uploaded DMG/ZIP/update metadata from its `Desktop Artifacts` run.
 - Edit `docs/releases/vX.Y.Z.md`, run
-  `pnpm validate:release -- --version X.Y.Z`, and publish that exact file with
+  `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/capture/publication.json`, and publish that exact file with
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
   hand-author or repair the live body separately.
 - Use one logical source line per prose paragraph and let GitHub wrap it to the
@@ -222,8 +232,7 @@ policy is tracked in
 - For a Homebrew upgrade, confirm `open -a` followed by
   `pnpm desktop:wait:ready -- --expected-version <version>` tolerates normal
   startup delay and proves the packaged server owns `3001`.
-- Confirm `pnpm validate:release` passes and verifies root/shared/server/web,
-  CLI, MCP, and desktop package versions plus required v6 release docs.
+- Confirm full `pnpm validate:release` passes with `--native-evidence`, `--native-app`, and `--media-evidence`, verifying candidate-bound macOS evidence, documentation-media freshness, root/shared/server/web/CLI/MCP/desktop package versions, and required v6 release docs. A source-only preflight is not this gate.
 
 ## Smoke Tests
 

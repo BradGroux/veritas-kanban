@@ -21,7 +21,13 @@ iOS uses Safari's Add to Home Screen flow instead of the browser install prompt.
 
 Chrome shows the install prompt only when the manifest and service worker are reachable from the current origin.
 
+## Mobile Board Navigation
+
+Home returns to the top of the board page. Board jumps directly to the task columns, leaving the first column below the sticky toolbar. The jump uses the toolbar's current rendered height so text-size changes do not obscure the column heading.
+
 On narrow screens, use **More views** in the header to reach Activity, Backlog, Archive, and other views. Their separate wide-screen shortcuts are omitted to preserve room for the logo, connection status, and task controls. Dropdown menus remain anchored to their controls without changing the page scale.
+
+The bottom navigation uses two rows on narrow phones so Home, Board, Alerts, Runs, Work, and Settings retain readable labels. Chat sits beside these destinations in the same reserved area instead of floating over task cards. Content and bottom notifications leave room for that area's actual height, including larger text and the device safe area. Wider browser windows retain the floating chat button. Task Overview actions move below their summary when the panel is too narrow for a readable side-by-side layout.
 
 ## Offline Behavior
 

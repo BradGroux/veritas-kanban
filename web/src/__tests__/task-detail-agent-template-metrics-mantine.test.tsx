@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { AgentPanel } from '@/components/task/AgentPanel';
@@ -44,10 +44,12 @@ vi.mock('@/hooks/useAgent', () => ({
   useAgentLog: mocks.useAgentLog,
   useStartAgent: () => ({
     mutate: mocks.startAgentMutate,
+    mutateAsync: mocks.startAgentMutate,
     isPending: false,
   }),
   useStopAgent: () => ({
     mutate: mocks.stopAgentMutate,
+    mutateAsync: mocks.stopAgentMutate,
     isPending: false,
   }),
   useSendMessage: () => ({
@@ -131,6 +133,7 @@ const template: TaskTemplate = {
 describe('task detail agent, template, and metrics Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.startAgentMutate.mockReset();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.useConfig.mockReturnValue({
       data: {
@@ -157,8 +160,8 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
       data: { agent: 'codex', model: 'sonnet', reason: 'Best configured agent' },
     });
     mocks.useTemplates.mockReturnValue({ data: [template] });
-    mocks.updateTaskMutateAsync.mockResolvedValue({});
-    mocks.applyTemplateActivity.mockResolvedValue({});
+    mocks.updateTaskMutateAsync.mockReset().mockResolvedValue({});
+    mocks.applyTemplateActivity.mockReset().mockResolvedValue({});
     mocks.useTaskMetrics.mockReturnValue({
       data: {
         totalRuns: 2,
@@ -242,10 +245,7 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Start' }));
 
     expect(mocks.clearOutputs).toHaveBeenCalled();
-    expect(mocks.startAgentMutate).toHaveBeenCalledWith(
-      { taskId: 'task-agent', agent: 'codex' },
-      { onSuccess: expect.any(Function) }
-    );
+    expect(mocks.startAgentMutate).toHaveBeenCalledWith({ taskId: 'task-agent', agent: 'codex' });
   });
 
   it('requires an override reason before starting an incomplete agent task', async () => {
@@ -273,14 +273,79 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Start Anyway' }));
 
     expect(mocks.clearOutputs).toHaveBeenCalled();
-    expect(mocks.startAgentMutate).toHaveBeenCalledWith(
-      {
-        taskId: 'task-agent-incomplete',
-        agent: 'codex',
-        overrideReason: 'Maintainer approved urgent fix',
-      },
-      { onSuccess: expect.any(Function) }
-    );
+    expect(mocks.startAgentMutate).toHaveBeenCalledWith({
+      taskId: 'task-agent-incomplete',
+      agent: 'codex',
+      overrideReason: 'Maintainer approved urgent fix',
+    });
+  });
+
+  it('retains the readiness override while launching and after failure', async () => {
+    let rejectStart!: (error: Error) => void;
+    mocks.startAgentMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectStart = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    const task = createMockTask({
+      id: 'task-override',
+      title: 'Fix',
+      description: 'Too short',
+      type: 'code',
+      git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+    renderWithProviders(<AgentPanel task={task} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    const dialog = screen.getByRole('dialog', { name: 'Start with readiness override?' });
+    const reason = within(dialog).getByLabelText('Override reason') as HTMLTextAreaElement;
+    fireEvent.change(reason, { target: { value: '  Maintainer approved urgent fix  ' } });
+    const submit = within(dialog).getByRole('button', { name: 'Start Anyway' });
+    fireEvent.click(submit);
+    expect(reason.disabled).toBe(true);
+    fireEvent.click(submit);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(screen.getByRole('dialog', { name: 'Start with readiness override?' })).toBe(dialog);
+    expect(mocks.startAgentMutate).toHaveBeenCalledExactlyOnceWith({
+      taskId: task.id,
+      agent: 'codex',
+      overrideReason: 'Maintainer approved urgent fix',
+    });
+    await act(async () => rejectStart(new Error('Fixture launch failed')));
+    expect(reason.value).toBe('  Maintainer approved urgent fix  ');
+    expect(within(dialog).getByRole('alert').textContent).toContain('Fixture launch failed');
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.startAgentMutate).toHaveBeenCalledTimes(2);
+    expect(mocks.startAgentMutate.mock.calls[1]).toEqual(mocks.startAgentMutate.mock.calls[0]);
+    expect(screen.queryByRole('dialog', { name: 'Start with readiness override?' })).toBeNull();
+    expect(mocks.refetchAttempts).toHaveBeenCalledOnce();
+  });
+
+  it('rechecks launch permission while an override is open', () => {
+    const task = createMockTask({
+      id: 'task-override-permission',
+      title: 'Fix',
+      description: 'Too short',
+      type: 'code',
+      git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+    const { rerender } = renderWithProviders(<AgentPanel task={task} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    const dialog = screen.getByRole('dialog', { name: 'Start with readiness override?' });
+    fireEvent.change(within(dialog).getByLabelText('Override reason'), {
+      target: { value: 'Maintainer approved urgent fix' },
+    });
+    mocks.identity.hasPermission.mockReturnValue(false);
+    rerender(<AgentPanel task={task} />);
+    const submit = within(dialog).getByRole('button', {
+      name: 'Start Anyway',
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(mocks.startAgentMutate).not.toHaveBeenCalled();
   });
 
   it('hides agent start controls for mobile device sessions without agent write permission', () => {
@@ -307,6 +372,53 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     expect(screen.getByText('Agent controls unavailable for this client')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Agent' })).toBeNull();
+  });
+
+  it('retains agent stop confirmation through failure and successful retry', async () => {
+    let rejectStop!: (error: Error) => void;
+    mocks.stopAgentMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectStop = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    mocks.useAgentStatus.mockReturnValue({
+      data: {
+        running: true,
+        attemptId: 'attempt-1',
+        controls: { controls: [{ action: 'stop', available: true }] },
+      },
+    });
+    renderWithProviders(
+      <AgentPanel
+        task={createMockTask({
+          id: 'task-stop-agent',
+          git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main', worktreePath: '/tmp' },
+        })}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }));
+    const dialog = screen.getByRole('dialog', { name: 'Stop the agent?' });
+    const submit = within(dialog).getByRole('button', { name: 'Stop Agent' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(mocks.stopAgentMutate).toHaveBeenCalledExactlyOnceWith({
+      taskId: 'task-stop-agent',
+      attemptId: 'attempt-1',
+    });
+    expect(screen.getByRole('dialog', { name: 'Stop the agent?' })).toBe(dialog);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(
+      (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    await act(async () => rejectStop(new Error('Stop fixture failed')));
+    expect(within(dialog).getByRole('alert').textContent).toContain('Stop fixture failed');
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.stopAgentMutate).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog', { name: 'Stop the agent?' })).toBeNull();
   });
 
   it('keeps running-agent message send and stop confirmation wired through Mantine modal', async () => {
@@ -591,6 +703,100 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onApplied).toHaveBeenCalled();
+  });
+
+  it('retains template inputs and dismissal ownership through update failure and retry', async () => {
+    let rejectUpdate!: (error: Error) => void;
+    mocks.updateTaskMutateAsync.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectUpdate = reject;
+        })
+    );
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const onApplied = vi.fn();
+    renderWithProviders(
+      <ApplyTemplateDialog
+        task={createMockTask({ id: 'task-template-pending', description: '', project: 'veritas' })}
+        open
+        onOpenChange={onOpenChange}
+        onApplied={onApplied}
+      />
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Template' }));
+    await user.click(await screen.findByRole('option', { name: /Bug Fix - Resolve defect/ }));
+    const variable = screen.getByLabelText('bugId') as HTMLInputElement;
+    fireEvent.change(variable, { target: { value: 'BUG-42' } });
+    const submit = screen.getByRole('button', { name: 'Apply Template' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(mocks.updateTaskMutateAsync).toHaveBeenCalledOnce();
+    expect(variable.disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: 'Template' }) as HTMLInputElement).disabled).toBe(
+      true
+    );
+    expect(
+      (screen.getByRole('switch', { name: 'Force overwrite' }) as HTMLInputElement).disabled
+    ).toBe(true);
+    await act(async () => rejectUpdate(new Error('Template fixture update failed')));
+    expect(screen.getByRole('alert').textContent).toContain('Template fixture update failed');
+    expect(document.activeElement).toBe(screen.getByRole('alert'));
+    expect(variable.value).toBe('BUG-42');
+    expect(variable.disabled).toBe(false);
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(mocks.applyTemplateActivity).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.updateTaskMutateAsync).toHaveBeenCalledTimes(2);
+    expect(mocks.updateTaskMutateAsync.mock.calls[1][0].input.description).toBe(
+      'Fix BUG-42 for veritas'
+    );
+    expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+    expect(onApplied).toHaveBeenCalledOnce();
+  });
+
+  it('keeps template application locked through non-fatal activity logging', async () => {
+    let rejectActivity!: (error: Error) => void;
+    mocks.applyTemplateActivity.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectActivity = reject;
+        })
+    );
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const onApplied = vi.fn();
+    try {
+      renderWithProviders(
+        <ApplyTemplateDialog
+          task={createMockTask({ description: '', project: 'veritas' })}
+          open
+          onOpenChange={onOpenChange}
+          onApplied={onApplied}
+        />
+      );
+      await user.click(screen.getByRole('combobox', { name: 'Template' }));
+      await user.click(await screen.findByRole('option', { name: /Bug Fix - Resolve defect/ }));
+      const submit = screen.getByRole('button', { name: 'Apply Template' });
+      await act(async () => fireEvent.click(submit));
+      expect(mocks.applyTemplateActivity).toHaveBeenCalledOnce();
+      fireEvent.click(submit);
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(mocks.updateTaskMutateAsync).toHaveBeenCalledOnce();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      await act(async () => rejectActivity(new Error('Activity fixture failed')));
+      expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+      expect(onApplied).toHaveBeenCalledOnce();
+      expect(screen.queryByRole('alert')).toBeNull();
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('renders task metrics and export controls through direct Mantine primitives', async () => {

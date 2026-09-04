@@ -4,6 +4,9 @@ import { constants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyNativeEvidence } from './native-ui/verify.mjs';
+import { packageDigest } from './native-ui/contract.mjs';
+import { loadMediaPublication, verifyPublishedMedia } from './docs-media/publication.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -39,6 +42,7 @@ const requiredScripts = [
   'test:load',
   'test:load:smoke',
   'test:release-format',
+  'test:release-native',
   'test:unit',
   'typecheck',
 ];
@@ -155,6 +159,10 @@ Options:
   --github                 Validate v<version> tag and GitHub release.
   --repo <owner/repo>      GitHub repository for --github. Defaults to package.json repository.
   --skip-build-output      Skip local dist artifact checks.
+  --native-evidence <file> Candidate-bound packaged macOS evidence report.
+  --native-app <path>      Exact .app verified by that report.
+  --media-evidence <file>  Build-bound documentation publication manifest.
+  --source-only           Source preflight only; never release acceptance.
   --docker-build           Build the production Docker image as part of validation.
   --help                   Show this help text.
 `);
@@ -167,6 +175,10 @@ function parseArgs(argv) {
     repo: undefined,
     skipBuildOutput: false,
     version: undefined,
+    nativeEvidence: undefined,
+    nativeApp: undefined,
+    mediaEvidence: undefined,
+    sourceOnly: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -188,6 +200,25 @@ function parseArgs(argv) {
 
     if (arg === '--skip-build-output') {
       options.skipBuildOutput = true;
+      continue;
+    }
+
+    if (arg === '--source-only') {
+      options.sourceOnly = true;
+      continue;
+    }
+    if (arg === '--native-evidence' || arg === '--native-app' || arg === '--media-evidence') {
+      const value = argv[++index];
+      if (!value || value.startsWith('--')) {
+        fail('CLI options', `${arg} requires a path`);
+        continue;
+      }
+      const key = {
+        '--native-evidence': 'nativeEvidence',
+        '--native-app': 'nativeApp',
+        '--media-evidence': 'mediaEvidence',
+      }[arg];
+      options[key] = value;
       continue;
     }
 
@@ -422,6 +453,19 @@ function printableDetail(detail) {
   return detail ? ` - ${detail}` : '';
 }
 
+export function remoteTagCommit(output, tagName) {
+  const ref = `refs/tags/${tagName}`;
+  const records = output
+    .trim()
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/));
+  const direct = records.filter(([, name]) => name === ref);
+  const peeled = records.filter(([, name]) => name === `${ref}^{}`);
+  if (direct.length !== 1 || peeled.length > 1) return undefined;
+  const commit = (peeled[0] ?? direct[0])[0];
+  return /^[a-f0-9]{40}$/.test(commit) ? commit : undefined;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const packages = [];
@@ -435,6 +479,87 @@ async function main() {
 
   const rootPackage = packages.find((pkg) => pkg.label === 'root').json;
   const expectedVersion = options.version ?? rootPackage.version;
+  if (options.sourceOnly) {
+    check(
+      'Source-only preflight does not consume candidate evidence',
+      !options.nativeEvidence && !options.nativeApp && !options.mediaEvidence,
+      'Remove --source-only to validate a packaged candidate'
+    );
+    skip('Packaged macOS evidence', 'source-only preflight is not release acceptance');
+  } else if (!options.nativeEvidence || !options.nativeApp) {
+    fail(
+      'Packaged macOS evidence',
+      'Both --native-evidence and --native-app are required; --skip-build-output does not bypass this gate'
+    );
+  } else {
+    const head = run('git', ['rev-parse', 'HEAD']);
+    const tree = run('git', ['status', '--porcelain']);
+    check(
+      'Candidate checkout is clean',
+      tree.ok && tree.stdout === '',
+      'Native release evidence requires a clean candidate checkout'
+    );
+    try {
+      if (!head.ok) throw new Error('Cannot resolve candidate commit');
+      // Media may be committed after capture, but only a verified docs-only
+      // delta may reuse native evidence for the original, unchanged app build.
+      const media = options.mediaEvidence
+        ? await loadMediaPublication({
+            evidencePath: path.resolve(options.mediaEvidence),
+            root: rootDir,
+            publicationCommit: head.stdout,
+          })
+        : undefined;
+      const errors = await verifyNativeEvidence({
+        evidencePath: path.resolve(options.nativeEvidence),
+        appPath: path.resolve(options.nativeApp),
+        commit: media?.capture.commit ?? head.stdout,
+        version: expectedVersion,
+      });
+      check('Packaged macOS evidence', errors.length === 0, errors.join('; ') || head.stdout);
+    } catch (error) {
+      fail('Packaged macOS evidence', error.message);
+    }
+  }
+  if (options.sourceOnly) {
+    skip('Documentation media freshness', 'source-only preflight is not release acceptance');
+  } else if (!options.mediaEvidence || !options.nativeApp) {
+    fail(
+      'Documentation media freshness',
+      '--media-evidence and --native-app are required; a browser capture or source preflight cannot bypass this gate'
+    );
+  } else {
+    try {
+      const head = run('git', ['rev-parse', 'HEAD']);
+      const tracked = run('git', ['ls-files', '-z', '--', 'README.md', 'docs']);
+      if (!head.ok || !tracked.ok)
+        throw new Error('Cannot resolve candidate commit or maintained documentation inventory');
+      const maintainedContents = [];
+      for (const file of tracked.stdout.split('\0').filter(Boolean)) {
+        const bytes = await readFile(path.join(rootDir, file));
+        if (!bytes.includes(0)) maintainedContents.push([file, bytes.toString('utf8')]);
+      }
+      const publication = await loadMediaPublication({
+        evidencePath: path.resolve(options.mediaEvidence),
+        root: rootDir,
+        publicationCommit: head.stdout,
+      });
+      const errors = await verifyPublishedMedia({
+        evidencePath: path.resolve(options.mediaEvidence),
+        root: rootDir,
+        expected: {
+          commit: publication.capture.commit,
+          publicationCommit: head.stdout,
+          version: expectedVersion,
+          packageDigest: await packageDigest(path.resolve(options.nativeApp)),
+        },
+        maintainedContents,
+      });
+      check('Documentation media freshness', errors.length === 0, errors.join('; ') || head.stdout);
+    } catch (error) {
+      fail('Documentation media freshness', error.message);
+    }
+  }
   const requiredReleaseDocs = releaseDocsForVersion(expectedVersion);
   const releaseBodyFile = `docs/releases/v${expectedVersion}.md`;
   const releaseBodyExists = await exists(releaseBodyFile);
@@ -565,11 +690,25 @@ async function main() {
       localTag.ok && localTag.stdout ? tagName : localTag.stderr || 'not found'
     );
 
-    const remoteTag = run('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tagName}`]);
+    const remoteTag = run('git', [
+      'ls-remote',
+      '--tags',
+      'origin',
+      `refs/tags/${tagName}`,
+      `refs/tags/${tagName}^{}`,
+    ]);
     check(
       `Origin git tag exists: ${tagName}`,
       remoteTag.ok && remoteTag.stdout.includes(`refs/tags/${tagName}`),
       remoteTag.ok && remoteTag.stdout ? 'origin' : remoteTag.stderr || 'not found'
+    );
+    const candidateHead = run('git', ['rev-parse', 'HEAD']);
+    check(
+      `Origin release tag matches candidate: ${tagName}`,
+      candidateHead.ok &&
+        remoteTag.ok &&
+        remoteTagCommit(remoteTag.stdout, tagName) === candidateHead.stdout,
+      'The destination tag must resolve to the verified checkout commit'
     );
 
     if (repo) {
@@ -625,7 +764,9 @@ async function main() {
     skip: 'SKIP',
   };
 
-  console.log(`\nRelease validation for ${expectedVersion}\n`);
+  console.log(
+    `\n${options.sourceOnly ? 'Source preflight' : 'Release validation'} for ${expectedVersion}\n`
+  );
 
   for (const item of checks) {
     console.log(`${labels[item.status]} ${item.name}${printableDetail(item.detail)}`);
@@ -637,7 +778,11 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('\nRelease validation passed.');
+  console.log(
+    options.sourceOnly
+      ? '\nSource preflight passed. Packaged, installed, signing, documentation-media, and publication acceptance are not established.'
+      : '\nRelease validation passed. Installed-app, signing, media visual/playback review, and publication acceptance require their separate evidence.'
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

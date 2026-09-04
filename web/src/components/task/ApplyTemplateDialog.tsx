@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import {
   Alert,
   Button,
   Code,
   Group,
-  Modal,
   Paper,
   Select,
   Stack,
@@ -68,6 +69,24 @@ export function ApplyTemplateDialog({
   const [requiredCustomVars, setRequiredCustomVars] = useState<string[]>([]);
   const [forceOverwrite, setForceOverwrite] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const applyInFlight = useRef(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (applyError) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [applyError]);
+
+  const handleClose = () => {
+    if (!applyInFlight.current) {
+      setApplyError(null);
+      onOpenChange(false);
+    }
+  };
 
   const { data: templates } = useTemplates();
   const updateTask = useUpdateTask();
@@ -216,110 +235,130 @@ export function ApplyTemplateDialog({
 
   // Apply the template
   const handleApply = async () => {
-    if (!template) return;
+    if (!template || applyInFlight.current) return;
+    applyInFlight.current = true;
+    setIsApplying(true);
+    setApplyError(null);
 
-    // Build variable context
-    const context: VariableContext = {
-      project: task.project,
-      author: 'User',
-      customVars,
-    };
-
-    // Build update input based on merge strategy
-    const updates: Record<string, unknown> = {};
-
-    // Description
-    if (template.taskDefaults.descriptionTemplate) {
-      const interpolated = interpolateVariables(template.taskDefaults.descriptionTemplate, context);
-      if (forceOverwrite || !task.description) {
-        updates.description = interpolated;
-      }
-    }
-
-    // Type
-    if (template.taskDefaults.type && (forceOverwrite || !task.type)) {
-      updates.type = template.taskDefaults.type;
-    }
-
-    // Priority
-    if (template.taskDefaults.priority && (forceOverwrite || !task.priority)) {
-      updates.priority = template.taskDefaults.priority;
-    }
-
-    // Project
-    if (template.taskDefaults.project && (forceOverwrite || !task.project)) {
-      updates.project = template.taskDefaults.project;
-    }
-
-    // Subtasks - APPEND to existing
-    if (template.subtaskTemplates && template.subtaskTemplates.length > 0) {
-      const now = new Date().toISOString();
-      const newSubtasks: Subtask[] = template.subtaskTemplates
-        .sort((a, b) => a.order - b.order)
-        .map((st) => ({
-          id: nanoid(),
-          title: interpolateVariables(st.title, context),
-          completed: false,
-          created: now,
-          ...(st.acceptanceCriteria?.length && {
-            acceptanceCriteria: st.acceptanceCriteria.map((criterion) =>
-              interpolateVariables(criterion, context)
-            ),
-            criteriaChecked: new Array(st.acceptanceCriteria.length).fill(false),
-          }),
-        }));
-
-      // Append to existing subtasks
-      const existingSubtasks = task.subtasks || [];
-      updates.subtasks = [...existingSubtasks, ...newSubtasks];
-    }
-
-    // Apply the updates
-    await updateTask.mutateAsync({
-      id: task.id,
-      input: updates,
-    });
-
-    // Track which fields were changed for activity logging
-    const changedFields = Object.keys(updates);
-
-    // Log activity
     try {
-      await api.tasks.applyTemplate(task.id, template.id, template.name, changedFields);
-    } catch (error) {
-      // Intentionally non-fatal: don't fail the whole operation if activity logging fails
-      console.error('Failed to log template application:', error);
+      // Build variable context
+      const context: VariableContext = {
+        project: task.project,
+        author: 'User',
+        customVars,
+      };
+
+      // Build update input based on merge strategy
+      const updates: Record<string, unknown> = {};
+
+      // Description
+      if (template.taskDefaults.descriptionTemplate) {
+        const interpolated = interpolateVariables(
+          template.taskDefaults.descriptionTemplate,
+          context
+        );
+        if (forceOverwrite || !task.description) {
+          updates.description = interpolated;
+        }
+      }
+
+      // Type
+      if (template.taskDefaults.type && (forceOverwrite || !task.type)) {
+        updates.type = template.taskDefaults.type;
+      }
+
+      // Priority
+      if (template.taskDefaults.priority && (forceOverwrite || !task.priority)) {
+        updates.priority = template.taskDefaults.priority;
+      }
+
+      // Project
+      if (template.taskDefaults.project && (forceOverwrite || !task.project)) {
+        updates.project = template.taskDefaults.project;
+      }
+
+      // Subtasks - APPEND to existing
+      if (template.subtaskTemplates && template.subtaskTemplates.length > 0) {
+        const now = new Date().toISOString();
+        const newSubtasks: Subtask[] = [...template.subtaskTemplates]
+          .sort((a, b) => a.order - b.order)
+          .map((st) => ({
+            id: nanoid(),
+            title: interpolateVariables(st.title, context),
+            completed: false,
+            created: now,
+            ...(st.acceptanceCriteria?.length && {
+              acceptanceCriteria: st.acceptanceCriteria.map((criterion) =>
+                interpolateVariables(criterion, context)
+              ),
+              criteriaChecked: new Array(st.acceptanceCriteria.length).fill(false),
+            }),
+          }));
+
+        // Append to existing subtasks
+        const existingSubtasks = task.subtasks || [];
+        updates.subtasks = [...existingSubtasks, ...newSubtasks];
+      }
+
+      // Apply the updates
+      try {
+        await updateTask.mutateAsync({
+          id: task.id,
+          input: updates,
+        });
+      } catch (error) {
+        setApplyError(error instanceof Error ? error.message : 'Unable to apply template.');
+        return;
+      }
+
+      // Track which fields were changed for activity logging
+      const changedFields = Object.keys(updates);
+
+      // Log activity
+      try {
+        await api.tasks.applyTemplate(task.id, template.id, template.name, changedFields);
+      } catch (error) {
+        // Intentionally non-fatal: don't fail the whole operation if activity logging fails
+        console.error('Failed to log template application:', error);
+      }
+
+      // Close dialog and notify parent
+      onOpenChange(false);
+      onApplied?.();
+
+      // Reset state
+      setSelectedTemplate(null);
+      setCustomVars({});
+      setRequiredCustomVars([]);
+      setForceOverwrite(false);
+    } finally {
+      applyInFlight.current = false;
+      setIsApplying(false);
     }
-
-    // Close dialog and notify parent
-    onOpenChange(false);
-    onApplied?.();
-
-    // Reset state
-    setSelectedTemplate(null);
-    setCustomVars({});
-    setRequiredCustomVars([]);
-    setForceOverwrite(false);
   };
 
   return (
     <Modal
+      compound
       opened={open}
-      onClose={() => onOpenChange(false)}
+      onClose={handleClose}
+      closeOnEscape={!isApplying}
+      closeOnClickOutside={!isApplying}
+      closeButtonProps={{ disabled: isApplying }}
       title={
         <Group gap="xs">
           <FileCode className="h-5 w-5" />
           <Text fw={600}>Apply Template to Task</Text>
         </Group>
       }
-      size="lg"
     >
-      <Stack gap="md">
+      <Stack gap="md" className="vk-overlay-scroll [&>*]:shrink-0">
         <Group justify="flex-end">
           <Button
             variant="subtle"
             size="xs"
             color="gray"
+            disabled={isApplying}
             onClick={() => setShowHelp(!showHelp)}
             leftSection={<HelpCircle className="h-4 w-4" />}
             rightSection={
@@ -368,19 +407,22 @@ export function ApplyTemplateDialog({
             </Text>
             <Tabs value={categoryFilter} onChange={(value) => setCategoryFilter(value ?? 'all')}>
               <Tabs.List grow>
-                <Tabs.Tab value="all">All</Tabs.Tab>
-                <Tabs.Tab value="bug" aria-label="Bug templates">
+                <Tabs.Tab value="all" disabled={isApplying}>
+                  All
+                </Tabs.Tab>
+                <Tabs.Tab value="bug" aria-label="Bug templates" disabled={isApplying}>
                   Bug
                 </Tabs.Tab>
-                <Tabs.Tab value="feature" aria-label="Feature templates">
+                <Tabs.Tab value="feature" aria-label="Feature templates" disabled={isApplying}>
                   Feature
                 </Tabs.Tab>
-                <Tabs.Tab value="sprint" aria-label="Sprint templates">
+                <Tabs.Tab value="sprint" aria-label="Sprint templates" disabled={isApplying}>
                   Sprint
                 </Tabs.Tab>
               </Tabs.List>
             </Tabs>
             <Select
+              disabled={isApplying}
               value={selectedTemplate || 'none'}
               onChange={(value) => {
                 if (!value || value === 'none') {
@@ -409,13 +451,15 @@ export function ApplyTemplateDialog({
                 </Group>
                 {requiredCustomVars.map((varName) => (
                   <TextInput
+                    disabled={isApplying}
                     key={varName}
                     id={`var-${varName}`}
                     label={varName}
                     value={customVars[varName] || ''}
-                    onChange={(e) =>
-                      setCustomVars((prev) => ({ ...prev, [varName]: e.currentTarget.value }))
-                    }
+                    onChange={(e) => {
+                      const value = e.currentTarget.value;
+                      setCustomVars((prev) => ({ ...prev, [varName]: value }));
+                    }}
                     placeholder={`Enter ${varName}...`}
                     size="xs"
                   />
@@ -436,6 +480,7 @@ export function ApplyTemplateDialog({
                   </Text>
                 </Stack>
                 <Switch
+                  disabled={isApplying}
                   checked={forceOverwrite}
                   onChange={(event) => setForceOverwrite(event.currentTarget.checked)}
                   aria-label="Force overwrite"
@@ -500,16 +545,25 @@ export function ApplyTemplateDialog({
             </Text>
           )}
         </Stack>
-
-        <Group justify="flex-end" gap="xs">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleApply} disabled={!template || updateTask.isPending}>
-            {updateTask.isPending ? 'Applying...' : 'Apply Template'}
-          </Button>
-        </Group>
+        {applyError && (
+          <Alert ref={errorRef} tabIndex={-1} color="red" title="Template not applied">
+            {applyError}
+          </Alert>
+        )}
       </Stack>
+      <OverlayFooter>
+        <UiAction type="button" variant="quiet" onClick={handleClose} disabled={isApplying}>
+          Cancel
+        </UiAction>
+        <UiAction
+          type="button"
+          onClick={() => void handleApply()}
+          disabled={!template || isApplying}
+          loading={isApplying}
+        >
+          Apply Template
+        </UiAction>
+      </OverlayFooter>
     </Modal>
   );
 }

@@ -250,7 +250,7 @@ function StatusHistoryPanel({ onTaskClick }: StatusHistoryPanelProps) {
                   <div
                     key={entry.id}
                     className={cn(
-                      'flex items-center gap-3 py-2.5 px-3 rounded-md transition-colors',
+                      'flex flex-wrap items-center gap-3 py-2.5 px-3 rounded-md transition-colors sm:flex-nowrap',
                       entry.taskId && onTaskClick
                         ? 'hover:bg-muted/50 cursor-pointer'
                         : 'hover:bg-muted/30'
@@ -274,15 +274,15 @@ function StatusHistoryPanel({ onTaskClick }: StatusHistoryPanelProps) {
                     <StatusBadge status={entry.previousStatus} isTaskStatus={isTaskStatus} />
                     <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
                     <StatusBadge status={entry.newStatus} isTaskStatus={isTaskStatus} />
-                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <div className="flex min-w-0 basis-full flex-col items-start gap-1 sm:flex-1 sm:flex-row sm:items-center sm:gap-2">
                       {entry.taskId && (
-                        <span className="text-sm text-muted-foreground shrink-0">
+                        <span className="max-w-full break-all text-sm text-muted-foreground sm:shrink-0">
                           {entry.taskId}
                         </span>
                       )}
                       <span
                         className={cn(
-                          'text-sm truncate',
+                          'max-w-full break-words text-sm sm:truncate',
                           onTaskClick && 'hover:underline',
                           titleColor
                         )}

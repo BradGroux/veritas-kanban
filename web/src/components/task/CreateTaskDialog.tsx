@@ -22,7 +22,7 @@ import { useTaskTypes, getTypeIcon } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useSprints } from '@/hooks/useSprints';
 import { useConfig } from '@/hooks/useConfig';
-import { useTemplateForm } from '@/hooks/useTemplateForm';
+import { PartialBlueprintCreationError, useTemplateForm } from '@/hooks/useTemplateForm';
 import { useCreateTaskForm } from '@/hooks/useCreateTaskForm';
 import { BlueprintPreview } from './create/BlueprintPreview';
 import { TemplateVariableInputs } from './create/TemplateVariableInputs';
@@ -62,6 +62,11 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const [duplicateResults, setDuplicateResults] = useState<SearchResult[]>([]);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [submissionRetryBlocked, setSubmissionRetryBlocked] = useState(false);
+  const submissionInFlight = useRef(false);
+  const submissionErrorRef = useRef<HTMLDivElement>(null);
   // Consolidated form state via useReducer
   const {
     state: formState,
@@ -207,6 +212,18 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
     ? templates?.find((t) => t.id === selectedTemplate)
     : null;
   const isBlueprint = Boolean(currentTemplate?.blueprint && currentTemplate.blueprint.length > 0);
+  const isPending = isSubmitting || isCreating;
+
+  useEffect(() => {
+    if (!submissionError) return;
+
+    const focusError = window.setTimeout(() => {
+      submissionErrorRef.current?.focus({ preventScroll: true });
+      submissionErrorRef.current?.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+    });
+
+    return () => window.clearTimeout(focusError);
+  }, [submissionError]);
 
   useEffect(() => {
     const query = [title, description].filter(Boolean).join(' ').trim();
@@ -240,7 +257,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
             ? 'Duplicate search is using a reduced index right now. You can still create the task.'
             : null
         );
-      } catch (err) {
+      } catch {
         if (cancelled) return;
         setDuplicateResults([]);
         setDuplicateError(
@@ -260,29 +277,50 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Use computed canSubmit instead of inline check
-    if (!canSubmit(isBlueprint)) {
-      return;
+    if (submissionInFlight.current || submissionRetryBlocked || !canSubmit(isBlueprint)) return;
+
+    submissionInFlight.current = true;
+    setIsSubmitting(true);
+    setSubmissionError(null);
+    setSubmissionRetryBlocked(false);
+    try {
+      await createTasks(title, description, project, sprint, type, priority, agent);
+      resetForm();
+      clearTemplate();
+      onOpenChange(false);
+    } catch (error) {
+      setSubmissionRetryBlocked(error instanceof PartialBlueprintCreationError);
+      setSubmissionError(error instanceof Error ? error.message : 'Unable to create the task.');
+    } finally {
+      submissionInFlight.current = false;
+      setIsSubmitting(false);
     }
+  };
 
-    await createTasks(title, description, project, sprint, type, priority, agent);
-
-    // Reset form state atomically
-    resetForm();
-    clearTemplate();
+  const handleClose = () => {
+    if (submissionInFlight.current) return;
+    setSubmissionError(null);
+    setSubmissionRetryBlocked(false);
     onOpenChange(false);
   };
 
   return (
     <UiModal
       opened={open}
-      onClose={() => onOpenChange(false)}
+      onClose={handleClose}
+      closeOnEscape={!isPending}
+      closeOnClickOutside={!isPending}
+      closeButtonProps={{ disabled: isPending }}
       title="Create New Task"
       variant="form"
       compound
       centered
     >
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <form
+        onSubmit={handleSubmit}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        aria-busy={isPending}
+      >
         <div className="vk-overlay-scroll" data-testid="create-task-scroll-region" tabIndex={0}>
           {/* Template selector */}
           {templates && templates.length > 0 && (
@@ -300,6 +338,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   type="button"
                   variant="subtle"
                   size="sm"
+                  disabled={isPending}
                   onClick={toggleHelp}
                   aria-label={showHelp ? 'Hide template help' : 'Show template help'}
                 >
@@ -342,20 +381,23 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
 
               <Tabs value={categoryFilter} onChange={(value) => setCategoryFilter(value ?? 'all')}>
                 <Tabs.List grow>
-                  <Tabs.Tab value="all">All</Tabs.Tab>
-                  <Tabs.Tab value="bug" aria-label="Bug templates">
+                  <Tabs.Tab value="all" disabled={isPending}>
+                    All
+                  </Tabs.Tab>
+                  <Tabs.Tab value="bug" aria-label="Bug templates" disabled={isPending}>
                     <Bug className="h-4 w-4" />
                   </Tabs.Tab>
-                  <Tabs.Tab value="feature" aria-label="Feature templates">
+                  <Tabs.Tab value="feature" aria-label="Feature templates" disabled={isPending}>
                     <Sparkles className="h-4 w-4" />
                   </Tabs.Tab>
-                  <Tabs.Tab value="sprint" aria-label="Sprint templates">
+                  <Tabs.Tab value="sprint" aria-label="Sprint templates" disabled={isPending}>
                     <RefreshCw className="h-4 w-4" />
                   </Tabs.Tab>
                 </Tabs.List>
               </Tabs>
 
               <Select
+                disabled={isPending}
                 aria-label="Task template"
                 value={selectedTemplate || 'none'}
                 onChange={(value) => handleTemplateSelect(value ?? 'none')}
@@ -373,6 +415,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 <>
                   <BlueprintPreview template={currentTemplate} />
                   <TemplateVariableInputs
+                    disabled={isPending}
                     variables={requiredCustomVars}
                     values={customVars}
                     onChange={(name, value) =>
@@ -384,6 +427,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
             ) : (
               <>
                 <TextInput
+                  disabled={isPending}
                   id="title"
                   label="Title"
                   value={title}
@@ -393,6 +437,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 />
 
                 <Textarea
+                  disabled={isPending}
                   id="description"
                   label="Description"
                   value={description}
@@ -434,6 +479,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                               key={`${result.collection}:${result.id}`}
                               component="button"
                               type="button"
+                              disabled={isPending}
                               withBorder
                               radius="md"
                               p="sm"
@@ -485,6 +531,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
 
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                   <Select
+                    disabled={isPending}
                     label="Type"
                     value={type}
                     onChange={(value) => setType(value ?? 'code')}
@@ -503,6 +550,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   />
 
                   <Select
+                    disabled={isPending}
                     label="Priority"
                     value={priority}
                     onChange={(value) => setPriority((value ?? 'medium') as TaskPriority)}
@@ -514,6 +562,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 <Stack gap="xs">
                   {!showNewProject ? (
                     <Select
+                      disabled={isPending}
                       ref={projectSelect}
                       label="Project (optional)"
                       value={project || '__none__'}
@@ -531,6 +580,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   ) : (
                     <Group gap="sm" align="end" wrap="nowrap">
                       <TextInput
+                        disabled={isPending}
                         ref={newProjectInput}
                         data-mantine-stop-propagation="true"
                         label="New project"
@@ -552,6 +602,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                       />
                       <UiAction
                         type="button"
+                        disabled={isPending}
                         onClick={() => {
                           if (newProjectName.trim()) {
                             setProject(newProjectName.trim());
@@ -560,7 +611,12 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                       >
                         Add
                       </UiAction>
-                      <UiAction type="button" variant="quiet" onClick={hideNewProject}>
+                      <UiAction
+                        type="button"
+                        variant="quiet"
+                        onClick={hideNewProject}
+                        disabled={isPending}
+                      >
                         Cancel
                       </UiAction>
                     </Group>
@@ -569,6 +625,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
 
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                   <Select
+                    disabled={isPending}
                     label="Sprint (optional)"
                     value={sprint || '__none__'}
                     onChange={(value) => setSprint(value === '__none__' ? '' : (value ?? ''))}
@@ -578,6 +635,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   />
 
                   <Select
+                    disabled={isPending}
                     label="Agent"
                     value={agent || 'auto'}
                     onChange={(value) => setAgent(value ?? 'auto')}
@@ -587,6 +645,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                 </SimpleGrid>
 
                 <TemplateVariableInputs
+                  disabled={isPending}
                   variables={requiredCustomVars}
                   values={customVars}
                   onChange={(name, value) => setCustomVars((prev) => ({ ...prev, [name]: value }))}
@@ -618,6 +677,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                                 type="button"
                                 variant="subtle"
                                 size="sm"
+                                disabled={isPending}
                                 onClick={() => removeSubtask(subtask.id)}
                                 aria-label={`Remove subtask: ${subtask.title}`}
                               >
@@ -633,13 +693,28 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
               </>
             )}
           </Stack>
+          {submissionError && (
+            <Alert
+              ref={submissionErrorRef}
+              tabIndex={-1}
+              color="red"
+              title="Task not created"
+              className="mt-4 shrink-0"
+            >
+              {submissionError}
+            </Alert>
+          )}
         </div>
         <OverlayFooter>
-          <UiAction type="button" variant="quiet" onClick={() => onOpenChange(false)}>
+          <UiAction type="button" variant="quiet" onClick={handleClose} disabled={isPending}>
             Cancel
           </UiAction>
-          <UiAction type="submit" disabled={!canSubmit(isBlueprint) || isCreating}>
-            {isCreating ? 'Creating...' : isBlueprint ? 'Create Tasks' : 'Create Task'}
+          <UiAction
+            type="submit"
+            disabled={!canSubmit(isBlueprint) || isPending || submissionRetryBlocked}
+            loading={isPending}
+          >
+            {isBlueprint ? 'Create Tasks' : 'Create Task'}
           </UiAction>
         </OverlayFooter>
       </form>

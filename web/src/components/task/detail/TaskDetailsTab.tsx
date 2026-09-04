@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Badge, Box, Button, Group, Modal, Paper, Stack, Text, Textarea } from '@mantine/core';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
+import { useState, useRef } from 'react';
+import { Badge, Box, Button, Group, Paper, Stack, Text, Textarea } from '@mantine/core';
 import { tasksApi } from '@/lib/api/tasks';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
@@ -37,10 +39,24 @@ export function TaskDetailsTab({
   const markdownSettings = featureSettings.markdown;
   const markdownEnabled = markdownSettings?.enableMarkdown ?? true;
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletionInFlight = useRef(false);
+  const closeDeleteDialog = () => {
+    if (!deletionInFlight.current) setDeleteConfirmOpen(false);
+  };
 
   const handleDelete = async () => {
-    await deleteTask.mutateAsync(task.id);
-    onClose();
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleteError(false);
+    try {
+      await deleteTask.mutateAsync(task.id);
+      onClose();
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletionInFlight.current = false;
+    }
   };
 
   const handleArchive = async () => {
@@ -252,22 +268,29 @@ export function TaskDetailsTab({
       </Box>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete this task?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this task. Try again.
+            </Text>
+          )}
           <Text size="sm">This will permanently delete "{task.title}".</Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setDeleteConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={handleDelete}>
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" disabled={deleteTask.isPending} onClick={closeDeleteDialog}>
+            Cancel
+          </UiAction>
+          <UiAction variant="destructive" loading={deleteTask.isPending} onClick={handleDelete}>
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </Stack>
   );

@@ -1,9 +1,12 @@
 import { StrictMode, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { MantineProvider } from '@mantine/core';
 import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   UiModal,
   UiDrawer,
+  UiTaskSurface,
   OVERLAY_VARIANTS,
   OverlayFooter,
   useOverlayHandoff,
@@ -13,6 +16,172 @@ import { renderWithProviders } from './test-utils';
 afterEach(cleanup);
 
 describe('shared popout contract', () => {
+  it('retains the external opener when a shortcut reopens before deferred restoration', async () => {
+    function Probe() {
+      const [opened, setOpened] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpened(true)}>External opener</button>
+          <UiModal
+            opened={opened}
+            onClose={() => setOpened(false)}
+            title="Shortcut decision"
+            keepMounted
+            transitionProps={{ duration: 10_000 }}
+          >
+            <button
+              onClick={() => {
+                flushSync(() => setOpened(false));
+                flushSync(() => setOpened(true));
+              }}
+            >
+              Reopen immediately
+            </button>
+            <button onClick={() => setOpened(false)}>Close shortcut decision</button>
+          </UiModal>
+        </>
+      );
+    }
+    renderWithProviders(
+      <MantineProvider env="default">
+        <Probe />
+      </MantineProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'External opener' });
+    vi.spyOn(trigger, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
+    trigger.focus();
+    fireEvent.click(trigger);
+    const reopen = await screen.findByRole('button', { name: 'Reopen immediately' });
+    reopen.focus();
+    fireEvent.click(reopen);
+    fireEvent.click(screen.getByRole('button', { name: 'Close shortcut decision' }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+  it('captures the new opener when a mounted dialog reopens before its exit completes', async () => {
+    function Probe() {
+      const [opened, setOpened] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpened(true)}>Approve opener</button>
+          <button onClick={() => setOpened(true)}>Reject opener</button>
+          <UiModal
+            opened={opened}
+            onClose={() => setOpened(false)}
+            title="Reused decision"
+            keepMounted
+            transitionProps={{ duration: 10_000 }}
+          >
+            <button onClick={() => setOpened(false)}>Close decision</button>
+          </UiModal>
+        </>
+      );
+    }
+    renderWithProviders(
+      <StrictMode>
+        <MantineProvider env="default">
+          <Probe />
+        </MantineProvider>
+      </StrictMode>
+    );
+    for (const name of ['Approve opener', 'Reject opener']) {
+      const trigger = screen.getByRole('button', { name });
+      vi.spyOn(trigger, 'getClientRects').mockReturnValue([
+        new DOMRect(0, 0, 100, 32),
+      ] as unknown as DOMRectList);
+      trigger.focus();
+      fireEvent.click(trigger);
+      fireEvent.click(await screen.findByRole('button', { name: 'Close decision' }));
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+    }
+  });
+  it('keeps task content mounted across presentation changes and stacks nested utilities', async () => {
+    const closeTask = vi.fn();
+    function Probe() {
+      const [expanded, setExpanded] = useState(false);
+      const [utility, setUtility] = useState(false);
+      const [confirm, setConfirm] = useState(false);
+      return (
+        <UiTaskSurface
+          opened
+          onClose={closeTask}
+          label="Task workspace"
+          expanded={expanded}
+          chatOpen={false}
+        >
+          <input aria-label="Retained draft" defaultValue="Unsaved work" />
+          <button onClick={() => setExpanded(!expanded)}>Change presentation</button>
+          <button onClick={() => setUtility(true)}>Open utility</button>
+          {utility && (
+            <UiDrawer opened onClose={() => setUtility(false)} title="Task utility">
+              <button onClick={() => setConfirm(true)}>Open confirmation</button>
+              {confirm && (
+                <UiModal opened onClose={() => setConfirm(false)} title="Confirm task action">
+                  <input aria-label="Confirmation reason" />
+                </UiModal>
+              )}
+            </UiDrawer>
+          )}
+        </UiTaskSurface>
+      );
+    }
+    renderWithProviders(
+      <StrictMode>
+        {/* Production portals keep child dialogs outside their inert ancestors. */}
+        <MantineProvider env="default">
+          <Probe />
+        </MantineProvider>
+      </StrictMode>
+    );
+    const task = screen.getByRole('dialog', { name: 'Task workspace' });
+    // Drawer.Content forwards className to both content and its positioning
+    // wrapper; the size-container class must only be on the visible content.
+    expect(task.classList.contains('vk-task-workspace')).toBe(true);
+    expect(task.parentElement?.classList.contains('vk-task-workspace')).toBe(false);
+    expect(task.querySelector<HTMLElement>('.mantine-Drawer-body')?.style.padding).toBe('0px');
+    const draft = screen.getByRole('textbox', { name: 'Retained draft' });
+    fireEvent.change(draft, { target: { value: 'Changed without saving' } });
+    for (const presentation of ['expanded', 'drawer']) {
+      fireEvent.click(screen.getByRole('button', { name: 'Change presentation' }));
+      expect(task.getAttribute('data-presentation')).toBe(presentation);
+      expect(screen.getByRole('textbox', { name: 'Retained draft' })).toBe(draft);
+      expect((draft as HTMLInputElement).value).toBe('Changed without saving');
+    }
+    const opener = screen.getByRole('button', { name: 'Open utility' });
+    vi.spyOn(opener, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
+    opener.focus();
+    fireEvent.click(opener);
+    expect(task.hasAttribute('inert')).toBe(true);
+    const utility = screen.getByRole('dialog', { name: 'Task utility' });
+    expect(
+      utility.closest('[data-overlay-presentation]')?.getAttribute('data-overlay-presentation')
+    ).toBe('dialog');
+    const confirmationOpener = screen.getByRole('button', { name: 'Open confirmation' });
+    vi.spyOn(confirmationOpener, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 100, 32),
+    ] as unknown as DOMRectList);
+    confirmationOpener.focus();
+    fireEvent.click(confirmationOpener);
+    expect(utility.closest('[data-overlay-variant]')?.hasAttribute('inert')).toBe(true);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Confirmation reason' }), {
+      key: 'Escape',
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Confirm task action' })).toBeNull()
+    );
+    await waitFor(() => expect(document.activeElement).toBe(confirmationOpener));
+    expect(task.hasAttribute('inert')).toBe(true);
+    fireEvent.keyDown(confirmationOpener, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Task utility' })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(task.hasAttribute('inert')).toBe(false);
+    expect(closeTask).not.toHaveBeenCalled();
+    fireEvent.keyDown(opener, { key: 'Escape' });
+    expect(closeTask).toHaveBeenCalledOnce();
+  });
   it('cancels queued handoffs on reopen and unmount, and executes only the latest selection', () => {
     const frames: FrameRequestCallback[] = [];
     const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {

@@ -21,6 +21,8 @@ The shared provider registers only open overlays, removes unmounted entries, and
 
 ## Consumer inventory
 
+The task-family migration in #1444 is tracked in [Task overlay family acceptance](TASK-OVERLAY-ACCEPTANCE.md). Its per-family browser and native evidence remains incomplete; adoption of a shared primitive is not completion of the inventory row.
+
 Line numbers identify the audited opening and may move during migration. A shared primitive alone does not prove the feature's inner scroll, spacing, or keyboard behavior. Each row remains subject to rendered acceptance.
 
 | Consumer                                                                                          | Opening line | Intended variant | Status                                               |

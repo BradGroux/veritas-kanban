@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
+import { useState, useRef } from 'react';
 import { FileText, Pencil, Trash2, X, Check, Plus, ExternalLink } from 'lucide-react';
 import {
   ActionIcon,
@@ -6,7 +8,6 @@ import {
   Box,
   Button,
   Group,
-  Modal,
   Paper,
   Select,
   SimpleGrid,
@@ -65,6 +66,11 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
   const [editStatus, setEditStatus] = useState<DeliverableStatus>(deliverable.status);
   const [editDescription, setEditDescription] = useState(deliverable.description || '');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletionInFlight = useRef(false);
+  const closeDeleteDialog = () => {
+    if (!deletionInFlight.current) setDeleteDialogOpen(false);
+  };
 
   const updateDeliverable = useUpdateDeliverable();
   const deleteDeliverable = useDeleteDeliverable();
@@ -93,8 +99,17 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
   };
 
   const handleDelete = async () => {
-    await deleteDeliverable.mutateAsync({ taskId, deliverableId: deliverable.id });
-    setDeleteDialogOpen(false);
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleteError(false);
+    try {
+      await deleteDeliverable.mutateAsync({ taskId, deliverableId: deliverable.id });
+      setDeleteDialogOpen(false);
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletionInFlight.current = false;
+    }
   };
 
   const isUrl = deliverable.path && /^https?:\/\//i.test(deliverable.path);
@@ -270,27 +285,39 @@ function DeliverableItem({ deliverable, taskId }: { deliverable: Deliverable; ta
       </Paper>
 
       <Modal
+        variant="confirm"
+        compound
         opened={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete deliverable?"
         centered
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this deliverable. Try again.
+            </Text>
+          )}
           <Text size="sm">Remove "{deliverable.title}" from this task's deliverables?</Text>
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              color="red"
-              onClick={() => {
-                void handleDelete();
-              }}
-            >
-              Delete
-            </Button>
-          </Group>
-        </Stack>
+        </div>
+        <OverlayFooter>
+          <UiAction
+            variant="quiet"
+            disabled={deleteDeliverable.isPending}
+            onClick={closeDeleteDialog}
+          >
+            Cancel
+          </UiAction>
+          <UiAction
+            variant="destructive"
+            loading={deleteDeliverable.isPending}
+            onClick={() => {
+              void handleDelete();
+            }}
+          >
+            Delete
+          </UiAction>
+        </OverlayFooter>
       </Modal>
     </>
   );

@@ -326,18 +326,27 @@ Follow the existing conventions in `.eslintrc.*`, `.prettierrc`, and `tsconfig.j
   Playwright does not retry failures. Screenshots and traces from the first
   failure are retained in `test-results/` and uploaded by Scheduled QA.
 
+  Scheduled QA splits the complete browser inventory across two isolated runners,
+  each with its own server/data directory and one worker. Both shards must pass;
+  a failing shard does not cancel the other. Existing test timeouts and the
+  25-minute job limit are unchanged. Download `playwright-artifacts-1` and
+  `playwright-artifacts-2` for their separate reports and failure evidence.
+  A cancelled or incomplete shard is not a passing milestone.
+
 - **Load smoke tests** use [k6](https://k6.io/):
 
   ```bash
   pnpm test:load:smoke
   ```
 
-- **Release readiness** checks workspace versions, changelog, README badge, build outputs, and optional GitHub tag/release state:
+- **Release readiness** checks workspace versions, changelog, README badge, build outputs, candidate-bound packaged macOS evidence, documentation-media freshness, and optional GitHub tag/release state:
 
   ```bash
-  pnpm validate:release
-  pnpm validate:release -- --github
+  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/publication.json
+  pnpm validate:release -- --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/publication.json --github
   ```
+
+  Capture media once from the verified release build, commit those exact files in a docs-only publication commit, then generate `publication.json` with `pnpm docs:verify-media`. The publication manifest preserves the original capture manifest and build identity; it is not a second recording. Any intervening application change requires a new build and capture. Use `--source-only` for source preflight before packaging. It cannot establish release acceptance. See [desktop release verification](docs/DESKTOP-RELEASE.md#native-gate-before-macos-upload) for evidence capture and the remaining signing, installation, media, and publication gates.
 
 - Write tests for new features and bug fixes.
 - Ensure existing tests pass before submitting.

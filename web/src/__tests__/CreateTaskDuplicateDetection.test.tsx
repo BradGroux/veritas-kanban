@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { api } from '@/lib/api';
 import { renderWithProviders } from './test-utils';
+import { PartialBlueprintCreationError } from '@/hooks/useTemplateForm';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -31,21 +32,34 @@ vi.mock('@/hooks/useConfig', () => ({
   useConfig: () => ({ data: { agents: [] } }),
 }));
 
-vi.mock('@/hooks/useTemplateForm', () => ({
-  useTemplateForm: () => ({
-    selectedTemplate: null,
-    templates: [],
-    subtasks: [],
-    customVars: {},
-    requiredCustomVars: [],
-    applyTemplate: vi.fn(),
-    clearTemplate: vi.fn(),
-    removeSubtask: vi.fn(),
-    setCustomVars: vi.fn(),
-    createTasks: vi.fn(),
-    isCreating: false,
-  }),
+const templateFormMocks = vi.hoisted(() => ({
+  createTasks: vi.fn(),
+  clearTemplate: vi.fn(),
+  selectedTemplate: null as string | null,
+  templates: [] as Array<Record<string, unknown>>,
+  customVars: {} as Record<string, string>,
+  requiredCustomVars: [] as string[],
 }));
+
+vi.mock('@/hooks/useTemplateForm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useTemplateForm')>();
+  return {
+    ...actual,
+    useTemplateForm: () => ({
+      selectedTemplate: templateFormMocks.selectedTemplate,
+      templates: templateFormMocks.templates,
+      subtasks: [],
+      customVars: templateFormMocks.customVars,
+      requiredCustomVars: templateFormMocks.requiredCustomVars,
+      applyTemplate: vi.fn(),
+      clearTemplate: templateFormMocks.clearTemplate,
+      removeSubtask: vi.fn(),
+      setCustomVars: vi.fn(),
+      createTasks: templateFormMocks.createTasks,
+      isCreating: false,
+    }),
+  };
+});
 
 const navigateToTaskMock = vi.fn();
 
@@ -61,6 +75,12 @@ describe('CreateTaskDialog duplicate detection', () => {
   beforeEach(() => {
     queryMock.mockReset();
     navigateToTaskMock.mockReset();
+    templateFormMocks.createTasks.mockReset();
+    templateFormMocks.clearTemplate.mockReset();
+    templateFormMocks.selectedTemplate = null;
+    templateFormMocks.templates = [];
+    templateFormMocks.customVars = {};
+    templateFormMocks.requiredCustomVars = [];
   });
 
   afterEach(() => {
@@ -173,5 +193,92 @@ describe('CreateTaskDialog duplicate detection', () => {
 
     expect(await screen.findByText(/Duplicate search is unavailable/i)).toBeDefined();
     expect(screen.queryByText(/spawn qmd ENOENT/i)).toBeNull();
+  });
+
+  it('retains creation ownership through failure and deliberate retry', async () => {
+    let rejectRequest!: (error: Error) => void;
+    const pendingRequest = new Promise<void>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    templateFormMocks.createTasks
+      .mockReturnValueOnce(pendingRequest)
+      .mockResolvedValueOnce(undefined);
+
+    const onOpenChange = vi.fn();
+    renderWithProviders(<CreateTaskDialog open onOpenChange={onOpenChange} />);
+
+    const title = screen.getByLabelText('Title') as HTMLInputElement;
+    fireEvent.change(title, { target: { value: 'Retain this complete draft' } });
+
+    const submit = screen.getByRole('button', { name: 'Create Task' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+
+    expect(templateFormMocks.createTasks).toHaveBeenCalledTimes(1);
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Close dialog' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(title.matches(':disabled')).toBe(true);
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await act(async () => rejectRequest(new Error('Fixture task creation failed')));
+    const error = await screen.findByRole('alert', { name: 'Task not created' });
+    await waitFor(() => expect(document.activeElement).toBe(error));
+    expect(error.textContent).toContain('Fixture task creation failed');
+    expect(title.value).toBe('Retain this complete draft');
+    expect(title.matches(':disabled')).toBe(false);
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    fireEvent.click(submit);
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false));
+    expect(templateFormMocks.createTasks).toHaveBeenCalledTimes(2);
+    expect(templateFormMocks.clearTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks blueprint variables while pending and blocks blind retry after partial creation', async () => {
+    let rejectRequest!: (error: Error) => void;
+    const pendingRequest = new Promise<void>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    templateFormMocks.selectedTemplate = 'release-blueprint';
+    templateFormMocks.templates = [
+      {
+        id: 'release-blueprint',
+        name: 'Release blueprint',
+        version: 1,
+        taskDefaults: {},
+        blueprint: [
+          { refId: 'build', title: 'Build release', taskDefaults: {} },
+          { refId: 'publish', title: 'Publish release', taskDefaults: {} },
+        ],
+        created: '2026-09-04T00:00:00.000Z',
+        updated: '2026-09-04T00:00:00.000Z',
+      },
+    ];
+    templateFormMocks.customVars = { channel: 'stable' };
+    templateFormMocks.requiredCustomVars = ['channel'];
+    templateFormMocks.createTasks.mockReturnValueOnce(pendingRequest);
+
+    renderWithProviders(<CreateTaskDialog open onOpenChange={vi.fn()} />);
+
+    const variable = screen.getByLabelText('channel') as HTMLInputElement;
+    const submit = screen.getByRole('button', { name: 'Create Tasks' }) as HTMLButtonElement;
+    fireEvent.click(submit);
+    expect(variable.disabled).toBe(true);
+
+    await act(async () => rejectRequest(new PartialBlueprintCreationError(1, 2)));
+    const error = await screen.findByRole('alert', { name: 'Task not created' });
+    expect(error.textContent).toContain('1 of 2 blueprint tasks were created');
+    expect(variable.disabled).toBe(false);
+    expect(submit.disabled).toBe(true);
+    fireEvent.submit(submit.closest('form') as HTMLFormElement);
+    expect(templateFormMocks.createTasks).toHaveBeenCalledTimes(1);
   });
 });

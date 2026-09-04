@@ -260,6 +260,77 @@ describe('layout chrome Mantine migration', () => {
     expect(container.querySelector('.mantine-Button-root')).toBeNull();
   });
 
+  it.each([false, true])(
+    'dismisses Session menu with Escape from its trigger (compact=%s)',
+    async (compact) => {
+      const user = userEvent.setup();
+      renderWithProviders(<UserMenu compact={compact} />);
+      const trigger = screen.getByRole('button', { name: 'Session menu' });
+      await user.click(trigger);
+      expect(screen.getByRole('dialog')).toBeDefined();
+      expect(document.activeElement).toBe(trigger);
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(document.activeElement).toBe(trigger);
+    }
+  );
+
+  it('returns focus on content Escape without stealing focus on click-away or action handoff', async () => {
+    const user = userEvent.setup();
+    const onOpenSecuritySettings = vi.fn();
+    const onOpenIdentitySettings = vi.fn();
+    renderWithProviders(
+      <>
+        <button>Outside</button>
+        <UserMenu
+          onOpenSecuritySettings={onOpenSecuritySettings}
+          onOpenIdentitySettings={onOpenIdentitySettings}
+        />
+      </>
+    );
+    const trigger = screen.getByRole('button', { name: 'Session menu' });
+    await user.click(trigger);
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Members & Permissions' })
+    );
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+
+    await user.click(trigger);
+    await user.click(trigger);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Outside' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Outside' }));
+
+    for (const [name, callback] of [
+      ['Security Settings', onOpenSecuritySettings],
+      ['Members & Permissions', onOpenIdentitySettings],
+    ] as const) {
+      await user.click(trigger);
+      await user.click(screen.getByRole('button', { name }));
+      expect(callback).toHaveBeenCalledOnce();
+      expect(screen.queryByRole('dialog')).toBeNull();
+    }
+  });
+
+  it('lets nested content consume Escape before dismissing the Session menu', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<UserMenu />);
+    await user.click(screen.getByRole('button', { name: 'Session menu' }));
+    const item = screen.getByRole('button', { name: 'Members & Permissions' });
+    item.addEventListener('keydown', (event) => event.preventDefault(), { once: true });
+    item.focus();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(document.activeElement).toBe(item);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
   it('renders WebSocket status with a direct Mantine popover', async () => {
     const user = userEvent.setup();
     const { baseElement } = renderWithProviders(<WebSocketIndicator />);

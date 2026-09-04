@@ -8,8 +8,8 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Badge, Button, Group, Loader, Modal, Paper, ScrollArea, Stack, Text } from '@mantine/core';
-import { useMediaQuery } from '@mantine/hooks';
+import { Badge, Button, Group, Loader, Paper, Stack, Text } from '@mantine/core';
+import { UiModal as Modal } from '@/components/ui/UiOverlay';
 import { Play, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { useIdentity } from '@/hooks/useIdentity';
@@ -142,32 +142,42 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadRevision, setLoadRevision] = useState(0);
   const [isStarting, setIsStarting] = useState<string | null>(null);
+  const startInFlight = useRef(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const ownsHistoryEntryRef = useRef(false);
   const { toast } = useToast();
   const { hasPermission } = useIdentity();
-  const isMobile = useMediaQuery('(max-width: 767px)', false);
   const canExecuteWorkflows = hasPermission('workflow:execute');
   const historyId = `${task.id}:workflow`;
 
   useEffect(() => {
+    if (startError) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [startError]);
+
+  useEffect(() => {
     if (!open) return;
+    const workflowState = {
+      ...(window.history.state && typeof window.history.state === 'object'
+        ? window.history.state
+        : {}),
+      [TASK_WORKFLOW_HISTORY_KEY]: historyId,
+    };
+    const workflowUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (workflowHistoryId() !== historyId) {
-      const nextState = {
-        ...(window.history.state && typeof window.history.state === 'object'
-          ? window.history.state
-          : {}),
-        [TASK_WORKFLOW_HISTORY_KEY]: historyId,
-      };
-      window.history.pushState(
-        nextState,
-        '',
-        `${window.location.pathname}${window.location.search}${window.location.hash}`
-      );
+      window.history.pushState(workflowState, '', workflowUrl);
     }
     ownsHistoryEntryRef.current = true;
 
     const handlePopState = () => {
       if (!ownsHistoryEntryRef.current || workflowHistoryId() === historyId) return;
+      if (startInFlight.current) {
+        window.history.pushState(workflowState, '', workflowUrl);
+        return;
+      }
       ownsHistoryEntryRef.current = false;
       onOpenChange(false);
     };
@@ -176,6 +186,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   }, [historyId, onOpenChange, open]);
 
   const handleClose = () => {
+    if (startInFlight.current) return;
     if (ownsHistoryEntryRef.current && workflowHistoryId() === historyId) {
       window.history.back();
       return;
@@ -190,6 +201,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
     const fetchData = async () => {
       setIsLoading(true);
       setLoadError(null);
+      setStartError(null);
       setWorkflows([]);
       setActiveRuns([]);
       setRecommendationsByWorkflow({});
@@ -243,7 +255,10 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
   }, [loadRevision, open, task.id, task.project, task.type, task.git?.worktreePath]);
 
   const handleStartWorkflow = async (workflowId: string) => {
+    if (startInFlight.current || !canExecuteWorkflows) return;
+    startInFlight.current = true;
     setIsStarting(workflowId);
+    setStartError(null);
     try {
       const run = await workflowsApi.startRun(workflowId, { taskId: task.id });
       toast({
@@ -254,28 +269,24 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
       // Add to active runs
       setActiveRuns((previousRuns) => [...previousRuns, run]);
     } catch (error) {
-      toast({
-        title: '❌ Failed to start workflow run',
-        description: error instanceof Error ? error.message : 'Unknown error',
-      });
+      setStartError(error instanceof Error ? error.message : 'Unable to start workflow run.');
     } finally {
+      startInFlight.current = false;
       setIsStarting(null);
     }
   };
 
   return (
-    <Modal
-      opened={open}
-      onClose={handleClose}
-      title="Run Workflow"
-      centered
-      size="xl"
-      fullScreen={isMobile}
-    >
+    <Modal opened={open} onClose={handleClose} title="Run Workflow" centered variant="authoring">
       <Stack gap="md">
         <Text size="sm" c="dimmed">
           Select a workflow to run against this task
         </Text>
+        {startError && (
+          <Text ref={errorRef} role="alert" tabIndex={-1} size="sm" c="red">
+            {startError}
+          </Text>
+        )}
 
         {isLoading ? (
           <Group justify="center" className="py-12">
@@ -300,7 +311,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
             </Stack>
           </Paper>
         ) : (
-          <ScrollArea.Autosize mah="65vh" type="auto">
+          <>
             <Stack gap="lg">
               {/* Active Runs */}
               {activeRuns.length > 0 && (
@@ -377,7 +388,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                         <Button
                           size="sm"
                           onClick={() => handleStartWorkflow(workflow.id)}
-                          disabled={!canExecuteWorkflows || isStarting === workflow.id}
+                          disabled={!canExecuteWorkflows || isStarting !== null}
                           title={
                             canExecuteWorkflows
                               ? 'Start run'
@@ -399,7 +410,7 @@ export function WorkflowSection({ task, open, onOpenChange }: WorkflowSectionPro
                 )}
               </Stack>
             </Stack>
-          </ScrollArea.Autosize>
+          </>
         )}
       </Stack>
     </Modal>

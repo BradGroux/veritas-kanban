@@ -36,6 +36,10 @@ If applicable, add screenshots to help explain your problem.
 - **Browser:** [e.g., Chrome 120, Safari 17]
 - **Veritas Kanban version:** [e.g., 4.0.1]
 
+## Desktop verification boundary
+
+For desktop UI reports, identify what was actually tested: browser, packaged macOS candidate, or installed macOS app. Include the app build/commit, package version, theme, window size, and screenshot or native evidence path when available. Browser screenshots or a simulated desktop bridge do not prove packaged or installed behavior. Record blocked verification explicitly; it is not a passing result.
+
 ## Additional Context
 
 Add any other context about the problem here.
