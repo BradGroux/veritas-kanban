@@ -190,6 +190,15 @@ const reviewCommentSchema = z.object({
 
 export const reviewScoresSchema = z.array(z.number().int().min(0).max(10)).length(4);
 
+const subtaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  completed: z.boolean(),
+  created: z.string(),
+  acceptanceCriteria: z.array(z.string()).optional(),
+  criteriaChecked: z.array(z.boolean()).optional(),
+});
+
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional().default(''),
@@ -202,6 +211,8 @@ const createTaskSchema = z.object({
   executionPolicy: TaskExecutionPolicySchema.optional(),
   reviewScores: reviewScoresSchema.optional(),
   reviewComments: z.array(reviewCommentSchema).optional(),
+  subtasks: z.array(subtaskSchema).optional(),
+  blockedBy: z.array(z.string()).optional(),
 });
 
 const gitSchema = z
@@ -330,15 +341,6 @@ const reviewStateSchema = z.object({
   decision: z.enum(['approved', 'changes-requested', 'rejected']).optional(),
   decidedAt: z.string().optional(),
   summary: z.string().optional(),
-});
-
-const subtaskSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  completed: z.boolean(),
-  created: z.string(),
-  acceptanceCriteria: z.array(z.string()).optional(),
-  criteriaChecked: z.array(z.boolean()).optional(),
 });
 
 const githubSchema = z

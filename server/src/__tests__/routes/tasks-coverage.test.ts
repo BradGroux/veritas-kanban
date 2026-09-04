@@ -470,6 +470,57 @@ describe('Tasks Routes (actual module)', () => {
   });
 
   describe('POST /api/tasks', () => {
+    it('preserves template subtasks and blueprint dependencies on creation', async () => {
+      const subtasks = [
+        {
+          id: 'subtask-1',
+          title: 'Verify release',
+          completed: false,
+          created: '2026-09-01T12:00:00Z',
+          acceptanceCriteria: ['Evidence recorded'],
+          criteriaChecked: [false],
+        },
+      ];
+      const blockedBy = ['prerequisite-task'];
+      mockTaskService.createTask.mockImplementation(async (input) => ({
+        id: 'blueprint-task',
+        ...input,
+      }));
+      const res = await request(app).post('/api/tasks').send({
+        title: 'Blueprint follow-up',
+        subtasks,
+        blockedBy,
+      });
+      expect(res.status).toBe(201);
+      expect(mockTaskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ subtasks, blockedBy })
+      );
+      expect(res.body.subtasks).toEqual(subtasks);
+      expect(res.body.blockedBy).toEqual(blockedBy);
+    });
+
+    it.each([
+      { subtasks: [{ id: 'bad', title: 'Missing required fields' }] },
+      {
+        subtasks: [
+          {
+            id: 'bad',
+            title: 'Bad criteria',
+            completed: false,
+            created: '2026-09-01',
+            acceptanceCriteria: [42],
+          },
+        ],
+      },
+      { blockedBy: [42] },
+    ])('rejects malformed template task fields: %j', async (fields) => {
+      const res = await request(app)
+        .post('/api/tasks')
+        .send({ title: 'Invalid blueprint', ...fields });
+      expect(res.status).toBe(400);
+      expect(mockTaskService.createTask).not.toHaveBeenCalled();
+    });
+
     it('accepts critical priority on creation', async () => {
       mockTaskService.createTask.mockImplementation(async (input) => ({
         id: 'critical-task',
