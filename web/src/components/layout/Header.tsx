@@ -488,9 +488,11 @@ export function Header() {
               </Button>
             )}
             {!isDesktopClient && (
-              <Group gap={4} wrap="nowrap" className="hidden xl:flex">
-                {PRIMARY_NAVIGATION_VIEWS.map(renderNavigationAction)}
-              </Group>
+              <div className="hidden xl:block">
+                <Group gap={4} wrap="nowrap">
+                  {PRIMARY_NAVIGATION_VIEWS.map(renderNavigationAction)}
+                </Group>
+              </div>
             )}
             <Menu position="bottom-end" shadow="md" withinPortal>
               <Menu.Target>
