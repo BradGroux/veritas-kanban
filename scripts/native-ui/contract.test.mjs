@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  contentSizes,
   evidenceFailures,
   geometryFailures,
   modes,
@@ -22,6 +23,14 @@ import path from 'node:path';
 const commit = 'a'.repeat(40);
 const digest = 'b'.repeat(64);
 const now = Date.now();
+test('native content sizes fit the hosted macOS runner while retaining expanded width', () => {
+  assert.deepEqual(contentSizes, {
+    normal: { width: 1700, height: 760 },
+    minimum: { width: 1180, height: 760 },
+  });
+  assert.equal(modes.length, 4);
+  assert(modes.every((mode) => mode.height === 760));
+});
 test('bundle identity includes web resources and rejects external symlinks', async (t) => {
   const fixture = await mkdtemp(path.join(os.tmpdir(), 'native-ui-contract-'));
   t.after(() => rm(fixture, { recursive: true, force: true }));

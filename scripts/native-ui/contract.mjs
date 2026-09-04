@@ -35,9 +35,15 @@ export const settingsSections = [
   'Security',
   'Maintenance',
 ];
+export const contentSizes = {
+  // Hosted macOS runners expose only 760px of usable content height. Keep the
+  // expanded width while using a height the native window manager can honor.
+  normal: { width: 1700, height: 760 },
+  minimum: { width: 1180, height: 760 },
+};
 export const modes = ['light', 'dark'].flatMap((theme) => [
-  { id: `${theme}-normal`, theme, width: 1700, height: 1000 },
-  { id: `${theme}-minimum`, theme, width: 1180, height: 760 },
+  { id: `${theme}-normal`, theme, ...contentSizes.normal },
+  { id: `${theme}-minimum`, theme, ...contentSizes.minimum },
 ]);
 // The runner cannot reduce this list when a scenario fails or is not implemented.
 export const states = [
