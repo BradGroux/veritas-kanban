@@ -1,6 +1,6 @@
 # Shared chat surface: implementation checkpoint
 
-Issue: #1386. This implementation is stacked on the responsive task shell in #1421. Scoped packaged macOS checks are recorded below; full acceptance remains open and this checkpoint does not close #1386.
+Issue: #1386. This implementation builds on the merged responsive task shell in #1421. Packaged macOS interaction acceptance is recorded below; the separate whole-app conformance, media, installed-app, and release gates remain open.
 
 ## Behavior
 
@@ -28,4 +28,8 @@ An additional packaged native scenario passed in both themes at 1180×760. It he
 
 ## Acceptance still required
 
-Complete explicit expanded-presentation and scroll/attempt/event-selection checks and stable final visual inspection. Refresh maintained documentation media only from the final accepted UI under #1388, then verify the installed application. Keep #1386 open until all its acceptance evidence exists.
+The explicit expanded-presentation checks subsequently passed in both themes. Plan/Details selection and a nonzero task scroll position survived expansion, chat close/reopen, and return to drawer presentation. A separate native search-result scenario opened an older attempt and highlighted prompt event, expanded Task Chat, changed to the 1180×760 window with 20px text, and closed chat. The same attempt, highlighted event content, and History section remained selected. Two test-harness details were corrected to match the real API and accessibility surface: search uses `/api/search`, and Attempt is a combobox. No production change was required.
+
+Expanded captures were inspected in light/dark: the task and chat meet at a defined boundary, empty-state art is unclipped, and the complete composer stays within the panel. These are diagnostic captures with synthetic timeline data, not final documentation media. Together with the prior Board/Squad, focus, draft, pending-edit, and cross-task checks, this completes the interaction acceptance for this shared-chat slice.
+
+Whole-app conformance and final installed-app verification remain under #1387/#1389. Refresh all maintained documentation media from the final accepted UI under #1388. This slice does not complete those gates or the remaining task-content and overlay migrations.
