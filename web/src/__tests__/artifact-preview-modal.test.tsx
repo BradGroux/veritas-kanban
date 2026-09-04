@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { WorkProductArtifactPreview } from '@veritas-kanban/shared';
+import {
+  WORK_PRODUCT_HTML_PREVIEW_CSP,
+  type WorkProductArtifactPreview,
+} from '@veritas-kanban/shared';
 import { ArtifactPreviewModal } from '@/components/task/ArtifactPreviewModal';
 import { renderWithProviders } from './test-utils';
 
@@ -200,6 +203,119 @@ describe('ArtifactPreviewModal', () => {
     await waitFor(() =>
       expect(mocks.recordPreviewAudit).toHaveBeenCalledWith('wp_html', 'close', 2)
     );
+  });
+
+  it('serializes causal navigation against refresh until its audit settles', async () => {
+    mocks.previewArtifact.mockResolvedValue(
+      preview(
+        {
+          kind: 'html',
+          document: '<h1>Report</h1>',
+          interactive: false,
+          contentSecurityPolicy: WORK_PRODUCT_HTML_PREVIEW_CSP,
+          sandbox: '',
+        },
+        'html'
+      )
+    );
+    let finishNavigation!: () => void;
+    mocks.recordPreviewAudit.mockImplementation((_id, action) =>
+      action === 'navigate'
+        ? new Promise<void>((resolve) => {
+            finishNavigation = resolve;
+          })
+        : Promise.resolve()
+    );
+    const onClose = vi.fn();
+    renderWithProviders(<ArtifactPreviewModal opened productId="wp_navigate" onClose={onClose} />);
+    await screen.findByTitle('preview.bin HTML preview');
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Causal event' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    });
+    expect((screen.getByRole('button', { name: 'Refresh' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect(
+      mocks.recordPreviewAudit.mock.calls.filter((call) => call[1] === 'refresh')
+    ).toHaveLength(0);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mocks.navigateToTask).not.toHaveBeenCalled();
+    await act(async () => {
+      finishNavigation();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mocks.navigateToTask).toHaveBeenCalledWith('task_preview', {
+      tab: 'timeline',
+      timelineAttemptId: 'attempt_preview',
+      timelineEventId: 'event_preview',
+    });
+    expect(mocks.previewArtifact).toHaveBeenCalledTimes(1);
+  });
+
+  it('owns refresh through audit and refetch, retaining the dialog on failure', async () => {
+    const response = preview(
+      {
+        kind: 'html',
+        document: '<h1>Report</h1>',
+        interactive: false,
+        contentSecurityPolicy: WORK_PRODUCT_HTML_PREVIEW_CSP,
+        sandbox: '',
+      },
+      'html'
+    );
+    let finishAudit!: () => void;
+    let failRefresh!: (error: Error) => void;
+    mocks.recordPreviewAudit.mockImplementation((_id, action) =>
+      action === 'refresh'
+        ? new Promise<void>((resolve) => {
+            finishAudit = resolve;
+          })
+        : Promise.resolve()
+    );
+    mocks.previewArtifact
+      .mockResolvedValueOnce(response)
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            failRefresh = reject;
+          })
+      )
+      .mockResolvedValue(response);
+    const onClose = vi.fn();
+    renderWithProviders(<ArtifactPreviewModal opened productId="wp_refresh" onClose={onClose} />);
+    await screen.findByTitle('preview.bin HTML preview');
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    act(() => {
+      fireEvent.click(refresh);
+      fireEvent.click(refresh);
+    });
+    expect((refresh as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      mocks.recordPreviewAudit.mock.calls.filter((call) => call[1] === 'refresh')
+    ).toHaveLength(1);
+    expect(mocks.previewArtifact).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => {
+      finishAudit();
+    });
+    await waitFor(() => expect(mocks.previewArtifact).toHaveBeenCalledTimes(2));
+    expect((refresh as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      failRefresh(new Error('Preview service unavailable'));
+    });
+    expect(await screen.findByText('Preview service unavailable')).toBeDefined();
+    await waitFor(() => expect((refresh as HTMLButtonElement).disabled).toBe(false));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(refresh);
+    await act(async () => {
+      finishAudit();
+    });
+    await waitFor(() => expect(mocks.previewArtifact).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByText('Preview service unavailable')).toBeNull());
   });
 });
 

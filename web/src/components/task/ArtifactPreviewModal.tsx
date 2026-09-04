@@ -41,6 +41,8 @@ export function ArtifactPreviewModal({
 }: ArtifactPreviewModalProps) {
   const { navigateToTask } = useView();
   const [zoom, setZoom] = useState(1);
+  const [pendingOperation, setPendingOperation] = useState<'refresh' | 'navigate' | null>(null);
+  const operationPending = useRef(false);
   const query = useQuery({
     queryKey: ['work-products', 'artifact-preview', productId, version],
     queryFn: () => workProductsApi.previewArtifact(productId as string, version),
@@ -86,40 +88,57 @@ export function ArtifactPreviewModal({
   };
 
   const openCausalEvent = async () => {
-    if (!preview?.causalEvent) return;
+    if (!preview?.causalEvent || operationPending.current) return;
     const event = preview.causalEvent;
-    if (productId && preview.renderer === 'html') {
-      await workProductsApi
-        .recordPreviewAudit(productId, 'navigate', preview.artifact?.version ?? version)
-        .catch(() => {});
+    operationPending.current = true;
+    setPendingOperation('navigate');
+    try {
+      if (productId && preview.renderer === 'html') {
+        await workProductsApi
+          .recordPreviewAudit(productId, 'navigate', preview.artifact?.version ?? version)
+          .catch(() => {});
+      }
+      onClose();
+      navigateToTask(event.taskId, {
+        tab: 'timeline',
+        timelineAttemptId: event.attemptId,
+        timelineEventId: event.eventId,
+      });
+    } finally {
+      operationPending.current = false;
+      setPendingOperation(null);
     }
-    onClose();
-    navigateToTask(event.taskId, {
-      tab: 'timeline',
-      timelineAttemptId: event.attemptId,
-      timelineEventId: event.eventId,
-    });
   };
 
   const refreshPreview = async () => {
-    if (!productId || preview?.renderer !== 'html') return;
-    await workProductsApi
-      .recordPreviewAudit(productId, 'refresh', preview.artifact?.version ?? version)
-      .catch(() => {});
-    await query.refetch();
+    if (!productId || preview?.renderer !== 'html' || operationPending.current) return;
+    operationPending.current = true;
+    setPendingOperation('refresh');
+    try {
+      await workProductsApi
+        .recordPreviewAudit(productId, 'refresh', preview.artifact?.version ?? version)
+        .catch(() => {});
+      await query.refetch();
+    } finally {
+      operationPending.current = false;
+      setPendingOperation(null);
+    }
   };
 
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={() => {
+        if (!operationPending.current) onClose();
+      }}
+      closeButtonProps={{ disabled: pendingOperation !== null }}
       title={title ? `Preview: ${title}` : 'Artifact preview'}
       variant="authoring"
       compound
       centered
       returnFocus
     >
-      <Stack gap="md" aria-live="polite" className="vk-overlay-scroll">
+      <Stack gap="md" aria-live="polite" className="vk-overlay-scroll [&>*]:shrink-0">
         {query.isLoading && (
           <Group gap="xs">
             <Loader size="sm" />
@@ -160,6 +179,8 @@ export function ArtifactPreviewModal({
                 size="xs"
                 leftSection={<RefreshCw className="h-3 w-3" />}
                 onClick={refreshPreview}
+                disabled={pendingOperation !== null}
+                loading={pendingOperation === 'refresh'}
               >
                 Refresh
               </Button>
@@ -197,6 +218,8 @@ export function ArtifactPreviewModal({
                 size="xs"
                 leftSection={<ExternalLink className="h-3 w-3" />}
                 onClick={openCausalEvent}
+                disabled={pendingOperation !== null}
+                loading={pendingOperation === 'navigate'}
               >
                 Causal event
               </Button>
