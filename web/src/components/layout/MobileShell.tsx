@@ -12,8 +12,13 @@ function scrollToBoardColumns() {
   // at activation so enlarged text and responsive chrome use their real size.
   const toolbarHeight =
     document.querySelector('.desktop-app-header')?.getBoundingClientRect().height ?? 0;
+  // Browsers can round fractional scroll offsets up. Keep the column edge on
+  // the visible side of the toolbar when enlarged text yields subpixel sizes.
   window.scrollTo({
-    top: Math.max(0, window.scrollY + columns.getBoundingClientRect().top - toolbarHeight),
+    top: Math.max(
+      0,
+      Math.floor(window.scrollY + columns.getBoundingClientRect().top - toolbarHeight)
+    ),
     behavior: 'instant',
   });
   return true;
