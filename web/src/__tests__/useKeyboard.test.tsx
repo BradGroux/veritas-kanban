@@ -263,6 +263,22 @@ describe('KeyboardProvider', () => {
     expect(screen.getByTestId('selected').textContent).toBe('none');
   });
 
+  it('leaves Escape to a visible modal when pending controls lose focus', () => {
+    const tasks = [createMockTask({ id: 'pending', title: 'Pending task', status: 'todo' })];
+    const { container } = renderWithProvider({ tasks });
+    fireEvent.keyDown(window, { key: 'j' });
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    container.appendChild(dialog);
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByTestId('selected').textContent).toBe('pending');
+
+    dialog.style.display = 'none';
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByTestId('selected').textContent).toBe('none');
+  });
+
   it.each(['button', 'a', 'select', 'summary'])(
     'preserves native Enter behavior on a focused %s',
     (tag) => {

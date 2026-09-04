@@ -1,6 +1,6 @@
 import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction } from '@/components/ui/UiVocabulary';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Badge, Box, Button, Group, Paper, Stack, Text, Textarea } from '@mantine/core';
 import { tasksApi } from '@/lib/api/tasks';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
@@ -39,10 +39,24 @@ export function TaskDetailsTab({
   const markdownSettings = featureSettings.markdown;
   const markdownEnabled = markdownSettings?.enableMarkdown ?? true;
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletionInFlight = useRef(false);
+  const closeDeleteDialog = () => {
+    if (!deletionInFlight.current) setDeleteConfirmOpen(false);
+  };
 
   const handleDelete = async () => {
-    await deleteTask.mutateAsync(task.id);
-    onClose();
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleteError(false);
+    try {
+      await deleteTask.mutateAsync(task.id);
+      onClose();
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletionInFlight.current = false;
+    }
   };
 
   const handleArchive = async () => {
@@ -257,18 +271,23 @@ export function TaskDetailsTab({
         variant="confirm"
         compound
         opened={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete this task?"
         centered
       >
         <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this task. Try again.
+            </Text>
+          )}
           <Text size="sm">This will permanently delete "{task.title}".</Text>
         </div>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setDeleteConfirmOpen(false)}>
+          <UiAction variant="quiet" disabled={deleteTask.isPending} onClick={closeDeleteDialog}>
             Cancel
           </UiAction>
-          <UiAction variant="destructive" onClick={handleDelete}>
+          <UiAction variant="destructive" loading={deleteTask.isPending} onClick={handleDelete}>
             Delete
           </UiAction>
         </OverlayFooter>

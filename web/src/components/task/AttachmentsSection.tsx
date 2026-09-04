@@ -56,14 +56,28 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
   const [extractedText, setExtractedText] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletionInFlight = useRef(false);
+  const closeDeleteDialog = () => {
+    if (!deletionInFlight.current) setDeleteDialogOpen(false);
+  };
   const deleteAttachment = useDeleteAttachment();
 
   const isImage = attachment.mimeType.startsWith('image/');
   const isDocument = !isImage;
 
   const handleDelete = async () => {
-    await deleteAttachment.mutateAsync({ taskId, attachmentId: attachment.id });
-    setDeleteDialogOpen(false);
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleteError(false);
+    try {
+      await deleteAttachment.mutateAsync({ taskId, attachmentId: attachment.id });
+      setDeleteDialogOpen(false);
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletionInFlight.current = false;
+    }
   };
 
   const handleToggleExpand = async () => {
@@ -164,17 +178,26 @@ function AttachmentItem({ taskId, attachment }: { taskId: string; attachment: At
         variant="confirm"
         compound
         opened={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={closeDeleteDialog}
         title="Delete attachment?"
         centered
       >
         <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this attachment. Try again.
+            </Text>
+          )}
           <Text size="sm" c="dimmed">
             This will permanently delete "{attachment.originalName}". This action cannot be undone.
           </Text>
         </div>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+          <UiAction
+            variant="quiet"
+            disabled={deleteAttachment.isPending}
+            onClick={closeDeleteDialog}
+          >
             Cancel
           </UiAction>
           <UiAction

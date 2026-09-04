@@ -73,6 +73,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [durationInput, setDurationInput] = useState('');
   const [descriptionInput, setDescriptionInput] = useState('');
+  const [addError, setAddError] = useState(false);
 
   // Reset when a different task is opened
   const taskIdRef = useRef(task.id);
@@ -125,6 +126,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
     const seconds = parseDuration(durationInput);
     if (!seconds || busy) return;
     setBusy(true);
+    setAddError(false);
     try {
       const result = await api.time.addEntry(task.id, seconds, descriptionInput || undefined);
       setTimeTracking(result.timeTracking);
@@ -133,6 +135,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
       setDescriptionInput('');
       setAddDialogOpen(false);
     } catch (err) {
+      setAddError(true);
       console.warn('[TimeTracking] add entry failed:', err);
     } finally {
       setBusy(false);
@@ -244,11 +247,18 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
         <Modal
           compound
           opened={addDialogOpen}
-          onClose={() => setAddDialogOpen(false)}
+          onClose={() => {
+            if (!busy) setAddDialogOpen(false);
+          }}
           title="Add Time Entry"
           centered
         >
           <Stack gap="md" className="vk-overlay-scroll">
+            {addError && (
+              <Text role="alert" size="sm" c="red">
+                Could not add time. Your draft is preserved. Try again.
+              </Text>
+            )}
             <Text size="sm" c="dimmed">
               Manually add time spent on this task.
             </Text>
@@ -258,6 +268,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
               </Text>
               <TextInput
                 id="duration"
+                disabled={busy}
                 value={durationInput}
                 onChange={(e) => setDurationInput(e.currentTarget.value)}
                 placeholder="e.g., 1h 30m or 45m or 30"
@@ -272,6 +283,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
               </Text>
               <TextInput
                 id="description"
+                disabled={busy}
                 value={descriptionInput}
                 onChange={(e) => setDescriptionInput(e.currentTarget.value)}
                 placeholder="What did you work on?"
@@ -279,7 +291,7 @@ export function TimeTrackingSection({ task }: TimeTrackingSectionProps) {
             </Stack>
           </Stack>
           <OverlayFooter>
-            <UiAction variant="quiet" onClick={() => setAddDialogOpen(false)}>
+            <UiAction variant="quiet" disabled={busy} onClick={() => setAddDialogOpen(false)}>
               Cancel
             </UiAction>
             <UiAction

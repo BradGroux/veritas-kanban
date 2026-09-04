@@ -66,10 +66,21 @@ function ObservationItem({
   onDelete: (observationId: string) => Promise<void>;
 }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
 
   const handleDelete = async () => {
-    await onDelete(observation.id);
-    setDeleteDialogOpen(false);
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(false);
+    try {
+      await onDelete(observation.id);
+      setDeleteDialogOpen(false);
+    } catch {
+      setDeleteError(true);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -120,21 +131,29 @@ function ObservationItem({
         variant="confirm"
         compound
         opened={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={() => {
+          if (!deleting) setDeleteDialogOpen(false);
+        }}
         title="Delete Observation"
         centered
       >
         <div className="vk-overlay-scroll">
+          {deleteError && (
+            <Text role="alert" size="sm" c="red">
+              Could not delete this observation. Try again.
+            </Text>
+          )}
           <Text size="sm" c="dimmed">
             Are you sure you want to delete this observation? This action cannot be undone.
           </Text>
         </div>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setDeleteDialogOpen(false)}>
+          <UiAction variant="quiet" disabled={deleting} onClick={() => setDeleteDialogOpen(false)}>
             Cancel
           </UiAction>
           <UiAction
             variant="destructive"
+            loading={deleting}
             onClick={() => {
               void handleDelete();
             }}
