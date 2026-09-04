@@ -12,6 +12,10 @@ The new browser regression passes in both themes at 1180×760 with 16px text and
 
 The first unit run required building the shared package in the fresh worktree. The first browser run used a workspace import unavailable from the root test package; it now imports the built shared module by repository-relative path. Both were setup issues, not passing acceptance evidence.
 
-## Remaining acceptance
+## Packaged macOS verification
 
-Rebuild the packaged macOS candidate with this change and inspect the same real dialog family at native normal/minimum sizes in both themes. Until that passes, this slice remains unaccepted. Installed-app replacement, other overlay families, final documentation images/GIFs, and release remain separate unfinished requirements.
+Unsigned candidate `bda76b05` was rebuilt with `pnpm desktop:package:mac:dir`. The harness verified `app.isPackaged`, version 6.1.6, and an isolated temporary user-data directory. All five real dialog flows passed in both themes at 1700×900 with 16px text and native minimum 1180×760 with 20px text. Initial focus, footer visibility, viewport bounds, no dialog horizontal overflow, Escape, exact opener restoration, and document-height containment passed. Destructive requests were intercepted and asserted absent. Captures of each dialog family were inspected for padding, action placement, and wrapping.
+
+The inspection also found an independent overflow in the underlying archive-suggestion banner when a sprint name is long and unbroken. That banner can horizontally pan the Board even though the confirmation dialog remains bounded. It is a separate follow-up, not covered by this modal-only acceptance.
+
+Installed-app replacement, other overlay families, final documentation images/GIFs, and release remain unfinished requirements. These diagnostic captures are not the final documentation media refresh.
