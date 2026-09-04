@@ -38,6 +38,14 @@ for (const theme of ['light', 'dark']) {
       }, viewport.font);
       await opener.click();
       await settings.getByRole('tab', { name: 'Shared Resources', exact: true }).click();
+      await expect(row).toBeVisible();
+      const content = settings.locator('[data-settings-content-scroll]');
+      expect(await content.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      const inventory = settings.getByRole('region', { name: 'Skill risk inventory', exact: true });
+      await inventory.focus();
+      await expect(inventory).toBeFocused();
+      await inventory.press('ArrowRight');
+      await expect.poll(() => inventory.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
       for (const name of ['Task', 'Exception']) {
         const action = row.getByRole('button', { name, exact: true });
         await action.scrollIntoViewIfNeeded();
@@ -56,6 +64,7 @@ for (const theme of ['light', 'dark']) {
         expect(await action.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       }
       expect(await settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(await content.evaluate((el) => el.scrollLeft)).toBe(0);
       const trigger = row.getByRole('button', { name: 'Exception', exact: true });
       await trigger.focus();
       await trigger.press('Enter');

@@ -218,122 +218,130 @@ export function SkillRiskDashboardPanel() {
               </UiPill>
             </SimpleGrid>
 
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Skill</Table.Th>
-                  <Table.Th>Scan</Table.Th>
-                  <Table.Th>Risk</Table.Th>
-                  <Table.Th>Capabilities</Table.Th>
-                  <Table.Th>Install gate</Table.Th>
-                  <Table.Th>Action</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {sortedItems.map((item) => (
-                  <Table.Tr key={item.skillId}>
-                    <Table.Td>
-                      <Text size="sm" fw={600}>
-                        {item.name}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        v{item.version} · {item.sourcePath}
-                      </Text>
-                      {item.remediationTaskId && (
-                        <UiPill kind="status" tone="info">
-                          task {item.remediationTaskId}
-                        </UiPill>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap={4}>
-                        <UiPill
-                          kind="status"
-                          tone={semanticToneForLegacyColor(
-                            item.scanStatus === 'scanned' ? 'green' : 'orange'
-                          )}
-                        >
-                          {item.scanStatus}
-                        </UiPill>
-                        {item.changedFiles.length > 0 && (
-                          <UiPill kind="status" tone="warning">
-                            changed
+            <Table.ScrollContainer
+              minWidth="52rem"
+              type="native"
+              role="region"
+              aria-label="Skill risk inventory"
+              tabIndex={0}
+            >
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Skill</Table.Th>
+                    <Table.Th>Scan</Table.Th>
+                    <Table.Th>Risk</Table.Th>
+                    <Table.Th>Capabilities</Table.Th>
+                    <Table.Th>Install gate</Table.Th>
+                    <Table.Th>Action</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {sortedItems.map((item) => (
+                    <Table.Tr key={item.skillId}>
+                      <Table.Td>
+                        <Text size="sm" fw={600}>
+                          {item.name}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          v{item.version} · {item.sourcePath}
+                        </Text>
+                        {item.remediationTaskId && (
+                          <UiPill kind="status" tone="info">
+                            task {item.remediationTaskId}
                           </UiPill>
                         )}
-                      </Group>
-                      <Text size="xs" c="dimmed">
-                        {formatDate(item.lastScannedAt)}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <UiPill
-                        kind="status"
-                        tone={semanticToneForLegacyColor(SEVERITY_COLORS[item.severity])}
-                      >
-                        {item.severity}
-                      </UiPill>
-                      <Text size="xs" c="dimmed">
-                        score {item.riskScore} · {item.findingCount} findings
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Stack gap={4}>
+                      </Table.Td>
+                      <Table.Td>
                         <Group gap={4}>
-                          <Text size="xs" c="dimmed">
-                            declared
-                          </Text>
-                          <CapabilityBadges values={item.declaredCapabilities} />
+                          <UiPill
+                            kind="status"
+                            tone={semanticToneForLegacyColor(
+                              item.scanStatus === 'scanned' ? 'green' : 'orange'
+                            )}
+                          >
+                            {item.scanStatus}
+                          </UiPill>
+                          {item.changedFiles.length > 0 && (
+                            <UiPill kind="status" tone="warning">
+                              changed
+                            </UiPill>
+                          )}
                         </Group>
-                        <Group gap={4}>
-                          <Text size="xs" c="dimmed">
-                            observed
-                          </Text>
-                          <CapabilityBadges values={observedCapabilities(item)} />
+                        <Text size="xs" c="dimmed">
+                          {formatDate(item.lastScannedAt)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <UiPill
+                          kind="status"
+                          tone={semanticToneForLegacyColor(SEVERITY_COLORS[item.severity])}
+                        >
+                          {item.severity}
+                        </UiPill>
+                        <Text size="xs" c="dimmed">
+                          score {item.riskScore} · {item.findingCount} findings
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack gap={4}>
+                          <Group gap={4}>
+                            <Text size="xs" c="dimmed">
+                              declared
+                            </Text>
+                            <CapabilityBadges values={item.declaredCapabilities} />
+                          </Group>
+                          <Group gap={4}>
+                            <Text size="xs" c="dimmed">
+                              observed
+                            </Text>
+                            <CapabilityBadges values={observedCapabilities(item)} />
+                          </Group>
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>
+                        <UiPill
+                          kind="status"
+                          tone={
+                            item.installDecision === 'block'
+                              ? 'blocked'
+                              : semanticToneForLegacyColor(DECISION_COLORS[item.installDecision])
+                          }
+                        >
+                          {item.installDecision}
+                        </UiPill>
+                        <Text size="xs" c="dimmed">
+                          {item.exception
+                            ? `${item.exception.owner} until ${formatDate(item.exception.expiresAt)}`
+                            : item.installReason}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs" wrap="wrap">
+                          <UiAction
+                            className="w-max shrink-0 scroll-mx-2"
+                            variant="secondary"
+                            leftSection={<ClipboardList className="h-3.5 w-3.5" />}
+                            loading={createTask.isPending}
+                            onClick={() => handleCreateTask(item)}
+                          >
+                            Task
+                          </UiAction>
+                          <UiAction
+                            className="w-max shrink-0 scroll-mx-2"
+                            variant="quiet"
+                            leftSection={<AlertTriangle className="h-3.5 w-3.5" />}
+                            onClick={() => openException(item)}
+                          >
+                            Exception
+                          </UiAction>
                         </Group>
-                      </Stack>
-                    </Table.Td>
-                    <Table.Td>
-                      <UiPill
-                        kind="status"
-                        tone={
-                          item.installDecision === 'block'
-                            ? 'blocked'
-                            : semanticToneForLegacyColor(DECISION_COLORS[item.installDecision])
-                        }
-                      >
-                        {item.installDecision}
-                      </UiPill>
-                      <Text size="xs" c="dimmed">
-                        {item.exception
-                          ? `${item.exception.owner} until ${formatDate(item.exception.expiresAt)}`
-                          : item.installReason}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="xs" wrap="wrap">
-                        <UiAction
-                          className="w-max shrink-0"
-                          variant="secondary"
-                          leftSection={<ClipboardList className="h-3.5 w-3.5" />}
-                          loading={createTask.isPending}
-                          onClick={() => handleCreateTask(item)}
-                        >
-                          Task
-                        </UiAction>
-                        <UiAction
-                          className="w-max shrink-0"
-                          variant="quiet"
-                          leftSection={<AlertTriangle className="h-3.5 w-3.5" />}
-                          onClick={() => openException(item)}
-                        >
-                          Exception
-                        </UiAction>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
           </>
         )}
       </Stack>
