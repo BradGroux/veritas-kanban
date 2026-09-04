@@ -61,17 +61,18 @@ for (const theme of ['light', 'dark']) {
       const child = async (
         trigger: Locator,
         title: string,
-        first: 'Cancel' | 'Role Name' | 'Allowed Tools' | 'Owner' | 'Confirmation'
+        first: 'Cancel' | 'Close' | 'Role Name' | 'Allowed Tools' | 'Owner'
       ) => {
         await trigger.click();
         const dialog = page.getByRole('dialog', { name: title, exact: true });
         await expect(dialog).toBeVisible();
         await expect(settingsRoot).toHaveAttribute('inert', '');
-        await expect(
-          first === 'Cancel'
+        const initial =
+          first === 'Cancel' || first === 'Close'
             ? dialog.getByRole('button', { name: first, exact: true })
-            : dialog.getByRole('textbox', { name: first, exact: true })
-        ).toBeFocused();
+            : dialog.getByRole('textbox', { name: first, exact: true });
+        await expect(initial).toBeFocused();
+        await expect(initial).toBeInViewport({ ratio: 1 });
         await inBounds(dialog);
         await inBounds(dialog.locator('.vk-overlay-footer'));
         await page.keyboard.press('Tab');
@@ -137,7 +138,7 @@ for (const theme of ['light', 'dark']) {
       await child(
         settings.getByRole('button', { name: 'Review Cleanup', exact: true }),
         'Review cleanup',
-        'Confirmation'
+        'Close'
       );
       await settings.getByRole('tab', { name: 'Shared Resources', exact: true }).click();
       await child(

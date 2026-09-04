@@ -601,7 +601,6 @@ export function MaintenanceTab() {
             {summary.cleanupPreview.notes.join(' ')}
           </Text>
           <TextInput
-            data-autofocus
             label="Confirmation"
             value={cleanupConfirm}
             onChange={(event) => setCleanupConfirm(event.currentTarget.value)}
@@ -609,7 +608,7 @@ export function MaintenanceTab() {
           />
         </Stack>
         <OverlayFooter>
-          <UiAction variant="quiet" onClick={() => setCleanupOpen(false)}>
+          <UiAction data-autofocus variant="quiet" onClick={() => setCleanupOpen(false)}>
             Close
           </UiAction>
           <UiAction variant="destructive" disabled={!cleanupEnabled}>
