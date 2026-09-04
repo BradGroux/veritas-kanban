@@ -66,6 +66,9 @@ test.describe('mobile responsive flows', () => {
   test('supports board, task detail, comments, approval review, notifications, and pairing setup', async ({
     page,
   }) => {
+    // WebKit's first mobile context can consume much of the default budget in
+    // fixture setup; keep this deliberately broad end-to-end flow bounded.
+    test.setTimeout(45_000);
     const taskTitle = `E2E Mobile Responsive Task ${Date.now()}`;
     const task = await seedTestTask(page, {
       title: taskTitle,
