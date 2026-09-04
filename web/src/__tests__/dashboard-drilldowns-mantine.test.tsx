@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Stack } from '@mantine/core';
 
@@ -11,6 +11,7 @@ import { ExportDialog } from '@/components/dashboard/ExportDialog';
 import { TasksDrillDown } from '@/components/dashboard/TasksDrillDown';
 import { TokensDrillDown } from '@/components/dashboard/TokensDrillDown';
 import { createMockProject, createMockTask, renderWithProviders } from './test-utils';
+import * as apiHelpers from '@/lib/api/helpers';
 
 const mocks = vi.hoisted(() => ({
   useTasks: vi.fn(),
@@ -46,6 +47,7 @@ const projects = [
 describe('dashboard Mantine drilldown surfaces', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.useTasks.mockReturnValue({
       data: [
         createMockTask({
@@ -199,6 +201,49 @@ describe('dashboard Mantine drilldown surfaces', () => {
 
     await user.click(screen.getByRole('button', { name: 'Close drilldown' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('guards pending export dismissal and preserves filters after failure', async () => {
+    let rejectRequest!: (error: Error) => void;
+    const request = vi.spyOn(apiHelpers, 'apiResponse').mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRequest = reject;
+        })
+    );
+    const onOpenChange = vi.fn();
+    renderWithProviders(<ExportDialog open onOpenChange={onOpenChange} taskId="task-export" />);
+    const dialog = screen.getByRole('dialog', { name: 'Export Metrics' });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(dialog).getByRole('button', { name: 'Close dialog' })
+      )
+    );
+    fireEvent.change(within(dialog).getByLabelText('From'), { target: { value: '2026-09-01' } });
+    const submit = within(dialog).getByRole('button', { name: 'Export' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect((within(dialog).getByLabelText('From') as HTMLInputElement).disabled).toBe(true);
+    await act(async () => rejectRequest(new Error('Fixture export failed')));
+    expect(within(dialog).getByRole('alert').textContent).toContain('Fixture export failed');
+    expect(document.activeElement).toBe(within(dialog).getByRole('alert'));
+    expect(within(dialog).getByRole('alert').scrollIntoView).toHaveBeenCalledWith({
+      block: 'center',
+      behavior: 'instant',
+    });
+    expect((within(dialog).getByLabelText('From') as HTMLInputElement).value).toBe('2026-09-01');
+    expect(
+      (within(dialog).getByRole('button', { name: 'Export' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('renders dashboard drilldown content through direct Mantine primitives and preserves selection', async () => {

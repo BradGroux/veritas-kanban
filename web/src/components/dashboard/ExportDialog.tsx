@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Group, Loader, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiAction } from '@/components/ui/UiVocabulary';
@@ -40,9 +40,19 @@ export function ExportDialog({
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportInFlight = useRef(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (exportError) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [exportError]);
+
+  useEffect(() => {
+    if (!open || exportInFlight.current) return;
 
     setFormat('csv');
     setScope(initialTaskId ? 'task' : initialProject ? 'project' : 'full');
@@ -50,10 +60,19 @@ export function ExportDialog({
     setProject(initialProject || '');
     setFromDate('');
     setToDate('');
+    setExportError(null);
   }, [open, initialTaskId, initialProject]);
 
   const handleExport = async () => {
+    if (
+      exportInFlight.current ||
+      (scope === 'task' && !taskId) ||
+      (scope === 'project' && !project)
+    )
+      return;
+    exportInFlight.current = true;
     setIsExporting(true);
+    setExportError(null);
 
     try {
       const params = new URLSearchParams();
@@ -97,13 +116,16 @@ export function ExportDialog({
 
       onOpenChange(false);
     } catch (error) {
-      console.error('Export error:', error);
+      setExportError(error instanceof Error ? error.message : 'Unable to export metrics.');
     } finally {
+      exportInFlight.current = false;
       setIsExporting(false);
     }
   };
 
-  const handleClose = () => onOpenChange(false);
+  const handleClose = () => {
+    if (!exportInFlight.current) onOpenChange(false);
+  };
 
   return (
     <Modal
@@ -127,6 +149,7 @@ export function ExportDialog({
 
         <Select
           label="Format"
+          disabled={isExporting}
           value={format}
           onChange={(value) => setFormat((value ?? 'csv') as ExportFormat)}
           data={[
@@ -137,6 +160,7 @@ export function ExportDialog({
 
         <Select
           label="Scope"
+          disabled={isExporting}
           value={scope}
           onChange={(value) => setScope((value ?? 'full') as ExportScope)}
           data={[
@@ -150,6 +174,7 @@ export function ExportDialog({
           (projects.length > 0 ? (
             <Select
               label="Project"
+              disabled={isExporting}
               value={project}
               onChange={(value) => setProject(value ?? '')}
               placeholder="Select project..."
@@ -158,6 +183,7 @@ export function ExportDialog({
           ) : (
             <TextInput
               label="Project"
+              disabled={isExporting}
               value={project}
               onChange={(e) => setProject(e.target.value)}
               placeholder="Project name"
@@ -167,6 +193,7 @@ export function ExportDialog({
         {scope === 'task' && (
           <TextInput
             label="Task ID"
+            disabled={isExporting}
             value={taskId}
             onChange={(e) => setTaskId(e.target.value)}
             placeholder="task_..."
@@ -175,6 +202,7 @@ export function ExportDialog({
 
         <TextInput
           label="From"
+          disabled={isExporting}
           type="date"
           value={fromDate}
           onChange={(e) => setFromDate(e.target.value)}
@@ -182,13 +210,19 @@ export function ExportDialog({
 
         <TextInput
           label="To"
+          disabled={isExporting}
           type="date"
           value={toDate}
           onChange={(e) => setToDate(e.target.value)}
         />
+        {exportError && (
+          <Text ref={errorRef} size="sm" c="red" role="alert" tabIndex={-1}>
+            {exportError}
+          </Text>
+        )}
       </Stack>
       <OverlayFooter>
-        <UiAction variant="quiet" onClick={handleClose}>
+        <UiAction variant="quiet" onClick={handleClose} disabled={isExporting}>
           Cancel
         </UiAction>
         <UiAction
