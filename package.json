@@ -60,7 +60,7 @@
     "test:load": "k6 run load-tests/k6/smoke.js && k6 run load-tests/k6/read-load.js && k6 run load-tests/k6/write-load.js && k6 run load-tests/k6/mixed-load.js && k6 run load-tests/k6/ws-stress.js && k6 run load-tests/k6/v5-remote-mix.js",
     "smoke:cli-mcp": "node scripts/smoke-cli-mcp-compat.mjs",
     "test:release-format": "node --test scripts/validate-release-format.test.mjs",
-    "test:release-native": "node --test scripts/validate-release-native.test.mjs scripts/native-ui/contract.test.mjs scripts/docs-media/verify.test.mjs",
+    "test:release-native": "node --test scripts/validate-release-native.test.mjs scripts/native-ui/contract.test.mjs scripts/docs-media/verify.test.mjs scripts/docs-media/record.test.mjs scripts/docs-media/finalize.test.mjs",
     "validate:release": "node scripts/validate-release.mjs",
     "desktop:ui:mac": "node scripts/native-ui/run.mjs",
     "desktop:ui:verify": "node scripts/native-ui/verify.mjs",
@@ -72,7 +72,7 @@
     "seed": "bash scripts/seed.sh",
     "prepare": "node scripts/prepare-husky.mjs",
     "demo": "docker compose -f demo/docker-compose.demo.yml up --build",
-    "docs:capture-media": "DOCS_MEDIA_CAPTURE=1 LOG_LEVEL=silent playwright test e2e/docs-media-capture.spec.ts --project=chromium --reporter=line && node scripts/build-docs-media-gifs.mjs",
+    "docs:capture-media": "node scripts/docs-media/run.mjs",
     "desktop:smoke:mac:local": "node scripts/check-desktop-local-packaging-smoke.mjs"
   },
   "devDependencies": {

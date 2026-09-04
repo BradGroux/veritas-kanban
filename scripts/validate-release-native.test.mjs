@@ -126,7 +126,14 @@ test('full validator rejects stale documentation metadata independently of nativ
   await writeFile(path.join(app, 'fixture.txt'), 'not a release app');
   await writeFile(
     media,
-    JSON.stringify({ schema: 'documentation-media-capture/v1', commit: '0'.repeat(40), assets: [] })
+    JSON.stringify({
+      schema: 'documentation-media-capture/v1',
+      mode: 'verify',
+      committedBytesMatch: true,
+      dirty: false,
+      commit: '0'.repeat(40),
+      assets: [],
+    })
   );
   const result = validate(['--native-app', app, '--media-evidence', media]);
   assert.equal(result.code, 1);
@@ -180,7 +187,15 @@ test('macOS publication stages without upload and verifies the distribution befo
   const native = steps.find((step) => step.includes('id: native-ui'));
   const upload = steps.find((step) => step.includes('name: Upload macOS release assets'));
   const retention = steps.find((step) => step.includes('name: Retain native macOS evidence'));
-  assert(native && upload && retention);
+  const media = steps.find((step) =>
+    step.includes('name: Capture final candidate documentation media')
+  );
+  assert(native && upload && retention && media);
+  assert(workflow.indexOf(native) < workflow.indexOf(media));
+  assert(workflow.indexOf(media) < workflow.indexOf(upload));
+  assert.match(media, /node scripts\/docs-media\/run.mjs.* verify/);
+  assert.doesNotMatch(media, /--source-only|continue-on-error| prepare/);
+  assert.match(retention, /documentation-media/);
   assert(
     workflow.indexOf('node scripts/finalize-macos-release-assets.mjs') < workflow.indexOf(native)
   );
@@ -199,6 +214,9 @@ test('macOS publication stages without upload and verifies the distribution befo
   const publication = upload.indexOf('gh release upload');
   assert(checksum >= 0 && verification > checksum && publication > verification);
   assert.match(upload, /--native-app "\$\{VERIFIED_NATIVE_APP\}"/);
-  assert.match(upload, /--native-app "\$\{VERIFIED_NATIVE_APP\}" --github/);
+  assert.match(
+    upload,
+    /--native-app "\$\{VERIFIED_NATIVE_APP\}" --media-evidence "\$\{RUNNER_TEMP\}\/documentation-media\/evidence.json" --github/
+  );
   assert.match(workflow, /fetch-depth: 0/);
 });

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-/* global window, document, innerWidth, innerHeight, getComputedStyle, requestAnimationFrame */
+/* global document, innerWidth, innerHeight, getComputedStyle, requestAnimationFrame */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
-import os from 'node:os';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { _electron, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { createNativeSession } from './session.mjs';
 import {
   fileDigest,
   evidenceFailures,
@@ -34,7 +32,6 @@ assert.equal(process.platform, 'darwin', 'This gate must run on macOS');
 const packagePath = await realpath(packageArgument);
 const output = path.resolve(outputArgument);
 await mkdir(output); // Never overwrite a previous run or its failure artifacts.
-const profile = await mkdtemp(path.join(os.tmpdir(), 'vk-native-conformance-'));
 const git = (...args) => {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -57,73 +54,15 @@ const report = {
 const persist = () =>
   writeFile(path.join(output, 'evidence.json'), JSON.stringify(report, null, 2) + '\n');
 await persist();
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const server = createServer();
-    server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port;
-      server.close((error) => (error ? reject(error) : resolve(port)));
-    });
-  });
-const port = await freePort();
-const origin = `http://127.0.0.1:${port}`;
-const password = randomBytes(24).toString('base64url');
-const env = Object.fromEntries(
-  ['PATH', 'HOME', 'TMPDIR', 'LANG', 'USER', 'LOGNAME']
-    .filter((key) => process.env[key])
-    .map((key) => [key, process.env[key]])
-);
-Object.assign(env, {
-  VERITAS_DESKTOP_PROFILE: 'native-ui-conformance',
-  VERITAS_DESKTOP_SERVER_PORT: String(port),
-});
+const session = await createNativeSession({ packagePath, commit, version });
+const { origin } = session;
 let app;
 let page;
 let fixtureTask;
 async function launch() {
-  app = await _electron.launch({
-    executablePath: path.join(packagePath, 'Contents/MacOS/veritas-kanban'),
-    args: [`--user-data-dir=${profile}`],
-    env,
-  });
-  const actual = await app.evaluate(({ app }) => ({
-    packaged: app.isPackaged,
-    userData: app.getPath('userData'),
-    appPath: app.getAppPath(),
-  }));
-  assert(actual.packaged, 'Unpackaged runtime is not native acceptance');
-  assert.equal(
-    await realpath(actual.userData),
-    await realpath(profile),
-    'Profile isolation failed'
-  );
-  assert.equal(
-    await realpath(actual.appPath),
-    await realpath(path.join(packagePath, 'Contents/Resources/app.asar')),
-    'Wrong package launched'
-  );
-  page = await app.firstWindow();
-  page.setDefaultTimeout(10_000);
-  await page.waitForURL(`${origin}/**`, { timeout: 60_000 });
-  const setup = page.getByRole('button', { name: 'Continue to Password', exact: true });
-  const settings = page.getByRole('button', { name: 'Settings', exact: true });
-  const login = page.getByRole('button', { name: 'Login', exact: true });
-  await expect(setup.or(settings).or(login)).toBeVisible({ timeout: 30_000 });
-  if (await setup.isVisible()) {
-    await setup.click();
-    await page.getByLabel('Password', { exact: true }).fill(password);
-    await page.getByLabel('Confirm Password', { exact: true }).fill(password);
-    await page.getByRole('button', { name: 'Create Password', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Save Your Recovery Key' })).toBeVisible();
-    await page.reload(); // Never record recovery keys or the synthetic password.
-  }
-  await expect(login.or(settings)).toBeVisible({ timeout: 30_000 });
-  if (await login.isVisible()) {
-    await page.getByLabel('Password', { exact: true }).fill(password);
-    await login.click();
-  }
-  await expect(settings).toBeVisible({ timeout: 30_000 });
+  const launched = await session.launch();
+  ({ app, page } = launched);
+  report.identity = launched.identity;
   page.on('response', (response) => {
     if (response.status() >= 400) {
       report.httpFailures ??= [];
@@ -134,17 +73,6 @@ async function launch() {
         status: response.status(),
       });
     }
-  });
-  report.identity = await page.evaluate(() => window.veritasDesktop.getAppInfo());
-  assert.equal(
-    report.identity.buildIdentity,
-    commit,
-    'Rebuild the candidate with VERITAS_BUILD_SHA equal to HEAD'
-  );
-  assert.equal(report.identity.version, version);
-  await app.evaluate(({ app, BrowserWindow }) => {
-    app.focus({ steal: true });
-    BrowserWindow.getAllWindows()[0].focus();
   });
 }
 async function resize(width, height) {

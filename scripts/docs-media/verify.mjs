@@ -154,6 +154,8 @@ export async function verifyMediaEvidence({ evidencePath, root, expected, mainta
   if (!Array.isArray(maintainedContents) || maintainedContents.length === 0)
     return ['missing maintained documentation reference inventory'];
   const report = JSON.parse(await readFile(evidencePath, 'utf8'));
+  if (report.mode !== 'verify' || report.committedBytesMatch !== true || report.dirty !== false)
+    return ['documentation media requires a final clean capture matching committed bytes'];
   const errors = mediaEvidenceFailures(report, expected);
   if (errors.length) return errors;
   root = await realpath(root);

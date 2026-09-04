@@ -177,6 +177,15 @@ jobs:
           node scripts/native-ui/run.mjs "${candidate_app}" "${RUNNER_TEMP}/native-ui-evidence"
           node scripts/native-ui/verify.mjs "${RUNNER_TEMP}/native-ui-evidence/evidence.json" "${candidate_app}"
 
+      - name: Capture final candidate documentation media
+        env:
+          VERIFIED_NATIVE_APP: ${{ steps.native-ui.outputs.app_path }}
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          pnpm exec playwright install chromium
+          node scripts/docs-media/run.mjs "${VERIFIED_NATIVE_APP}" "${RUNNER_TEMP}/documentation-media" verify
+
       - name: Retain native macOS evidence even on failure
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -185,6 +194,7 @@ jobs:
           path: |
             ${{ runner.temp }}/native-ui-evidence
             ${{ runner.temp }}/native-distribution.sha256
+            ${{ runner.temp }}/documentation-media
           if-no-files-found: warn
           retention-days: 14
 
@@ -197,7 +207,7 @@ jobs:
           set -euo pipefail
 
           shasum -a 256 -c "${RUNNER_TEMP}/native-distribution.sha256"
-          node ../scripts/validate-release.mjs --native-evidence "${RUNNER_TEMP}/native-ui-evidence/evidence.json" --native-app "${VERIFIED_NATIVE_APP}" --github
+          node ../scripts/validate-release.mjs --native-evidence "${RUNNER_TEMP}/native-ui-evidence/evidence.json" --native-app "${VERIFIED_NATIVE_APP}" --media-evidence "${RUNNER_TEMP}/documentation-media/evidence.json" --github
 
           version="$(node -p "require('./package.json').version")"
           tag="v${version}"

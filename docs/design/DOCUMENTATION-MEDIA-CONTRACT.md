@@ -12,7 +12,7 @@ Use deterministic public-safe data. Inspect cropping, padding, focus, labels, ac
 
 ## Evidence schema
 
-The external JSON capture manifest has schema `documentation-media-capture/v1` and status `captured`. That status means capture finished, not that visual acceptance passed. It records the exact `commit`, `version`, whole-app `packageDigest`, ISO `completedAt`, and `assets` array. Store raw run evidence outside public documentation.
+The external JSON capture manifest has schema `documentation-media-capture/v1` and status `captured`. That status means capture finished, not that visual acceptance passed. Final evidence additionally requires `mode: "verify"`, `dirty: false`, and `committedBytesMatch: true`. It records the exact `commit`, `version`, whole-app `packageDigest`, ISO `completedAt`, and `assets` array. Store raw run evidence outside public documentation.
 
 Each asset records `name`, `decision`, and `reason`. Non-retired entries additionally record their exact versioned `path`, SHA-256 `sha256`, and `capture` object. The capture object repeats the candidate `commit`, `version`, and `packageDigest`; records `boundary` (`packaged-macos` or `mobile-browser`), `width`, `height`, `scaleFactor`, ISO `capturedAt`, and `method` (`window-capture` or `interaction-recording`). Desktop entries require `packaged: true`. Retired entries must omit path, digest, and capture claims.
 
@@ -21,6 +21,10 @@ Full release validation takes `--media-evidence <manifest>` alongside the native
 This verifier checks freshness and declared provenance, not image decoding, visual quality, or semantic playback. Those acceptance checks require inspection of the actual media. A manifest is not a substitute for a real capture runner or native conformance evidence. Capture and publication must preserve exact candidate identity; committing source changes requires a new build and new capture evidence, never rewritten identity fields on an older run.
 
 ## Candidate preparation and final capture
+
+Run `pnpm docs:capture-media /absolute/path/veritas-kanban.app /absolute/path/new-external-directory prepare` on macOS with `ffmpeg` and the pinned Playwright Chromium browser installed. The shared native session launcher verifies the real packaged app, build identity, version, and isolated profile, then authenticates through the production UI. Public-safe tasks are created through that isolated server's authenticated API. Desktop capture uses the actual native window; mobile capture has no injected desktop bridge. Capture waits for fonts and settled overlays for stills, uses reduced motion, and suppresses only the blinking text caret, not focus rings or application layout.
+
+Interaction capture samples before input, while actions and assertions are pending, and after verified completion. Each recording retains numbered raw frames, hashes, timestamps, and named action start/completion frame ranges. Both GIFs and the demo MP4 are encoded from those live frames. Failed input, capture, or encoding leaves diagnostic output and exits nonzero; it cannot emit successful final evidence. The command refuses to overwrite an existing output directory.
 
 Use two passes to avoid a capture/commit identity cycle. First prepare the versioned media and guide references, review them, and commit them. This preparation pass is not release evidence. Then build the final clean commit and run the actual native/mobile interactions again, capturing fresh media into an external run directory. Compare every new file's bytes with its committed versioned asset before emitting the final manifest. The manifest binds the final run's commit and actual package digest, not the preparation build.
 
