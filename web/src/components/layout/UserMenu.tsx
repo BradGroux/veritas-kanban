@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import {
   Badge,
   ActionIcon,
@@ -31,6 +37,17 @@ export function UserMenu({
     useIdentity();
   const [open, setOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Handle both the trigger and portaled content. Mantine's default Escape
+  // listener only sees events captured inside the dropdown.
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (!open || event.defaultPrevented || event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
 
   // Format session expiry
   const formatExpiry = (expiry: string | null) => {
@@ -104,10 +121,13 @@ export function UserMenu({
       radius="md"
       shadow="md"
       withinPortal
+      closeOnEscape={false}
     >
       <Popover.Target>
         {compact ? (
           <ActionIcon
+            ref={triggerRef}
+            onKeyDown={handleMenuKeyDown}
             variant="subtle"
             color="gray"
             size={32}
@@ -119,6 +139,8 @@ export function UserMenu({
           </ActionIcon>
         ) : (
           <Button
+            ref={triggerRef}
+            onKeyDown={handleMenuKeyDown}
             variant="subtle"
             color="gray"
             size="sm"
@@ -137,7 +159,10 @@ export function UserMenu({
           </Button>
         )}
       </Popover.Target>
-      <Popover.Dropdown className="w-72 bg-popover p-0 text-popover-foreground">
+      <Popover.Dropdown
+        className="w-72 bg-popover p-0 text-popover-foreground"
+        onKeyDown={handleMenuKeyDown}
+      >
         <Box className="border-b border-border p-3">
           <Group align="flex-start" gap="xs" wrap="nowrap">
             <Box className="mt-0.5 rounded-full bg-primary/10 p-1.5 text-primary">
