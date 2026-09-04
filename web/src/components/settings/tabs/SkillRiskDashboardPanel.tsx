@@ -310,8 +310,9 @@ export function SkillRiskDashboardPanel() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Group gap="xs" wrap="nowrap">
+                      <Group gap="xs" wrap="wrap">
                         <UiAction
+                          className="w-max shrink-0"
                           variant="secondary"
                           leftSection={<ClipboardList className="h-3.5 w-3.5" />}
                           loading={createTask.isPending}
@@ -320,6 +321,7 @@ export function SkillRiskDashboardPanel() {
                           Task
                         </UiAction>
                         <UiAction
+                          className="w-max shrink-0"
                           variant="quiet"
                           leftSection={<AlertTriangle className="h-3.5 w-3.5" />}
                           onClick={() => openException(item)}
