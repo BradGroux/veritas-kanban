@@ -354,7 +354,7 @@ export function FilterBar({
           />
         </div>
         <OverlayFooter>
-          <UiAction variant="secondary" onClick={closeNameModal}>
+          <UiAction variant="quiet" onClick={closeNameModal}>
             Cancel
           </UiAction>
           <UiAction onClick={submitSavedViewName} disabled={!viewName.trim()}>
@@ -376,7 +376,7 @@ export function FilterBar({
           </Text>
         </div>
         <OverlayFooter>
-          <UiAction variant="secondary" data-autofocus onClick={() => setDeleteViewId(null)}>
+          <UiAction variant="quiet" data-autofocus onClick={() => setDeleteViewId(null)}>
             Cancel
           </UiAction>
           <UiAction variant="destructive" onClick={confirmDeleteSavedView}>

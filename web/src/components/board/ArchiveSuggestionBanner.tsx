@@ -106,7 +106,7 @@ export function ArchiveSuggestionBanner() {
           </Text>
         </div>
         <OverlayFooter>
-          <UiAction variant="secondary" data-autofocus onClick={() => setConfirmSprint(null)}>
+          <UiAction variant="quiet" data-autofocus onClick={() => setConfirmSprint(null)}>
             Cancel
           </UiAction>
           <UiAction
