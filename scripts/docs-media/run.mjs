@@ -289,6 +289,7 @@ try {
   await button('Settings').click();
   const settings = page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ });
   await expect(settings).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
   await still('settings-navigation.png');
   for (const [name, file] of [
     ['Agents', 'agent-providers.png'],

@@ -291,6 +291,7 @@ async function exercise(state, mode, shot) {
       'aria-selected',
       'true'
     );
+    await expect(dialog.getByRole('heading', { name: tab, exact: true })).toBeVisible();
     await shot();
     await dismiss(dialog, opener);
   } else if (state === 'left-rail' || state === 'right-rail') {
