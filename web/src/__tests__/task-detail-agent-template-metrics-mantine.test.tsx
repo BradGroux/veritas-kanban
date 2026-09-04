@@ -44,6 +44,7 @@ vi.mock('@/hooks/useAgent', () => ({
   useAgentLog: mocks.useAgentLog,
   useStartAgent: () => ({
     mutate: mocks.startAgentMutate,
+    mutateAsync: mocks.startAgentMutate,
     isPending: false,
   }),
   useStopAgent: () => ({
@@ -132,6 +133,7 @@ const template: TaskTemplate = {
 describe('task detail agent, template, and metrics Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.startAgentMutate.mockReset();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.useConfig.mockReturnValue({
       data: {
@@ -243,10 +245,7 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Start' }));
 
     expect(mocks.clearOutputs).toHaveBeenCalled();
-    expect(mocks.startAgentMutate).toHaveBeenCalledWith(
-      { taskId: 'task-agent', agent: 'codex' },
-      { onSuccess: expect.any(Function) }
-    );
+    expect(mocks.startAgentMutate).toHaveBeenCalledWith({ taskId: 'task-agent', agent: 'codex' });
   });
 
   it('requires an override reason before starting an incomplete agent task', async () => {
@@ -274,14 +273,79 @@ describe('task detail agent, template, and metrics Mantine migration', () => {
     await user.click(screen.getByRole('button', { name: 'Start Anyway' }));
 
     expect(mocks.clearOutputs).toHaveBeenCalled();
-    expect(mocks.startAgentMutate).toHaveBeenCalledWith(
-      {
-        taskId: 'task-agent-incomplete',
-        agent: 'codex',
-        overrideReason: 'Maintainer approved urgent fix',
-      },
-      { onSuccess: expect.any(Function) }
-    );
+    expect(mocks.startAgentMutate).toHaveBeenCalledWith({
+      taskId: 'task-agent-incomplete',
+      agent: 'codex',
+      overrideReason: 'Maintainer approved urgent fix',
+    });
+  });
+
+  it('retains the readiness override while launching and after failure', async () => {
+    let rejectStart!: (error: Error) => void;
+    mocks.startAgentMutate
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectStart = reject;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+    const task = createMockTask({
+      id: 'task-override',
+      title: 'Fix',
+      description: 'Too short',
+      type: 'code',
+      git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+    renderWithProviders(<AgentPanel task={task} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    const dialog = screen.getByRole('dialog', { name: 'Start with readiness override?' });
+    const reason = within(dialog).getByLabelText('Override reason') as HTMLTextAreaElement;
+    fireEvent.change(reason, { target: { value: '  Maintainer approved urgent fix  ' } });
+    const submit = within(dialog).getByRole('button', { name: 'Start Anyway' });
+    fireEvent.click(submit);
+    expect(reason.disabled).toBe(true);
+    fireEvent.click(submit);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(screen.getByRole('dialog', { name: 'Start with readiness override?' })).toBe(dialog);
+    expect(mocks.startAgentMutate).toHaveBeenCalledExactlyOnceWith({
+      taskId: task.id,
+      agent: 'codex',
+      overrideReason: 'Maintainer approved urgent fix',
+    });
+    await act(async () => rejectStart(new Error('Fixture launch failed')));
+    expect(reason.value).toBe('  Maintainer approved urgent fix  ');
+    expect(within(dialog).getByRole('alert').textContent).toContain('Fixture launch failed');
+    await act(async () => fireEvent.click(submit));
+    expect(mocks.startAgentMutate).toHaveBeenCalledTimes(2);
+    expect(mocks.startAgentMutate.mock.calls[1]).toEqual(mocks.startAgentMutate.mock.calls[0]);
+    expect(screen.queryByRole('dialog', { name: 'Start with readiness override?' })).toBeNull();
+    expect(mocks.refetchAttempts).toHaveBeenCalledOnce();
+  });
+
+  it('rechecks launch permission while an override is open', () => {
+    const task = createMockTask({
+      id: 'task-override-permission',
+      title: 'Fix',
+      description: 'Too short',
+      type: 'code',
+      git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main', worktreePath: '/tmp' },
+    });
+    const { rerender } = renderWithProviders(<AgentPanel task={task} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    const dialog = screen.getByRole('dialog', { name: 'Start with readiness override?' });
+    fireEvent.change(within(dialog).getByLabelText('Override reason'), {
+      target: { value: 'Maintainer approved urgent fix' },
+    });
+    mocks.identity.hasPermission.mockReturnValue(false);
+    rerender(<AgentPanel task={task} />);
+    const submit = within(dialog).getByRole('button', {
+      name: 'Start Anyway',
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(mocks.startAgentMutate).not.toHaveBeenCalled();
   });
 
   it('hides agent start controls for mobile device sessions without agent write permission', () => {
