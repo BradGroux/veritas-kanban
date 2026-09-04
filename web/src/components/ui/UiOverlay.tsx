@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -90,7 +91,9 @@ export function UiModal({
   const stack = useContext(OverlayStack);
   const register = stack?.register;
   const opener = useRef<HTMLElement | null | undefined>(undefined);
-  useEffect(() => {
+  // Reopened overlays must join the Escape/focus stack before the browser can
+  // deliver another key event to their still-mounted transition content.
+  useLayoutEffect(() => {
     if (!props.opened) return;
     // Effect replay (including a lazy surface reveal) must not replace the
     // original opener with a field or background heading focused during mount.
