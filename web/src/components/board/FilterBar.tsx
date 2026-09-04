@@ -1,21 +1,12 @@
 import { useState } from 'react';
 import { Bookmark, Edit3, Filter, Save, Search, Star, StarOff, Trash2, X } from 'lucide-react';
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core';
+import { ActionIcon, Badge, Button, Group, Select, Text, TextInput, Tooltip } from '@mantine/core';
 import type { BoardSavedView, Task, TaskType } from '@veritas-kanban/shared';
 import { useTaskTypes } from '@/hooks/useTaskTypes';
 import { useProjects } from '@/hooks/useProjects';
 import { useConfig } from '@/hooks/useConfig';
+import { UiModal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 
 export interface FilterState {
   search: string;
@@ -346,13 +337,14 @@ export function FilterBar({
         </div>
       )}
 
-      <Modal
+      <UiModal
         opened={nameModalMode !== null}
         onClose={closeNameModal}
         title={nameModalMode === 'rename' ? 'Rename saved view' : 'Save board view'}
-        size="sm"
+        variant="form"
+        compound
       >
-        <Stack gap="sm">
+        <div className="vk-overlay-scroll">
           <TextInput
             label="View name"
             value={viewName}
@@ -360,37 +352,38 @@ export function FilterBar({
             data-autofocus
             maxLength={80}
           />
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={closeNameModal}>
-              Cancel
-            </Button>
-            <Button onClick={submitSavedViewName} disabled={!viewName.trim()}>
-              {nameModalMode === 'rename' ? 'Rename' : 'Save'}
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" onClick={closeNameModal}>
+            Cancel
+          </UiAction>
+          <UiAction onClick={submitSavedViewName} disabled={!viewName.trim()}>
+            {nameModalMode === 'rename' ? 'Rename' : 'Save'}
+          </UiAction>
+        </OverlayFooter>
+      </UiModal>
 
-      <Modal
+      <UiModal
         opened={Boolean(deleteSavedView)}
         onClose={() => setDeleteViewId(null)}
         title="Delete saved view?"
-        size="sm"
+        variant="confirm"
+        compound
       >
-        <Stack gap="sm">
-          <Text size="sm">
+        <div className="vk-overlay-scroll">
+          <Text size="sm" className="break-words">
             Delete "{deleteSavedView?.name}"? Current filters and shared URLs stay unchanged.
           </Text>
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => setDeleteViewId(null)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={confirmDeleteSavedView}>
-              Delete
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" data-autofocus onClick={() => setDeleteViewId(null)}>
+            Cancel
+          </UiAction>
+          <UiAction variant="destructive" onClick={confirmDeleteSavedView}>
+            Delete
+          </UiAction>
+        </OverlayFooter>
+      </UiModal>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { X, Trash2, Archive, ArrowRight, Inbox } from 'lucide-react';
-import { ActionIcon, Button, Group, Modal, Select, Text } from '@mantine/core';
+import { ActionIcon, Button, Select, Text } from '@mantine/core';
+import { UiModal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useToast } from '@/hooks/useToast';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDeleteTask, useBulkUpdate, useBulkArchiveByIds } from '@/hooks/useTasks';
@@ -363,28 +365,32 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
         )}
       </div>
 
-      <Modal
+      <UiModal
         opened={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         title={`Delete ${selectedCount} task${selectedCount !== 1 ? 's' : ''}?`}
-        centered
+        variant="confirm"
+        compound
       >
-        <Text size="sm" c="dimmed">
-          This action cannot be undone. The selected tasks will be permanently deleted.
-        </Text>
-        <Group justify="flex-end" gap="sm" mt="lg">
-          <Button
-            variant="default"
+        <div className="vk-overlay-scroll">
+          <Text size="sm" c="dimmed">
+            This action cannot be undone. The selected tasks will be permanently deleted.
+          </Text>
+        </div>
+        <OverlayFooter>
+          <UiAction
+            variant="quiet"
+            data-autofocus
             onClick={() => setShowDeleteConfirm(false)}
             disabled={isProcessing}
           >
             Cancel
-          </Button>
-          <Button onClick={handleDeleteSelected} disabled={isProcessing} color="red">
+          </UiAction>
+          <UiAction onClick={handleDeleteSelected} disabled={isProcessing} variant="destructive">
             {isProcessing ? 'Deleting...' : 'Delete'}
-          </Button>
-        </Group>
-      </Modal>
+          </UiAction>
+        </OverlayFooter>
+      </UiModal>
     </>
   );
 }

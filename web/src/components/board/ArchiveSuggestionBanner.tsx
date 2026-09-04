@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ActionIcon, Button, Group, Modal, Stack, Text } from '@mantine/core';
+import { ActionIcon, Button, Text } from '@mantine/core';
+import { UiModal, OverlayFooter } from '@/components/ui/UiOverlay';
+import { UiAction } from '@/components/ui/UiVocabulary';
 import { useArchiveSuggestions, useArchiveSprint } from '@/hooks/useTasks';
 import { Archive, X, Loader2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -89,41 +91,42 @@ export function ArchiveSuggestionBanner() {
       </div>
 
       {/* Confirmation Dialog */}
-      <Modal
+      <UiModal
         opened={!!confirmSprint}
         onClose={() => setConfirmSprint(null)}
         title={`Archive sprint "${confirmSprint}"?`}
-        centered
+        variant="confirm"
+        compound
       >
-        <Stack gap="md">
+        <div className="vk-overlay-scroll">
           <Text size="sm" c="dimmed">
             This will archive all{' '}
             {suggestions.find((s) => s.sprint === confirmSprint)?.taskCount || 0} tasks in this
             sprint. You can restore them from the archive later.
           </Text>
-          <Group justify="flex-end">
-            <Button variant="subtle" color="gray" onClick={() => setConfirmSprint(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => confirmSprint && handleArchive(confirmSprint)}
-              disabled={archiveSprint.isPending}
-            >
-              {archiveSprint.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Archiving...
-                </>
-              ) : (
-                <>
-                  <Archive className="h-4 w-4 mr-2" />
-                  Archive Sprint
-                </>
-              )}
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        </div>
+        <OverlayFooter>
+          <UiAction variant="quiet" data-autofocus onClick={() => setConfirmSprint(null)}>
+            Cancel
+          </UiAction>
+          <UiAction
+            onClick={() => confirmSprint && handleArchive(confirmSprint)}
+            disabled={archiveSprint.isPending}
+          >
+            {archiveSprint.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Archiving...
+              </>
+            ) : (
+              <>
+                <Archive className="h-4 w-4 mr-2" />
+                Archive Sprint
+              </>
+            )}
+          </UiAction>
+        </OverlayFooter>
+      </UiModal>
     </>
   );
 }
