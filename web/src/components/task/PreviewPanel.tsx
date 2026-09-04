@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { UiDrawer as Drawer } from '@/components/ui/UiOverlay';
 import {
   ActionIcon,
+  Alert,
   Button,
   Code,
   Group,
@@ -22,7 +23,6 @@ import {
   Square,
   RefreshCw,
   ExternalLink,
-  Loader2,
   Terminal,
   Monitor,
   AlertCircle,
@@ -38,6 +38,18 @@ interface PreviewPanelProps {
 export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
   const [showOutput, setShowOutput] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
+  const [operation, setOperation] = useState<'start' | 'stop' | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const requestInFlight = useRef(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const isPending = operation !== null;
+
+  useEffect(() => {
+    if (requestError) {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }, [requestError]);
 
   const { data: status, isLoading } = usePreviewStatus(open ? task.id : undefined);
   const { data: outputData } = usePreviewOutput(open && showOutput ? task.id : undefined);
@@ -50,12 +62,34 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
   const hasError = status && 'error' in status && status.error;
   const previewUrl = status && 'url' in status ? status.url : null;
 
-  const handleStart = () => {
-    startPreview.mutate(task.id);
+  const runOperation = async (nextOperation: 'start' | 'stop') => {
+    if (
+      requestInFlight.current ||
+      (nextOperation === 'start' && (!task.git?.repo || isRunning || isStarting)) ||
+      (nextOperation === 'stop' && !isRunning)
+    )
+      return;
+    requestInFlight.current = true;
+    setOperation(nextOperation);
+    setRequestError(null);
+    try {
+      if (nextOperation === 'start') await startPreview.mutateAsync(task.id);
+      else await stopPreview.mutateAsync(task.id);
+    } catch (error) {
+      setRequestError(
+        error instanceof Error ? error.message : `Unable to ${nextOperation} preview.`
+      );
+    } finally {
+      requestInFlight.current = false;
+      setOperation(null);
+    }
   };
 
-  const handleStop = () => {
-    stopPreview.mutate(task.id);
+  const handleClose = () => {
+    if (!requestInFlight.current) {
+      setRequestError(null);
+      onOpenChange(false);
+    }
   };
 
   const handleRefresh = () => {
@@ -71,7 +105,10 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
   return (
     <Drawer
       opened={open}
-      onClose={() => onOpenChange(false)}
+      onClose={handleClose}
+      closeOnEscape={!isPending}
+      closeOnClickOutside={!isPending}
+      closeButtonProps={{ disabled: isPending }}
       position="right"
       compound
       title={
@@ -95,6 +132,7 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                   variant="outline"
                   size="lg"
                   aria-label="Refresh preview"
+                  disabled={isPending}
                   onClick={handleRefresh}
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -103,6 +141,7 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                   variant="outline"
                   size="lg"
                   aria-label="Open preview externally"
+                  disabled={isPending}
                   onClick={handleOpenExternal}
                 >
                   <ExternalLink className="h-4 w-4" />
@@ -111,6 +150,7 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                   variant={showOutput ? 'filled' : 'outline'}
                   size="lg"
                   aria-label="Toggle preview output"
+                  disabled={isPending}
                   onClick={() => setShowOutput(!showOutput)}
                 >
                   <Terminal className="h-4 w-4" />
@@ -120,31 +160,23 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                   variant="filled"
                   size="lg"
                   aria-label="Stop preview"
-                  onClick={handleStop}
-                  disabled={stopPreview.isPending}
+                  onClick={() => void runOperation('stop')}
+                  disabled={isPending}
+                  loading={operation === 'stop'}
                 >
-                  {stopPreview.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Square className="h-4 w-4" />
-                  )}
+                  <Square className="h-4 w-4" />
                 </ActionIcon>
               </>
             )}
 
             {!isRunning && !isStarting && (
               <Button
-                onClick={handleStart}
-                disabled={startPreview.isPending || !task.git?.repo}
-                leftSection={
-                  startPreview.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )
-                }
+                onClick={() => void runOperation('start')}
+                disabled={isPending || !task.git?.repo}
+                loading={operation === 'start'}
+                leftSection={<Play className="h-4 w-4" />}
               >
-                {startPreview.isPending ? 'Starting...' : 'Start Preview'}
+                Start Preview
               </Button>
             )}
           </Group>
@@ -152,6 +184,17 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
 
         {/* Content Area */}
         <Stack gap={0} className="vk-overlay-scroll">
+          {requestError && (
+            <Alert
+              ref={errorRef}
+              tabIndex={-1}
+              color="red"
+              title="Preview request failed"
+              className="m-4 shrink-0"
+            >
+              {requestError}
+            </Alert>
+          )}
           {/* Loading state */}
           {(isLoading || isStarting) && (
             <Stack align="center" justify="center" gap="sm" className="flex-1">
@@ -173,7 +216,11 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
               <Text size="sm" c="dimmed" className="max-w-md">
                 {status && 'error' in status ? status.error : 'An error occurred'}
               </Text>
-              <Button onClick={handleStart} leftSection={<RefreshCw className="h-4 w-4" />}>
+              <Button
+                onClick={() => void runOperation('start')}
+                disabled={isPending || !task.git?.repo}
+                leftSection={<RefreshCw className="h-4 w-4" />}
+              >
                 Try Again
               </Button>
             </Stack>
@@ -189,11 +236,6 @@ export function PreviewPanel({ task, open, onOpenChange }: PreviewPanelProps) {
                   ? 'Start the dev server to see a live preview of your changes.'
                   : 'Configure a repository for this task to use preview.'}
               </Text>
-              {startPreview.error && (
-                <Text size="sm" c="red">
-                  {startPreview.error.message}
-                </Text>
-              )}
             </Stack>
           )}
 

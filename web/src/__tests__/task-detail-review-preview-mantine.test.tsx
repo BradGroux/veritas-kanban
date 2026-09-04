@@ -44,11 +44,13 @@ vi.mock('@/hooks/usePreview', () => ({
   usePreviewOutput: mocks.usePreviewOutput,
   useStartPreview: () => ({
     mutate: mocks.startPreviewMutate,
+    mutateAsync: mocks.startPreviewMutate,
     isPending: false,
     error: null,
   }),
   useStopPreview: () => ({
     mutate: mocks.stopPreviewMutate,
+    mutateAsync: mocks.stopPreviewMutate,
     isPending: false,
   }),
 }));
@@ -108,6 +110,8 @@ describe('task detail review and preview Mantine migration', () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.stubGlobal('open', vi.fn());
     mocks.mergeWorktreeMutate.mockReset().mockResolvedValue(undefined);
+    mocks.startPreviewMutate.mockReset().mockResolvedValue(undefined);
+    mocks.stopPreviewMutate.mockReset().mockResolvedValue(undefined);
     mocks.resolveConflictMutateAsync.mockResolvedValue({ success: true });
     mocks.abortConflictMutateAsync.mockResolvedValue({ success: true });
     mocks.continueConflictMutateAsync.mockResolvedValue({ success: true });
@@ -498,6 +502,67 @@ describe('task detail review and preview Mantine migration', () => {
     expect(onStartAddComment).toHaveBeenCalledTimes(2);
     expect(container.querySelector('.veritas-secondary-action')).toBe(addComment);
   });
+
+  it.each(['start', 'stop'] as const)(
+    'retains preview %s ownership through failure and retry',
+    async (operation) => {
+      let rejectRequest!: (error: Error) => void;
+      const mutation = operation === 'start' ? mocks.startPreviewMutate : mocks.stopPreviewMutate;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRequest = reject;
+          })
+      );
+      mocks.usePreviewStatus.mockReturnValue({
+        data:
+          operation === 'start'
+            ? { status: 'error', error: 'Previous preview failed' }
+            : { status: 'running', url: 'http://localhost:4321', output: [] },
+        isLoading: false,
+      });
+      const onOpenChange = vi.fn();
+      renderWithProviders(
+        <PreviewPanel
+          task={createMockTask({
+            id: 'task-preview-pending',
+            git: { repo: 'veritas', branch: 'fixture', baseBranch: 'main' },
+          })}
+          open
+          onOpenChange={onOpenChange}
+        />
+      );
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close dialog' }))
+      );
+      const submit = screen.getByRole('button', {
+        name: operation === 'start' ? 'Start Preview' : 'Stop preview',
+      });
+      fireEvent.click(submit);
+      fireEvent.click(submit);
+      if (operation === 'start') fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(mutation).toHaveBeenCalledExactlyOnceWith('task-preview-pending');
+      expect((submit as HTMLButtonElement).disabled).toBe(true);
+      if (operation === 'stop') {
+        for (const name of ['Refresh preview', 'Open preview externally', 'Toggle preview output'])
+          expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+      }
+      await act(async () => rejectRequest(new Error(`Fixture ${operation} request failed`)));
+      const error = screen.getByRole('alert', { name: 'Preview request failed' });
+      expect(error.textContent).toContain(`Fixture ${operation} request failed`);
+      expect(document.activeElement).toBe(error);
+      expect((submit as HTMLButtonElement).disabled).toBe(false);
+      await act(async () => fireEvent.click(submit));
+      expect(mutation).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('alert', { name: 'Preview request failed' })).toBeNull();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  );
 
   it('renders preview drawer controls through direct Mantine primitives', async () => {
     const user = userEvent.setup();
