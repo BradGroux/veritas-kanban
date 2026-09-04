@@ -72,6 +72,8 @@ Independent specification and standards reviews found no actionable source issue
 
 ### Metrics export
 
+Export dates use inclusive UTC calendar-day bounds: From starts at 00:00:00.000Z and To ends at 23:59:59.999Z on the selected dates. The dialog states this convention. Exact-query component checks cover ordinary dates and daylight-saving transition dates; run the date slice under UTC, America/Chicago, and Asia/Tokyo to verify independence from the host timezone.
+
 `task-export-popout.spec.ts` opens export from task History/Metrics and tests both themes and motion settings at the three viewport/text combinations. It checks fixed footer geometry and hit targets, viewport containment, nested inert state, guarded Escape/header/backdrop dismissal, disabled filters while exporting, retained filters after failure, and a successful synthetic download on retry with an identical query and exact opener restoration. The retry uses a response with no filename header and verifies the generic fallback name. No real telemetry export is performed.
 
 The original browser case reproduced dismissal while the request was pending. Export now uses a synchronous submission/dismissal lock, exposes an inline error, and preserves scope/date filters on failure. The error receives focus without native scrolling and is then centered in the primary scroller; focus alone left its bottom edge clipped at minimum size. Browser and component checks verify the focus/scroll behavior. The component regression also tests immediate duplicate submission and restored Cancel availability.

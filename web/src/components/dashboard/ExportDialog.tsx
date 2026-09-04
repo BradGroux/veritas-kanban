@@ -89,7 +89,7 @@ export function ExportDialog({
       }
       if (toDate) {
         const toDateTime = new Date(toDate);
-        toDateTime.setHours(23, 59, 59, 999);
+        toDateTime.setUTCHours(23, 59, 59, 999);
         params.set('to', toDateTime.toISOString());
       }
 
@@ -200,6 +200,9 @@ export function ExportDialog({
           />
         )}
 
+        <Text size="xs" c="dimmed">
+          Dates use UTC. Both selected days are included.
+        </Text>
         <TextInput
           label="From"
           disabled={isExporting}

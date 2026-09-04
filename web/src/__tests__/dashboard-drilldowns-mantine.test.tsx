@@ -246,6 +246,27 @@ describe('dashboard Mantine drilldown surfaces', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it.each(['2026-09-02', '2026-03-08', '2026-11-01'])(
+    'exports the full UTC calendar day for %s regardless of host timezone',
+    async (date) => {
+      const request = vi
+        .spyOn(apiHelpers, 'apiResponse')
+        .mockRejectedValueOnce(new Error('Fixture export failed'));
+      renderWithProviders(<ExportDialog open onOpenChange={vi.fn()} taskId="task-export" />);
+      const dialog = screen.getByRole('dialog', { name: 'Export Metrics' });
+      fireEvent.change(within(dialog).getByLabelText('From'), { target: { value: date } });
+      fireEvent.change(within(dialog).getByLabelText('To'), { target: { value: date } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Export' }));
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+      const url = new URL(String(request.mock.calls[0][0]), 'http://fixture.local');
+      expect(url.searchParams.get('from')).toBe(`${date}T00:00:00.000Z`);
+      expect(url.searchParams.get('to')).toBe(`${date}T23:59:59.999Z`);
+      await waitFor(() =>
+        expect(within(dialog).getByRole('alert').textContent).toContain('Fixture export failed')
+      );
+    }
+  );
+
   it('renders dashboard drilldown content through direct Mantine primitives and preserves selection', async () => {
     const user = userEvent.setup();
     const onTaskClick = vi.fn();
