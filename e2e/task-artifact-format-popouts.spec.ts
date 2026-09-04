@@ -231,6 +231,42 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
             await expect(dialog).toBeVisible();
             await expect(dialog.getByRole('button', { name: 'Close dialog' })).toBeDisabled();
             await expect(dialog.getByRole('button', { name: 'Causal event' })).toBeDisabled();
+            // Reduced-motion transitions must not remove the loader's layout transform.
+            for (const size of [
+              { width: 1700, height: 900, fontSize: '16px' },
+              { width: 1180, height: 760, fontSize: '20px' },
+              { width: 900, height: 480, fontSize: '20px' },
+            ]) {
+              await page.setViewportSize(size);
+              await page.evaluate((fontSize) => {
+                document.documentElement.style.fontSize = fontSize;
+              }, size.fontSize);
+              const refresh = dialog.getByRole('button', { name: 'Refresh', exact: true });
+              await expect(refresh).toBeDisabled();
+              await expect
+                .poll(
+                  () =>
+                    refresh.evaluate((button) => {
+                      const loader = button.querySelector('.mantine-Button-loader');
+                      if (!loader) return false;
+                      const outer = button.getBoundingClientRect();
+                      const inner = loader.getBoundingClientRect();
+                      return (
+                        inner.width > 0 &&
+                        inner.height > 0 &&
+                        inner.left >= outer.left &&
+                        inner.right <= outer.right &&
+                        inner.top >= outer.top &&
+                        inner.bottom <= outer.bottom &&
+                        Math.abs(inner.left + inner.width / 2 - outer.left - outer.width / 2) <=
+                          1 &&
+                        Math.abs(inner.top + inner.height / 2 - outer.top - outer.height / 2) <= 2
+                      );
+                    }),
+                  { message: 'Loading indicator must be centered and fully inside its button' }
+                )
+                .toBe(true);
+            }
             expect(
               audits.filter((entry) => (entry as { action: string }).action === 'refresh')
             ).toHaveLength(1);

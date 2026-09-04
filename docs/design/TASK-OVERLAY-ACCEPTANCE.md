@@ -124,4 +124,6 @@ The initial component regression reproduced immediate dismissal after dispatch. 
 
 ## Remaining acceptance
 
+Shared loading buttons retain a static centering transform when reduced-motion transitions omit their styles. Normal-motion transitions continue to own their animated transform. The HTML artifact Refresh regression checks a held request at normal and enlarged text sizes, requiring the loading indicator to remain centered and fully inside its button. The original packaged-candidate clipping remains historical evidence; fresh affected native verification is required after integration and rebuilding.
+
 Complete every family in both themes, normal and enlarged text, minimum native window size, keyboard entry/dismissal, reduced motion, pending-operation states, and viewport/footer reachability. Rebuild the packaged application with the complete family and inspect native captures. Reconcile the consumer inventory only against that evidence. Final installed-app verification and the maintained documentation screenshots/GIF refresh remain separate, unfinished work.
