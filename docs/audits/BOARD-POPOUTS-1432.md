@@ -18,4 +18,6 @@ Unsigned candidate `bda76b05` was rebuilt with `pnpm desktop:package:mac:dir`. T
 
 The inspection also found an independent overflow in the underlying archive-suggestion banner when a sprint name is long and unbroken. That banner can horizontally pan the Board even though the confirmation dialog remains bounded. It is a separate follow-up, not covered by this modal-only acceptance.
 
+Specification review found no actionable gaps. Standards review found Cancel used the outlined secondary variant instead of the documented quiet dismissal variant. All four render locations, covering five flows, now use quiet; the reviewer confirmed the finding cleared. Handlers and autofocus are unchanged. The native captures above precede this final styling correction; a refreshed candidate check is required before merge.
+
 Installed-app replacement, other overlay families, final documentation images/GIFs, and release remain unfinished requirements. These diagnostic captures are not the final documentation media refresh.

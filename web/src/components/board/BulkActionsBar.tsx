@@ -379,7 +379,7 @@ export function BulkActionsBar({ tasks }: BulkActionsBarProps) {
         </div>
         <OverlayFooter>
           <UiAction
-            variant="secondary"
+            variant="quiet"
             data-autofocus
             onClick={() => setShowDeleteConfirm(false)}
             disabled={isProcessing}
