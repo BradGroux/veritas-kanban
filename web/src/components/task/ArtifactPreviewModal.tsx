@@ -185,7 +185,7 @@ export function ArtifactPreviewModal({
                 Refresh
               </Button>
             )}
-            {(preview.renderer === 'image' || preview.renderer === 'pdf') && (
+            {preview.renderer === 'image' && (
               <>
                 <Button
                   variant="default"
@@ -241,11 +241,15 @@ export function ArtifactPreviewModal({
 
 function PreviewBody({ preview, zoom }: { preview: WorkProductArtifactPreview; zoom: number }) {
   if (preview.status !== 'ready' || !preview.content) {
+    const pdfDownload =
+      preview.status === 'unsupported' && preview.artifact?.mediaType === 'application/pdf';
     return (
       <Alert
-        color="yellow"
-        title={statusLabel(preview.status)}
-        icon={<AlertTriangle className="h-4 w-4" />}
+        color={pdfDownload ? 'blue' : 'yellow'}
+        title={pdfDownload ? 'PDF download' : statusLabel(preview.status)}
+        icon={
+          pdfDownload ? <Download className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />
+        }
       >
         {preview.message}
       </Alert>
@@ -293,21 +297,10 @@ function PreviewBody({ preview, zoom }: { preview: WorkProductArtifactPreview; z
   }
   if (preview.content.kind === 'pdf') {
     return (
-      <Paper withBorder p="xs" h={520} style={{ overflow: 'auto' }}>
-        <iframe
-          title={`${preview.artifact?.safeName ?? 'Artifact'} PDF preview`}
-          src={`data:application/pdf;base64,${preview.content.base64}`}
-          sandbox=""
-          referrerPolicy="no-referrer"
-          style={{
-            border: 0,
-            width: `${100 / zoom}%`,
-            height: `${500 / zoom}px`,
-            transform: `scale(${zoom})`,
-            transformOrigin: 'top left',
-          }}
-        />
-      </Paper>
+      <Alert title="PDF download">
+        Download this PDF and open it in your preferred PDF viewer. Inline PDF preview is not
+        supported.
+      </Alert>
     );
   }
   return (

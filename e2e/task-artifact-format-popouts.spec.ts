@@ -10,10 +10,6 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
         page,
         context,
       }) => {
-        test.fixme(
-          kind === 'pdf',
-          '#1448: PDF page rendering is unproven: the sandboxed viewer is blank; footer checks are not acceptance.'
-        );
         await bypassAuth(page);
         await page.emulateMedia({ reducedMotion });
         await page.addInitScript(
@@ -95,9 +91,12 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
             return route.fulfill({
               json: {
                 schemaVersion: 'work-product-artifact-preview/v1',
-                status: 'ready',
-                renderer: kind,
-                message: 'Preview ready',
+                status: kind === 'pdf' ? 'unsupported' : 'ready',
+                renderer: kind === 'pdf' ? 'none' : kind,
+                message:
+                  kind === 'pdf'
+                    ? 'Download this PDF and open it in your preferred PDF viewer. Inline PDF preview is not supported.'
+                    : 'Preview ready',
                 artifact,
                 sourceRunId: 'run_fixture',
                 causalEvent: {
@@ -127,7 +126,7 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
                           height: 512,
                           animated: false,
                         }
-                      : { kind, base64: bytes.toString('base64'), pages: 1 },
+                      : null,
               },
             });
           }
@@ -158,9 +157,13 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
                   .evaluate((el) => (el as HTMLImageElement).naturalWidth)
               )
               .toBe(512);
-          } else {
+          } else if (kind === 'html') {
             await expect(dialog.locator('iframe')).toHaveAttribute('sandbox', '');
             await expect(dialog.locator('iframe')).toHaveAttribute('referrerpolicy', 'no-referrer');
+          } else {
+            await expect(dialog.getByText(/Download this PDF and open it/)).toBeVisible();
+            await expect(dialog.locator('iframe, embed, object')).toHaveCount(0);
+            await expect(dialog.getByRole('button', { name: /Zoom preview/ })).toHaveCount(0);
           }
           if (kind === 'html')
             await expect(
@@ -200,7 +203,11 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
               'Close dialog',
               'Download',
               'Causal event',
-              ...(kind === 'html' ? ['Refresh'] : ['Zoom preview in', 'Zoom preview out']),
+              ...(kind === 'html'
+                ? ['Refresh']
+                : kind === 'image'
+                  ? ['Zoom preview in', 'Zoom preview out']
+                  : []),
             ]) {
               await expect(dialog.getByRole('button', { name, exact: true })).toBeInViewport({
                 ratio: 1,
@@ -211,12 +218,12 @@ for (const kind of ['image', 'pdf', 'html'] as const) {
             if (kind === 'html')
               expect((await dialog.locator('iframe').boundingBox())!.height).toBeGreaterThan(500);
           }
-          if (kind !== 'html') {
+          if (kind === 'image') {
             await dialog.getByRole('button', { name: 'Zoom preview in' }).click();
             await expect(dialog.getByLabel('Preview zoom 125 percent')).toBeVisible();
             await dialog.getByRole('button', { name: 'Zoom preview out' }).click();
             await expect(dialog.getByLabel('Preview zoom 100 percent')).toBeVisible();
-          } else {
+          } else if (kind === 'html') {
             await dialog.getByRole('button', { name: 'Refresh' }).click();
             await expect.poll(() => reads).toBe(2);
             await expect(dialog.getByRole('button', { name: 'Refresh' })).toBeDisabled();

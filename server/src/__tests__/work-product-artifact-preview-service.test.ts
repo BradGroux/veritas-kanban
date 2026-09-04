@@ -122,12 +122,14 @@ describe('WorkProductArtifactPreviewService', () => {
     await expect(preview()).resolves.toMatchObject({ status: 'oversized', renderer: 'none' });
   });
 
-  it('allows bounded passive PDFs and blocks active document actions', async () => {
+  it('offers PDF download without preview bytes and preserves active-content rejection', async () => {
     readPreviewSource.mockResolvedValueOnce(source('application/pdf', pdfFixture()));
     await expect(preview()).resolves.toMatchObject({
-      status: 'ready',
-      renderer: 'pdf',
-      content: { kind: 'pdf', pages: 1 },
+      status: 'unsupported',
+      renderer: 'none',
+      content: null,
+      message: expect.stringContaining('preferred PDF viewer'),
+      actions: { downloadAllowed: true },
     });
 
     readPreviewSource.mockResolvedValueOnce(

@@ -74,7 +74,7 @@ describe('ArtifactPreviewModal', () => {
     });
   });
 
-  it('renders text, raster, PDF, and formula-marked table contracts', async () => {
+  it('renders text, raster, legacy PDF fallback, and formula-marked table contracts', async () => {
     const user = userEvent.setup();
     const cases: Array<{
       response: WorkProductArtifactPreview;
@@ -94,9 +94,9 @@ describe('ArtifactPreviewModal', () => {
       {
         response: preview({ kind: 'pdf', base64: 'JVBERg==', pages: 1 }, 'pdf'),
         assertion: () => {
-          const frame = screen.getByTitle('preview.bin PDF preview');
-          expect(frame.getAttribute('sandbox')).toBe('');
-          expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+          expect(screen.getByText(/Download this PDF and open it/)).toBeDefined();
+          expect(document.querySelector('iframe, embed, object')).toBeNull();
+          expect(screen.queryByRole('button', { name: 'Zoom preview in' })).toBeNull();
         },
       },
       {
@@ -137,6 +137,32 @@ describe('ArtifactPreviewModal', () => {
         expect(screen.getByLabelText('Preview zoom 125 percent')).toBeDefined();
       }
       rendered.unmount();
+    }
+  });
+
+  it('downloads the exact PDF version without embedding or opening it automatically', async () => {
+    const user = userEvent.setup();
+    const response = preview(null, 'pdf');
+    response.status = 'unsupported';
+    response.renderer = 'none';
+    response.message = 'Download this PDF and open it in your preferred PDF viewer.';
+    response.artifact!.safeName = 'report.pdf';
+    mocks.previewArtifact.mockResolvedValue(response);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      renderWithProviders(
+        <ArtifactPreviewModal opened productId="wp_pdf" version={2} onClose={vi.fn()} />
+      );
+      await screen.findByText('PDF download');
+      expect(document.querySelector('iframe, embed, object')).toBeNull();
+      expect(screen.queryByRole('button', { name: /Zoom preview/ })).toBeNull();
+      expect(mocks.downloadArtifact).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: /^Download$/ }));
+      await waitFor(() => expect(click).toHaveBeenCalledOnce());
+      expect(mocks.downloadArtifact).toHaveBeenCalledWith('wp_pdf', 2);
+      expect((click.mock.instances[0] as HTMLAnchorElement).download).toBe('report.pdf');
+    } finally {
+      click.mockRestore();
     }
   });
 
