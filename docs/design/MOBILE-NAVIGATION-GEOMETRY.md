@@ -7,3 +7,9 @@ Measure the toolbar at activation, including enlarged text. Round the resulting 
 The existing `e2e/mobile-board-scroll.spec.ts` browser checks cover navigation from Activity and repeated Home/Board activation at 390px and 430px widths with 16px and 20px root text. They require zero overlap and at most two pixels of clearance. At 390px with 20px text, the regression was a 73.5px toolbar and a requested 453.5px scroll offset that Chromium rounded to 454px, obscuring 0.5px of the board.
 
 These browser checks do not establish packaged macOS, signed-release, or documentation-media acceptance. Those remain separate integration gates.
+
+## Populated Activity containment
+
+Activity rows must fit the viewport rather than expanding the mobile layout viewport around fixed navigation. Below the small-screen breakpoint, timestamp/status controls may wrap and task identity occupies a separate line with a wrapping ID and title. Wider layouts retain the existing single-row arrangement. No status, ID, or title is hidden to make the row fit.
+
+`e2e/mobile-navigation-hit-target.spec.ts` supplies populated Activity records with realistic-length IDs independently of prior tests. It checks layout width, all navigation and Chat hit targets, and pointer/keyboard return to Board at narrow widths, enlarged text, and both motion preferences. The original 320px case expanded the layout viewport to 424px while the visual viewport remained 320px; increasing navigation z-index would not fix that mismatch.
