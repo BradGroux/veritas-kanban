@@ -289,10 +289,12 @@ describe('task detail work products surface', () => {
     const previewDialog = await screen.findByRole('dialog', {
       name: 'Preview: Release report PDF',
     });
-    expect(within(previewDialog).getByTitle('release-report.pdf PDF preview')).toBeDefined();
+    expect(within(previewDialog).getByText(/Download this PDF and open it/)).toBeDefined();
+    expect(previewDialog.querySelector('iframe, embed, object')).toBeNull();
+    expect(within(previewDialog).queryByRole('button', { name: /Zoom preview/ })).toBeNull();
     expect(previewArtifactMock).toHaveBeenCalledWith(fileProduct.id, 1);
 
-    await user.click(screen.getByRole('button', { name: 'Download release-report.pdf' }));
+    await user.click(within(previewDialog).getByRole('button', { name: /^Download$/ }));
 
     await waitFor(() => expect(downloadArtifactMock).toHaveBeenCalledWith(fileProduct.id, 1));
     expect(URL.createObjectURL).toHaveBeenCalled();
