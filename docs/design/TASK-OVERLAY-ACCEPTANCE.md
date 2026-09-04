@@ -36,6 +36,12 @@ Reduced-motion preferences make CSS transitions immediate, with no transition de
 - `task-detail.spec.ts` expanded-workspace case passed. `task-popout-stack.spec.ts` adds template and nested-utility browser checks. Fixtures do not launch agents, start preview servers, resolve conflicts, or create managed worktrees; managed ownership exists only in intercepted browser reads.
 - Independent standards and specification source reviews identified scrolling utility controls and non-quiet Cancel actions. Both were corrected and cleared on recheck. Remaining evidence gaps are explicit above.
 
+### Apply Template submission
+
+Apply Template owns submission and dismissal until both the task update and non-fatal activity logging settle. Template selection, variables, overwrite strategy and close controls stay disabled during that operation. Update failures preserve the draft and focus a visible inline error; logging failure after a successful update still completes the application. Variable input values remain stable across deferred rendering.
+
+The verification contract includes immediate duplicate prevention, retained inputs, deliberate retry and delayed logging failure. `task-template-pending.spec.ts` checks pending and failed states in both themes and motion settings at 1700×900/16px, 1180×760/20px and 900×480/20px, with fixed/reachable footers, exact intercepted update payloads, disabled dismissal/inputs and opener restoration. Fixture-backed browser checks do not establish native utility-operation or final documentation-media acceptance. Delivery evidence is tracked in #1503.
+
 ### Supporting task dialogs
 
 `task-support-popouts.spec.ts` covers task, comment, attachment, observation, and deliverable deletion plus manual time entry. Each family is exercised in light/dark, normal/reduced motion, and 1700×900 at 16px, 1180×760 at 20px, and 900×480 at 20px. Checks cover bounded bodies, fixed/reachable footers, no horizontal overflow, keyboard opening, trapped focus, exact opener restoration, and retained task title. Delayed synthetic failed requests exercise Escape, header-close, and backdrop dismissal guards, one submission, inline error recovery, and preserved manual-time drafts. This proves retry availability, not a successful retry. No supporting-record mutation reaches the backend.
