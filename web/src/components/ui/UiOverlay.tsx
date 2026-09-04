@@ -266,7 +266,10 @@ export function UiTaskSurface({
               'veritas-overlay-surface vk-task-workspace flex h-full min-h-0 max-h-[100dvh] flex-col overflow-hidden border-l bg-background bg-clip-padding text-sm shadow-lg',
           }}
         >
-          <Drawer.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+          <Drawer.Body
+            style={{ padding: 0 }}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
             {children}
           </Drawer.Body>
         </Drawer.Content>

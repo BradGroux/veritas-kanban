@@ -58,6 +58,7 @@ describe('shared popout contract', () => {
     // wrapper; the size-container class must only be on the visible content.
     expect(task.classList.contains('vk-task-workspace')).toBe(true);
     expect(task.parentElement?.classList.contains('vk-task-workspace')).toBe(false);
+    expect(task.querySelector<HTMLElement>('.mantine-Drawer-body')?.style.padding).toBe('0px');
     const draft = screen.getByRole('textbox', { name: 'Retained draft' });
     fireEvent.change(draft, { target: { value: 'Changed without saving' } });
     for (const presentation of ['expanded', 'drawer']) {

@@ -26,6 +26,8 @@ describe('PrimaryPageShell', () => {
     );
 
     const heading = screen.getByRole('heading', { level: 1, name: 'Evidence Timeline' });
+    expect(heading.style.fontSize).toBe('1.5rem');
+    expect(heading.style.lineHeight).toBe('2rem');
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     await waitFor(() => expect(document.activeElement).toBe(heading));
     expect(screen.getByText('Chronological source-backed evidence.')).toBeTruthy();
