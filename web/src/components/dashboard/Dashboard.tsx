@@ -225,7 +225,7 @@ export function Dashboard({ onTaskClick }: DashboardProps = {}) {
       />
 
       {/* Status bar: enforcement indicator + updated timestamp */}
-      <div className="flex items-center justify-between -mt-2">
+      <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
         <EnforcementIndicator />
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />

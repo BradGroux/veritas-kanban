@@ -8,6 +8,12 @@ The existing `e2e/mobile-board-scroll.spec.ts` browser checks cover navigation f
 
 These browser checks do not establish packaged macOS, signed-release, or documentation-media acceptance. Those remain separate integration gates.
 
+## Late dashboard content
+
+Tracking: #1495. The embedded dashboard's enforcement status and update timestamp wrap onto separate lines when they cannot fit side by side. Both remain visible. A below-the-fold row can expand the mobile layout viewport even while the user is interacting with Chat near the top of the page; fixed navigation then moves outside the visual viewport.
+
+`e2e/mobile-dashboard-status.spec.ts` waits for the lazy dashboard to load at 320px with enlarged text, checks both status items and the page width, then verifies Chat close/reopen with draft retention. Do not replace this with a check made before the dashboard mounts, broad overflow clipping, or forced clicks.
+
 ## Populated Activity containment
 
 Activity rows must fit the viewport rather than expanding the mobile layout viewport around fixed navigation. Below the small-screen breakpoint, timestamp/status controls may wrap and task identity occupies a separate line with a wrapping ID and title. Wider layouts retain the existing single-row arrangement. No status, ID, or title is hidden to make the row fit.
