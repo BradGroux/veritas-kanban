@@ -1,13 +1,24 @@
 # Veritas Kanban v6 GA Checklist
 
 This checklist contains the active stable-release gate for Veritas Kanban
-6.1.6 and retains the completed 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
+6.1.7 and retains the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
 Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-09-03 for the completed Veritas Kanban 6.1.6 release.
+Documentation freshness: 2026-09-04 for the completed Veritas Kanban 6.1.7 release.
 
-## 6.1.6 Release Gate
+## 6.1.7 Release Gate
+
+- [x] macOS UI tracker #1389 and child issues #1378-#1388 are complete through focused merged work, the final signed candidate, refreshed documentation media, and the separately verified installed app.
+- [x] Root, shared, server, web, CLI, MCP, desktop, changelog, reviewed release source, and public documentation identify 6.1.7 without an API or database migration.
+- [x] Signed capture run [33926469724](https://github.com/BradGroux/veritas-kanban/actions/runs/33926469724) passed 144 of 144 required native states, detected all six seeded defects, and retained the exact build `ed5094c6a5f9dd6958ceb952d8d018a40135bf33` with whole-bundle SHA-256 `a23df6443940aff4d9b5013b97ab753b986a63f3bb15dc0d3a8c6aaace866f94`.
+- [x] The 14 maintained screenshots and GIFs were captured from that exact candidate, verified by digest, visually reviewed, and published unchanged in commit `6befd39cbc1264b18fa272d25bc64642f2b60383`.
+- [x] Annotated tag `v6.1.7` (`9c3bf5b60bdd836e0a248a150892fc59ef5a6703`) peels to the documentation-media commit, and promotion run [33928175193](https://github.com/BradGroux/veritas-kanban/actions/runs/33928175193) passed after publishing the live release and signed assets.
+- [x] Homebrew tap [PR #63](https://github.com/BradGroux/homebrew-tap/pull/63) publishes the signed 6.1.7 ZIP with SHA-256 `ac0b84ced655b02a87b2964f1036916683ba95628ef9acfeace6beac8142ff17`; strict audit, fetch, livecheck, installed version, signature, notarization, staple, listener, and exact health checks pass.
+- [x] The Homebrew-installed app passed first launch, dark/light 1180×760 Workbench and rail checks, draft retention, wide-to-compact resizing, fullscreen recovery, and compact quit/relaunch without clipped controls, blank space, dead actions, or the retired bottom dock.
+- [x] The coordinated private security advisory was closed without publication at the owner's direction after the fixed versions were available in every supported distribution channel.
+
+## Historical 6.1.6 Release Gate
 
 - [x] Focused fixes #1367-#1373 close dependency, app-shell containment, Settings, Command+K, desktop wordmark, consecutive drag, and action/navigation consistency issues #1360-#1366.
 - [x] Production and complete dependency audits report no known vulnerabilities, and the default branch has zero open Dependabot alerts.
@@ -148,7 +159,7 @@ Documentation freshness: 2026-09-03 for the completed Veritas Kanban 6.1.6 relea
 Apply `ci:full` to the release pull request and keep it applied through the
 final candidate synchronization. That single milestone runs the complete
 workspace suite, critical-path coverage, unsigned desktop artifacts, and
-Docker image contract. Run the following commands once from the clean 6.1.6
+Docker image contract. Run the following commands once from the clean 6.1.7
 release candidate at the supported Node floor and current supported Node:
 
 ```bash
@@ -178,8 +189,8 @@ pnpm desktop:dev:fresh
 pnpm desktop:smoke:mac:local
 pnpm desktop:package:mac:unsigned
 pnpm test:release-format
-pnpm validate:release -- --version 6.1.6 --skip-build-output --source-only
-pnpm validate:release -- --version 6.1.6 --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --docker-build
+pnpm validate:release -- --version 6.1.7 --skip-build-output --source-only
+pnpm validate:release -- --version 6.1.7 --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --docker-build
 ```
 
 Source preflight is not release acceptance. Full validation requires the exact clean candidate's fresh native matrix and retained screenshots; signing, installed-app, documentation-media, and publication evidence remain separate gates. See [desktop release verification](DESKTOP-RELEASE.md#native-gate-before-macos-upload).
@@ -193,12 +204,13 @@ gates at Node 22.22.1 and the current supported Node runtime.
 
 ## Distribution And Post-Publication
 
-The 6.1.6 release is published and verified. Release PR #1375 merged as
-`655df233d5b0ed0e8ebf1e54076b692c8cae893c`; annotated `v6.1.6`, the exact live
-release body, signed/notarized assets, updater metadata, isolated downloaded-app
-readiness, post-publication validation, and Homebrew PR #61 passed. Homebrew
-upgraded the installed 6.1.5 app to 6.1.6 while retaining its existing user
-profile. Exact evidence is recorded in the release candidate evidence packet.
+The 6.1.7 release is published and verified. Annotated tag `v6.1.7` peels to
+`6befd39cbc1264b18fa272d25bc64642f2b60383`; the exact live release body,
+signed/notarized assets, updater metadata, retained native matrix,
+post-publication validation, Homebrew PR #63, and the independently exercised
+installed app passed. The coordinated private advisory was closed without
+publication at the owner's direction. Exact evidence is recorded in the
+release candidate evidence packet.
 
 ## Historical 6.0.2 Source And Scope
 

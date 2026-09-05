@@ -1,16 +1,79 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the completed Veritas Kanban 6.1.6 desktop reliability release and
-retains historical evidence for the completed 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
+This packet records the completed Veritas Kanban 6.1.7 macOS UI and interaction release and
+retains historical evidence for the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
 publication, and Homebrew availability.
 
-Veritas Kanban 6.1.6 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
+Veritas Kanban 6.1.7 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-09-03 for the completed Veritas Kanban 6.1.6 release.
+Documentation freshness: 2026-09-04 for the completed Veritas Kanban 6.1.7 release.
 
-## 6.1.6 Desktop Reliability Release
+## 6.1.7 macOS UI and interaction release
+
+| Field                     | Value                                                                                                                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release version           | 6.1.7                                                                                                                                                                                                   |
+| Release tracker           | [#1389](https://github.com/BradGroux/veritas-kanban/issues/1389), covering child issues #1378-#1388                                                                                                     |
+| Version preparation       | [PR #1494](https://github.com/BradGroux/veritas-kanban/pull/1494), merged as `62b95ee9a72ed7ca2010737b1b88f4956a469b50`                                                                                 |
+| Signed candidate          | Build `ed5094c6a5f9dd6958ceb952d8d018a40135bf33`, whole-bundle SHA-256 `a23df6443940aff4d9b5013b97ab753b986a63f3bb15dc0d3a8c6aaace866f94`                                                               |
+| Release source            | Annotated tag object `9c3bf5b60bdd836e0a248a150892fc59ef5a6703` peels to `6befd39cbc1264b18fa272d25bc64642f2b60383`, which contains the exact captured documentation media                              |
+| Version and compatibility | All maintained packages are 6.1.7; REST API remains `v1`; no database migration; valid 6.1.6 workspaces remain compatible; macOS 13 arm64 minimum                                                       |
+| Native and media evidence | 144 of 144 required states passed, all six seeded defects were detected, and 14 maintained screenshots and GIFs were captured, hash-verified, visually reviewed, and published from the exact candidate |
+| Publication status        | Complete: live tag and release body, signed/notarized assets, updater metadata, Homebrew cask, installed-app verification, and owner-directed private advisory disposition all passed                   |
+
+The signed capture run
+[33926469724](https://github.com/BradGroux/veritas-kanban/actions/runs/33926469724)
+completed the full packaged macOS matrix in light and dark appearance at the
+1700×760 expanded and 1180×760 compact content sizes. It covered every required
+route, task drawer and expanded mode, Board Chat, Squad Chat, Task Chat,
+Settings, shared popouts, relaunch behavior, keyboard behavior, reduced motion,
+and the final HTTP ledger. All six deliberate faults were detected. The only
+accepted HTTP exceptions were documented optional task-chat 404 responses; no
+429 or 5xx response remained.
+
+The same run retained the candidate and the 14 documentation assets. Those
+exact files were verified by digest, visually reviewed, and published unchanged
+in commit `6befd39cbc1264b18fa272d25bc64642f2b60383`. Promotion run
+[33928175193](https://github.com/BradGroux/veritas-kanban/actions/runs/33928175193)
+then validated and published the live v6.1.7 tag, release body, and signed
+artifacts.
+
+### 6.1.7 published macOS assets
+
+| Asset                                         |              Size | Published SHA-256                                                  |
+| --------------------------------------------- | ----------------: | ------------------------------------------------------------------ |
+| `Veritas-Kanban-6.1.7-mac-arm64.dmg`          | 280,160,406 bytes | `172531cdad55b6a3683a03da3d0287fd52cebc0ddcc05eb2087dda10f65f2665` |
+| `Veritas-Kanban-6.1.7-mac-arm64.zip`          | 284,591,165 bytes | `ac0b84ced655b02a87b2964f1036916683ba95628ef9acfeace6beac8142ff17` |
+| `Veritas-Kanban-6.1.7-mac-arm64.dmg.blockmap` |     289,072 bytes | `4e68a8bf8614d727362fd6095e026ea0f8d9dc3af2c32c4ea8286fb1b876adc0` |
+| `Veritas-Kanban-6.1.7-mac-arm64.zip.blockmap` |     297,160 bytes | `7b03f01309de28785ee06099f327c7fb301b6a78683bae2022e4798aefda2bd5` |
+| `latest-mac.yml`                              |         530 bytes | `17f1f5fd19f21f1ae3fd455a052f43db0609aa702fe2abd62aebdd1143b87509` |
+
+Homebrew tap [PR #63](https://github.com/BradGroux/homebrew-tap/pull/63)
+merged as `e83f9b53d9ede0826683715ee2e04a84b84a3b82` and publishes the
+verified ZIP digest above. The registered cask reports 6.1.7 and passed Ruby
+syntax, strict online audit, fetch, and livecheck before installation.
+
+After explicit operator approval of macOS's first-launch confirmation,
+`/Applications/Veritas Kanban.app` reported version 6.1.7, passed deep strict
+signature verification, Gatekeeper assessment as a notarized Developer ID
+application, and staple validation. Its bundled server owned the port 3001
+listener and returned `ok: true`, service `veritas-kanban`, and version `6.1.7`
+from `/api/health`.
+
+The installed app was exercised at 1180×760 in both themes. Board Chat, Squad
+Chat, the compact Squad actions popover, sender selection, and composers were
+contained and readable. Opening either auxiliary rail closed Workbench;
+opening Workbench collapsed both rails. A non-sent Squad draft survived channel
+switching and a 1500×900-to-1180×760 resize without being sent. Fullscreen exit
+and a quit/relaunch at the saved minimum size both restored the compact state
+with Workbench and both rails closed. No bottom dock, blank canvas, clipped
+control, or dead chat action remained. The coordinated private advisory was
+closed without publication at the owner's direction after the fixed versions
+were available in every supported distribution channel.
+
+## Historical 6.1.6 Desktop Reliability Release
 
 | Field                      | Value                                                                                                                                                      |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |

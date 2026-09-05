@@ -1,6 +1,6 @@
 # Task overlay family acceptance
 
-Tracking: #1444, parent #1383. Status: accepted for the v6.1.7 packaged release candidate. Homebrew first-launch verification remains a separate boundary under #1389.
+Tracking: #1444, parent #1383. Status: accepted for the v6.1.7 packaged release candidate and the separately verified Homebrew-installed app.
 
 ## Implementation
 
