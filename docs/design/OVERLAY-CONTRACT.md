@@ -1,6 +1,6 @@
 # Shared popout contract
 
-Tracking: #1383; foundation and Template family slice #1401. Status: packaged-candidate contract accepted for v6.1.7. The inventory below preserves the original audit snapshot; final reconciliation and evidence follow it. The issue remains open for its Homebrew-installed compact-window check.
+Tracking: #1383; foundation and Template family slice #1401. Status: accepted for v6.1.7 in both the packaged candidate and the Homebrew-installed app. The inventory below preserves the original audit snapshot; final reconciliation and evidence follow it.
 
 ## Geometry
 
@@ -101,4 +101,13 @@ Open `?ui-gallery=1` and use the Popout geometry cards. Each variant opens the a
 
 Final signed capture run [`33926469724`](https://github.com/BradGroux/veritas-kanban/actions/runs/33926469724) passed all 144 packaged macOS states and detected all six seeded defects from exact build commit `ed5094c6a5f9dd6958ceb952d8d018a40135bf33`. The matrix records computed overlay padding, route geometry, compact-shell behavior, Workbench chat, task drawer/expanded/chat presentations, Preview, confirmations, and functional controls in both themes at 1700×760 and 1180×760. The 14 maintained screenshots and GIFs were captured from that candidate and published in commit `6befd39cbc1264b18fa272d25bc64642f2b60383`. Browser evidence and native evidence remain distinct; both passed their declared scopes.
 
-#1383 and the umbrella #1389 remain open until the Homebrew-installed app is launched through macOS's first-run confirmation and its compact-window behavior is checked. That installed-app requirement is not implied by the packaged-candidate acceptance above.
+The separate Homebrew-installed check passed after explicit operator approval
+of macOS's first-launch confirmation. At 1180×760 in both themes, Board Chat,
+Squad Chat, the compact Squad actions popover, sender selection, and composers
+remained contained. Opening a rail closed Workbench, and opening Workbench
+collapsed both rails. A non-sent Squad Chat draft survived channel switching
+and wide-to-compact resizing; the resize did not send the draft or recreate the
+three-panel squeeze. Fullscreen exit and a quit/relaunch at the saved minimum
+size restored the compact state with Workbench and both rails closed. This
+installed-app evidence completes #1383 and the umbrella #1389; it supplements
+rather than replaces the commit-bound packaged-candidate matrix above.

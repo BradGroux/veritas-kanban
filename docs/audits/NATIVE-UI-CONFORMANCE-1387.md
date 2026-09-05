@@ -3,8 +3,8 @@
 Status: accepted for v6.1.7. Signed capture run
 [`33926469724`](https://github.com/BradGroux/veritas-kanban/actions/runs/33926469724)
 passed the complete packaged macOS gate from build commit
-`ed5094c6a5f9dd6958ceb952d8d018a40135bf33`. Installed Homebrew first-launch
-verification remains a separate release-train boundary under #1389.
+`ed5094c6a5f9dd6958ceb952d8d018a40135bf33`. The Homebrew-installed app also
+passed its separate first-launch and compact-window verification on September 4, 2026.
 
 ## Boundary
 
@@ -48,4 +48,24 @@ The final run closed the diagnostic gaps without weakening the contract:
 - The run retained the signed release candidate, native evidence, and documentation media. The 14 maintained assets were published from those exact captures in commit `6befd39cbc1264b18fa272d25bc64642f2b60383`.
 - Promotion run [`33928175193`](https://github.com/BradGroux/veritas-kanban/actions/runs/33928175193) published v6.1.7, and the post-publication release validator passed against the live tag, release body, and assets.
 
-The packaged-candidate gate is complete. Browser fixtures remain diagnostic, and the Homebrew-installed copy is not counted as opened until the operator accepts macOS's first-launch confirmation and the launched app is checked separately under #1389.
+The packaged-candidate gate is complete. Browser fixtures remain diagnostic.
+After explicit operator approval of macOS's first-launch confirmation, the
+Homebrew-installed `/Applications/Veritas Kanban.app` reported version 6.1.7,
+owned the port 3001 listener through its bundled server, and returned
+`{"ok":true,"service":"veritas-kanban","version":"6.1.7"}` from
+`/api/health`. Deep strict signature verification, Gatekeeper assessment as a
+notarized Developer ID application, and staple validation all passed.
+
+The installed app was then exercised at the 1180×760 minimum window size in
+dark and light appearance. Board Chat, Squad Chat, the compact Squad actions
+popover, sender selector, and composers remained contained and readable.
+Opening either auxiliary rail closed Workbench; reopening either chat channel
+collapsed both rails. A non-sent Squad Chat draft survived channel switching
+and a 1500×900-to-1180×760 resize, while the compact transition closed
+Workbench without sending or clearing the draft. Entering fullscreen with
+Squad Chat open and returning to the saved 1180×760 window also closed
+Workbench and restored the compact rail state. A quit and relaunch at the saved
+minimum size reopened with both rails and Workbench collapsed. No bottom dock,
+blank canvas, clipped controls, or dead chat action was present. This closes
+the installed-app boundary for #1383 and #1389 without treating it as a rerun
+of the separate 144-state packaged-candidate matrix.
