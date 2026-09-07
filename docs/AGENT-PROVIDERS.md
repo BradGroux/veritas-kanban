@@ -689,6 +689,8 @@ and treats only the exact persisted idempotency key as a safe duplicate.
 Provider adapters and restart recovery prepare evidence but cannot implement a
 parallel terminal persistence path.
 
+`RunRecoveryCoordinator` owns restart reconciliation, retry/fallback decisions, scheduled retry timers, and recovered-process monitors. Its public entry points reconcile persisted work, inspect/cancel recovery, claim a retry after admission, and plan from a failure or completion. The host supplies explicit task, journal, supervisor, and launch ports; verified reattachment and exactly-once completion remain with the existing admission and attempt owners. Timers are scoped to one coordinator, and disposing it cancels only its timers. Provider selection, immutable binding checks, fallback eligibility, and retry idempotency are unchanged.
+
 Provider summaries, evidence, artifacts, and verification claims are bounded,
 redacted, and stored as unverified provider evidence. Veritas independently
 captures Git HEAD, post-launch files and commits, task verification state,

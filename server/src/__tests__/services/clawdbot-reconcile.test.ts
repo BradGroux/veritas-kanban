@@ -511,7 +511,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       new RunRecoveryPolicyService(() => 0.5)
     );
     const schedule = vi
-      .spyOn(service as never, 'scheduleTaskRecovery')
+      .spyOn((service as unknown as { recovery: never }).recovery, 'scheduleTaskRecovery')
       .mockImplementation(() => undefined);
 
     await (
@@ -602,7 +602,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       undefined,
       new RunRecoveryPolicyService(() => 0.5)
     );
-    const testable = service as unknown as {
+    const testable = (service as unknown as { recovery: unknown }).recovery as {
       planTaskRecovery(
         taskId: string,
         attempt: TaskAttempt,
@@ -715,7 +715,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     } as never);
 
     await (
-      service as unknown as {
+      (service as unknown as { recovery: unknown }).recovery as {
         launchScheduledTaskRecovery(taskId: string, attemptId: string): Promise<void>;
       }
     ).launchScheduledTaskRecovery(currentTask.id, parentAttempt.id);
@@ -742,14 +742,14 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     );
 
     const claimed = await (
-      service as unknown as {
-        claimTaskRecoveryAfterAdmission(
+      (service as unknown as { recovery: unknown }).recovery as {
+        claimAfterAdmission(
           taskId: string,
           task: Task,
           options: { parentAttemptId: string; recovery: RunRecoveryRecord }
         ): Promise<Task>;
       }
-    ).claimTaskRecoveryAfterAdmission(currentTask.id, currentTask, {
+    ).claimAfterAdmission(currentTask.id, currentTask, {
       parentAttemptId: parentAttempt.id,
       recovery,
     });
@@ -788,7 +788,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     attempt.runRetry = recovery;
     mockGetTask.mockResolvedValue(task);
     mockUpdateTask.mockRejectedValue(new Error('concurrent task mutation'));
-    const testable = service as unknown as {
+    const testable = (service as unknown as { recovery: unknown }).recovery as {
       scheduleTaskRecovery(taskId: string, attemptId: string, recovery: RunRecoveryRecord): void;
       clearScheduledRecovery(taskId: string, attemptId: string): void;
     };
