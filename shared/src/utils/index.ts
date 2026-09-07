@@ -15,3 +15,5 @@ export * from './acp-json-rpc-peer.js';
 export * from './task-readiness.js';
 export * from './workflow-pipeline.js';
 export * from './task-board-order.js';
+
+export * from './board-task.js';

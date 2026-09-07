@@ -140,6 +140,28 @@ describe('Tasks Routes (actual module)', () => {
   });
 
   describe('GET /api/tasks', () => {
+    it('returns bounded card records and searches the full description beyond the preview', async () => {
+      const tasks = Array.from({ length: 201 }, (_, index) => ({
+        id: `task_${index}`,
+        title: 'Board fixture',
+        description: 'a'.repeat(1000) + (index === 200 ? 'needle' : ''),
+        type: 'code',
+        status: 'todo',
+        priority: 'medium',
+        created: '2026-09-07',
+        updated: '2026-09-07',
+        revision: 1,
+      }));
+      mockTaskService.listTasks.mockResolvedValue(tasks);
+      const snapshot = await request(app).get('/api/tasks?view=board');
+      expect(snapshot.status).toBe(200);
+      expect(snapshot.body).toHaveLength(201);
+      expect(snapshot.body[0].description).toHaveLength(400);
+      expect(snapshot.body[200].boardSummary).toHaveProperty('readiness');
+      const search = await request(app).get('/api/tasks?fields=id&search=needle');
+      expect(search.body).toEqual([{ id: 'task_200' }]);
+    });
+
     it('should list all tasks', async () => {
       const tasks = [
         { id: 't1', title: 'Task 1', created: '2025-01-01', updated: '2025-01-02' },

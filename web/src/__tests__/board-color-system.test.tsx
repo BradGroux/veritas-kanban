@@ -7,6 +7,7 @@ import type { TaskTypeConfig } from '@veritas-kanban/shared';
 const { dropState } = vi.hoisted(() => ({ dropState: { isOver: false } }));
 
 vi.mock('@dnd-kit/core', () => ({
+  useDndContext: () => ({ active: null }),
   useDroppable: () => ({ setNodeRef: vi.fn(), isOver: dropState.isOver }),
 }));
 

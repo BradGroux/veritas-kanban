@@ -65,6 +65,20 @@ describe('tasksApi', () => {
     expect(result[0].id).toBe('t1');
   });
 
+  it('loads the card snapshot separately from full tasks with cancellation', async () => {
+    const controller = new AbortController();
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => [{ id: 'card' }],
+    } as Response);
+    expect(await tasksApi.listBoard(controller.signal)).toEqual([{ id: 'card' }]);
+    expect(fetch).toHaveBeenCalledWith(
+      'http://test-api/tasks?view=board',
+      expect.objectContaining({ cache: 'no-store', signal: controller.signal })
+    );
+  });
+
   it('get() calls GET /tasks/:id', async () => {
     const task = createMockTask({ id: 'abc123' });
     vi.mocked(fetch).mockResolvedValueOnce({

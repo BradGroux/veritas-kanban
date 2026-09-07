@@ -2,21 +2,22 @@ import { createElement, type ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MoveTaskResult, Task } from '@veritas-kanban/shared';
-import { useMoveTask, useTasks } from '@/hooks/useTasks';
+import { toBoardTask, type MoveTaskResult, type Task } from '@veritas-kanban/shared';
+import { useMoveTask, useTasks, useBoardTasks } from '@/hooks/useTasks';
 import { useTaskSync } from '@/hooks/useTaskSync';
 import type { UseWebSocketOptions } from '@/hooks/useWebSocket';
 import { createMockTask } from './test-utils';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
+  listBoard: vi.fn(),
   move: vi.fn(),
   socketOptions: null as UseWebSocketOptions | null,
   toast: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
-  api: { tasks: { list: mocks.list, move: mocks.move } },
+  api: { tasks: { listBoard: mocks.listBoard, list: mocks.list, move: mocks.move } },
 }));
 
 vi.mock('@/hooks/useToast', () => ({ toast: mocks.toast }));
@@ -68,6 +69,38 @@ describe('board move QueryClient and WebSocket convergence', () => {
   function wrapper({ children }: { children: ReactNode }) {
     return createElement(QueryClientProvider, { client: queryClient }, children);
   }
+
+  it('uses summary revisions for moves and updates the separate board cache', async () => {
+    queryClient.removeQueries({ queryKey: ['tasks'], exact: true });
+    queryClient.setQueryData(['tasks', 'board'], [toBoardTask(original)]);
+    mocks.move.mockResolvedValue({
+      task: moved,
+      orderedTaskIds: [moved.id],
+      replayed: false,
+      operationId: 'board-move',
+    });
+    mocks.listBoard.mockResolvedValue([toBoardTask(moved)]);
+    const { result } = renderHook(() => ({ board: useBoardTasks(), move: useMoveTask() }), {
+      wrapper,
+    });
+    await act(async () =>
+      result.current.move.mutateAsync({
+        id: original.id,
+        input: {
+          operationId: 'board-move',
+          sourceStatus: 'todo',
+          sourcePosition: 0,
+          destinationStatus: 'blocked',
+          destinationIndex: 0,
+        },
+      })
+    );
+    expect(mocks.move).toHaveBeenCalledWith(original.id, expect.anything(), 3);
+    await waitFor(() => expect(result.current.board.data?.[0].status).toBe('blocked'));
+    expect(queryClient.getQueryData(['tasks'])).toBeUndefined();
+    expect(queryClient.getQueryData(['tasks', moved.id])).toEqual(moved);
+    expect(result.current.board.data?.[0]).toHaveProperty('boardSummary');
+  });
 
   it('keeps the old cache stable while pending, then converges with an echoed move event', async () => {
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');

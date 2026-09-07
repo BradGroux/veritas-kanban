@@ -9,7 +9,7 @@ import {
   type MetricsPeriod,
   type TrendDirection,
 } from '@/hooks/useMetrics';
-import { useTasks } from '@/hooks/useTasks';
+import { useBoardTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
 import { ExportDialog } from './ExportDialog';
@@ -170,7 +170,7 @@ export function Dashboard({ onTaskClick }: DashboardProps = {}) {
   } = useMetrics(period, project, customFrom, customTo);
   const { data: taskCost } = useTaskCost(period, project, customFrom, customTo);
   const { data: utilization } = useUtilization(period, customFrom, customTo);
-  const { data: tasks } = useTasks();
+  const { data: tasks } = useBoardTasks();
   const { data: projectsList = [] } = useProjects();
 
   // Get unique project IDs from tasks, then map to project configs for labels

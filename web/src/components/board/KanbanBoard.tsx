@@ -1,4 +1,10 @@
-import { useMoveTask, useTasks, useTasksByStatus } from '@/hooks/useTasks';
+import {
+  useMoveTask,
+  useBoardTasks,
+  useBoardSearch,
+  useTask,
+  useTasksByStatus,
+} from '@/hooks/useTasks';
 import { useBoardDragDrop } from '@/hooks/useBoardDragDrop';
 import { KanbanColumn } from './KanbanColumn';
 import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
@@ -102,7 +108,7 @@ const BoardSidebar = lazy(() =>
 const EMPTY_SAVED_VIEWS: BoardSavedView[] = [];
 
 export function KanbanBoard() {
-  const { data: tasks, isLoading, error, refetch, isFetching } = useTasks();
+  const { data: tasks, isLoading, error, refetch, isFetching } = useBoardTasks();
   const { settings: featureSettings, isPlaceholderData } = useFeatureSettings();
   const updateFeatureSettings = useUpdateFeatureSettings();
   const boardSettings = featureSettings.board ?? DEFAULT_FEATURE_SETTINGS.board;
@@ -143,6 +149,8 @@ export function KanbanBoard() {
     return { search: '', project: null, type: null, agent: null };
   });
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
+  const searchMatches = useBoardSearch(filters.search);
+  const detailQuery = useTask(selectedTask?.id ?? '');
 
   const { selectedTaskId, setTasks, setOnOpenTask, setOnMoveTask } = useKeyboard();
   const { isSelecting, toggleSelecting } = useBulkActions();
@@ -354,8 +362,13 @@ export function KanbanBoard() {
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
-    return tasks ? filterTasks(tasks, filters) : [];
-  }, [tasks, filters]);
+    const matches = filters.search ? new Set(searchMatches.data ?? []) : null;
+    return tasks
+      ? filterTasks(tasks, { ...filters, search: '' }).filter(
+          (task) => !matches || matches.has(task.id)
+        )
+      : [];
+  }, [tasks, filters, searchMatches.data]);
 
   const taskIndex = useMemo(() => new Map((tasks ?? []).map((task) => [task.id, task])), [tasks]);
 
@@ -580,9 +593,8 @@ export function KanbanBoard() {
   };
 
   // Keep selected task in sync with updated data
-  const currentSelectedTask = selectedTask
-    ? tasks?.find((t) => t.id === selectedTask.id) || selectedTask
-    : null;
+  const currentSelectedTask =
+    detailQuery.data ?? (selectedTask && !('boardSummary' in selectedTask) ? selectedTask : null);
 
   if (isLoading) {
     return <BoardLoadingSkeleton columns={columns} />;
@@ -658,6 +670,19 @@ export function KanbanBoard() {
         )}
       </div>
 
+      {filters.search && searchMatches.isFetching && (
+        <p role="status" className="px-2 text-sm text-muted-foreground">
+          Searching tasks…
+        </p>
+      )}
+      {filters.search && searchMatches.error && (
+        <div role="alert" className="px-2 text-sm">
+          Search could not be completed.{' '}
+          <Button variant="subtle" onClick={() => void searchMatches.refetch()}>
+            Retry search
+          </Button>
+        </div>
+      )}
       <BulkActionsBar tasks={filteredTasks} />
 
       {boardSettings.showArchiveSuggestions && <ArchiveSuggestionBanner />}
@@ -792,6 +817,16 @@ export function KanbanBoard() {
         )}
       </FeatureErrorBoundary>
 
+      {detailOpen && !currentSelectedTask && (
+        <div
+          role="status"
+          className="fixed bottom-4 right-4 z-50 rounded border bg-background p-4 shadow"
+        >
+          {detailQuery.error ? 'Task details could not be loaded.' : 'Loading task details…'}
+          {detailQuery.error && <Button onClick={() => void detailQuery.refetch()}>Retry</Button>}
+          <Button onClick={() => handleDetailClose(false)}>Close</Button>
+        </div>
+      )}
       {detailPanelMounted && (
         <Suspense fallback={null}>
           <TaskDetailPanel
