@@ -322,3 +322,7 @@ On macOS, Command-W closes the window while the managed server stays running.
 Reopen the window from the Dock. Command-Q quits and stops the managed server.
 Standard Hide, Hide Others, Show All and Services commands are available in the
 application menu; View provides text zoom and full screen.
+
+Saved window bounds are fitted to the current display work areas at launch or
+reopen. If a monitor was disconnected, the window returns to the primary display.
+Maximized windows retain their previous normal bounds for unmaximizing.
