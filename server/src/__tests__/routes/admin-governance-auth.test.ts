@@ -383,7 +383,7 @@ describe('admin-only governance routes', () => {
         type: 'feature',
         priority: 'medium',
         project: undefined,
-        subtasks: undefined,
+        subtaskCount: undefined,
       },
       { requiredRuntimeCapabilities: undefined }
     );

@@ -123,6 +123,7 @@ class CostPredictionService {
     project?: string;
     description?: string;
     subtasks?: Array<unknown>;
+    subtaskCount?: number;
   }): Promise<CostPrediction> {
     // 1. Get historical base cost from telemetry
     const historicalBase = await this.getHistoricalBaseCost(task.type, task.project);
@@ -138,7 +139,7 @@ class CostPredictionService {
 
     // 4. Estimate complexity from description length + subtask count
     const descLength = (task.description || '').length;
-    const subtaskCount = task.subtasks?.length || 0;
+    const subtaskCount = task.subtasks?.length ?? task.subtaskCount ?? 0;
     let complexityMultiplier: number;
     if (descLength < COMPLEXITY_THRESHOLDS.simple && subtaskCount === 0) {
       complexityMultiplier = COMPLEXITY_MULTIPLIERS.simple;
