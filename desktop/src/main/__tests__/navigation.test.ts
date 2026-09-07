@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Shell } from 'electron';
+import type { IpcMainInvokeEvent, Shell, WebContents } from 'electron';
 
-import { hasSameOriginNavigation, openValidatedExternalUrl } from '../navigation.js';
+import {
+  hasSameOriginNavigation,
+  isOwnedDesktopSender,
+  openValidatedExternalUrl,
+} from '../navigation.js';
 
 function shell(): Shell {
   return {
@@ -21,6 +25,30 @@ describe('desktop navigation guards', () => {
       )
     ).toBe(false);
     expect(hasSameOriginNavigation('not a url', 'http://127.0.0.1:3000')).toBe(false);
+  });
+
+  it('accepts only an owned main frame at the app origin, with a separate generated-status-page exception', () => {
+    const owner = {
+      mainFrame: { url: 'http://127.0.0.1:3000/?desktop-settings=1' },
+      isDestroyed: () => false,
+      getURL: () => 'data:text/html,status',
+    } as unknown as WebContents;
+    const event = { sender: owner, senderFrame: owner.mainFrame } as IpcMainInvokeEvent;
+    expect(isOwnedDesktopSender(event, [owner], 'http://127.0.0.1:3000')).toBe(true);
+    expect(
+      isOwnedDesktopSender(
+        { ...event, senderFrame: { url: owner.mainFrame.url } } as IpcMainInvokeEvent,
+        [owner],
+        'http://127.0.0.1:3000'
+      )
+    ).toBe(false);
+    expect(isOwnedDesktopSender(event, [], 'http://127.0.0.1:3000')).toBe(false);
+    expect(isOwnedDesktopSender(event, [owner], 'http://127.0.0.1:4000')).toBe(false);
+    Object.assign(owner.mainFrame, { url: 'data:text/html,status' });
+    expect(isOwnedDesktopSender(event, [owner], 'http://127.0.0.1:3000')).toBe(false);
+    expect(isOwnedDesktopSender(event, [owner], 'http://127.0.0.1:3000', owner)).toBe(true);
+    Object.assign(owner.mainFrame, { url: 'data:text/html,unrecognized' });
+    expect(isOwnedDesktopSender(event, [owner], 'http://127.0.0.1:3000', owner)).toBe(false);
   });
 
   it('reuses the safe external URL validator before opening OS handlers', async () => {

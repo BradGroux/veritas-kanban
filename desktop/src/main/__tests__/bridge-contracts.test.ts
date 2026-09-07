@@ -132,6 +132,32 @@ describe('desktop bridge contracts', () => {
     expect(registered.size).toBe(DESKTOP_BRIDGE_METHOD_NAMES.length);
   });
 
+  it('enforces the native sender check before invoking bridge operations', async () => {
+    const registered = new Map<string, (event: unknown, request: unknown) => Promise<unknown>>();
+    const ipc = {
+      handle: (channel: string, handler: (event: unknown, request: unknown) => Promise<unknown>) =>
+        registered.set(channel, handler),
+    } as unknown as IpcMain;
+    const nativeRuntime = runtime();
+    const allowed = {};
+    registerDesktopBridge(
+      ipc,
+      nativeRuntime,
+      shell(),
+      false,
+      '6.1.7',
+      undefined,
+      undefined,
+      undefined,
+      (event) => event === allowed
+    );
+    const readStatus = registered.get(DESKTOP_BRIDGE_METHODS.getConnectionStatus.channel);
+    if (!readStatus) throw new Error('Missing connection-status handler');
+    await expect(readStatus({}, undefined)).rejects.toThrow('cannot use the desktop bridge');
+    expect(nativeRuntime.snapshot).not.toHaveBeenCalled();
+    await expect(readStatus(allowed, undefined)).resolves.toMatchObject({ profile: 'fresh' });
+  });
+
   it('reports the Electron application version through the desktop bridge', () => {
     const bridgeHandlers = createDesktopBridgeHandlers(runtime(), shell(), true, '6.0.1');
 

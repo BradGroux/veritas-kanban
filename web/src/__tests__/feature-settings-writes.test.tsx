@@ -15,6 +15,7 @@ import {
   useUpdateFeatureSettings,
 } from '@/hooks/useFeatureSettings';
 import {
+  getFeatureSettingsWrites,
   resetFeatureSettingsWrites,
   FEATURE_SETTINGS_QUERY_KEY,
 } from '@/lib/feature-settings-writes';
@@ -52,6 +53,41 @@ describe('feature settings write ownership', () => {
     cleanup();
     client.clear();
     vi.useRealTimers();
+  });
+
+  it('flushes edits on native quit and waits for newer edits queued during an active save', async () => {
+    const writer = getFeatureSettingsWrites(client);
+    let finish!: (settings: FeatureSettings) => void;
+    mocks.update.mockImplementationOnce(
+      () =>
+        new Promise<FeatureSettings>((resolve) => {
+          finish = resolve;
+        })
+    );
+    writer.enqueue({ general: { humanDisplayName: 'First' } }, 500);
+    const settled = vi.fn();
+    const ending = writer.settle().then(settled);
+    expect(mocks.update).toHaveBeenCalledOnce();
+    writer.enqueue({ general: { humanDisplayName: 'Latest' } }, 500);
+    expect(settled).not.toHaveBeenCalled();
+    finish(stored);
+    await ending;
+    expect(mocks.update).toHaveBeenCalledTimes(2);
+    expect(stored.general.humanDisplayName).toBe('Latest');
+    expect(settled).toHaveBeenCalledOnce();
+  });
+
+  it('blocks native quit on failed persistence without silently retrying', async () => {
+    const writer = getFeatureSettingsWrites(client);
+    mocks.update.mockRejectedValueOnce(new Error('Offline'));
+    writer.enqueue({ general: { humanDisplayName: 'Keep me' } }, 500);
+    await expect(writer.settle()).rejects.toThrow('Offline');
+    await expect(writer.settle()).rejects.toThrow('Offline');
+    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(writer.overlay(stored).general.humanDisplayName).toBe('Keep me');
+    writer.retry();
+    await writer.settle();
+    expect(stored.general.humanDisplayName).toBe('Keep me');
   });
 
   it('persists a pending edit after immediate tab or Settings unmount', async () => {

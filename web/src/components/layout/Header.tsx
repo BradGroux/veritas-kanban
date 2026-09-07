@@ -1,3 +1,5 @@
+import { desktopSettingsBridge } from '@/lib/desktop-settings';
+import { toast } from '@/hooks/useToast';
 import { parseSettingsSupportHash } from '@/components/settings/settings-search-index';
 import { flushSync } from 'react-dom';
 import {
@@ -250,7 +252,7 @@ export function Header({
     openSquadChatPanel();
   }, [openSquadChatPanel, toggleBottomPanel, usesWorkbenchChat]);
 
-  const openSettingsDialog = useCallback(
+  const openBrowserSettingsDialog = useCallback(
     (section?: string, control?: string) => {
       markPanelLoaded('settings');
       setSettingsControl(control);
@@ -260,17 +262,51 @@ export function Header({
     [markPanelLoaded]
   );
 
-  const openSecuritySettings = useCallback(() => {
-    markPanelLoaded('settings');
-    setSettingsTab('security');
-    setSettingsOpen(true);
-  }, [markPanelLoaded]);
-
-  const openIdentitySettings = useCallback(() => {
-    markPanelLoaded('settings');
-    setSettingsTab('multi-user');
-    setSettingsOpen(true);
-  }, [markPanelLoaded]);
+  const openSettingsDialog = useCallback(
+    (section?: string, control?: string) => {
+      const bridge = desktopSettingsBridge();
+      if (!bridge?.getAppInfo || !bridge.dispatchCommand) {
+        openBrowserSettingsDialog(section, control);
+        return;
+      }
+      const dispatchSettings = bridge.dispatchCommand;
+      void bridge
+        .getAppInfo()
+        .then(async (info) => {
+          if (info.platform !== 'darwin') {
+            openBrowserSettingsDialog(section, control);
+            return;
+          }
+          const result = await dispatchSettings({
+            command: 'open-settings',
+            source: 'renderer',
+            payload: { section, control },
+          });
+          if (!result.accepted)
+            toast({
+              title: 'Settings could not open',
+              description: result.message,
+              variant: 'destructive',
+            });
+        })
+        .catch(() =>
+          toast({
+            title: 'Settings could not open',
+            description: 'The desktop window is unavailable. Try opening Settings again.',
+            variant: 'destructive',
+          })
+        );
+    },
+    [openBrowserSettingsDialog]
+  );
+  const openSecuritySettings = useCallback(
+    () => openSettingsDialog('security'),
+    [openSettingsDialog]
+  );
+  const openIdentitySettings = useCallback(
+    () => openSettingsDialog('multi-user'),
+    [openSettingsDialog]
+  );
 
   const renderNavigationAction = (item: NavigationItem) => {
     const Icon = VIEW_ICONS[item.icon];
@@ -376,7 +412,7 @@ export function Header({
           else message = 'Task write permission is required to create a task.';
           break;
         case 'open-settings':
-          if (canOpenSettings) action = () => openSettingsDialog();
+          if (canOpenSettings) action = () => openBrowserSettingsDialog();
           else message = 'Settings read permission is required to open Settings.';
           break;
         case 'open-search':
@@ -398,11 +434,11 @@ export function Header({
         case 'create-backup':
         case 'create-debug-bundle':
           if (canOpenSettings && hasPermission('backup:read'))
-            action = () => openSettingsDialog('maintenance');
+            action = () => openBrowserSettingsDialog('maintenance');
           else message = 'Settings and backup read permission are required to open Maintenance.';
           break;
         case 'test-squad-webhook':
-          if (canOpenSettings) action = () => openSettingsDialog('notifications');
+          if (canOpenSettings) action = () => openBrowserSettingsDialog('notifications');
           else message = 'Open Notifications in Settings to configure and test external delivery.';
           break;
       }
@@ -415,7 +451,7 @@ export function Header({
     canOpenSettings,
     hasPermission,
     openCreateDialog,
-    openSettingsDialog,
+    openBrowserSettingsDialog,
     openSearchDialog,
     onOpenCommandCenter,
     onOpenDiagnostics,

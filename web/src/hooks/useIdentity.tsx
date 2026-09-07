@@ -168,6 +168,18 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(readStoredWorkspaceId);
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== ACTIVE_WORKSPACE_STORAGE_KEY || event.storageArea !== window.localStorage)
+        return;
+      setActiveWorkspaceId(event.newValue);
+      void queryClient.invalidateQueries({ queryKey: ['auth', 'context'] });
+      void queryClient.invalidateQueries({ queryKey: ['identity'] });
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [queryClient]);
+
   const authQuery = useQuery({
     queryKey: ['auth', 'context'],
     queryFn: identityApi.getAuthContext,

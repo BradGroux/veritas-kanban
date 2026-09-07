@@ -1,3 +1,4 @@
+import { useDesktopAuthSync, notifyDesktopAuthChange } from './useSettingsWindowSync';
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react';
 import type { AuthStatus } from '@veritas-kanban/shared';
 import { apiFetch } from '@/lib/api/helpers';
@@ -53,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useDesktopAuthSync(refreshStatus);
+
   // Check auth status on mount
   useEffect(() => {
     refreshStatus();
@@ -83,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({ password, rememberMe }),
         });
         await refreshStatus();
+        notifyDesktopAuthChange();
         return { success: true };
       } catch (err) {
         console.error('[Auth] Login failed:', err);
@@ -96,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } finally {
+      notifyDesktopAuthChange();
       await refreshStatus();
     }
   }, [refreshStatus]);

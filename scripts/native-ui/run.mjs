@@ -5,6 +5,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect } from '@playwright/test';
+import {
+  nativeSettingsPage,
+  closeNativeSettings,
+  verifyNativeSettingsWindow,
+} from './settings-window.mjs';
 import { createNativeSession } from './session.mjs';
 import { verifyRouteContrast } from './contrast.mjs';
 import {
@@ -86,11 +91,11 @@ async function launch() {
 async function resize(width, height) {
   await app.evaluate(
     ({ BrowserWindow }, size) => {
-      const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+      const window = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === size.url);
       window.webContents.setZoomFactor(1);
       window.setContentSize(size.width, size.height);
     },
-    { width, height }
+    { width, height, url: page.url() }
   );
   await expect.poll(() => page.evaluate(() => [innerWidth, innerHeight])).toEqual([width, height]);
 }
@@ -109,7 +114,7 @@ async function configure(mode) {
 }
 async function metrics() {
   const geometry = await page.evaluate(() => {
-    const shell = document.querySelector('.desktop-app-shell');
+    const shell = document.querySelector('.desktop-app-shell, [data-settings-window]');
     if (!shell) throw new Error('Missing production desktop shell');
     const rect = (el) => {
       const b = el.getBoundingClientRect();
@@ -198,8 +203,8 @@ async function capture(entry) {
   entry.route = new URL(page.url()).pathname;
   entry.theme = await page.locator('html').getAttribute('data-mantine-color-scheme');
   entry.geometry = await metrics();
-  const native = await app.evaluate(async ({ BrowserWindow, screen }) => {
-    const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+  const native = await app.evaluate(async ({ BrowserWindow, screen }, url) => {
+    const window = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
     return {
       bounds: window.getBounds(),
       contentBounds: window.getContentBounds(),
@@ -207,7 +212,7 @@ async function capture(entry) {
       scaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor,
       png: (await window.capturePage()).toPNG().toString('base64'),
     };
-  });
+  }, page.url());
   const name = `${entry.id.replaceAll('/', '--')}.png`;
   await writeFile(path.join(output, name), Buffer.from(native.png, 'base64'));
   delete native.png;
@@ -292,17 +297,25 @@ async function exercise(state, mode, shot) {
     await expect(page).toHaveURL(`${origin}/`);
   } else if (state.startsWith('settings-')) {
     const tab = settingsSections.find((label) => state === `settings-${label.toLowerCase()}`);
+    const board = page;
     const opener = button('Settings');
     await opener.click();
-    const dialog = page.locator('.settings-dialog-content');
-    await dialog.getByRole('tab', { name: tab, exact: true }).click();
-    await expect(dialog.getByRole('tab', { name: tab, exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    await expect(dialog.getByRole('heading', { name: tab, exact: true })).toBeVisible();
-    await shot();
-    await dismiss(dialog, opener);
+    page = await nativeSettingsPage(app);
+    try {
+      await resize(mode.width, mode.height);
+      const settings = page.getByRole('main', { name: 'Settings', exact: true });
+      await settings.getByRole('tab', { name: tab, exact: true }).click();
+      await expect(settings.getByRole('tab', { name: tab, exact: true })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      );
+      await expect(settings.getByRole('heading', { name: tab, exact: true })).toBeVisible();
+      await shot({ windowRole: 'settings' });
+      await closeNativeSettings(app, page);
+    } finally {
+      page = board;
+    }
+    await expect(opener).toBeFocused();
   } else if (state === 'left-rail' || state === 'right-rail') {
     const side = state === 'left-rail' ? 'left' : 'right';
     const expand = button(`Expand ${side} sidebar`);
@@ -426,12 +439,10 @@ async function exercise(state, mode, shot) {
         await expect(
           button(`${before === 'true' ? 'Expand' : 'Collapse'} ${side} sidebar`)
         ).toHaveAttribute('aria-expanded', before === 'true' ? 'false' : 'true');
-      } else if (
-        name === 'New Task' ||
-        name === 'Settings' ||
-        name === 'Search' ||
-        name === 'Command palette'
-      ) {
+      } else if (name === 'Settings') {
+        await control.click();
+        await closeNativeSettings(app, await nativeSettingsPage(app));
+      } else if (name === 'New Task' || name === 'Search' || name === 'Command palette') {
         await control.click();
         const dialog = page.getByRole('dialog', {
           name: {
@@ -498,15 +509,21 @@ async function exercise(state, mode, shot) {
       page.getByRole('heading', { name: `Native acceptance ${mode.id}`, exact: true })
     ).toBeVisible();
   } else if (state === 'confirmation') {
+    const board = page;
     await button('Settings').click();
-    const settings = page.locator('.settings-dialog-content');
-    const reset = settings.getByRole('button', { name: 'Reset All', exact: true });
-    await reset.click();
-    const dialog = page.getByRole('dialog', { name: 'Reset all settings?', exact: true });
-    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
-    await shot();
-    await dismiss(dialog, reset);
-    await dismiss(settings, button('Settings'));
+    page = await nativeSettingsPage(app);
+    try {
+      await resize(mode.width, mode.height);
+      const reset = page.getByRole('button', { name: 'Reset All', exact: true });
+      await reset.click();
+      const dialog = page.getByRole('dialog', { name: 'Reset all settings?', exact: true });
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+      await shot({ windowRole: 'settings' });
+      await dismiss(dialog, reset);
+      await closeNativeSettings(app, page);
+    } finally {
+      page = board;
+    }
   } else if (state === 'search' || state === 'command-palette') {
     const palette = state === 'command-palette';
     if (palette) await page.keyboard.press('Meta+k');
@@ -663,6 +680,7 @@ try {
   await launch();
   report.titlebarAction = await verifyConfiguredTitlebarAction(app, page);
   report.menuCommands = await verifyNativeMenuCommands(app, page);
+  report.settingsWindow = await verifyNativeSettingsWindow(app, page);
   const windowMenu = await verifyNativeWindowMenu(app, page);
   page = windowMenu.page;
   report.menuRoles = windowMenu.roles;

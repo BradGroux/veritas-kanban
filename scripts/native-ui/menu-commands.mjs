@@ -1,4 +1,5 @@
 /* global window, setTimeout, clearTimeout */
+import { nativeSettingsPage, closeNativeSettings } from './settings-window.mjs';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -30,22 +31,25 @@ export async function verifyNativeMenuCommands(app, page) {
       if (!item || !item.enabled) throw new Error(`Native command unavailable: ${label}`);
       item.click();
     }, label);
+    if (surface === 'Settings') {
+      const settings = await nativeSettingsPage(app);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      if (['Import', 'Export', 'Create Backup', 'Create Debug Bundle'].includes(label)) {
+        await expect(
+          settings.getByRole('heading', { name: 'Maintenance', exact: true })
+        ).toBeVisible();
+        await expect(
+          settings.getByRole('button', { name: 'Debug Bundle', exact: true })
+        ).toBeVisible();
+      }
+      results.push({ label, surface, nativeSettingsWindow: true, mainDialogs: 0 });
+      await closeNativeSettings(app, settings);
+      continue;
+    }
     const dialog = page.getByRole('dialog');
     await expect(dialog).toHaveCount(1);
     await expect(dialog).toBeVisible();
-    if (surface === 'Settings') {
-      await expect(
-        dialog.getByRole('button', { name: 'Close settings', exact: true })
-      ).toBeVisible();
-      if (['Import', 'Export', 'Create Backup', 'Create Debug Bundle'].includes(label)) {
-        await expect(
-          dialog.getByRole('heading', { name: 'Maintenance', exact: true })
-        ).toBeVisible();
-        await expect(
-          dialog.getByRole('button', { name: 'Debug Bundle', exact: true })
-        ).toBeVisible();
-      }
-    } else if (surface === 'Command Center') {
+    if (surface === 'Command Center') {
       await expect(dialog.getByRole('textbox', { name: 'Search commands' })).toBeVisible();
     } else if (surface === 'Search') {
       await expect(dialog.getByRole('textbox', { name: 'Search Veritas' })).toBeVisible();
@@ -122,7 +126,11 @@ export async function verifyNativeWindowMenu(app, page) {
   };
   const zoom = () =>
     app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0].webContents.getZoomFactor()
+      BrowserWindow.getAllWindows()
+        .find(
+          (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+        )
+        .webContents.getZoomFactor()
     );
   await clickRole('zoomIn');
   await expect.poll(zoom).toBeGreaterThan(1);
@@ -136,7 +144,9 @@ export async function verifyNativeWindowMenu(app, page) {
     const transition = app.evaluate(
       ({ BrowserWindow }, event) =>
         new Promise((resolve, reject) => {
-          const window = BrowserWindow.getAllWindows()[0];
+          const window = BrowserWindow.getAllWindows().find(
+            (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+          );
           const timeout = setTimeout(() => reject(new Error(`No ${event} event`)), 10000);
           window.once(event, () => {
             clearTimeout(timeout);
@@ -150,23 +160,45 @@ export async function verifyNativeWindowMenu(app, page) {
   }
   await expect
     .poll(() =>
-      app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find(
+            (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+          )
+          .isFullScreen()
+      )
     )
     .toBe(false);
   const normalBounds = await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows()[0];
+    const window = BrowserWindow.getAllWindows().find(
+      (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+    );
     const bounds = window.getNormalBounds();
     window.maximize();
     return bounds;
   });
   await expect
-    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()))
+    .poll(() =>
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find(
+            (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+          )
+          .isMaximized()
+      )
+    )
     .toBe(true);
   const before = await page.evaluate(() => window.veritasDesktop.getConnectionStatus());
   const closed = page.waitForEvent('close');
   await clickRole('close');
   await closed;
-  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0);
+  assert.equal(
+    await app.evaluate(
+      ({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().filter((window) => window.isVisible()).length
+    ),
+    0
+  );
   const opened = app.waitForEvent('window');
   await app.evaluate(({ app }) => app.emit('activate'));
   const reopened = await opened;
@@ -178,11 +210,31 @@ export async function verifyNativeWindowMenu(app, page) {
     'Closing the window restarted the managed server'
   );
   await expect
-    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()))
+    .poll(() =>
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find(
+            (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+          )
+          .isMaximized()
+      )
+    )
     .toBe(true);
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].unmaximize());
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings'))
+      .unmaximize()
+  );
   await expect
-    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds()))
+    .poll(() =>
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find(
+            (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+          )
+          .getBounds()
+      )
+    )
     .toEqual(normalBounds);
   return { page: reopened, roles: items, normalBounds };
 }
@@ -192,14 +244,24 @@ export async function verifyConfiguredTitlebarAction(app, page) {
     systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string')
   );
   await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows()[0];
+    const window = BrowserWindow.getAllWindows().find(
+      (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+    );
     window.restore();
     window.unmaximize();
   });
   const state = () =>
     app.evaluate(({ BrowserWindow }) => ({
-      maximized: BrowserWindow.getAllWindows()[0].isMaximized(),
-      minimized: BrowserWindow.getAllWindows()[0].isMinimized(),
+      maximized: BrowserWindow.getAllWindows()
+        .find(
+          (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+        )
+        .isMaximized(),
+      minimized: BrowserWindow.getAllWindows()
+        .find(
+          (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+        )
+        .isMinimized(),
     }));
   await expect.poll(state).toEqual({ maximized: false, minimized: false });
   await page.getByRole('navigation', { name: 'Main navigation' }).dispatchEvent('dblclick');
@@ -209,7 +271,9 @@ export async function verifyConfiguredTitlebarAction(app, page) {
   };
   await expect.poll(state).toEqual(expected);
   await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows()[0];
+    const window = BrowserWindow.getAllWindows().find(
+      (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+    );
     window.restore();
     window.unmaximize();
     window.focus();
