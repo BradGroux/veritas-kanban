@@ -51,8 +51,8 @@ function isLocalhost(req: Request): boolean {
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
-function isAuthStatusRequest(req: Request): boolean {
-  return req.method === 'GET' && req.path === '/status';
+function isAuthReadRequest(req: Request): boolean {
+  return req.method === 'GET' && (req.path === '/status' || req.path === '/context');
 }
 
 // ── Factory ────────────────────────────────────────────────────────────────────
@@ -112,12 +112,12 @@ export const authRateLimit = rateLimit({
   limit: 10,
   windowMs: 15 * 60_000, // 15 minutes
   message: 'Too many authentication attempts. Please try again later.',
-  skip: (req) => isLocalhost(req) || isAuthStatusRequest(req),
+  skip: (req) => isLocalhost(req) || isAuthReadRequest(req),
 });
 
 /**
- * Read-style limiter for the auth status polling endpoint.
- * This endpoint is called on normal route loads and must not consume login/setup attempts.
+ * Read-style limiter for auth status and authenticated context reads.
+ * Normal route loads must not consume login/setup attempts.
  */
 export const authStatusRateLimit = rateLimit({
   limit: 120,

@@ -238,6 +238,7 @@ router.get(
  */
 router.get(
   '/context',
+  authStatusRateLimit,
   authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     res.json({
