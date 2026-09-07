@@ -199,7 +199,7 @@ describe('SettingsDialog Mantine shell', () => {
     renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
     expect(await screen.findByRole('alert')).toBeDefined();
     expect(screen.getByText('Changes not saved.')).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Retry$/ }));
     expect(mocks.retrySave).toHaveBeenCalledOnce();
   });
 
