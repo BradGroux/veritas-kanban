@@ -5,6 +5,8 @@ import { renderWithProviders } from './test-utils';
 
 const mocks = vi.hoisted(() => ({
   debouncedUpdate: vi.fn(),
+  retrySave: vi.fn(),
+  saveError: null as Error | null,
   hasPermission: vi.fn(),
   toast: vi.fn(),
   productMode: { selectedMode: 'advanced' as string },
@@ -32,7 +34,11 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
       productMode: mocks.productMode,
     },
   }),
-  useDebouncedFeatureUpdate: () => ({ debouncedUpdate: mocks.debouncedUpdate }),
+  useDebouncedFeatureUpdate: () => ({
+    debouncedUpdate: mocks.debouncedUpdate,
+    error: mocks.saveError,
+    retry: mocks.retrySave,
+  }),
 }));
 
 vi.mock('@/hooks/useIdentity', () => ({
@@ -105,6 +111,7 @@ vi.mock('@/components/settings/tabs/MultiUserTab', () => ({
 
 describe('SettingsDialog Mantine shell', () => {
   beforeEach(() => {
+    mocks.saveError = null;
     mocks.hasPermission.mockReturnValue(true);
     mocks.productMode.selectedMode = 'advanced';
     mocks.showSidebar = true;
@@ -185,6 +192,15 @@ describe('SettingsDialog Mantine shell', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Reset All' }));
     expect(await screen.findByRole('dialog', { name: 'Reset all settings?' })).toBeDefined();
     expect(mocks.debouncedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps failed saves visible with an explicit retry action', async () => {
+    mocks.saveError = new Error('Offline');
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    expect(await screen.findByRole('alert')).toBeDefined();
+    expect(screen.getByText('Changes not saved.')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    expect(mocks.retrySave).toHaveBeenCalledOnce();
   });
 
   it('keeps compact section navigation in the mobile header flow', async () => {

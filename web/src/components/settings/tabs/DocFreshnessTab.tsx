@@ -11,7 +11,7 @@ import {
 
 export function DocFreshnessTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
 
   const docFreshness = settings.docFreshness || DEFAULT_FEATURE_SETTINGS.docFreshness;
 
@@ -31,7 +31,7 @@ export function DocFreshnessTab() {
       <SettingsSection
         title="Freshness Policy"
         description="Set the scan cadence and response when documents become stale."
-        actions={<SaveIndicator isPending={isPending} />}
+        actions={<SaveIndicator isPending={isPending} error={saveError} />}
         onReset={resetDocFreshness}
         divided
       >

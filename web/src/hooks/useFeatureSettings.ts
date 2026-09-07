@@ -1,10 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef, useEffect } from 'react';
+import { createElement, useCallback, useSyncExternalStore } from 'react';
+import { toast } from './useToast';
+import {
+  FEATURE_SETTINGS_QUERY_KEY,
+  getFeatureSettingsWrites,
+  type FeatureSettingsPatch,
+} from '@/lib/feature-settings-writes';
 import { api } from '@/lib/api';
 import type { FeatureSettings } from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 
-const QUERY_KEY = ['settings', 'features'] as const;
+const QUERY_KEY = FEATURE_SETTINGS_QUERY_KEY;
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes — settings don't change often
 
 /**
@@ -12,9 +18,10 @@ const STALE_TIME = 5 * 60 * 1000; // 5 minutes — settings don't change often
  * Returns defaults while loading so consumers never see undefined.
  */
 export function useFeatureSettings() {
+  const writer = getFeatureSettingsWrites(useQueryClient());
   const query = useQuery({
     queryKey: QUERY_KEY,
-    queryFn: api.settings.getFeatures,
+    queryFn: async () => writer.overlay(await api.settings.getFeatures()),
     staleTime: STALE_TIME,
     placeholderData: DEFAULT_FEATURE_SETTINGS,
   });
@@ -48,90 +55,41 @@ export function useFeatureSetting<
  *   update.mutate({ board: { showDashboard: false } });
  */
 export function useUpdateFeatureSettings() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (patch: Record<string, any>) => api.settings.updateFeatures(patch),
-    onMutate: async (patch) => {
-      // Cancel in-flight fetches
-      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
-
-      // Snapshot current value
-      const previous = queryClient.getQueryData<FeatureSettings>(QUERY_KEY);
-
-      // Optimistically update
-      if (previous) {
-        // SAFETY: FeatureSettings sections are all objects — use Record view for dynamic key access
-        const optimistic = { ...previous } as unknown as Record<string, Record<string, unknown>>;
-        for (const section of Object.keys(patch) as Array<keyof FeatureSettings>) {
-          if (section in optimistic && typeof patch[section] === 'object') {
-            optimistic[section] = {
-              ...optimistic[section],
-              ...patch[section],
-            };
-          }
-        }
-        queryClient.setQueryData(QUERY_KEY, optimistic as unknown as FeatureSettings);
-      }
-
-      return { previous };
-    },
-    onError: (_err, _patch, context) => {
-      // Rollback on error
-      if (context?.previous) {
-        queryClient.setQueryData(QUERY_KEY, context.previous);
-      }
-    },
-    onSettled: () => {
-      // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-    },
-  });
+  const writer = useFeatureWriter();
+  return useMutation({ mutationFn: (patch: FeatureSettingsPatch) => writer.save(patch) });
 }
 
-/**
- * Returns a debounced updater function that batches rapid changes.
- * Useful for toggle switches and sliders that fire frequently.
- */
+function useFeatureWriter() {
+  const writer = getFeatureSettingsWrites(useQueryClient());
+  writer.onFailure = () => {
+    return toast({
+      title: 'Settings could not be saved',
+      description: 'Your changes are kept for retry. They have not been saved to the server.',
+      variant: 'destructive',
+      duration: 10000,
+      action: createElement(
+        'button',
+        {
+          type: 'button',
+          onClick: writer.retry,
+          className: 'text-sm underline rounded focus-visible:outline focus-visible:outline-2',
+        },
+        'Retry settings save'
+      ),
+    }).dismiss;
+  };
+  return writer;
+}
+
+/** Batches edits across sections and retains failed writes until they are retried. */
 export function useDebouncedFeatureUpdate(delayMs = 500) {
-  const update = useUpdateFeatureSettings();
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<Record<string, any>>({});
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const flush = useCallback(() => {
-    if (Object.keys(pendingRef.current).length > 0) {
-      update.mutate({ ...pendingRef.current });
-      pendingRef.current = {};
-    }
-  }, [update]);
-
+  const writer = useFeatureWriter();
+  const state = useSyncExternalStore(writer.subscribe, writer.getSnapshot, writer.getSnapshot);
   const debouncedUpdate = useCallback(
-    (patch: Record<string, any>) => {
-      // Merge into pending batch
-      for (const section of Object.keys(patch)) {
-        pendingRef.current[section] = {
-          ...(pendingRef.current[section] || {}),
-          ...patch[section],
-        };
-      }
-
-      // Reset timer
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      timeoutRef.current = setTimeout(flush, delayMs);
+    (patch: FeatureSettingsPatch) => {
+      writer.enqueue(patch, delayMs);
     },
-    [flush, delayMs]
+    [writer, delayMs]
   );
-
-  return { debouncedUpdate, isPending: update.isPending };
+  return { debouncedUpdate, ...state, retry: writer.retry };
 }

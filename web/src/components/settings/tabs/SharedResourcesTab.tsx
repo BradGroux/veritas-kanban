@@ -18,7 +18,7 @@ const TYPE_OPTIONS: Array<{
 
 export function SharedResourcesTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
 
   const sharedResources = settings?.sharedResources ?? DEFAULT_FEATURE_SETTINGS.sharedResources;
 
@@ -50,7 +50,7 @@ export function SharedResourcesTab() {
       <SettingsSection
         title="Resource Sharing"
         description="Choose which resource types can be mounted across projects."
-        actions={<SaveIndicator isPending={isPending} />}
+        actions={<SaveIndicator isPending={isPending} error={saveError} />}
         onReset={resetSharedResources}
         divided
       >

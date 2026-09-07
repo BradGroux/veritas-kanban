@@ -290,7 +290,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       setActiveTab(TABS.find(canUseTab)?.id ?? 'general');
     }
   }, [activeTab, canUseTab]);
-  const { debouncedUpdate } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, error: saveError, retry: retrySave } = useDebouncedFeatureUpdate();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const dialogContentRef = useRef<HTMLDivElement>(null);
@@ -541,6 +541,16 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             Settings
           </Text>
           {isBoardOnly && <UiPill>Board Only</UiPill>}
+          {saveError && (
+            <Group gap="xs" role="alert">
+              <Text size="xs" c="red">
+                Changes not saved.
+              </Text>
+              <UiAction variant="quiet" onClick={retrySave}>
+                Retry
+              </UiAction>
+            </Group>
+          )}
         </Group>
       }
       centered

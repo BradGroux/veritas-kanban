@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { resetFeatureSettingsWrites } from './lib/feature-settings-writes';
 import { Box } from '@mantine/core';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/toaster';
@@ -188,6 +190,20 @@ function DesktopAwareAppShell({
 
 // Main app content (only rendered when authenticated)
 function AppContent() {
+  const queryClient = useQueryClient();
+  const settingsSessionMounted = useRef(false);
+  useEffect(() => {
+    settingsSessionMounted.current = true;
+    return () => {
+      settingsSessionMounted.current = false;
+      // Strict Mode may remount effects synchronously. End the writer only when
+      // the authenticated application really leaves, never on a Settings tab change.
+      queueMicrotask(() => {
+        if (!settingsSessionMounted.current) resetFeatureSettingsWrites(queryClient);
+      });
+    };
+  }, [queryClient]);
+
   // Connect to WebSocket for real-time task updates
   const { isConnected, connectionState, reconnectAttempt, reconnect } = useTaskSync();
   const { status: authStatus, refreshStatus } = useAuth();
