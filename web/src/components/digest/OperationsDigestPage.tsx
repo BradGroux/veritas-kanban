@@ -714,7 +714,10 @@ function SourceList({
             <div key={`${item.kind}:${item.id}`} className="min-w-0 text-sm">
               <div className="truncate">{item.label}</div>
               <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <Code className="truncate" color="dark">
+                <Code
+                  className="truncate"
+                  style={{ color: 'var(--foreground)', backgroundColor: 'var(--muted)' }}
+                >
                   {item.id}
                 </Code>
                 <span className="shrink-0">{formatDateTime(item.timestamp)}</span>

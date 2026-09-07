@@ -39,3 +39,13 @@ Identity tokens are `neutral`, `violet`, `cyan`, `orange`, `emerald`, `rose`, `a
 ## Responsive and accessibility behavior
 
 The plate and stamp stay compact in both board densities. Columns retain the board's existing responsive layout, while card metadata continues to wrap on narrow surfaces. Status glyphs, labels, counts, signal text, focus rings, and border changes preserve meaning in grayscale and common color-vision-deficiency conditions. Essential text and controls continue to use the established foreground and focus tokens; semantic color is supplemental.
+
+### Filled action contrast
+
+Filled controls use `--primary-action` with `--primary-foreground`, and
+`--primary-action-hover` for hover. These are separate from the brighter `--primary`
+accent used for text and focus in dark mode. Mantine filled Veritas controls and
+Tailwind filled selections share this pair. Do not use opacity to lighten a
+filled control with small white text. The native route gate measures normal,
+hover and focus text contrast on shared actions, Drift filters and populated
+Operations task identifiers in both themes.
