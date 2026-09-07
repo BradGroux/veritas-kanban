@@ -151,7 +151,9 @@ export interface DesktopCommandDispatcherOptions {
   runtime: DesktopRuntime;
   shell: Shell;
   quit(): void;
-  sendRendererCommand(command: DesktopCommandDispatchRequest): void;
+  sendRendererCommand(
+    command: DesktopCommandDispatchRequest
+  ): Promise<DesktopCommandDispatchResult>;
   checkForUpdates(): Promise<DesktopUpdateStatus>;
   downloadUpdate(): Promise<DesktopUpdateStatus>;
   installUpdate(): DesktopUpdateStatus;
@@ -168,19 +170,16 @@ export class DesktopCommandDispatcher {
 
     switch (definition.nativeAction) {
       case 'renderer':
-        this.options.sendRendererCommand(request);
-        return accepted(request, 'renderer');
+        return this.options.sendRendererCommand(request);
       case 'restart-server':
         await this.options.runtime.restartLocalServer();
-        this.options.sendRendererCommand(request);
         return accepted(request, 'desktop');
       case 'open-logs':
         await this.options.shell.openPath(this.options.runtime.snapshot().logsDir);
         return accepted(request, 'desktop');
       case 'show-diagnostics':
       case 'create-debug-bundle':
-        this.options.sendRendererCommand(request);
-        return accepted(request, 'renderer');
+        return this.options.sendRendererCommand(request);
       case 'check-updates':
         await this.options.checkForUpdates();
         return accepted(request, 'desktop');
@@ -194,12 +193,7 @@ export class DesktopCommandDispatcher {
         this.options.showTestNotification();
         return accepted(request, 'desktop');
       case 'test-external-delivery':
-        this.options.sendRendererCommand(request);
-        return accepted(
-          request,
-          'renderer',
-          'External delivery test requires configured delivery.'
-        );
+        return this.options.sendRendererCommand(request);
       case 'copy-diagnostics':
         this.options.copyRedactedDiagnostics(this.options.runtime.snapshot());
         return accepted(request, 'desktop');

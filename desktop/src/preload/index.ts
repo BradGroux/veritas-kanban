@@ -97,7 +97,9 @@ export interface VeritasDesktopApi {
   onRunProgress(listener: BridgeEventListener<'runProgress'>): () => void;
   onUpdateStatus(listener: BridgeEventListener<'updateStatus'>): () => void;
   onNotificationAction(listener: BridgeEventListener<'notificationAction'>): () => void;
-  onMenuCommand(listener: BridgeEventListener<'menuCommand'>): () => void;
+  onMenuCommand(
+    listener: (request: DesktopCommandDispatchRequest) => { accepted: boolean; message?: string }
+  ): () => void;
   onUploadProgress(listener: BridgeEventListener<'uploadProgress'>): () => void;
   onWorkProductExportProgress(
     listener: BridgeEventListener<'workProductExportProgress'>
@@ -185,7 +187,30 @@ const api: VeritasDesktopApi = {
   onRunProgress: (listener) => onDesktopEvent('runProgress', listener),
   onUpdateStatus: (listener) => onDesktopEvent('updateStatus', listener),
   onNotificationAction: (listener) => onDesktopEvent('notificationAction', listener),
-  onMenuCommand: (listener) => onDesktopEvent('menuCommand', listener),
+  onMenuCommand: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      request: DesktopCommandDispatchRequest & { requestId?: string }
+    ) => {
+      if (!request.requestId) return;
+      try {
+        const result = listener(request);
+        ipcRenderer.send('desktop:menu-command-result', {
+          requestId: request.requestId,
+          accepted: result?.accepted === true,
+          message: result?.message,
+        });
+      } catch {
+        ipcRenderer.send('desktop:menu-command-result', {
+          requestId: request.requestId,
+          accepted: false,
+          message: 'Unable to open this action. Close the current dialog and try again.',
+        });
+      }
+    };
+    ipcRenderer.on('desktop:menu-command', handler);
+    return () => ipcRenderer.off('desktop:menu-command', handler);
+  },
   onUploadProgress: (listener) => onDesktopEvent('uploadProgress', listener),
   onWorkProductExportProgress: (listener) => onDesktopEvent('workProductExportProgress', listener),
   onExternalDeliveryVerification: (listener) =>

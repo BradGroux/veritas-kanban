@@ -57,7 +57,12 @@ function dispatcher() {
   const shell = {
     openPath: vi.fn(async () => ''),
   } as unknown as Shell;
-  const sendRendererCommand = vi.fn();
+  const sendRendererCommand = vi.fn(async (request) => ({
+    command: request.command,
+    accepted: true,
+    handledBy: 'renderer' as const,
+    message: undefined,
+  }));
   const checkForUpdates = vi.fn(async () => updateStatus('idle'));
   const downloadUpdate = vi.fn(async () => updateStatus('ready'));
   const installUpdate = vi.fn(() => updateStatus('ready'));

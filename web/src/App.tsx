@@ -132,11 +132,15 @@ function DesktopAwareAppShell({
   setShowDesktopOnboarding: (open: boolean) => void;
 }) {
   const { isDesktopClient, bottomPanel } = useDesktopShell();
+  const [commandCenterOpen, setCommandCenterOpen] = useState(false);
 
   return (
     <Box className="desktop-app-shell min-h-screen bg-background">
       <SkipToContent />
-      <Header />
+      <Header
+        onOpenDiagnostics={() => setShowDesktopOnboarding(true)}
+        onOpenCommandCenter={() => setCommandCenterOpen(true)}
+      />
       <Suspense fallback={<div className="h-7 border-b border-border bg-muted/30" aria-hidden />}>
         <SystemHealthBar />
       </Suspense>
@@ -169,7 +173,7 @@ function DesktopAwareAppShell({
         <DesktopBottomPanel />
       </div>
       <Toaster />
-      <CommandPalette />
+      <CommandPalette nativeOpen={commandCenterOpen} onNativeOpenChange={setCommandCenterOpen} />
       <KeyboardShortcutsDialog />
       <Suspense fallback={null}>
         {!isDesktopClient && <MobileShell showChat={!bottomPanel} />}
@@ -196,28 +200,9 @@ function AppContent() {
 
   useEffect(() => {
     const openDiagnostics = () => setShowDesktopOnboarding(true);
-    const desktop = (
-      window as Window & {
-        veritasDesktop?: {
-          onMenuCommand(listener: (payload: { command: string }) => void): () => void;
-        };
-      }
-    ).veritasDesktop;
-
-    const unsubscribe = desktop?.onMenuCommand?.((payload) => {
-      if (
-        payload.command === 'open-onboarding' ||
-        payload.command === 'show-diagnostics' ||
-        payload.command === 'communication-health'
-      ) {
-        setShowDesktopOnboarding(true);
-      }
-    });
-
     window.addEventListener('veritas:open-diagnostics', openDiagnostics);
 
     return () => {
-      unsubscribe?.();
       window.removeEventListener('veritas:open-diagnostics', openDiagnostics);
     };
   }, []);

@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom';
 import {
   ActionIcon,
   Badge,
@@ -133,7 +134,10 @@ function VeritasMark({ className }: { className?: string }) {
   );
 }
 
-export function Header() {
+export function Header({
+  onOpenDiagnostics,
+  onOpenCommandCenter,
+}: { onOpenDiagnostics?: () => void; onOpenCommandCenter?: () => void } = {}) {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
@@ -154,6 +158,7 @@ export function Header() {
   const canOpenSettings = hasPermission('settings:read') || hasPermission('admin:manage');
   const {
     isDesktopClient,
+    resetDesktopLayout,
     leftRailOpen,
     rightRailOpen,
     bottomPanel,
@@ -338,6 +343,72 @@ export function Header() {
     window.addEventListener('veritas:open-search', handleOpenSearch);
     return () => window.removeEventListener('veritas:open-search', handleOpenSearch);
   }, [openSearchDialog]);
+
+  // The only native command subscriber lives in the authenticated, mounted shell.
+  useEffect(() => {
+    const desktop = (
+      window as Window & {
+        veritasDesktop?: {
+          onMenuCommand?: (
+            listener: (request: { command: string }) => { accepted: boolean; message?: string }
+          ) => () => void;
+        };
+      }
+    ).veritasDesktop;
+    return desktop?.onMenuCommand?.(({ command }) => {
+      let action: (() => void) | undefined;
+      let message = 'This command is not available in this workspace.';
+      switch (command) {
+        case 'new-task':
+          if (canCreateTask) action = openCreateDialog;
+          else message = 'Task write permission is required to create a task.';
+          break;
+        case 'open-settings':
+          if (canOpenSettings) action = () => openSettingsDialog();
+          else message = 'Settings read permission is required to open Settings.';
+          break;
+        case 'open-search':
+          action = () => openSearchDialog();
+          break;
+        case 'open-command-center':
+          action = onOpenCommandCenter;
+          break;
+        case 'reset-layout':
+          action = resetDesktopLayout;
+          break;
+        case 'open-onboarding':
+        case 'show-diagnostics':
+        case 'communication-health':
+          action = onOpenDiagnostics;
+          break;
+        case 'import-data':
+        case 'export-data':
+        case 'create-backup':
+        case 'create-debug-bundle':
+          if (canOpenSettings && hasPermission('backup:read'))
+            action = () => openSettingsDialog('maintenance');
+          else message = 'Settings and backup read permission are required to open Maintenance.';
+          break;
+        case 'test-squad-webhook':
+          if (canOpenSettings) action = () => openSettingsDialog('notifications');
+          else message = 'Open Notifications in Settings to configure and test external delivery.';
+          break;
+      }
+      if (!action) return { accepted: false, message };
+      flushSync(action);
+      return { accepted: true };
+    });
+  }, [
+    canCreateTask,
+    canOpenSettings,
+    hasPermission,
+    openCreateDialog,
+    openSettingsDialog,
+    openSearchDialog,
+    onOpenCommandCenter,
+    onOpenDiagnostics,
+    resetDesktopLayout,
+  ]);
 
   const handleChromeDoubleClick = useCallback(
     (event: MouseEvent<HTMLElement>) => {
