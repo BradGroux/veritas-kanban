@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef } from 'react';
+import { createElement, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
@@ -800,26 +800,28 @@ export function useTasksByStatus(
   tasks: Task[] | undefined,
   columns?: BoardColumnConfig[]
 ): Record<string, Task[]> {
-  const statuses = normalizeBoardColumns(columns ?? DEFAULT_FEATURE_SETTINGS.board.columns).map(
-    (column) => column.id
-  );
-  const grouped = Object.fromEntries(statuses.map((status) => [status, [] as Task[]])) as Record<
-    string,
-    Task[]
-  >;
+  return useMemo(() => {
+    const statuses = normalizeBoardColumns(columns ?? DEFAULT_FEATURE_SETTINGS.board.columns).map(
+      (column) => column.id
+    );
+    const grouped = Object.fromEntries(statuses.map((status) => [status, [] as Task[]])) as Record<
+      string,
+      Task[]
+    >;
 
-  for (const task of tasks ?? []) {
-    if (!grouped[task.status]) {
-      grouped[task.status] = [];
+    for (const task of tasks ?? []) {
+      if (!grouped[task.status]) {
+        grouped[task.status] = [];
+      }
+      grouped[task.status].push(task);
     }
-    grouped[task.status].push(task);
-  }
 
-  for (const status of Object.keys(grouped)) {
-    grouped[status] = sortTasksByBoardPosition(grouped[status]);
-  }
+    for (const status of Object.keys(grouped)) {
+      grouped[status] = sortTasksByBoardPosition(grouped[status]);
+    }
 
-  return grouped;
+    return grouped;
+  }, [tasks, columns]);
 }
 
 // A shared snapshot index avoids scanning the whole board for every card.
