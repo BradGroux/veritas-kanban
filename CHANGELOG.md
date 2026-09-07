@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.2.0]
+
+Unpublished release candidate. Veritas Kanban 6.2.0 improves Settings persistence, keyboard and native macOS interactions, and large-board behavior.
+
+### Changed
+
+- Made macOS Settings a reusable window with shared settings content, synchronized changes, and a pending-save check before quitting. Browser Settings remains a modal (#1525, #1542).
+- Added permission-aware Settings search and direct control links; added System appearance alongside Light and Dark; compacted secondary board filters on narrow screens (#1539–#1541).
+- Loaded compact card records and rendered a measured window for large columns. Full task details load on demand, full-text search remains available, and dependency checks share one index (#1537).
+- Updated SQLite notifications by affected row and moved filtering and pagination into repository queries. Extracted recovery scheduling, reconciliation and monitoring into one coordinator (#1536, #1543).
+
+### Fixed
+
+- Connected native menu commands to renderer actions, restored standard macOS menu commands, kept restored windows on available displays, and honored the title-bar double-click preference (#1524, #1529–#1531).
+- Preserved pending Settings edits across section changes and closing; retained failed saves for retry and waited for persistence before confirming an import (#1525).
+- Kept modified keys and IME composition out of board letter shortcuts. Keyboard selection follows visible order, brings tasks into view, and uses help derived from configured columns (#1526, #1533, #1534).
+- Corrected primary-action, filter and code-token contrast; separated browser onboarding from native desktop diagnostics (#1532, #1535).
+- Rejected empty or ambiguous task identifiers in CLI/MCP mutations; bounded API waits and retained structured errors. File notification writes preserve recoverable state and report malformed or unreadable data (#1527, #1528, #1538).
+
+### Compatibility
+
+- All maintained package versions move together to 6.2.0. REST API `v1` and existing full-task/summary clients remain compatible. This candidate adds no database migration.
+- Existing explicit Light/Dark choices are retained. System appearance is an additional preference. Failed Settings writes need an explicit retry; closing the macOS Settings window keeps its pending edits alive.
+- CLI/MCP task suffixes must identify exactly one task. Use the complete task ID when several matches exist.
+
 ## [6.1.7] - 2026-09-04
 
 Veritas Kanban 6.1.7 corrects desktop and compact-window layout, popout interactions, and task-editing failures found during the broader UI audit.

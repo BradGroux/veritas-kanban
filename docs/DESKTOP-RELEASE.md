@@ -1,5 +1,10 @@
 # Veritas Kanban Desktop Release
 
+> For the 6.2.0 candidate, verification is local and GitHub CI is prohibited. Do not dispatch
+> the historical GitHub workflows described below. Inspect triggers before repository or
+> release publication and stop if the action would start prohibited automation. Follow the
+> [current local candidate gate](V6-GA-CHECKLIST.md#final-release-validation-commands).
+
 This guide covers desktop packaging paths for macOS GA artifacts and
 Linux/Windows preview artifact scaffolding: unsigned PR artifacts, signed
 release artifacts, update metadata, and smoke testing.

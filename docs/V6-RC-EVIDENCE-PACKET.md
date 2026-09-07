@@ -1,6 +1,6 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet records the completed Veritas Kanban 6.1.7 macOS UI and interaction release and
+This packet tracks the unpublished 6.2.0 candidate and the completed 6.1.7 macOS UI and interaction release, and
 retains historical evidence for the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
 stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
 merged implementation, deterministic conformance, local runtime proof, signed
@@ -8,7 +8,18 @@ publication, and Homebrew availability.
 
 Veritas Kanban 6.1.7 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-09-04 for the completed Veritas Kanban 6.1.7 release.
+Documentation freshness: 2026-09-07. Candidate acceptance remains pending.
+
+## 6.2.0 candidate
+
+The candidate is prepared locally from the audit backlog. No 6.2.0 release, installation replacement, distribution update or media publication has occurred. The implementation branch is not a public delivery artifact.
+
+- Package versions: root, shared, server, web, CLI, MCP and desktop identify 6.2.0.
+- Focused local checks cover the affected storage, Settings, keyboard, board, native bridge and recovery behavior.
+- The complete local integration gate, packaged native journeys and matched media review are in progress. Their final revision, artifact hashes and results will be recorded here before acceptance.
+- The original external-tracker approval failure has not recurred in the instrumented full server run. Its original worker/order information was not retained; #1544 remains open pending a reproducible failure or explicit disposition.
+- GitHub CI is prohibited. Publication is blocked while applicable repository triggers remain enabled. No controls have been changed.
+- Signing/notarization, installed-app replacement, release/distribution changes and public writing require their separate acceptance and authorization.
 
 ## 6.1.7 macOS UI and interaction release
 
