@@ -797,7 +797,7 @@ All tool errors return:
 
 | Error                                 | Cause                                             | Fix                                                                        |
 | ------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `Task not found: abc123`              | ID doesn't match any task                         | Check the ID — partial match needs ≥ 6 characters                          |
+| `Task not found: abc123`              | ID doesn't match any task                         | Use an exact ID or a suffix unique to one task                             |
 | `Can only start agents on code tasks` | Tried `start_agent` on a non-code task            | Change task type to `code` first                                           |
 | `Task needs a worktree first`         | `start_agent` on a task without git worktree      | Create a worktree via the VK UI or API before starting an agent            |
 | `Provider runtime does not support…`  | Required launch or stop capability is unavailable | Select a capable provider or refresh its validated manifest                |
@@ -884,8 +884,14 @@ Yes. Any MCP-compatible client works — Cursor, Cline, Continue, Zed, or custom
 Not currently. The server uses stdio only. If you need HTTP transport, use the VK REST API directly.
 
 **Q: How do partial task IDs work?**
-The `findTask` utility matches the last N characters of a task ID (minimum 6). If multiple tasks match, it returns the first match. Use more characters for precision.
+An exact ID takes precedence over suffix matches. A suffix is accepted only when it identifies one task. Empty or whitespace-only IDs are rejected, and ambiguous suffixes return an error listing candidate IDs without updating, archiving, or deleting any task. Use an exact ID to resolve ambiguity.
 
 ---
 
 _Last updated: 2026-08-30 · VK v6.1.3 · 42 tools / 9 categories_
+
+### API deadlines and errors
+
+Shared API requests have a 30-second deadline, including response-body reads. Set `VK_API_TIMEOUT_MS` to a positive integer of milliseconds for a different default. Agent launch requests explicitly allow 120 seconds for provider preflight and worktree preparation. Client integrations can set `timeoutMs` per request and supply an `AbortSignal`; cancellation also covers uncached permission preflight. Writes are never retried automatically. A timeout does not prove that the server rejected or rolled back a write: inspect the task or operation before trying it again.
+
+API errors retain HTTP status and server error code. MCP tool errors and CLI task commands using `--json` include structured metadata. Forwarded details use an allowlist for validation, revision, permission, and retry fields; complete task snapshots and credential fields are omitted. A rejected preflight does not remain cached as a permanent transport failure.

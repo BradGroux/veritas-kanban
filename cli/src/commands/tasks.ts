@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { api } from '../utils/api.js';
+import { formatApiError } from '@veritas-kanban/shared';
 import { findTask } from '../utils/find.js';
 import { formatTask, formatTaskJson, formatTasksJson } from '../utils/format.js';
 import type { Task } from '../utils/types.js';
@@ -43,7 +44,9 @@ export function registerTaskCommands(program: Command): void {
           filtered.forEach((task: Task) => console.log(formatTask(task, options.verbose)));
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        console.error(
+          options.json ? formatApiError(err, true) : chalk.red(`Error: ${formatApiError(err)}`)
+        );
         process.exit(1);
       }
     });
@@ -79,7 +82,9 @@ export function registerTaskCommands(program: Command): void {
           }
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        console.error(
+          options.json ? formatApiError(err, true) : chalk.red(`Error: ${formatApiError(err)}`)
+        );
         process.exit(1);
       }
     });
@@ -121,7 +126,9 @@ export function registerTaskCommands(program: Command): void {
           console.log(formatTask(task, true));
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        console.error(
+          options.json ? formatApiError(err, true) : chalk.red(`Error: ${formatApiError(err)}`)
+        );
         process.exit(1);
       }
     });
@@ -175,7 +182,9 @@ export function registerTaskCommands(program: Command): void {
           console.log(formatTask(task, true));
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        console.error(
+          options.json ? formatApiError(err, true) : chalk.red(`Error: ${formatApiError(err)}`)
+        );
         process.exit(1);
       }
     });
@@ -202,7 +211,9 @@ export function registerTaskCommands(program: Command): void {
           console.log(chalk.green('✓ Task archived'));
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        console.error(
+          options.json ? formatApiError(err, true) : chalk.red(`Error: ${formatApiError(err)}`)
+        );
         process.exit(1);
       }
     });
@@ -229,7 +240,9 @@ export function registerTaskCommands(program: Command): void {
           console.log(chalk.green('✓ Task deleted'));
         }
       } catch (err) {
-        console.error(chalk.red(`Error: ${(err as Error).message}`));
+        console.error(
+          options.json ? formatApiError(err, true) : chalk.red(`Error: ${formatApiError(err)}`)
+        );
         process.exit(1);
       }
     });

@@ -550,18 +550,24 @@ export class ClientPermissionError extends Error {
   }
 }
 
-export function createApiPermissionGuard(loadContext: () => Promise<ClientAuthContext>) {
-  let cachedContext: Promise<ClientAuthContext> | null = null;
+export function createApiPermissionGuard(
+  loadContext: (options?: Pick<RequestInit, 'signal'>) => Promise<ClientAuthContext>
+) {
+  let cachedContext: ClientAuthContext | null = null;
 
   return async function assertApiPermissionForRequest(
     path: string,
-    options: Pick<RequestInit, 'method'> = {}
+    options: Pick<RequestInit, 'method' | 'signal'> = {}
   ): Promise<ClientAuthContext | null> {
     const requirement = getApiPermissionRequirement(path, options);
     if (requirement.public) return null;
 
-    cachedContext ??= loadContext();
-    const context = await cachedContext;
+    options.signal?.throwIfAborted();
+    // Cache only successful context. Each uncached caller owns its cancellation;
+    // an aborted request must not poison later requests or cancel another caller.
+    const context = cachedContext ?? (await loadContext({ signal: options.signal }));
+    options.signal?.throwIfAborted();
+    cachedContext = context;
     const allowed = requirement.permissions.some((permission) =>
       hasClientPermission(context, permission)
     );

@@ -2,6 +2,8 @@
  * Shared API client for CLI and MCP
  */
 
+import { ApiError, safeApiDetails, safeApiText } from './api-errors.js';
+export { ApiError, formatApiError } from './api-errors.js';
 import type { Task } from '../types/task.types.js';
 import { createApiPermissionGuard, type ClientAuthContext } from './api-permissions.js';
 export {
@@ -91,56 +93,143 @@ export function buildApiHeaders(headers?: HeadersInit, apiKey = getEnv('VK_API_K
   };
 }
 
-/**
- * Create an API client instance
- * @param baseUrl - Base URL for the API (default: http://localhost:3001)
- * @returns API client function
- */
-export function createApiClient(baseUrl = DEFAULT_BASE, apiKey = getEnv('VK_API_KEY')) {
-  return async function api<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${baseUrl}${path}`, {
-      ...options,
-      headers: buildApiHeaders(options?.headers, apiKey),
-    });
+export interface ApiClientOptions {
+  timeoutMs?: number;
+}
+export interface ApiRequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+export const DEFAULT_API_TIMEOUT_MS = 30_000;
 
-    if (!res.ok) {
-      const error = (await res.json().catch(() => ({ error: res.statusText }))) as unknown;
+function requestTimeout(value: number | undefined): number {
+  const timeout = value ?? Number(getEnv('VK_API_TIMEOUT_MS') ?? DEFAULT_API_TIMEOUT_MS);
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2_147_483_647) {
+    throw new Error('API timeout must be an integer from 1 to 2147483647 milliseconds');
+  }
+  return timeout;
+}
 
-      if (isErrorEnvelope(error)) {
-        throw new Error(error.error.message || `API error: ${res.status}`);
+async function withDeadline<T>(
+  options: ApiRequestOptions,
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>
+): Promise<T> {
+  const caller = options.signal;
+  caller?.throwIfAborted();
+  const controller = new AbortController();
+  const cancel = () => controller.abort(caller?.reason);
+  caller?.addEventListener('abort', cancel, { once: true });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await run(controller.signal);
+  } catch (error) {
+    if (caller?.aborted) throw caller.reason;
+    if (timedOut)
+      throw new ApiError(
+        `Request exceeded ${timeoutMs} ms. Check server availability or set an explicit longer timeout. Mutations are not retried.`,
+        { code: 'TIMEOUT' }
+      );
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    caller?.removeEventListener('abort', cancel);
+  }
+}
+
+/** A finite deadline covers both response headers and the response body. No automatic retries. */
+export function createApiClient(
+  baseUrl = DEFAULT_BASE,
+  apiKey = getEnv('VK_API_KEY'),
+  defaults: ApiClientOptions = {}
+) {
+  const defaultTimeout = requestTimeout(defaults.timeoutMs);
+  return async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+    const { timeoutMs: override, ...request } = options;
+    const headers = buildApiHeaders(options.headers, apiKey);
+    const secrets = Object.entries(headers)
+      .filter(([key]) => key === 'x-api-key' || key === 'authorization')
+      .flatMap(([, value]) => [value, value.replace(/^Bearer\s+/i, '')]);
+    return withDeadline(options, requestTimeout(override ?? defaultTimeout), async (signal) => {
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}${path}`, { ...request, signal, headers });
+      } catch (error) {
+        if (signal.aborted) throw error;
+        throw new ApiError(
+          'Cannot reach the API server. Check VK_API_URL and server availability.',
+          { code: 'NETWORK_ERROR' }
+        );
       }
-
-      const legacyError = isRecord(error) && typeof error.error === 'string' ? error.error : null;
-      const legacyMessage =
-        isRecord(error) && typeof error.message === 'string' ? error.message : null;
-
-      throw new Error(legacyError || legacyMessage || `API error: ${res.status}`);
-    }
-
-    if (res.status === 204) {
-      return undefined as T;
-    }
-
-    const body = await res.json();
-
-    // Unwrap standard API envelope { success, data, meta }
-    if (isSuccessEnvelope<T>(body)) {
-      return body.data;
-    }
-
-    return body as T;
+      if (res.status === 204) return undefined as T;
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch (error) {
+        if (signal.aborted) throw error;
+        if (res.ok)
+          throw new ApiError('API returned an invalid JSON response.', {
+            status: res.status,
+            code: 'INVALID_RESPONSE',
+          });
+      }
+      if (!res.ok || isErrorEnvelope(body)) {
+        const envelope = isErrorEnvelope(body) ? body.error : null;
+        const legacy = isRecord(body) ? body : {};
+        const rawMessage =
+          envelope?.message ?? (typeof legacy.error === 'string' ? legacy.error : legacy.message);
+        const rawCode = envelope?.code ?? legacy.code;
+        const retryAfter = res.headers.get('retry-after');
+        const details = safeApiDetails(envelope?.details ?? legacy.details, secrets);
+        throw new ApiError(
+          safeApiText(
+            typeof rawMessage === 'string' ? rawMessage : `API request failed (${res.status})`,
+            secrets
+          ),
+          {
+            status: res.status,
+            code:
+              typeof rawCode === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(rawCode)
+                ? rawCode
+                : 'API_ERROR',
+            details: retryAfter
+              ? {
+                  ...(isRecord(details) && !Array.isArray(details) ? details : {}),
+                  retryAfter: safeApiText(retryAfter, secrets),
+                }
+              : details,
+          }
+        );
+      }
+      if (isSuccessEnvelope<T>(body)) return body.data;
+      return body as T;
+    });
   };
 }
 
-export function createGuardedApiClient(baseUrl = DEFAULT_BASE, apiKey = getEnv('VK_API_KEY')) {
-  const rawApi = createApiClient(baseUrl, apiKey);
-  const assertPermission = createApiPermissionGuard(() =>
-    rawApi<ClientAuthContext>('/api/auth/context')
+export function createGuardedApiClient(
+  baseUrl = DEFAULT_BASE,
+  apiKey = getEnv('VK_API_KEY'),
+  defaults: ApiClientOptions = {}
+) {
+  const rawApi = createApiClient(baseUrl, apiKey, defaults);
+  const defaultTimeout = requestTimeout(defaults.timeoutMs);
+  const assertPermission = createApiPermissionGuard((options) =>
+    rawApi<ClientAuthContext>('/api/auth/context', options)
   );
-
-  return async function api<T>(path: string, options?: RequestInit): Promise<T> {
-    await assertPermission(path, options);
-    return rawApi<T>(path, options);
+  return async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+    return withDeadline(
+      options,
+      requestTimeout(options.timeoutMs ?? defaultTimeout),
+      async (signal) => {
+        await assertPermission(path, { ...options, signal });
+        signal.throwIfAborted();
+        return rawApi<T>(path, { ...options, signal });
+      }
+    );
   };
 }
 
@@ -152,12 +241,23 @@ export const API_BASE = (typeof process !== 'undefined' && process.env?.VK_API_U
 export const api = createApiClient(API_BASE);
 
 /**
- * Find task by ID (supports partial matching on ID suffix)
+ * Find a task by exact ID or an unambiguous ID suffix. Blank and ambiguous
+ * identifiers are rejected before a caller can mutate an unintended task.
  * @param id - Full or partial task ID
  * @param apiClient - Optional custom API client (defaults to shared api client)
  * @returns Task if found, null otherwise
  */
 export async function findTask(id: string, apiClient = api): Promise<Task | null> {
+  if (!id.trim()) throw new Error('Task identifier must not be empty or whitespace');
   const tasks = await apiClient<Task[]>('/api/tasks');
-  return tasks.find((t) => t.id === id || t.id.endsWith(id)) || null;
+  const exact = tasks.find((task) => task.id === id);
+  if (exact) return exact;
+  const candidates = tasks.filter((task) => task.id.endsWith(id));
+  if (candidates.length > 1) {
+    const ids = candidates.map((task) => JSON.stringify(task.id)).sort();
+    throw new Error(
+      `Ambiguous task identifier ${JSON.stringify(id)}; use an exact ID: ${ids.join(', ')}`
+    );
+  }
+  return candidates[0] ?? null;
 }
