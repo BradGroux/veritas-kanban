@@ -159,3 +159,33 @@ export async function verifyNativeWindowMenu(app, page) {
     .toEqual(normalBounds);
   return { page: reopened, roles: items, normalBounds };
 }
+
+export async function verifyConfiguredTitlebarAction(app, page) {
+  const preference = await app.evaluate(({ systemPreferences }) =>
+    systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string')
+  );
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    window.restore();
+    window.unmaximize();
+  });
+  const state = () =>
+    app.evaluate(({ BrowserWindow }) => ({
+      maximized: BrowserWindow.getAllWindows()[0].isMaximized(),
+      minimized: BrowserWindow.getAllWindows()[0].isMinimized(),
+    }));
+  await expect.poll(state).toEqual({ maximized: false, minimized: false });
+  await page.getByRole('navigation', { name: 'Main navigation' }).dispatchEvent('dblclick');
+  const expected = {
+    maximized: ['', 'Maximize', 'Fill'].includes(preference),
+    minimized: preference === 'Minimize',
+  };
+  await expect.poll(state).toEqual(expected);
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    window.restore();
+    window.unmaximize();
+    window.focus();
+  });
+  return { preference: preference || 'system default', expected };
+}

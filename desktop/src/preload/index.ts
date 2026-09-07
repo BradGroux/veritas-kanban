@@ -16,7 +16,7 @@ import type {
   DesktopSetupDiagnostics,
   DesktopSupportSnapshot,
   DesktopUpdateStatus,
-  DesktopWindowToggleMaximizeResult,
+  DesktopWindowTitlebarActionResult,
   DesktopWorkProductExportRequest,
   DesktopWorkProductExportResult,
 } from '../shared/desktop-bridge-contracts.js';
@@ -37,7 +37,7 @@ const DESKTOP_BRIDGE_METHODS = {
   performNotificationAction: { channel: 'desktop:perform-notification-action' },
   exportWorkProduct: { channel: 'desktop:export-work-product' },
   openExternal: { channel: 'desktop:open-external' },
-  toggleWindowMaximize: { channel: 'desktop:toggle-window-maximize' },
+  performTitlebarAction: { channel: 'desktop:perform-titlebar-action' },
 } as const;
 
 const DESKTOP_BRIDGE_EVENTS = {
@@ -90,7 +90,7 @@ export interface VeritasDesktopApi {
     request: DesktopWorkProductExportRequest
   ): Promise<DesktopWorkProductExportResult>;
   openExternal(url: string): Promise<void>;
-  toggleWindowMaximize(): Promise<DesktopWindowToggleMaximizeResult>;
+  performTitlebarAction(): Promise<DesktopWindowTitlebarActionResult>;
   onSetupProgress(listener: BridgeEventListener<'setupProgress'>): () => void;
   onCommunicationCheck(listener: BridgeEventListener<'communicationCheck'>): () => void;
   onServerStatus(listener: (status: DesktopStatusSnapshot) => void): () => void;
@@ -177,9 +177,9 @@ const api: VeritasDesktopApi = {
     ),
   openExternal: (url: string) =>
     invokeDesktop<void>(DESKTOP_BRIDGE_METHODS.openExternal.channel, { url }),
-  toggleWindowMaximize: () =>
-    invokeDesktop<DesktopWindowToggleMaximizeResult>(
-      DESKTOP_BRIDGE_METHODS.toggleWindowMaximize.channel
+  performTitlebarAction: () =>
+    invokeDesktop<DesktopWindowTitlebarActionResult>(
+      DESKTOP_BRIDGE_METHODS.performTitlebarAction.channel
     ),
   onSetupProgress: (listener) => onDesktopEvent('setupProgress', listener),
   onCommunicationCheck: (listener) => onDesktopEvent('communicationCheck', listener),

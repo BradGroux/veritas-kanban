@@ -326,3 +326,8 @@ application menu; View provides text zoom and full screen.
 Saved window bounds are fitted to the current display work areas at launch or
 reopen. If a monitor was disconnected, the window returns to the primary display.
 Maximized windows retain their previous normal bounds for unmaximizing.
+
+The custom header follows the macOS title-bar double-click preference (zoom/fill,
+minimize, or no action). Configure it in [Desktop & Dock settings](https://support.apple.com/guide/mac-help/change-desktop-dock-settings-mchlp1119/mac).
+The native gate records the current preference and verifies its action without
+changing the operator's system preferences.

@@ -7,6 +7,7 @@ import {
   safeStorage,
   shell,
   screen,
+  systemPreferences,
 } from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -15,6 +16,7 @@ import { createRequire } from 'node:module';
 import { DESKTOP_APP_ID, DESKTOP_APP_NAME, DESKTOP_MIN_WINDOW } from './app-metadata.js';
 import { registerDesktopBridge } from './bridge.js';
 import { DesktopCommandDispatcher } from './commands.js';
+import { applyTitlebarAction, resolveTitlebarAction } from './titlebar-action.js';
 import { sendAcknowledgedRendererCommand } from './renderer-commands.js';
 import { extractDeepLinkFromArgv, parseDesktopDeepLink } from './deep-links.js';
 import { configureDesktopMenu, dispatchDesktopMenuCommand } from './menu.js';
@@ -347,18 +349,16 @@ async function boot(): Promise<void> {
     commandDispatcher,
     updateService,
     {
-      toggleMaximize: () => {
-        const window = activeMainWindow();
-        if (!window) {
-          return { maximized: false };
-        }
-        if (window.isMaximized()) {
-          window.unmaximize();
-        } else {
-          window.maximize();
-        }
-        return { maximized: window.isMaximized() };
-      },
+      performTitlebarAction: () =>
+        applyTitlebarAction(
+          activeMainWindow(),
+          resolveTitlebarAction(
+            process.platform,
+            process.platform === 'darwin'
+              ? systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string')
+              : ''
+          )
+        ),
     }
   );
   refreshDesktopMenu();

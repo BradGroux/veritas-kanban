@@ -267,7 +267,7 @@ function renderDesktopBoard() {
   Object.defineProperty(window, 'veritasDesktop', {
     configurable: true,
     value: {
-      toggleWindowMaximize: vi.fn(),
+      performTitlebarAction: vi.fn(),
     },
   });
   window.localStorage.setItem('veritas.desktop.rightRailOpen', 'false');

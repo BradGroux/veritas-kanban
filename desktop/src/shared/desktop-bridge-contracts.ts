@@ -204,7 +204,7 @@ export interface DesktopWorkProductExportResult {
   warnings: string[];
 }
 
-export interface DesktopWindowToggleMaximizeResult {
+export interface DesktopWindowTitlebarActionResult {
   maximized: boolean;
 }
 
@@ -295,9 +295,9 @@ export const DESKTOP_BRIDGE_METHODS = {
     dangerous: true,
     validator: 'openExternal',
   },
-  toggleWindowMaximize: {
+  performTitlebarAction: {
     capability: 'shell',
-    channel: 'desktop:toggle-window-maximize',
+    channel: 'desktop:perform-titlebar-action',
     desktopOnly: true,
     dangerous: false,
   },
@@ -317,7 +317,7 @@ export const DESKTOP_BRIDGE_METHOD_NAMES = [
   'performNotificationAction',
   'exportWorkProduct',
   'openExternal',
-  'toggleWindowMaximize',
+  'performTitlebarAction',
 ] as const;
 
 export type DesktopBridgeMethod = (typeof DESKTOP_BRIDGE_METHOD_NAMES)[number];
@@ -425,7 +425,7 @@ export interface DesktopBridgeRequestMap {
   performNotificationAction: DesktopNotificationActionRequest;
   exportWorkProduct: DesktopWorkProductExportRequest;
   openExternal: OpenExternalRequest;
-  toggleWindowMaximize: undefined;
+  performTitlebarAction: undefined;
 }
 
 export interface DesktopBridgeResponseMap {
@@ -442,7 +442,7 @@ export interface DesktopBridgeResponseMap {
   performNotificationAction: DesktopNotificationActionResult;
   exportWorkProduct: DesktopWorkProductExportResult;
   openExternal: undefined;
-  toggleWindowMaximize: DesktopWindowToggleMaximizeResult;
+  performTitlebarAction: DesktopWindowTitlebarActionResult;
 }
 
 export interface DesktopBridgeEventPayloadMap {

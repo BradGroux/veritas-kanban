@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { ViewProvider } from '@/contexts/ViewContext';
@@ -143,7 +143,7 @@ function renderDesktopHeaderChrome(options: { withBottomPanel?: boolean } = {}) 
   Object.defineProperty(window, 'veritasDesktop', {
     configurable: true,
     value: {
-      toggleWindowMaximize: vi.fn(),
+      performTitlebarAction: vi.fn(),
     },
   });
   document.documentElement.dataset.client = 'desktop';
@@ -381,10 +381,26 @@ describe('layout chrome Mantine migration', () => {
     expect(container.querySelector('.lucide-panel-right-close')).toBeNull();
   });
 
+  it('sends titlebar double clicks only from the header background', () => {
+    renderDesktopHeaderChrome();
+    const action = (
+      window as unknown as { veritasDesktop: { performTitlebarAction: ReturnType<typeof vi.fn> } }
+    ).veritasDesktop.performTitlebarAction;
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'New Task' }));
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Settings' }));
+    const input = document.createElement('input');
+    screen.getByRole('navigation', { name: 'Main navigation' }).append(input);
+    fireEvent.doubleClick(input);
+    expect(action).not.toHaveBeenCalled();
+    input.remove();
+    fireEvent.doubleClick(screen.getByRole('navigation', { name: 'Main navigation' }));
+    expect(action).toHaveBeenCalledOnce();
+  });
+
   it('uses the filled brand treatment with white text for the active desktop navigation item', () => {
     Object.defineProperty(window, 'veritasDesktop', {
       configurable: true,
-      value: { toggleWindowMaximize: vi.fn() },
+      value: { performTitlebarAction: vi.fn() },
     });
     document.documentElement.dataset.client = 'desktop';
     window.history.replaceState({}, '', '/drift');
