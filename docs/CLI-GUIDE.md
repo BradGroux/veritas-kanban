@@ -1190,7 +1190,7 @@ alias vkai='vk agent idle'
 
 ### Partial ID Matching
 
-You don't need to type the full task ID. `vk show` and other commands support partial matching:
+You can use an exact task ID or a unique suffix. Exact IDs take precedence. Empty identifiers and suffixes matching more than one task are rejected before any update, archive, or deletion; ambiguity errors list candidate IDs so you can choose explicitly:
 
 ```bash
 # Full ID

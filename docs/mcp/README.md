@@ -797,7 +797,7 @@ All tool errors return:
 
 | Error                                 | Cause                                             | Fix                                                                        |
 | ------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `Task not found: abc123`              | ID doesn't match any task                         | Check the ID — partial match needs ≥ 6 characters                          |
+| `Task not found: abc123`              | ID doesn't match any task                         | Use an exact ID or a suffix unique to one task                             |
 | `Can only start agents on code tasks` | Tried `start_agent` on a non-code task            | Change task type to `code` first                                           |
 | `Task needs a worktree first`         | `start_agent` on a task without git worktree      | Create a worktree via the VK UI or API before starting an agent            |
 | `Provider runtime does not support…`  | Required launch or stop capability is unavailable | Select a capable provider or refresh its validated manifest                |
@@ -884,7 +884,7 @@ Yes. Any MCP-compatible client works — Cursor, Cline, Continue, Zed, or custom
 Not currently. The server uses stdio only. If you need HTTP transport, use the VK REST API directly.
 
 **Q: How do partial task IDs work?**
-The `findTask` utility matches the last N characters of a task ID (minimum 6). If multiple tasks match, it returns the first match. Use more characters for precision.
+An exact ID takes precedence over suffix matches. A suffix is accepted only when it identifies one task. Empty or whitespace-only IDs are rejected, and ambiguous suffixes return an error listing candidate IDs without updating, archiving, or deleting any task. Use an exact ID to resolve ambiguity.
 
 ---
 

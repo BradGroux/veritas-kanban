@@ -152,12 +152,23 @@ export const API_BASE = (typeof process !== 'undefined' && process.env?.VK_API_U
 export const api = createApiClient(API_BASE);
 
 /**
- * Find task by ID (supports partial matching on ID suffix)
+ * Find a task by exact ID or an unambiguous ID suffix. Blank and ambiguous
+ * identifiers are rejected before a caller can mutate an unintended task.
  * @param id - Full or partial task ID
  * @param apiClient - Optional custom API client (defaults to shared api client)
  * @returns Task if found, null otherwise
  */
 export async function findTask(id: string, apiClient = api): Promise<Task | null> {
+  if (!id.trim()) throw new Error('Task identifier must not be empty or whitespace');
   const tasks = await apiClient<Task[]>('/api/tasks');
-  return tasks.find((t) => t.id === id || t.id.endsWith(id)) || null;
+  const exact = tasks.find((task) => task.id === id);
+  if (exact) return exact;
+  const candidates = tasks.filter((task) => task.id.endsWith(id));
+  if (candidates.length > 1) {
+    const ids = candidates.map((task) => JSON.stringify(task.id)).sort();
+    throw new Error(
+      `Ambiguous task identifier ${JSON.stringify(id)}; use an exact ID: ${ids.join(', ')}`
+    );
+  }
+  return candidates[0] ?? null;
 }
