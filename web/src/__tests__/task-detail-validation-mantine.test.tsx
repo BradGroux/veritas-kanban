@@ -19,7 +19,7 @@ vi.mock('@/hooks/useTasks', async () => {
   const actual = await vi.importActual<typeof import('@/hooks/useTasks')>('@/hooks/useTasks');
   return {
     ...actual,
-    useTasks: mocks.useTasks,
+    useBoardTasks: mocks.useTasks,
     useAddVerificationStep: () => ({ mutateAsync: mocks.addVerificationStep }),
     useUpdateVerificationStep: () => ({ mutateAsync: mocks.updateVerificationStep }),
     useDeleteVerificationStep: () => ({ mutateAsync: mocks.deleteVerificationStep }),

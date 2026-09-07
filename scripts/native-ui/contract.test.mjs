@@ -76,7 +76,12 @@ function report() {
         status: 'passed',
         theme: mode.theme,
         screenshot: { path: `${id}.png`, sha256: digest },
+        windowRole: id.split('/')[1]?.startsWith('settings-') ? 'settings' : 'board',
         nativeWindow: {
+          role: id.split('/')[1]?.startsWith('settings-') ? 'settings' : 'board',
+          visible: true,
+          modal: false,
+          settingsWindowCount: 1,
           bounds: { x: 0, y: 0, width: mode.width, height: mode.height },
           contentBounds: { x: 0, y: 0, width: mode.width, height: mode.height },
           scaleFactor: 2,
@@ -368,7 +373,6 @@ test('required footer and compound scroll measurements cannot disappear', () => 
   for (const [state, kind] of [
     ['confirmation', 'footer'],
     ['create-task', 'scroll'],
-    ['settings-general', 'scroll'],
   ]) {
     const r = report();
     const overlay = r.entries.find((entry) => entry.id === `light-normal/${state}`).geometry
@@ -383,6 +387,11 @@ test('required footer and compound scroll measurements cannot disappear', () => 
 });
 test('missing overlay measurements and invalid native bounds fail closed', () => {
   for (const mutate of [
+    (r) => delete r.entries.find((e) => e.id.endsWith('/settings-general')).nativeWindow.role,
+    (r) => (r.entries.find((e) => e.id.endsWith('/settings-general')).nativeWindow.modal = true),
+    (r) =>
+      (r.entries.find((e) => e.id.endsWith('/settings-general')).nativeWindow.settingsWindowCount =
+        2),
     (r) => (r.entries.find((e) => requiresOverlay(e.id)).geometry.overlays = []),
     (r) => (r.entries.find((e) => requiresOverlay(e.id)).geometry.overlays = [{ parts: [] }]),
     (r) => (r.entries[0].nativeWindow.bounds = {}),

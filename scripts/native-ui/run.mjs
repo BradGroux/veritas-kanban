@@ -201,6 +201,13 @@ async function capture(entry) {
   const native = await app.evaluate(async ({ BrowserWindow, screen }) => {
     const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
     return {
+      role: new URL(url).searchParams.get('desktop-settings') === '1' ? 'settings' : 'board',
+      visible: window.isVisible(),
+      modal: window.isModal(),
+      settingsWindowCount: BrowserWindow.getAllWindows().filter(
+        (candidate) =>
+          new URL(candidate.webContents.getURL()).searchParams.get('desktop-settings') === '1'
+      ).length,
       bounds: window.getBounds(),
       contentBounds: window.getContentBounds(),
       minimumSize: window.getMinimumSize(),
