@@ -5,6 +5,7 @@ import { renderWithProviders } from './test-utils';
 
 const mocks = vi.hoisted(() => ({
   debouncedUpdate: vi.fn(),
+  importSettings: vi.fn(),
   retrySave: vi.fn(),
   saveError: null as Error | null,
   hasPermission: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
       productMode: mocks.productMode,
     },
   }),
+  useUpdateFeatureSettings: () => ({ mutateAsync: mocks.importSettings }),
   useDebouncedFeatureUpdate: () => ({
     debouncedUpdate: mocks.debouncedUpdate,
     error: mocks.saveError,
@@ -121,6 +123,46 @@ describe('SettingsDialog Mantine shell', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('announces import completion only after persistence and reports failed saves', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    let resolveSave: () => void = () => {
+      throw new Error('Save was not started');
+    };
+    mocks.importSettings.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        })
+    );
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    const file = {
+      text: async () => JSON.stringify({ general: { humanDisplayName: 'Imported' } }),
+    };
+    fireEvent.change(screen.getByLabelText('Import settings file'), { target: { files: [file] } });
+    await waitFor(() => expect(mocks.importSettings).toHaveBeenCalledTimes(1));
+    expect(mocks.toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Import complete' })
+    );
+    resolveSave();
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Import complete' })
+      )
+    );
+    mocks.toast.mockClear();
+    mocks.importSettings.mockRejectedValueOnce(new Error('Save unavailable'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    fireEvent.change(screen.getByLabelText('Import settings file'), { target: { files: [file] } });
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Import failed', description: 'Save unavailable' })
+      )
+    );
+    expect(mocks.toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Import complete' })
+    );
   });
 
   it('renders the settings shell with direct Mantine controls', async () => {
