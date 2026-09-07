@@ -34,6 +34,8 @@ interface KeyboardContextValue {
   selectedTaskId: string | null;
   setSelectedTaskId: (id: string | null) => void;
 
+  columns: ReturnType<typeof normalizeBoardColumns>;
+
   // Task list for navigation
   tasks: Task[];
   setTasks: (tasks: Task[]) => void;
@@ -253,6 +255,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       isHelpOpen,
       selectedTaskId,
       setSelectedTaskId,
+      columns,
       tasks,
       setTasks,
       setOnOpenTask,
@@ -268,6 +271,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       isHelpOpen,
       selectedTaskId,
       setSelectedTaskId,
+      columns,
       tasks,
       setTasks,
       setOnOpenTask,
