@@ -316,6 +316,8 @@ PATCH /api/tasks/:id
 
 **Body**: Partial task fields to update (title, description, status, priority, assignee, etc.).
 
+Managed attempt state is owned by the run lifecycle APIs. Generic task updates reject an `attempt` replacement when the current attempt contains runtime, launch, admission, supervision, or other server-owned evidence. Ordinary task fields remain editable. Historical attempts containing only the legacy editor fields remain editable through this endpoint.
+
 **Headers**:
 
 ```http
