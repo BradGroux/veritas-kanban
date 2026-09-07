@@ -317,3 +317,8 @@ menu and the mounted renderer. File data commands and Debug Bundle open the exis
 Maintenance flow; they do not automatically export, restore, or create files.
 Renderer commands wait for an acknowledgement. Finish setup and unlock the workspace
 before using them; unavailable actions display a reason instead of reporting success.
+
+On macOS, Command-W closes the window while the managed server stays running.
+Reopen the window from the Dock. Command-Q quits and stops the managed server.
+Standard Hide, Hide Others, Show All and Services commands are available in the
+application menu; View provides text zoom and full screen.

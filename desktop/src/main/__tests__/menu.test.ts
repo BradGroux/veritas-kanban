@@ -141,6 +141,7 @@ describe('desktop native menu', () => {
         'Veritas Kanban',
         'File',
         'editMenu',
+        'View',
         'Navigate',
         'Desktop',
         'windowMenu',
@@ -172,5 +173,42 @@ describe('desktop native menu', () => {
 
     expect(template.some((item) => item.role === 'windowMenu')).toBe(false);
     expect(template.some((item) => item.role === 'help')).toBe(false);
+  });
+});
+
+describe('standard platform menu roles', () => {
+  const roles = (platform: NodeJS.Platform) =>
+    createDesktopMenuTemplate({
+      platform,
+      status: status(),
+      dispatch: vi.fn(),
+      copyVersionInfo: vi.fn(),
+      openHelp: vi.fn(),
+    }).flatMap((item) => (Array.isArray(item.submenu) ? item.submenu : [item]));
+  it('declares standard macOS roles and accelerators while retaining custom actions', () => {
+    const items = roles('darwin');
+    for (const [role, accelerator] of [
+      ['quit', 'CommandOrControl+Q'],
+      ['close', 'CommandOrControl+W'],
+      ['hide', 'Command+H'],
+      ['hideOthers', 'Command+Alt+H'],
+      ['resetZoom', 'CommandOrControl+0'],
+      ['zoomIn', 'CommandOrControl+Plus'],
+      ['zoomOut', 'CommandOrControl+-'],
+      ['togglefullscreen', 'Control+Command+F'],
+    ]) {
+      expect(items.find((item) => item.role === role)).toMatchObject({ accelerator });
+    }
+    expect(items.some((item) => item.role === 'services')).toBe(true);
+    expect(items.some((item) => item.role === 'unhide')).toBe(true);
+    // The native quit role emits app.before-quit, which owns managed shutdown.
+    expect(items.find((item) => item.role === 'quit')?.click).toBeUndefined();
+  });
+  it.each(['linux', 'win32'] as const)('does not install Mac-only roles on %s', (platform) => {
+    const items = roles(platform);
+    expect(
+      items.some((item) => ['services', 'hide', 'hideOthers', 'unhide'].includes(item.role ?? ''))
+    ).toBe(false);
+    expect(items.find((item) => item.role === 'togglefullscreen')?.accelerator).toBe('F11');
   });
 });
