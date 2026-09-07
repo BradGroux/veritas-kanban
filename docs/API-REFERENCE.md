@@ -1042,7 +1042,7 @@ POST /api/auth/login
 
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "token": "<jwt-token>",
   "role": "admin",
   "expiresIn": "24h"
 }
