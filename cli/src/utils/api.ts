@@ -10,6 +10,9 @@ import {
 export {
   API_BASE,
   ClientPermissionError,
+  ApiError,
+  formatApiError,
+  type ApiRequestOptions,
   buildApiHeaders,
   createApiClient,
   createGuardedApiClient,
@@ -21,6 +24,6 @@ export {
 export const api = createGuardedApiClient(API_BASE);
 
 const contextApi = createApiClient(API_BASE);
-export const assertApiPermissionForRequest = createApiPermissionGuard(() =>
-  contextApi<ClientAuthContext>('/api/auth/context')
+export const assertApiPermissionForRequest = createApiPermissionGuard((options) =>
+  contextApi<ClientAuthContext>('/api/auth/context', options)
 );

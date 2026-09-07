@@ -1242,3 +1242,9 @@ vk list --status in-progress
 ---
 
 _Part of [Veritas Kanban](../README.md) · Built by [Digital Meld](https://digitalmeld.io)_
+
+### API deadlines and errors
+
+Shared API requests have a 30-second deadline, including response-body reads. Set `VK_API_TIMEOUT_MS` to a positive integer of milliseconds for a different default. Agent launch requests explicitly allow 120 seconds for provider preflight and worktree preparation. Client integrations can set `timeoutMs` per request and supply an `AbortSignal`; cancellation also covers uncached permission preflight. Writes are never retried automatically. A timeout does not prove that the server rejected or rolled back a write: inspect the task or operation before trying it again.
+
+API errors retain HTTP status and server error code. MCP tool errors and CLI task commands using `--json` include structured metadata. Forwarded details use an allowlist for validation, revision, permission, and retry fields; complete task snapshots and credential fields are omitted. A rejected preflight does not remain cached as a permanent transport failure.

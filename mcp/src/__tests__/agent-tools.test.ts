@@ -53,6 +53,7 @@ describe('MCP agent runtime capability controls', () => {
     });
 
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
+      timeoutMs: 120_000,
       method: 'POST',
       body: JSON.stringify({
         agent: 'claude-code',
@@ -69,6 +70,7 @@ describe('MCP agent runtime capability controls', () => {
     });
 
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
+      timeoutMs: 120_000,
       method: 'POST',
       body: JSON.stringify({
         agent: 'claude-code',
@@ -86,6 +88,7 @@ describe('MCP agent runtime capability controls', () => {
     });
 
     expect(mockApi).toHaveBeenCalledWith('/api/agents/task_1/start', {
+      timeoutMs: 120_000,
       method: 'POST',
       body: JSON.stringify({
         agent: 'claude-code',

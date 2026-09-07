@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '@veritas-kanban/shared';
 import { Command } from 'commander';
 const { mockApi } = vi.hoisted(() => ({ mockApi: vi.fn() }));
 vi.mock('../utils/api.js', () => ({ api: mockApi }));
@@ -37,6 +38,23 @@ describe('task mutation identifier resolution', () => {
     });
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it('writes structured API error metadata for JSON commands', async () => {
+    mockApi.mockRejectedValue(
+      new ApiError('Conflict', { status: 409, code: 'CONFLICT', details: { currentRevision: 4 } })
+    );
+    await expect(execute('update', 'task_target_abc')).rejects.toThrow('CLI exit');
+    const output = vi.mocked(console.error).mock.calls.at(-1)?.[0];
+    expect(JSON.parse(output)).toEqual({
+      error: {
+        message: 'HTTP 409 [CONFLICT] Conflict',
+        status: 409,
+        code: 'CONFLICT',
+        details: { currentRevision: 4 },
+      },
+    });
+    expect(mockApi).toHaveBeenCalledOnce();
+  });
 
   for (const command of ['update', 'archive', 'delete']) {
     it(`${command} rejects blank and ambiguous IDs without a write`, async () => {

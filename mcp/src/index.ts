@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 // Import utilities
-import { api } from './utils/api.js';
+import { api, ApiError, formatApiError } from './utils/api.js';
 import { findTask } from './utils/find.js';
 import { Task } from './utils/types.js';
 
@@ -106,7 +106,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text',
-          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          text:
+            error instanceof ApiError
+              ? formatApiError(error, true)
+              : `Error: ${formatApiError(error)}`,
         },
       ],
       isError: true,

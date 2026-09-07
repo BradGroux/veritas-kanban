@@ -243,6 +243,7 @@ export function registerAgentCommands(program: Command): void {
         }
 
         const result = await api<{ attemptId: string }>(`/api/agents/${task.id}/start`, {
+          timeoutMs: 120_000, // Provider preflight and worktree preparation can take longer.
           method: 'POST',
           body: JSON.stringify({
             agent: options.profile ? undefined : options.agent,
