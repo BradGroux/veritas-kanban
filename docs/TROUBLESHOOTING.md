@@ -605,6 +605,10 @@ Smoke-test the path in this order:
 
 Generic Squad Chat webhooks send a `squad.message` payload with `event`, `message.id`, `message.agent`, `message.message`, `message.timestamp`, and `isHuman`. If a webhook secret is configured, VK signs the request with `X-VK-Signature`. The Communication Health panel redacts webhook paths, query strings, secrets, and bearer tokens; avoid pasting full webhook URLs into screenshots or support notes.
 
+### Notification state cannot be loaded
+
+In file storage mode, `notifications.json` and `thread-subscriptions.json` in the configured runtime directory must contain JSON arrays. Missing files initialize normally. Malformed JSON and read failures stop the operation instead of resetting notification history. Preserve a copy of the affected file, restore a known-good copy or correct its read permissions, then retry. Writes replace the complete file atomically; a failed write leaves the previous file available.
+
 ### Notifications do not send externally
 
 Notification delivery channels are optional. Local notifications, broadcasts, and Squad Chat can work while external webhook delivery is disabled. Use `/api/broadcasts` for durable system-wide messages and verify delivery-specific settings before expecting an external wake or push.

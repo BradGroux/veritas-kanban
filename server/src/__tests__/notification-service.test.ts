@@ -5,18 +5,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parseMentions } from '../services/notification-service.js';
 
-// Mock fs and file-lock before importing the service
-vi.mock('node:fs/promises', () => ({
-  default: {
-    readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
-    writeFile: vi.fn().mockResolvedValue(undefined),
+// Persistence behavior is exercised separately against real repository files.
+vi.mock('../storage/notification-file-repository.js', () => ({
+  NotificationFileRepository: class {
+    async loadNotifications() {
+      return [];
+    }
+    async loadSubscriptions() {
+      return [];
+    }
+    async saveNotifications() {}
+    async saveSubscriptions() {}
   },
-  readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
-  writeFile: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('../services/file-lock.js', () => ({
-  withFileLock: vi.fn(async (_path: string, fn: () => Promise<void>) => await fn()),
 }));
 
 const { getNotificationService } = await import('../services/notification-service.js');

@@ -1,4 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { atomicWriteFile } from './fs-helpers.js';
 import path from 'node:path';
 import { withFileLock } from '../services/file-lock.js';
 
@@ -37,13 +38,24 @@ export class NotificationFileRepository {
 
   private async loadArray<T>(filePath: string): Promise<T[]> {
     try {
-      return JSON.parse(await readFile(filePath, 'utf8')) as T[];
-    } catch {
-      return [];
+      const values: unknown = JSON.parse(await readFile(filePath, 'utf8'));
+      if (!Array.isArray(values)) throw new Error('Expected a JSON array');
+      return values as T[];
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw new Error(
+        `Cannot load ${path.basename(filePath)}. Preserve the file and restore valid JSON or correct its read permissions before retrying.`,
+        { cause }
+      );
     }
   }
 
   private saveArray<T>(filePath: string, values: T[]): Promise<void> {
-    return withFileLock(filePath, () => writeFile(filePath, JSON.stringify(values, null, 2)));
+    return withFileLock(filePath, async () => {
+      // A cached service must not overwrite state that became unreadable since
+      // its last load. Validate the existing bytes while holding the same lock.
+      await this.loadArray(filePath);
+      await atomicWriteFile(filePath, JSON.stringify(values, null, 2));
+    });
   }
 }
