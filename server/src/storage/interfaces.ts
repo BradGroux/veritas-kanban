@@ -84,6 +84,11 @@ import type {
   RunOutputArtifactRangeQuery,
   RunOutputQuarantineReason,
 } from '@veritas-kanban/shared';
+import type {
+  Notification,
+  NotificationStats,
+  ThreadSubscription,
+} from '../services/notification-service.js';
 import type { Activity, ActivityType } from '../services/activity-service.js';
 import type {
   StatusHistoryEntry,
@@ -601,4 +606,25 @@ export interface StorageProvider {
 
   /** Graceful shutdown (close watchers, release connections, etc.). */
   shutdown(): Promise<void>;
+}
+
+/** Incremental notification operations; bulk import/export remains adapter-specific. */
+export interface NotificationQuery {
+  agent?: string;
+  undelivered?: boolean;
+  taskId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface NotificationRepository {
+  appendNotifications(notifications: Notification[]): void | Promise<void>;
+  listNotifications(query?: NotificationQuery): Notification[] | Promise<Notification[]>;
+  markDelivered(id: string, at: string): boolean | Promise<boolean>;
+  markManyDelivered(ids: string[], at: string): number | Promise<number>;
+  markAllDelivered(agent: string, at: string): number | Promise<number>;
+  clearNotifications(): number | Promise<number>;
+  getStats(): NotificationStats | Promise<NotificationStats>;
+  subscribe(subscription: ThreadSubscription): void | Promise<void>;
+  getSubscriptions(taskId: string): ThreadSubscription[] | Promise<ThreadSubscription[]>;
 }

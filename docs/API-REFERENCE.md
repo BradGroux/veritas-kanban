@@ -6461,3 +6461,17 @@ No query params required.
 _For workflow engine endpoints, see [API-WORKFLOWS.md](API-WORKFLOWS.md)._  
 _For MCP server tools, see [MCP Server Guide](mcp/README.md)._  
 _For agent workflow SOPs, see [SOP-agent-task-workflow.md](SOP-agent-task-workflow.md)._
+
+## Notification pagination and storage
+
+`GET /api/notifications` accepts `limit` (integer 1–1000) and `offset` (nonnegative integer), alongside the existing `agent`, `undelivered`, and `taskId` filters. Omit pagination to retain the existing all-results response. Invalid pagination returns HTTP 400. Responses remain arrays, ordered newest first with notification ID as the stable tie-breaker.
+
+SQLite applies filtering and pagination in the query, aggregates notification statistics in SQL, and updates delivery state by row ID. Subscription creation preserves an existing subscription's original reason and timestamp. The file backend keeps the same operation semantics with locked, atomic file updates; its read and write costs still depend on retained history. No database migration is required.
+
+Run the disposable SQLite delivery benchmark from the repository root:
+
+```bash
+pnpm --filter @veritas-kanban/server exec tsx scripts/benchmark-notifications.ts
+```
+
+It seeds 100, 1,000, and 10,000 public-safe notifications in temporary databases, reports cold delivery latency and 25 warm samples per size, and removes only its temporary fixtures. `changedRowsPerWrite` should remain `[1]`. Timings depend on hardware and current host load; compare matching environments and use the row-change count as the deterministic regression check.

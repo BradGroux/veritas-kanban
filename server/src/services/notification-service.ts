@@ -5,6 +5,7 @@
  * and thread subscriptions for multi-agent communication.
  */
 
+import type { NotificationRepository, NotificationQuery } from '../storage/interfaces.js';
 import { createLogger } from '../lib/logger.js';
 import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/database.js';
 import { SqliteNotificationRepository } from '../storage/sqlite/notification-repository.js';
@@ -93,17 +94,13 @@ export function parseMentions(text: string): string[] {
 // ─── Service ─────────────────────────────────────────────────────
 
 export class NotificationService {
-  private notifications: Notification[] = [];
-  private subscriptions: ThreadSubscription[] = [];
-  private loaded = false;
-  private readonly fileRepository: NotificationFileRepository;
-  private readonly repository: SqliteNotificationRepository | null = null;
+  private readonly repository: NotificationRepository;
   private readonly sqliteDatabase: SqliteDatabase | null = null;
   private readonly ownsSqliteDatabase: boolean = false;
 
   constructor(options: NotificationServiceOptions = {}) {
     const dataDir = options.dataDir ?? DATA_DIR;
-    this.fileRepository = new NotificationFileRepository({
+    this.repository = new NotificationFileRepository({
       dataDir,
       notificationsFile: options.notificationsFile,
       subscriptionsFile: options.subscriptionsFile,
@@ -120,38 +117,6 @@ export class NotificationService {
     }
   }
 
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return;
-    if (this.repository) {
-      this.notifications = this.repository.loadNotifications();
-      this.subscriptions = this.repository.loadSubscriptions();
-      this.loaded = true;
-      return;
-    }
-
-    this.notifications = await this.fileRepository.loadNotifications<Notification>();
-    this.subscriptions = await this.fileRepository.loadSubscriptions<ThreadSubscription>();
-    this.loaded = true;
-  }
-
-  private async saveNotifications(): Promise<void> {
-    if (this.repository) {
-      this.repository.saveNotifications(this.notifications);
-      return;
-    }
-
-    await this.fileRepository.saveNotifications(this.notifications);
-  }
-
-  private async saveSubscriptions(): Promise<void> {
-    if (this.repository) {
-      this.repository.saveSubscriptions(this.subscriptions);
-      return;
-    }
-
-    await this.fileRepository.saveSubscriptions(this.subscriptions);
-  }
-
   /**
    * Process a comment for @mentions and create notifications.
    * Also subscribes the commenter to the thread.
@@ -162,8 +127,6 @@ export class NotificationService {
     content: string;
     allAgents?: string[];
   }): Promise<Notification[]> {
-    await this.ensureLoaded();
-
     const mentions = parseMentions(params.content);
     const created: Notification[] = [];
 
@@ -177,9 +140,9 @@ export class NotificationService {
     targets = targets.filter((t) => t !== params.fromAgent.toLowerCase());
 
     // Also notify thread subscribers (if not already in mentions)
-    const subscribers = this.subscriptions
-      .filter((s) => s.taskId === params.taskId)
-      .map((s) => s.agent.toLowerCase());
+    const subscribers = (await this.repository.getSubscriptions(params.taskId)).map((s) =>
+      s.agent.toLowerCase()
+    );
 
     const allTargets = [...new Set([...targets, ...subscribers])].filter(
       (t) => t !== params.fromAgent.toLowerCase()
@@ -196,7 +159,6 @@ export class NotificationService {
         delivered: false,
         createdAt: new Date().toISOString(),
       };
-      this.notifications.push(notification);
       created.push(notification);
     }
 
@@ -208,7 +170,7 @@ export class NotificationService {
       await this.subscribe(params.taskId, target, 'mentioned');
     }
 
-    await this.saveNotifications();
+    await this.repository.appendNotifications(created);
 
     log.info(
       {
@@ -227,8 +189,7 @@ export class NotificationService {
    * Create a notification for task assignment.
    */
   async notifyAssignment(taskId: string, agents: string[], assignedBy: string): Promise<void> {
-    await this.ensureLoaded();
-
+    const created: Notification[] = [];
     for (const agent of agents) {
       if (agent.toLowerCase() === assignedBy.toLowerCase()) continue;
 
@@ -242,127 +203,38 @@ export class NotificationService {
         delivered: false,
         createdAt: new Date().toISOString(),
       };
-      this.notifications.push(notification);
+      created.push(notification);
 
       // Auto-subscribe assigned agents
       await this.subscribe(taskId, agent, 'assigned');
     }
 
-    await this.saveNotifications();
+    await this.repository.appendNotifications(created);
   }
 
   /**
    * Get notifications for an agent.
    */
-  async getNotifications(filters: {
-    agent: string;
-    undelivered?: boolean;
-    taskId?: string;
-    limit?: number;
-  }): Promise<Notification[]> {
-    await this.ensureLoaded();
-
-    let results = this.notifications.filter((n) => n.targetAgent === filters.agent.toLowerCase());
-
-    if (filters.undelivered) {
-      results = results.filter((n) => !n.delivered);
-    }
-    if (filters.taskId) {
-      results = results.filter((n) => n.taskId === filters.taskId);
-    }
-
-    results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    if (filters.limit) {
-      results = results.slice(0, filters.limit);
-    }
-
-    return results;
+  async getNotifications(filters: NotificationQuery & { agent: string }): Promise<Notification[]> {
+    return this.repository.listNotifications(filters);
   }
 
-  /**
-   * Get notifications across all agents.
-   *
-   * Used by the CLI notification commands, which predate the agent-scoped
-   * route shape.
-   */
   async getAllNotifications(
-    filters: {
-      undelivered?: boolean;
-      limit?: number;
-    } = {}
+    filters: Omit<NotificationQuery, 'agent' | 'taskId'> = {}
   ): Promise<Notification[]> {
-    await this.ensureLoaded();
-
-    let results = [...this.notifications];
-
-    if (filters.undelivered) {
-      results = results.filter((n) => !n.delivered);
-    }
-
-    results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    if (filters.limit) {
-      results = results.slice(0, filters.limit);
-    }
-
-    return results;
+    return this.repository.listNotifications(filters);
   }
 
-  /**
-   * Mark a notification as delivered.
-   */
   async markDelivered(notificationId: string): Promise<boolean> {
-    await this.ensureLoaded();
-
-    const notification = this.notifications.find((n) => n.id === notificationId);
-    if (!notification) return false;
-
-    notification.delivered = true;
-    notification.deliveredAt = new Date().toISOString();
-    await this.saveNotifications();
-    return true;
+    return this.repository.markDelivered(notificationId, new Date().toISOString());
   }
 
-  /**
-   * Mark multiple notifications as delivered.
-   */
   async markManyDelivered(notificationIds: string[]): Promise<number> {
-    await this.ensureLoaded();
-
-    const ids = new Set(notificationIds);
-    const now = new Date().toISOString();
-    let count = 0;
-    for (const notification of this.notifications) {
-      if (ids.has(notification.id) && !notification.delivered) {
-        notification.delivered = true;
-        notification.deliveredAt = now;
-        count++;
-      }
-    }
-
-    if (count > 0) await this.saveNotifications();
-    return count;
+    return this.repository.markManyDelivered(notificationIds, new Date().toISOString());
   }
 
-  /**
-   * Mark all notifications for an agent as delivered.
-   */
   async markAllDelivered(agent: string): Promise<number> {
-    await this.ensureLoaded();
-
-    let count = 0;
-    const now = new Date().toISOString();
-    for (const n of this.notifications) {
-      if (n.targetAgent === agent.toLowerCase() && !n.delivered) {
-        n.delivered = true;
-        n.deliveredAt = now;
-        count++;
-      }
-    }
-
-    if (count > 0) await this.saveNotifications();
-    return count;
+    return this.repository.markAllDelivered(agent.toLowerCase(), new Date().toISOString());
   }
 
   /**
@@ -381,8 +253,6 @@ export class NotificationService {
     dedupeKey?: string;
     source?: NotificationSourceMetadata;
   }): Promise<Notification> {
-    await this.ensureLoaded();
-
     const notification: Notification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       taskId: params.taskId || 'system',
@@ -400,8 +270,7 @@ export class NotificationService {
       createdAt: new Date().toISOString(),
     };
 
-    this.notifications.push(notification);
-    await this.saveNotifications();
+    await this.repository.appendNotifications([notification]);
     return notification;
   }
 
@@ -409,71 +278,28 @@ export class NotificationService {
    * Clear all notifications.
    */
   async clearNotifications(): Promise<number> {
-    await this.ensureLoaded();
-
-    const count = this.notifications.length;
-    this.notifications = [];
-    if (count > 0) await this.saveNotifications();
-    return count;
+    return this.repository.clearNotifications();
   }
 
-  /**
-   * Get notification statistics.
-   */
   async getStats(): Promise<NotificationStats> {
-    await this.ensureLoaded();
-
-    const byAgent: Record<string, { total: number; undelivered: number }> = {};
-    const byType: Record<string, number> = {};
-
-    for (const n of this.notifications) {
-      if (!byAgent[n.targetAgent]) {
-        byAgent[n.targetAgent] = { total: 0, undelivered: 0 };
-      }
-      byAgent[n.targetAgent].total++;
-      if (!n.delivered) byAgent[n.targetAgent].undelivered++;
-
-      byType[n.type] = (byType[n.type] || 0) + 1;
-    }
-
-    return {
-      totalNotifications: this.notifications.length,
-      undelivered: this.notifications.filter((n) => !n.delivered).length,
-      byAgent,
-      byType,
-    };
+    return this.repository.getStats();
   }
 
-  /**
-   * Subscribe an agent to a task thread.
-   */
   async subscribe(
     taskId: string,
     agent: string,
     reason: ThreadSubscription['reason']
   ): Promise<void> {
-    await this.ensureLoaded();
-
-    const exists = this.subscriptions.some(
-      (s) => s.taskId === taskId && s.agent === agent.toLowerCase()
-    );
-    if (exists) return;
-
-    this.subscriptions.push({
+    await this.repository.subscribe({
       taskId,
       agent: agent.toLowerCase(),
       reason,
       subscribedAt: new Date().toISOString(),
     });
-    await this.saveSubscriptions();
   }
 
-  /**
-   * Get subscriptions for a task.
-   */
   async getSubscriptions(taskId: string): Promise<ThreadSubscription[]> {
-    await this.ensureLoaded();
-    return this.subscriptions.filter((s) => s.taskId === taskId);
+    return this.repository.getSubscriptions(taskId);
   }
 
   dispose(): void {

@@ -48,6 +48,30 @@ describe('Notification Routes', () => {
   });
 
   describe('GET /api/notifications', () => {
+    it('passes validated pagination to the filtered repository query', async () => {
+      mockNotificationService.getNotifications.mockResolvedValue([]);
+      const res = await request(app).get(
+        '/api/notifications?agent=alice&undelivered=true&limit=20&offset=40'
+      );
+      expect(res.status).toBe(200);
+      expect(mockNotificationService.getNotifications).toHaveBeenCalledWith({
+        agent: 'alice',
+        undelivered: true,
+        taskId: '',
+        limit: 20,
+        offset: 40,
+      });
+    });
+
+    it.each(['limit=-1', 'limit=1.5', 'limit=1001', 'limit=nope', 'offset=-1'])(
+      'rejects invalid pagination: %s',
+      async (query) => {
+        const res = await request(app).get(`/api/notifications?${query}`);
+        expect(res.status).toBe(400);
+        expect(mockNotificationService.getAllNotifications).not.toHaveBeenCalled();
+      }
+    );
+
     it('should list all notifications when no agent is provided', async () => {
       mockNotificationService.getAllNotifications.mockResolvedValue([
         { id: 'n1', targetAgent: 'system', delivered: false },
