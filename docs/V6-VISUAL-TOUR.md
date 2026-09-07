@@ -1,13 +1,16 @@
 # Veritas Kanban v6 Visual Tour
 
-This tour presents release-safe 6.1.7 views of the board, progressive task
+This tour presents release-safe 6.2.0 views of the board, progressive task
 workspace, grouped Settings, provider support, communication surfaces,
 Maintenance, Command+K, Workbench, and mobile layout. The historical
 [v5 Visual Tour](V5-VISUAL-TOUR.md) retains its own versioned media.
 
-Documentation freshness: 2026-09-04 for the verified Veritas Kanban 6.1.7 stable
-release. Every image below was generated from the integrated 6.1.7 source
-with isolated dummy data.
+Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
+Desktop media was captured from the packaged Mac application; mobile media was
+captured in a browser at 390×844. All media uses isolated public-safe data.
+See the [complete before/after comparison](releases/v6.2.0-comparison.md) and
+[capture provenance](assets/v6.2.0/README.md). The signed 6.1.7 release remains
+the current installation target until 6.2.0 is separately approved and released.
 
 ## Board And Task Workspace
 
@@ -16,11 +19,11 @@ desktop shell, and Workbench affordance. Opening a task replaces the former
 peer-tab drawer with progressive Overview, Plan, Run, Results, and History
 modes.
 
-![6.1.7 board overview with release-safe tasks](assets/v6.1.7/board-overview.png)
+![6.2.0 board overview with release-safe tasks](assets/v6.2.0/board-overview.png)
 
-![6.1.7 progressive task workspace](assets/v6.1.7/task-workspace.png)
+![6.2.0 progressive task workspace](assets/v6.2.0/task-workspace.png)
 
-![6.1.7 board, task workspace, grouped Settings, providers, and Command+K tour](assets/v6.1.7/board-to-workspace.gif)
+![6.2.0 board-to-task interaction](assets/v6.2.0/board-to-workspace.gif)
 
 ## Grouped Settings And Command Palette
 
@@ -28,9 +31,9 @@ Settings groups all twenty destinations under Core, Collaboration, Automation,
 Governance, and System while keeping transfer and danger-zone actions separate.
 Command+K uses the same current shell and remains bounded to the viewport.
 
-![6.1.7 grouped Settings navigation](assets/v6.1.7/settings-navigation.png)
+![6.2.0 grouped Settings navigation](assets/v6.2.0/settings-navigation.png)
 
-![6.1.7 Command+K palette](assets/v6.1.7/command-palette.png)
+![6.2.0 Command+K palette](assets/v6.2.0/command-palette.png)
 
 ## Provider Support
 
@@ -43,7 +46,7 @@ diagnostics, dispatch, and telemetry.
 The release capture must use dummy profile names and contain no login state,
 environment values, provider output, private paths, or credentials.
 
-![6.1.7 provider settings with current grouped navigation](assets/v6.1.7/agent-providers.png)
+![6.2.0 provider settings with current grouped navigation](assets/v6.2.0/agent-providers.png)
 
 Expected visible behavior:
 
@@ -62,7 +65,7 @@ URLs, public identity, environment-variable references, compatibility facets,
 one-channel mappings, definition preview/import, trigger rules, and bounded
 audit state.
 
-![6.1.7 communication health, Buzz, and reply-adapter settings](assets/v6.1.7/notification-adapters.png)
+![6.2.0 communication health, Buzz, and reply-adapter settings](assets/v6.2.0/notification-adapters.png)
 
 Expected visible behavior:
 
@@ -97,22 +100,31 @@ Expected visible behavior:
 
 ## Workbench, Squad Chat, Maintenance, And Mobile
 
-| Surface            | Current 6.1.7 capture                                             |
+| Surface            | Current 6.2.0 capture                                             |
 | ------------------ | ----------------------------------------------------------------- |
-| Workbench          | ![Workbench](assets/v6.1.7/workbench-panel.png)                   |
-| Squad Chat         | ![Squad Chat](assets/v6.1.7/squad-chat.png)                       |
-| Maintenance        | ![Maintenance](assets/v6.1.7/maintenance-center.png)              |
-| Mobile board       | ![Mobile board](assets/v6.1.7/mobile-board.png)                   |
-| Mobile task        | ![Mobile task workspace](assets/v6.1.7/mobile-task-workspace.png) |
-| Mobile Settings    | ![Mobile Settings](assets/v6.1.7/mobile-settings.png)             |
-| Mobile guided tour | ![Mobile flow](assets/v6.1.7/mobile-flow.gif)                     |
+| Workbench          | ![Workbench](assets/v6.2.0/workbench-panel.png)                   |
+| Squad Chat         | ![Squad Chat](assets/v6.2.0/squad-chat.png)                       |
+| Maintenance        | ![Maintenance](assets/v6.2.0/maintenance-center.png)              |
+| Mobile board       | ![Mobile board](assets/v6.2.0/mobile-board.png)                   |
+| Mobile task        | ![Mobile task workspace](assets/v6.2.0/mobile-task-workspace.png) |
+| Mobile Settings    | ![Mobile Settings](assets/v6.2.0/mobile-settings.png)             |
+| Mobile guided tour | ![Mobile flow](assets/v6.2.0/mobile-flow.gif)                     |
 
 ## Capture Rules
 
-Run `pnpm docs:capture-media` to recreate the maintained 6.1.7 PNG and GIF set
-from an isolated Playwright runtime. The capture uses public dummy tasks,
-cleans them after the run, and builds the GIFs from the reviewed screenshots.
-It requires `ffmpeg` on `PATH`.
+Follow the [documentation media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md).
+Run `pnpm docs:capture-media <candidate.app> <new-external-directory>` from a
+clean candidate checkout on macOS. The output directory must not already exist.
+The runner launches the actual packaged application in an isolated profile,
+captures the mobile browser separately, and records real interactions at 8 fps.
+It requires `ffmpeg` and the pinned Playwright Chromium installation.
+
+The original capture files and manifest remain outside the repository. After
+visual inspection and complete GIF/MP4 playback, copy the exact bytes to the
+versioned media paths and commit only documentation/media changes. Run
+`pnpm docs:verify-media <capture/evidence.json> <candidate.app> <capture/publication.json>`
+from that clean documentation commit. This verifies original, committed and
+working-copy hashes without recapturing or relabeling an older build.
 
 Before publication, retain only verified screenshots captured from an isolated
 runtime without private data. If a state cannot be safely produced, retain the

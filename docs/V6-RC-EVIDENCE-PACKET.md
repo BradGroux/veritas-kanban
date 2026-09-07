@@ -8,7 +8,7 @@ publication, and Homebrew availability.
 
 Veritas Kanban 6.1.7 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
 
-Documentation freshness: 2026-09-07. Candidate acceptance remains pending.
+Documentation freshness: 2026-09-07. Local native and media acceptance passed; delivery and distribution acceptance remain pending.
 
 ## 6.2.0 candidate
 
@@ -16,7 +16,12 @@ The candidate is prepared locally from the audit backlog. No 6.2.0 release, inst
 
 - Package versions: root, shared, server, web, CLI, MCP and desktop identify 6.2.0.
 - Focused local checks cover the affected storage, Settings, keyboard, board, native bridge and recovery behavior.
-- The complete local integration gate, packaged native journeys and matched media review are in progress. Their final revision, artifact hashes and results will be recorded here before acceptance.
+- Verified build: `a2e95a42f74c7137ace785c165c0cf7816678a99`. Whole-app SHA-256: `25d1a2d79a65811aff25f1a90d6a56b8482c6f830c050ac4a54b211adc13a63b`. The arm64 package was exercised on macOS 26.6.2 and is unsigned; it has not replaced an installed application.
+- Local integration: server 3,709 passed / 5 skipped on Node 22.23.2; web 1,032 passed; CLI 90 passed; MCP 80 passed / 19 credential-gated skips; desktop 108 passed. Typecheck, build and lint passed with zero lint errors. The final web change received a complete web-suite run; unchanged workspace gates were retained.
+- The exact package passed all 144 required native cases and detected all six deliberate faults. Checks include native keyboard input, focus, light/dark and compact layouts, menu routing, modeless Settings persistence, window management and recovery.
+- Packaged 100/1,000/5,000-task fixtures passed the recorded performance budgets. The 5,000-task journey also passed offscreen keyboard navigation, full-detail retrieval, status move, complete-description search, realtime updates, pointer dragging and reload persistence.
+- All 14 maintained media assets, ten task-mode PNGs and the focused large-board image were captured from this build, inspected, and retained with original hashes. Both GIFs and the demo MP4 completed playback inspection. [Capture provenance](assets/v6.2.0/README.md) and the [comparison gallery](releases/v6.2.0-comparison.md) disclose baseline fixture and environment differences.
+- Earlier Node 26.8.1 server runs had intermittent failures. Their cause remains unproven; passing supported-runtime checks do not establish remediation of #1544.
 - The original external-tracker approval failure has not recurred in the instrumented full server run. Its original worker/order information was not retained; #1544 remains open pending a reproducible failure or explicit disposition.
 - GitHub CI is prohibited. Publication is blocked while applicable repository triggers remain enabled. No controls have been changed.
 - Signing/notarization, installed-app replacement, release/distribution changes and public writing require their separate acceptance and authorization.
