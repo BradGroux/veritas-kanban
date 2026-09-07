@@ -3,37 +3,28 @@
  * Tests @mention parsing, notification creation, delivery tracking, and thread subscriptions.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parseMentions } from '../services/notification-service.js';
+import { parseMentions, NotificationService } from '../services/notification-service.js';
+import {
+  createTestSqliteDatabase,
+  type TestSqliteDatabase,
+} from '../storage/sqlite/test-helpers.js';
 
-// Persistence behavior is exercised separately against real repository files.
-vi.mock('../storage/notification-file-repository.js', () => ({
-  NotificationFileRepository: class {
-    async loadNotifications() {
-      return [];
-    }
-    async loadSubscriptions() {
-      return [];
-    }
-    async saveNotifications() {}
-    async saveSubscriptions() {}
-  },
-}));
-
-const { getNotificationService } = await import('../services/notification-service.js');
-import type { NotificationService } from '../services/notification-service.js';
-
-describe('NotificationService', () => {
+describe.each(['file', 'sqlite'] as const)('NotificationService (%s)', (storageType) => {
   let service: NotificationService;
+  let fixture: TestSqliteDatabase;
 
   beforeEach(() => {
-    service = getNotificationService();
-    // Reset internal state
-    (service as any).notifications = [];
-    (service as any).subscriptions = [];
-    (service as any).loaded = true;
+    fixture = createTestSqliteDatabase();
+    service = new NotificationService({
+      storageType,
+      dataDir: fixture.rootDir,
+      sqliteDatabase: fixture.database,
+    });
   });
 
   afterEach(() => {
+    service.dispose();
+    fixture.cleanup();
     vi.clearAllMocks();
   });
 

@@ -100,3 +100,45 @@ for (const kind of ['notifications', 'subscriptions'] as const) {
     );
   });
 }
+
+describe('incremental notification file rollback', () => {
+  let root: string;
+  beforeEach(async () => {
+    fault.stage = '';
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-notification-rollback-'));
+  });
+  afterEach(async () => {
+    fault.stage = '';
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it.each(['write', 'rename'])(
+    'retains delivery state and supports retry after %s failure',
+    async (stage) => {
+      const repository = new NotificationFileRepository({ dataDir: root });
+      await repository.appendNotifications([
+        {
+          id: 'retained',
+          taskId: 'task',
+          targetAgent: 'alice',
+          fromAgent: 'bob',
+          content: 'fixture',
+          type: 'mention',
+          delivered: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]);
+      const file = path.join(root, 'notifications.json');
+      const before = await fs.readFile(file, 'utf8');
+      fault.stage = stage;
+      await expect(
+        repository.markDelivered('retained', '2026-01-02T00:00:00.000Z')
+      ).rejects.toMatchObject({ code: 'EIO' });
+      expect(await fs.readFile(file, 'utf8')).toBe(before);
+      expect((await repository.listNotifications())[0].delivered).toBe(false);
+      fault.stage = '';
+      expect(await repository.markDelivered('retained', '2026-01-02T00:00:00.000Z')).toBe(true);
+      expect((await repository.listNotifications())[0].delivered).toBe(true);
+    }
+  );
+});
