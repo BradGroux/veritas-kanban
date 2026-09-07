@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { renderWithProviders } from './test-utils';
@@ -26,12 +26,99 @@ function diagnostics() {
 }
 
 describe('desktop onboarding', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'veritasDesktop', {
+      configurable: true,
+      value: {
+        getSetupDiagnostics: vi.fn(async () => diagnostics()),
+        validateConnectionConfig: vi.fn(async () => ({
+          mode: 'local',
+          valid: true,
+          normalizedServerUrl: null,
+          errors: [],
+          warnings: [],
+        })),
+      },
+    });
+  });
   afterEach(() => {
     cleanup();
     window.localStorage.clear();
     delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each([false, true])(
+    'uses server setup in a browser, including existing data: %s',
+    async (existing) => {
+      delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                needsSetup: true,
+                authenticated: false,
+                sessionExpiry: null,
+                authEnabled: true,
+                setupContext: {
+                  hasExistingData: existing,
+                  storageMode: 'sqlite',
+                  counts: { tasks: existing ? 2 : 0 },
+                },
+              })
+            )
+        )
+      );
+      renderWithProviders(
+        <AuthProvider>
+          <SetupScreen />
+        </AuthProvider>
+      );
+      if (existing) {
+        await screen.findByText('Secure Existing Server Data');
+        expect(screen.queryByLabelText('Password')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Secure Existing Data' }));
+      }
+      await screen.findByText('Secure Your Board');
+      expect(screen.getByText(/Your board data stays on that server/)).toBeDefined();
+      expect(screen.queryByText('Desktop Setup')).toBeNull();
+      expect(screen.queryByText('Desktop Bridge')).toBeNull();
+      expect(screen.queryByText(/create a new local SQLite/)).toBeNull();
+      expect(window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY)).toBeNull();
+    }
+  );
+
+  it.each([false, true])('handles restricted storage with native bridge: %s', async (native) => {
+    if (!native) delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage denied', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage denied', 'SecurityError');
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ needsSetup: true, authenticated: false, authEnabled: true })
+          )
+      )
+    );
+    renderWithProviders(
+      <AuthProvider>
+        <SetupScreen />
+      </AuthProvider>
+    );
+    if (native) {
+      await screen.findByText('Desktop Setup');
+      fireEvent.click(screen.getByRole('button', { name: 'Continue to Password' }));
+    }
+    expect(await screen.findByText('Secure Your Board')).toBeDefined();
+    expect(screen.queryByText('Desktop Bridge')).toBeNull();
   });
 
   it('shows the board-only first-run path before password setup', async () => {
@@ -186,6 +273,7 @@ describe('desktop onboarding', () => {
   });
 
   it('labels browser-only remote checks as URL validation', async () => {
+    delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
     renderWithProviders(<DesktopOnboardingPanel onContinue={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('setup-mode-remote'));
@@ -199,6 +287,7 @@ describe('desktop onboarding', () => {
   });
 
   it('blocks browser-only remote checks for local destinations', async () => {
+    delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
     renderWithProviders(<DesktopOnboardingPanel onContinue={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('setup-mode-remote'));
