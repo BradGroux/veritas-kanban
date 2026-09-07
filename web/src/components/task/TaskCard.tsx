@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { Select, Tooltip } from '@mantine/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -218,6 +218,21 @@ export const TaskCard = memo(function TaskCard({
     id: task.id,
     disabled: !dragEnabled,
   });
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const attachCard = useCallback(
+    (node: HTMLDivElement | null) => {
+      cardRef.current = node;
+      setNodeRef(node);
+    },
+    [setNodeRef]
+  );
+  useEffect(() => {
+    if (isSelected) {
+      cardRef.current?.focus({ preventScroll: true });
+      cardRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [isSelected]);
+
   const { isSelecting, toggleSelect, isSelected: isBulkSelected } = useBulkActions();
   const [tooltipDismissed, setTooltipDismissed] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
@@ -362,7 +377,7 @@ export const TaskCard = memo(function TaskCard({
       }
     >
       <div
-        ref={setNodeRef}
+        ref={attachCard}
         data-task-id={task.id}
         style={style}
         {...(dragEnabled ? listeners : {})}
@@ -372,7 +387,7 @@ export const TaskCard = memo(function TaskCard({
         onMouseLeave={() => setTooltipDismissed(false)}
         role="article"
         tabIndex={0}
-        aria-label={`Task: ${task.title}, Type: ${typeLabel}, Priority: ${task.priority}${readinessAria}${isBlockedState ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}${isAttemptFailed ? ', Latest attempt failed' : ''}${isAwaitingReview ? ', Awaiting review' : ''}${isVerified ? ', Verified' : ''}`}
+        aria-label={`${isSelected ? 'Selected. ' : ''}Task: ${task.title}, Type: ${typeLabel}, Priority: ${task.priority}${readinessAria}${isBlockedState ? ', Blocked' : ''}${isAgentRunning ? ', Agent running' : ''}${isAttemptFailed ? ', Latest attempt failed' : ''}${isAwaitingReview ? ', Awaiting review' : ''}${isVerified ? ', Verified' : ''}`}
         data-type-color-token={typeColorToken}
         data-selected={isSelected ? 'true' : undefined}
         data-dragging={isDragging || isCurrentlyDragging ? 'true' : undefined}
