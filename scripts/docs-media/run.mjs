@@ -120,7 +120,7 @@ async function settle() {
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   );
 }
-async function capture() {
+async function capture(taskMode = false) {
   if (mobile) {
     assert.deepEqual(await page.evaluate(() => [innerWidth, innerHeight]), [390, 844]);
     assert.equal(await page.evaluate(() => typeof window.veritasDesktop), 'undefined');
@@ -139,13 +139,20 @@ async function capture() {
       scaleFactor: screen.getDisplayMatching(win.getBounds()).scaleFactor,
       png: (await win.capturePage()).toPNG().toString('base64'),
     };
-  });
-  assert.equal(native.contentBounds.width, contentSizes.normal.width);
-  assert.equal(native.contentBounds.height, contentSizes.normal.height);
+  }, page.url());
+  if (taskMode) {
+    assert.equal(native.bounds.width, 1180);
+    assert.equal(native.bounds.height, 900);
+    assert.equal(native.contentBounds.width, 1180);
+    assert(native.contentBounds.height >= 760 && native.contentBounds.height <= 900);
+  } else {
+    assert.equal(native.contentBounds.width, contentSizes.normal.width);
+    assert.equal(native.contentBounds.height, contentSizes.normal.height);
+  }
   return {
     bytes: Buffer.from(native.png, 'base64'),
-    width: contentSizes.normal.width,
-    height: contentSizes.normal.height,
+    width: native.contentBounds.width,
+    height: native.contentBounds.height,
     scaleFactor: native.scaleFactor,
     nativeWindow: { bounds: native.bounds, contentBounds: native.contentBounds },
   };
@@ -181,7 +188,7 @@ async function recordAsset(name, captured, method, recording) {
 }
 async function still(name) {
   await settle();
-  const captured = await capture();
+  const captured = await capture(taskModeAssets.includes(name));
   await writeFile(path.join(output, name), captured.bytes, { flag: 'wx' });
   await recordAsset(name, captured, 'window-capture');
 }
