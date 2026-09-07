@@ -1,4 +1,13 @@
-import { app, BrowserWindow, clipboard, ipcMain, Notification, safeStorage, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Notification,
+  safeStorage,
+  shell,
+  screen,
+} from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -97,12 +106,17 @@ if (!app.requestSingleInstanceLock()) {
 
 function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
   const preloadPath = path.join(__dirname, '../preload/index.cjs');
-  const windowBounds = applyDesktopWindowState(savedState);
+  const primary = screen.getPrimaryDisplay();
+  const workAreas = [
+    primary,
+    ...screen.getAllDisplays().filter((display) => display.id !== primary.id),
+  ].map((display) => display.workArea);
+  const windowBounds = applyDesktopWindowState(savedState, undefined, workAreas);
 
   const window = new BrowserWindow({
     title: DESKTOP_APP_NAME,
-    minWidth: DESKTOP_MIN_WINDOW.width,
-    minHeight: DESKTOP_MIN_WINDOW.height,
+    minWidth: Math.min(DESKTOP_MIN_WINDOW.width, windowBounds.width),
+    minHeight: Math.min(DESKTOP_MIN_WINDOW.height, windowBounds.height),
     ...windowBounds,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 18 } : undefined,

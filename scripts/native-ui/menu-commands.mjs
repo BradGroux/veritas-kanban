@@ -126,6 +126,15 @@ export async function verifyNativeWindowMenu(app, page) {
       app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())
     )
     .toBe(false);
+  const normalBounds = await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    const bounds = window.getNormalBounds();
+    window.maximize();
+    return bounds;
+  });
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()))
+    .toBe(true);
   const before = await page.evaluate(() => window.veritasDesktop.getConnectionStatus());
   const closed = page.waitForEvent('close');
   await clickRole('close');
@@ -141,5 +150,12 @@ export async function verifyNativeWindowMenu(app, page) {
     before.server.pid,
     'Closing the window restarted the managed server'
   );
-  return { page: reopened, roles: items };
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMaximized()))
+    .toBe(true);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].unmaximize());
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds()))
+    .toEqual(normalBounds);
+  return { page: reopened, roles: items, normalBounds };
 }
