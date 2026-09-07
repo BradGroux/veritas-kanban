@@ -113,6 +113,62 @@ describe('KeyboardProvider', () => {
     );
   });
 
+  it.each(['metaKey', 'ctrlKey', 'altKey', 'shiftKey'] as const)(
+    'leaves %s combinations to the platform',
+    (modifier) => {
+      const create = vi.fn();
+      const move = vi.fn();
+      function RegisterCreate() {
+        const { setOpenCreateDialog } = useKeyboard();
+        React.useEffect(() => setOpenCreateDialog(create), [setOpenCreateDialog]);
+        return null;
+      }
+      render(
+        <KeyboardProvider>
+          <RegisterCreate />
+          <TestConsumer tasks={[createMockTask({ id: 'task_one' })]} onMoveTask={move} />
+        </KeyboardProvider>
+      );
+      for (const key of ['c', 'j', 'k', '1', 'ArrowDown', 'ArrowUp', 'Enter']) {
+        const event = new KeyboardEvent('keydown', { key, [modifier]: true, cancelable: true });
+        fireEvent(window, event);
+        expect(event.defaultPrevented).toBe(false);
+      }
+      expect(create).not.toHaveBeenCalled();
+      expect(move).not.toHaveBeenCalled();
+      expect(screen.getByTestId('selected').textContent).toBe('none');
+      fireEvent.keyDown(window, { key: 'c' });
+      expect(create).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('preserves the intentional chat chord and ignores IME composition', () => {
+    const chat = vi.fn();
+    const create = vi.fn();
+    function RegisterCommands() {
+      const { setOpenChatPanel, setOpenCreateDialog } = useKeyboard();
+      React.useEffect(() => {
+        setOpenChatPanel(chat);
+        setOpenCreateDialog(create);
+      }, [setOpenChatPanel, setOpenCreateDialog]);
+      return null;
+    }
+    render(
+      <KeyboardProvider>
+        <RegisterCommands />
+      </KeyboardProvider>
+    );
+    fireEvent.keyDown(window, { key: 'C', metaKey: true, shiftKey: true });
+    fireEvent.keyDown(window, { key: 'C', ctrlKey: true, shiftKey: true });
+    expect(chat).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(window, { key: 'C', ctrlKey: true, shiftKey: true, altKey: true });
+    fireEvent.keyDown(window, { key: 'C', metaKey: true, shiftKey: true, isComposing: true });
+    fireEvent.keyDown(window, { key: 'c', isComposing: true });
+    fireEvent.keyDown(window, { key: 'c', keyCode: 229 });
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('starts with no selected task and help closed', () => {
     renderWithProvider();
     expect(screen.getByTestId('selected').textContent).toBe('none');

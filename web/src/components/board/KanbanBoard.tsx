@@ -375,6 +375,7 @@ export function KanbanBoard() {
   // Register filtered tasks with keyboard context
   useEffect(() => {
     setTasks(filteredTasks);
+    return () => setTasks([]);
   }, [filteredTasks, setTasks]);
 
   // Handler for opening a task
