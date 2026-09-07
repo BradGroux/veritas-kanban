@@ -402,13 +402,31 @@ app.on('before-quit', (event) => {
 });
 
 app.on('window-all-closed', () => {
-  app.quit();
+  if (process.platform !== 'darwin') app.quit();
 });
 
+let reopeningWindow = false;
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    void boot();
-  }
+  if (activeMainWindow() || reopeningWindow || quitting) return;
+  reopeningWindow = true;
+  void (async () => {
+    // Closing the last Mac window keeps its managed server and IPC handlers alive.
+    if (runtime && windowStatePaths) {
+      const savedState = await readDesktopWindowState(windowStatePaths);
+      if (quitting) return;
+      mainWindow = createMainWindow(savedState);
+      await mainWindow.loadURL(runtime.getRendererOrigin());
+      flushPendingDeepLinks();
+    } else {
+      await boot();
+    }
+  })()
+    .catch((error: unknown) => {
+      showDesktopError(error instanceof Error ? error.message : 'Unable to reopen the window.');
+    })
+    .finally(() => {
+      reopeningWindow = false;
+    });
 });
 
 process.on('uncaughtException', (error) => {
