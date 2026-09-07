@@ -8,7 +8,7 @@ import os from 'node:os';
 import { chromium, expect } from '@playwright/test';
 import { createNativeSession } from '../native-ui/session.mjs';
 import { contentSizes, fileDigest, packageDigest } from '../native-ui/contract.mjs';
-import { maintainedAssets, mediaSchema, mediaEvidenceFailures } from './verify.mjs';
+import { maintainedAssets, taskModeAssets, mediaSchema, mediaEvidenceFailures } from './verify.mjs';
 import { encodeInteraction, recordInteraction } from './record.mjs';
 import { finalizeCapture } from './finalize.mjs';
 
@@ -49,6 +49,26 @@ const report = {
   startedAt: new Date().toISOString(),
   macOS: os.release(),
   assets: [],
+  fixture: {
+    source: 'scripts/docs-media/run.mjs',
+    kind: 'synthetic-public-safe',
+    taskTitle: 'Prepare the release candidate',
+    status: 'todo',
+  },
+  taskModeComparison: {
+    baseline: 'docs/assets/v6.1.7/task-mode-audit/manifest.json',
+    matched: [
+      'native window 1180x900',
+      'dark theme',
+      'Overview/Plan/Run/Results/History',
+      'drawer then expanded',
+    ],
+    unmatched: [
+      'Original showcase dataset is unavailable; uses the documentation fixture.',
+      'Native content capture excludes the baseline window frame and shadow.',
+      'Host OS differs from the baseline macOS 15.7.9.',
+    ],
+  },
 };
 const persist = () =>
   writeFile(path.join(output, 'evidence.json'), JSON.stringify(report, null, 2) + '\n');
@@ -132,7 +152,9 @@ async function capture() {
 }
 async function recordAsset(name, captured, method, recording) {
   const file = path.join(output, name);
-  report.assets.push({
+  const taskMode = taskModeAssets.includes(name);
+  const destination = taskMode ? (report.taskModeAssets ??= []) : report.assets;
+  destination.push({
     name,
     decision: 'replace',
     reason: 'Recaptured the converged interface from the candidate',
@@ -148,6 +170,7 @@ async function recordAsset(name, captured, method, recording) {
       height: captured.height,
       scaleFactor: captured.scaleFactor,
       nativeWindow: captured.nativeWindow,
+      ...(taskMode ? { framing: 'native-content-without-window-frame' } : {}),
       method,
       capturedAt: new Date().toISOString(),
     },
@@ -338,6 +361,27 @@ try {
   await button('Mobile settings').click();
   await expect(page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ })).toBeVisible();
   await still('mobile-settings.png');
+  page = boardPage;
+  mobile = false;
+  await openTask();
+  // Match the retained task-mode audit's native window dimensions. Native
+  // capturePage excludes its frame/shadow; that framing difference is recorded.
+  await app.evaluate(({ BrowserWindow }, url) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
+    win.setSize(1180, 900);
+  }, page.url());
+  for (const presentation of ['drawer', 'expanded']) {
+    if (presentation === 'expanded') await button('Expand task workspace').click();
+    for (const name of ['Overview', 'Plan', 'Run', 'Results', 'History']) {
+      await workspaceMode(name);
+      await still(`task-${presentation}-${name.toLowerCase()}.png`);
+    }
+  }
+  await app.evaluate(({ BrowserWindow }, url) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
+    win.setContentSize(1700, 760);
+  }, page.url());
+  await button('Close task workspace').click();
   report.assets.sort((a, b) => maintainedAssets.indexOf(a.name) - maintainedAssets.indexOf(b.name));
   report.completedAt = new Date().toISOString();
   report.status = 'captured';

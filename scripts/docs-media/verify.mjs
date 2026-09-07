@@ -20,6 +20,12 @@ export const maintainedAssets = [
   'workbench-panel.png',
 ];
 
+export const taskModeAssets = ['drawer', 'expanded'].flatMap((presentation) =>
+  ['overview', 'plan', 'run', 'results', 'history'].map(
+    (mode) => `task-${presentation}-${mode}.png`
+  )
+);
+
 const digest = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const text = (value) => typeof value === 'string' && value.trim().length > 0;
 
@@ -75,14 +81,26 @@ export function mediaEvidenceFailures(report, expected, now = Date.now()) {
     new Set(assets.map((asset) => asset?.name)).size !== maintainedAssets.length
   )
     errors.push('missing or duplicate maintained media decisions');
-  for (const name of maintainedAssets) {
-    const asset = assets.find((item) => item?.name === name);
+  const supplemental = report.taskModeAssets ?? [];
+  if (!Array.isArray(supplemental)) return [...errors, 'invalid task mode capture list'];
+  if (
+    report.taskModeAssets !== undefined &&
+    (supplemental.length !== taskModeAssets.length ||
+      new Set(supplemental.map((asset) => asset?.name)).size !== taskModeAssets.length)
+  )
+    errors.push('missing or duplicate task mode captures');
+  const expectedNames = [
+    ...maintainedAssets,
+    ...(report.taskModeAssets === undefined ? [] : taskModeAssets),
+  ];
+  for (const name of expectedNames) {
+    const asset = [...assets, ...supplemental].find((item) => item?.name === name);
     if (!asset || !['keep', 'replace', 'retire'].includes(asset.decision) || !text(asset.reason)) {
       errors.push(`${name}: missing explicit media decision and reason`);
       continue;
     }
     if (asset.decision === 'retire') {
-      if (name.endsWith('.gif'))
+      if (name.endsWith('.gif') || taskModeAssets.includes(name))
         errors.push(`${name}: named interaction GIF must remain maintained`);
       if (asset.path !== undefined || asset.sha256 !== undefined || asset.capture !== undefined)
         errors.push(`${name}: retired media must not claim a current capture`);
@@ -102,7 +120,20 @@ export function mediaEvidenceFailures(report, expected, now = Date.now()) {
       errors.push(`${name}: desktop capture did not use the packaged application`);
     const viewport =
       boundary === 'mobile-browser' ? { width: 390, height: 844 } : contentSizes.normal;
-    if (capture?.width !== viewport.width || capture?.height !== viewport.height)
+    const taskMode = taskModeAssets.includes(name);
+    if (
+      taskMode &&
+      (capture?.nativeWindow?.bounds?.width !== 1180 ||
+        capture?.nativeWindow?.bounds?.height !== 900 ||
+        capture?.width !== 1180 ||
+        capture?.height < 760 ||
+        capture?.height > 900 ||
+        capture?.nativeWindow?.contentBounds?.width !== capture?.width ||
+        capture?.nativeWindow?.contentBounds?.height !== capture?.height ||
+        capture?.framing !== 'native-content-without-window-frame')
+    )
+      errors.push(`${name}: missing matched task window geometry or explicit framing`);
+    if (!taskMode && (capture?.width !== viewport.width || capture?.height !== viewport.height))
       errors.push(
         `${name}: wrong supported ${boundary === 'mobile-browser' ? 'mobile' : 'packaged macOS'} viewport`
       );
@@ -172,7 +203,7 @@ export async function verifyMediaEvidence({ evidencePath, root, expected, mainta
   } catch (error) {
     return [`missing candidate media directory: ${error.message}`];
   }
-  for (const asset of report.assets) {
+  for (const asset of [...report.assets, ...(report.taskModeAssets ?? [])]) {
     if (asset.decision === 'retire') continue;
     try {
       const intendedFile = path.join(root, asset.path);

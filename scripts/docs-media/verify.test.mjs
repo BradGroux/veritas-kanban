@@ -1,3 +1,4 @@
+/* global structuredClone */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
@@ -6,6 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   maintainedAssets,
+  taskModeAssets,
   mediaSchema,
   mediaEvidenceFailures,
   staleMediaReferences,
@@ -222,4 +224,36 @@ test('missing maintained reference inventory cannot silently skip stale-referenc
   assert.deepEqual(await verifyMediaEvidence({}), [
     'missing maintained documentation reference inventory',
   ]);
+});
+
+test('task mode comparison binds every view to native geometry and candidate identity', () => {
+  const report = fixture();
+  report.taskModeAssets = taskModeAssets.map((name) => ({
+    ...structuredClone(report.assets[0]),
+    name,
+    path: `docs/assets/v6.1.7/${name}`,
+    capture: {
+      ...report.assets[0].capture,
+      width: 1180,
+      height: 872,
+      nativeWindow: {
+        bounds: { width: 1180, height: 900 },
+        contentBounds: { width: 1180, height: 872 },
+      },
+      framing: 'native-content-without-window-frame',
+    },
+  }));
+  assert.deepEqual(mediaEvidenceFailures(report, expected), []);
+  for (const mutate of [
+    (r) => r.taskModeAssets.pop(),
+    (r) => (r.taskModeAssets[0].capture.commit = 'c'.repeat(40)),
+    (r) => (r.taskModeAssets[0].capture.nativeWindow.bounds.height = 760),
+    (r) => delete r.taskModeAssets[0].capture.framing,
+    (r) => (r.taskModeAssets[0].decision = 'retire'),
+    (r) => (r.taskModeAssets[0].path = 'docs/assets/v6.1.7/../escape.png'),
+  ]) {
+    const changed = structuredClone(report);
+    mutate(changed);
+    assert(mediaEvidenceFailures(changed, expected).length);
+  }
 });

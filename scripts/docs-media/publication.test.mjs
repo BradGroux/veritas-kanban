@@ -253,3 +253,21 @@ test('a symlink cannot substitute an external original capture', async (t) => {
   await symlink(path.join(f.root, 'docs/assets/v6.1.7/board-overview.png'), file);
   assert((await verifyPublishedMedia(f.args)).some((error) => error.includes('symlink')));
 });
+
+test('task mode images cannot enter publication without their original capture manifest', async (t) => {
+  const f = await fixture(t);
+  await writeFile(
+    path.join(f.root, 'docs/assets/v6.1.7/task-drawer-overview.png'),
+    'unrecorded image'
+  );
+  f.git('add', '.');
+  f.git('commit', '-qm', 'add unrecorded task view');
+  f.expected.publicationCommit = f.git('rev-parse', 'HEAD');
+  f.publication.publicationCommit = f.expected.publicationCommit;
+  await writeFile(f.evidencePath, JSON.stringify(f.publication));
+  assert(
+    (await verifyPublishedMedia(f.args)).some((error) =>
+      error.includes('complete original capture manifest')
+    )
+  );
+});
