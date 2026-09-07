@@ -1,3 +1,4 @@
+import { parseSettingsSupportHash } from '@/components/settings/settings-search-index';
 import { flushSync } from 'react-dom';
 import {
   ActionIcon,
@@ -141,6 +142,7 @@ export function Header({
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
+  const [settingsControl, setSettingsControl] = useState<string | undefined>();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchPreset, setSearchPreset] = useState<SearchPreset | undefined>();
   // activityOpen removed — sidebar merged into feed (GH-66)
@@ -249,8 +251,9 @@ export function Header({
   }, [openSquadChatPanel, toggleBottomPanel, usesWorkbenchChat]);
 
   const openSettingsDialog = useCallback(
-    (section?: string) => {
+    (section?: string, control?: string) => {
       markPanelLoaded('settings');
+      setSettingsControl(control);
       setSettingsTab(section);
       setSettingsOpen(true);
     },
@@ -326,12 +329,21 @@ export function Header({
 
   useEffect(() => {
     const handleOpenSettings = (event: Event) => {
-      const section = (event as CustomEvent<{ section?: string }>).detail?.section;
-      openSettingsDialog(section);
+      const detail = (event as CustomEvent<{ section?: string; control?: string }>).detail;
+      openSettingsDialog(detail?.section, detail?.control);
     };
 
+    const openSupportLink = () => {
+      const target = parseSettingsSupportHash(window.location.hash);
+      if (target) openSettingsDialog(target.section, target.control);
+    };
+    openSupportLink();
+    window.addEventListener('hashchange', openSupportLink);
     window.addEventListener('veritas:open-settings', handleOpenSettings);
-    return () => window.removeEventListener('veritas:open-settings', handleOpenSettings);
+    return () => {
+      window.removeEventListener('hashchange', openSupportLink);
+      window.removeEventListener('veritas:open-settings', handleOpenSettings);
+    };
   }, [openSettingsDialog]);
 
   useEffect(() => {
@@ -690,9 +702,19 @@ export function Header({
             open={settingsOpen}
             onOpenChange={(open) => {
               setSettingsOpen(open);
-              if (!open) setSettingsTab(undefined);
+              if (!open) {
+                setSettingsTab(undefined);
+                setSettingsControl(undefined);
+                if (parseSettingsSupportHash(window.location.hash))
+                  window.history.replaceState(
+                    window.history.state,
+                    '',
+                    `${window.location.pathname}${window.location.search}`
+                  );
+              }
             }}
             defaultTab={settingsTab}
+            defaultControl={settingsControl}
           />
         )}
         {loadedPanels.has('chat') && <ChatPanel open={chatOpen} onOpenChange={setChatOpen} />}

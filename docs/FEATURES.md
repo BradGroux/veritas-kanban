@@ -2645,3 +2645,11 @@ A persistent header status bar that gives you a real-time overview of system hea
 ---
 
 _Last updated: 2026-03-21 · [Back to README](../README.md)_
+
+### Find and link to settings
+
+Use **Search settings** to find a category or control by its label or common terms such as theme, backup, token, and default agent. Arrow keys select a result; Enter opens its existing section and moves focus to the target. Empty results leave focus in the search field. Results respect the section and control permissions. Board Only is a focus preset, not a permission boundary: optional agent and automation results remain available, are marked optional, and follow core results.
+
+Support links can append a settings fragment to the app URL, for example `/#settings/general/general-appearance`, `/#settings/maintenance/maintenance-backup`, or `/#settings/multi-user/multi-user-api-access`. Selecting a search result updates this fragment so the current URL can be copied. Closing Settings clears it. Links never perform the setting's action, and a control target that is unknown or unavailable falls back to an allowed section.
+
+Data configures telemetry, budgets, and archiving; Maintenance contains backup, restore, logs, and storage tools; Manage contains task-data management. The existing categories have not moved.
