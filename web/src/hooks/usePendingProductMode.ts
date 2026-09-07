@@ -19,6 +19,8 @@ export function usePendingProductMode(): void {
       return;
     }
 
+    if (update.isError) return; // Failed settings remain queued for explicit retry.
+
     update.mutate(
       {
         productMode: {

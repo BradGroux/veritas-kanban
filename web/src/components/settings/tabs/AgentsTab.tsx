@@ -133,7 +133,7 @@ export function AgentsTab() {
   const harnessSupport = harnessCompatibility?.supportStatuses ?? [];
   const { data: sandboxPresets = [], isLoading: isSandboxPoliciesLoading } = useSandboxPolicies();
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
   const updateAgents = useUpdateAgents();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
@@ -325,7 +325,7 @@ export function AgentsTab() {
           <SettingsGroup className="space-y-4">
             <SectionHeader
               title="Agent Behavior"
-              actions={<SaveIndicator isPending={isPending} />}
+              actions={<SaveIndicator isPending={isPending} error={saveError} />}
               onReset={resetAgents}
               contained
             />

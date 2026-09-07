@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { SETTINGS_NAVIGATION_GROUPS, SettingsDialog } from '@/components/settings/SettingsDialog';
 import { renderWithProviders } from './test-utils';
 
 const mocks = vi.hoisted(() => ({
   debouncedUpdate: vi.fn(),
+  importSettings: vi.fn(),
+  retrySave: vi.fn(),
+  saveError: null as Error | null,
   hasPermission: vi.fn(),
   toast: vi.fn(),
   productMode: { selectedMode: 'advanced' as string },
@@ -32,7 +35,12 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
       productMode: mocks.productMode,
     },
   }),
-  useDebouncedFeatureUpdate: () => ({ debouncedUpdate: mocks.debouncedUpdate }),
+  useUpdateFeatureSettings: () => ({ mutateAsync: mocks.importSettings }),
+  useDebouncedFeatureUpdate: () => ({
+    debouncedUpdate: mocks.debouncedUpdate,
+    error: mocks.saveError,
+    retry: mocks.retrySave,
+  }),
 }));
 
 vi.mock('@/hooks/useIdentity', () => ({
@@ -105,6 +113,7 @@ vi.mock('@/components/settings/tabs/MultiUserTab', () => ({
 
 describe('SettingsDialog Mantine shell', () => {
   beforeEach(() => {
+    mocks.saveError = null;
     mocks.hasPermission.mockReturnValue(true);
     mocks.productMode.selectedMode = 'advanced';
     mocks.showSidebar = true;
@@ -114,6 +123,46 @@ describe('SettingsDialog Mantine shell', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('announces import completion only after persistence and reports failed saves', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    let resolveSave: () => void = () => {
+      throw new Error('Save was not started');
+    };
+    mocks.importSettings.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        })
+    );
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    const file = {
+      text: async () => JSON.stringify({ general: { humanDisplayName: 'Imported' } }),
+    };
+    fireEvent.change(screen.getByLabelText('Import settings file'), { target: { files: [file] } });
+    await waitFor(() => expect(mocks.importSettings).toHaveBeenCalledTimes(1));
+    expect(mocks.toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Import complete' })
+    );
+    resolveSave();
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Import complete' })
+      )
+    );
+    mocks.toast.mockClear();
+    mocks.importSettings.mockRejectedValueOnce(new Error('Save unavailable'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    fireEvent.change(screen.getByLabelText('Import settings file'), { target: { files: [file] } });
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Import failed', description: 'Save unavailable' })
+      )
+    );
+    expect(mocks.toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Import complete' })
+    );
   });
 
   it('renders the settings shell with direct Mantine controls', async () => {
@@ -185,6 +234,15 @@ describe('SettingsDialog Mantine shell', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Reset All' }));
     expect(await screen.findByRole('dialog', { name: 'Reset all settings?' })).toBeDefined();
     expect(mocks.debouncedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps failed saves visible with an explicit retry action', async () => {
+    mocks.saveError = new Error('Offline');
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    expect(await screen.findByRole('alert')).toBeDefined();
+    expect(screen.getByText('Changes not saved.')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /^Retry$/ }));
+    expect(mocks.retrySave).toHaveBeenCalledOnce();
   });
 
   it('keeps compact section navigation in the mobile header flow', async () => {

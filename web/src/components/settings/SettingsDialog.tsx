@@ -3,7 +3,11 @@ import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
 import { useState, useRef, useCallback, lazy, Suspense, useEffect, useMemo } from 'react';
 import { Group, Menu, Select, Skeleton, Stack, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
-import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
+import {
+  useFeatureSettings,
+  useDebouncedFeatureUpdate,
+  useUpdateFeatureSettings,
+} from '@/hooks/useFeatureSettings';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useToast } from '@/hooks/useToast';
 import {
@@ -290,7 +294,8 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       setActiveTab(TABS.find(canUseTab)?.id ?? 'general');
     }
   }, [activeTab, canUseTab]);
-  const { debouncedUpdate } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, error: saveError, retry: retrySave } = useDebouncedFeatureUpdate();
+  const importSettings = useUpdateFeatureSettings();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const dialogContentRef = useRef<HTMLDivElement>(null);
@@ -379,7 +384,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
           `Import ${Object.keys(validPatch).length} setting sections: ${Object.keys(validPatch).join(', ')}?\n\nThis will overwrite current values.`
         )
       ) {
-        debouncedUpdate(validPatch);
+        await importSettings.mutateAsync(validPatch);
         toast({
           title: 'Import complete',
           description: 'Settings imported successfully!',
@@ -541,6 +546,16 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
             Settings
           </Text>
           {isBoardOnly && <UiPill>Board Only</UiPill>}
+          {saveError && (
+            <Group gap="xs" role="alert">
+              <Text size="xs" c="red">
+                Changes not saved.
+              </Text>
+              <UiAction variant="quiet" onClick={retrySave}>
+                Retry
+              </UiAction>
+            </Group>
+          )}
         </Group>
       }
       centered

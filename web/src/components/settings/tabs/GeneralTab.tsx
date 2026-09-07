@@ -146,10 +146,11 @@ export function GeneralTab() {
                 </Group>
               }
               value={localDisplayName}
-              onChange={(e) => setLocalDisplayName(e.target.value)}
-              onBlur={() =>
-                debouncedUpdate({ general: { humanDisplayName: localDisplayName || 'Human' } })
-              }
+              onChange={(e) => {
+                const value = e.target.value;
+                setLocalDisplayName(value);
+                debouncedUpdate({ general: { humanDisplayName: value || 'Human' } });
+              }}
               placeholder="Human"
               maw={320}
             />

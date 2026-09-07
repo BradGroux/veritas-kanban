@@ -178,7 +178,7 @@ function formToInput(form: AdapterFormState): CommunicationAdapterInput {
 
 export function NotificationsTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
   const queryClient = useQueryClient();
   const { data: outboundEndpoints = [] } = useQuery({
     queryKey: ['integrations', 'outbound', 'endpoints'],
@@ -709,7 +709,7 @@ export function NotificationsTab() {
         id="notifications-preferences"
         title="Preferences"
         description="Choose the events and broad destination used for routine notifications."
-        actions={<SaveIndicator isPending={isPending} />}
+        actions={<SaveIndicator isPending={isPending} error={saveError} />}
         onReset={resetNotifications}
         divided
       >

@@ -45,7 +45,7 @@ function formatCeremonyTarget(requirement: CeremonyRequirement): string {
 
 export function EnforcementTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
   const { data: config } = useConfig();
   const { data: pendingCeremonies = [] } = useQuery({
     queryKey: ['ceremonies', 'pending', 'settings'],
@@ -77,7 +77,7 @@ export function EnforcementTab() {
       <SettingsSection
         title="Completion Gates"
         description="Require review and ceremony evidence before eligible work can complete."
-        actions={<SaveIndicator isPending={isPending} />}
+        actions={<SaveIndicator isPending={isPending} error={saveError} />}
         onReset={resetEnforcement}
       >
         <div className="space-y-4">

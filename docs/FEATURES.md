@@ -2082,6 +2082,8 @@ Optimizations spanning server, frontend, and data lifecycle.
 
 ## Settings & Customization
 
+Settings edits are batched across sections and continue saving when you switch tabs or close Settings. If a save fails, the changes remain available in the current authenticated session and Settings shows a Retry action. A failed save is never labelled Saved.
+
 Modular settings system with focused, permission-aware sections.
 
 ![6.1.7 Maintenance Center settings surface](assets/v6.1.7/maintenance-center.png)
