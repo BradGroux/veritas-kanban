@@ -1,5 +1,5 @@
 import { useVirtualColumn } from '@/hooks/useVirtualColumn';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { BadgeCheck, Ban, CircleDashed, CircleDot, OctagonAlert, Play } from 'lucide-react';
@@ -47,7 +47,7 @@ function getStatusPresentation(status: string) {
   );
 }
 
-export function KanbanColumn({
+export const KanbanColumn = memo(function KanbanColumn({
   id,
   title,
   tasks,
@@ -136,7 +136,7 @@ export function KanbanColumn({
         </div>
       </div>
 
-      <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
         <div
           ref={windowed.viewport}
           onScroll={windowed.updateView}
@@ -239,4 +239,4 @@ export function KanbanColumn({
       )}
     </div>
   );
-}
+});

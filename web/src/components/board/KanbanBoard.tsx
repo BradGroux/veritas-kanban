@@ -726,7 +726,11 @@ export function KanbanBoard() {
                       taskIndex={taskIndex}
                       onTaskClick={handleTaskClick}
                       onTaskStatusChange={handleMoveTask}
-                      selectedTaskId={selectedTaskId}
+                      selectedTaskId={
+                        selectedTaskId && taskIndex.get(selectedTaskId)?.status === column.id
+                          ? selectedTaskId
+                          : null
+                      }
                       canChangeStatus={canWriteTasks && isOnline}
                       dragEnabled={canDragTasks && !isMovePending}
                       isDragActive={isDragActive}
@@ -764,7 +768,11 @@ export function KanbanBoard() {
                     taskIndex={taskIndex}
                     onTaskClick={handleTaskClick}
                     onTaskStatusChange={handleMoveTask}
-                    selectedTaskId={selectedTaskId}
+                    selectedTaskId={
+                      selectedTaskId && taskIndex.get(selectedTaskId)?.status === column.id
+                        ? selectedTaskId
+                        : null
+                    }
                     canChangeStatus={canWriteTasks && isOnline}
                     dragEnabled={false}
                     showStatusControls={isMobileLayout}
