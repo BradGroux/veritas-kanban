@@ -116,6 +116,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const target = e.target instanceof HTMLElement ? e.target : null;
       if (
         e.defaultPrevented ||
+        e.isComposing ||
+        e.keyCode === 229 ||
         target?.isContentEditable ||
         target?.closest(
           'input, textarea, select, button, a[href], summary, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="combobox"], [role="listbox"], [role="option"], [role="slider"], [role="spinbutton"], [role="tab"], [role="menuitem"]'
@@ -143,11 +145,15 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const currentIndex = selectedTaskId ? taskList.findIndex((t) => t.id === selectedTaskId) : -1;
 
       // Cmd+Shift+C (or Ctrl+Shift+C on Windows/Linux) - Toggle chat panel
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'C') {
+      if (e.metaKey !== e.ctrlKey && !e.altKey && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         openChatPanel();
         return;
       }
+
+      // Unregistered modifiers belong to the platform or focused application.
+      // Shift is permitted only for '?' so shortcut help remains reachable.
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.shiftKey && e.key !== '?')) return;
 
       switch (e.key) {
         case 'c':
@@ -215,7 +221,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
             });
             return;
           }
-          if (selectedTaskId && onMoveTaskRef.current) {
+          if (selectedTaskId && currentIndex >= 0 && onMoveTaskRef.current) {
             onMoveTaskRef.current(selectedTaskId, newStatus);
           } else {
             // Show toast when no task is selected
