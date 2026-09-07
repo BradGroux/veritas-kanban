@@ -18,9 +18,9 @@
     "chalk": "^6.0.0"
   },
   "devDependencies": {
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.4.1",
     "typescript": "^6.0.3",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.13"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",
