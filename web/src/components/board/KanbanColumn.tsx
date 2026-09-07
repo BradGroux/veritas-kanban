@@ -4,7 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { BadgeCheck, Ban, CircleDashed, CircleDot, OctagonAlert, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TaskCard } from '@/components/task/TaskCard';
-import { isTaskBlocked, getTaskBlockers } from '@/hooks/useTasks';
+import { getTaskBlockers, type TaskDependencyIndex } from '@/hooks/useTasks';
 import { useBulkTaskMetrics } from '@/hooks/useBulkTaskMetrics';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
@@ -16,6 +16,7 @@ interface KanbanColumnProps {
   title: string;
   tasks: Task[];
   allTasks: Task[];
+  taskIndex?: TaskDependencyIndex;
   onTaskClick?: (task: Task) => void;
   onTaskStatusChange?: (taskId: string, status: TaskStatus) => void;
   selectedTaskId?: string | null;
@@ -50,6 +51,7 @@ export function KanbanColumn({
   title,
   tasks,
   allTasks,
+  taskIndex,
   onTaskClick,
   onTaskStatusChange,
   selectedTaskId,
@@ -62,6 +64,10 @@ export function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !dragEnabled });
   const { settings: featureSettings } = useFeatureSettings();
   const { isSelecting, selectedIds, toggleGroup } = useBulkActions();
+  const dependencyIndex = useMemo(
+    () => taskIndex ?? new Map(allTasks.map((task) => [task.id, task])),
+    [taskIndex, allTasks]
+  );
   const showDoneMetrics = featureSettings.board.showDoneMetrics;
   const statusPresentation = getStatusPresentation(id);
   const StatusIcon = statusPresentation.icon;
@@ -138,8 +144,8 @@ export function KanbanColumn({
             </div>
           ) : (
             tasks.map((task) => {
-              const blocked = isTaskBlocked(task, allTasks);
-              const blockers = blocked ? getTaskBlockers(task, allTasks) : [];
+              const blockers = getTaskBlockers(task, dependencyIndex);
+              const blocked = blockers.length > 0;
               const taskMetrics =
                 id === 'done' && showDoneMetrics ? metricsMap?.get(task.id) : undefined;
               return (

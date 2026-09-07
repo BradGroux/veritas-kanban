@@ -780,19 +780,23 @@ export function useTasksByStatus(
   return grouped;
 }
 
-// Check if a task is blocked by incomplete dependencies
-export function isTaskBlocked(task: Task, allTasks: Task[]): boolean {
-  if (!task.blockedBy?.length) return false;
+// A shared snapshot index avoids scanning the whole board for every card.
+export type TaskDependencyIndex = ReadonlyMap<string, Task>;
 
-  const blockingTasks = allTasks.filter((t) => task.blockedBy?.includes(t.id));
-  return blockingTasks.some((t) => t.status !== 'done');
+export function isTaskBlocked(task: Task, allTasks: Task[] | TaskDependencyIndex): boolean {
+  return getTaskBlockers(task, allTasks).length > 0;
 }
 
-// Get the blockers for a task
-export function getTaskBlockers(task: Task, allTasks: Task[]): Task[] {
+export function getTaskBlockers(task: Task, allTasks: Task[] | TaskDependencyIndex): Task[] {
   if (!task.blockedBy?.length) return [];
-
-  return allTasks.filter((t) => task.blockedBy?.includes(t.id) && t.status !== 'done');
+  if (Array.isArray(allTasks)) {
+    const ids = new Set(task.blockedBy);
+    return allTasks.filter((candidate) => ids.has(candidate.id) && candidate.status !== 'done');
+  }
+  return [...new Set(task.blockedBy)].flatMap((id) => {
+    const blocker = allTasks.get(id);
+    return blocker && blocker.status !== 'done' ? [blocker] : [];
+  });
 }
 
 // Archive suggestions - sprints where all tasks are done

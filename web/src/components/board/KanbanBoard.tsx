@@ -357,6 +357,8 @@ export function KanbanBoard() {
     return tasks ? filterTasks(tasks, filters) : [];
   }, [tasks, filters]);
 
+  const taskIndex = useMemo(() => new Map((tasks ?? []).map((task) => [task.id, task])), [tasks]);
+
   // Group filtered tasks by status
   const tasksByStatus = useTasksByStatus(filteredTasks, columns);
   const allTasksByStatus = useTasksByStatus(tasks ?? [], columns);
@@ -696,6 +698,7 @@ export function KanbanBoard() {
                       title={column.title}
                       tasks={liveTasksByStatus[column.id] ?? []}
                       allTasks={filteredTasks}
+                      taskIndex={taskIndex}
                       onTaskClick={handleTaskClick}
                       onTaskStatusChange={handleMoveTask}
                       selectedTaskId={selectedTaskId}
@@ -733,6 +736,7 @@ export function KanbanBoard() {
                     title={column.title}
                     tasks={tasksByStatus[column.id] ?? []}
                     allTasks={filteredTasks}
+                    taskIndex={taskIndex}
                     onTaskClick={handleTaskClick}
                     onTaskStatusChange={handleMoveTask}
                     selectedTaskId={selectedTaskId}
