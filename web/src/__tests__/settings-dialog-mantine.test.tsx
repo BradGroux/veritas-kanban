@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { SETTINGS_NAVIGATION_GROUPS, SettingsDialog } from '@/components/settings/SettingsDialog';
 import { renderWithProviders } from './test-utils';
 
