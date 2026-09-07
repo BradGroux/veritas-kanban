@@ -13,6 +13,7 @@ function ShellProbe() {
 
   return (
     <div>
+      <button onClick={shell.resetDesktopLayout}>Reset layout</button>
       <output aria-label="left rail">{String(shell.leftRailOpen)}</output>
       <output aria-label="right rail">{String(shell.rightRailOpen)}</output>
       <output aria-label="bottom panel">{shell.bottomPanel ?? 'closed'}</output>
@@ -34,8 +35,6 @@ function ShellProbe() {
 }
 
 describe('desktop shell recovery', () => {
-  let menuListener: ((payload: { command: string }) => void) | undefined;
-
   beforeEach(() => {
     const storage = new Map<string, string>();
     Object.defineProperty(window, 'localStorage', {
@@ -59,7 +58,7 @@ describe('desktop shell recovery', () => {
       configurable: true,
       value: {
         onMenuCommand: vi.fn((listener: (payload: { command: string }) => void) => {
-          menuListener = listener;
+          void listener;
           return vi.fn();
         }),
       },
@@ -70,7 +69,6 @@ describe('desktop shell recovery', () => {
     cleanup();
     delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
     delete document.documentElement.dataset.client;
-    menuListener = undefined;
   });
 
   it('retires legacy bottom-dock state and defaults to a bounded right dock', () => {
@@ -190,7 +188,7 @@ describe('desktop shell recovery', () => {
     expect(screen.getByLabelText('right rail').textContent).toBe('true');
   });
 
-  it('resets the complete desktop layout from the native recovery command', async () => {
+  it('resets the complete desktop layout through the shell action', async () => {
     const user = userEvent.setup();
 
     render(
@@ -203,7 +201,7 @@ describe('desktop shell recovery', () => {
     await user.click(screen.getByRole('button', { name: 'Open right rail' }));
     await user.click(screen.getByRole('button', { name: 'Open board chat' }));
 
-    act(() => menuListener?.({ command: 'reset-layout' }));
+    await user.click(screen.getByRole('button', { name: 'Reset layout' }));
 
     expect(screen.getByLabelText('left rail').textContent).toBe('true');
     expect(screen.getByLabelText('right rail').textContent).toBe('false');

@@ -308,3 +308,12 @@ Windows release and update support stay blocked until code signing and
 signed-installer smoke coverage are in place. Linux release and updater support
 are deferred until the project has clear checksum, provenance, install, and
 AppImage/deb/rpm update policies.
+
+### Native menu verification
+
+The packaged native UI gate exercises New Task, Settings, Search, Command Center,
+Import, Export, Create Backup, and Create Debug Bundle through Electron's installed
+menu and the mounted renderer. File data commands and Debug Bundle open the existing
+Maintenance flow; they do not automatically export, restore, or create files.
+Renderer commands wait for an acknowledgement. Finish setup and unlock the workspace
+before using them; unavailable actions display a reason instead of reporting success.

@@ -6,6 +6,7 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect } from '@playwright/test';
 import { createNativeSession } from './session.mjs';
+import { verifyNativeMenuCommands } from './menu-commands.mjs';
 import {
   fileDigest,
   evidenceFailures,
@@ -652,6 +653,8 @@ async function checkSeededRendererFailures() {
 }
 try {
   await launch();
+  report.menuCommands = await verifyNativeMenuCommands(app, page);
+  await persist();
   for (const mode of modes) {
     for (const state of states) {
       const entry = { id: `${mode.id}/${state}`, status: 'running' };

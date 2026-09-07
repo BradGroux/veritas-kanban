@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { DESKTOP_APP_ID, DESKTOP_APP_NAME, DESKTOP_MIN_WINDOW } from './app-metadata.js';
 import { registerDesktopBridge } from './bridge.js';
 import { DesktopCommandDispatcher } from './commands.js';
+import { sendAcknowledgedRendererCommand } from './renderer-commands.js';
 import { extractDeepLinkFromArgv, parseDesktopDeepLink } from './deep-links.js';
 import { configureDesktopMenu, dispatchDesktopMenuCommand } from './menu.js';
 import { hasSameOriginNavigation, openValidatedExternalUrl } from './navigation.js';
@@ -301,9 +302,8 @@ async function boot(): Promise<void> {
     runtime,
     shell,
     quit: () => app.quit(),
-    sendRendererCommand: (command) => {
-      activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.menuCommand.channel, command);
-    },
+    sendRendererCommand: (command) =>
+      sendAcknowledgedRendererCommand(ipcMain, activeMainWindow()?.webContents, command),
     checkForUpdates: () =>
       updateService?.checkForUpdates() ?? Promise.resolve(updateServiceFallback(packaged)),
     downloadUpdate: () =>

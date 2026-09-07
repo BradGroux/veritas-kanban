@@ -103,8 +103,21 @@ function nextEnabledIndex(
   return -1;
 }
 
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
+export function CommandPalette({
+  nativeOpen = false,
+  onNativeOpenChange,
+}: { nativeOpen?: boolean; onNativeOpenChange?: (open: boolean) => void } = {}) {
+  const [open, setOpenState] = useState(false);
+  const setOpen = useCallback(
+    (next: boolean | ((current: boolean) => boolean)) => {
+      setOpenState(next);
+      onNativeOpenChange?.(false);
+    },
+    [onNativeOpenChange]
+  );
+  useEffect(() => {
+    if (nativeOpen) setOpenState(true);
+  }, [nativeOpen]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchMounted, setSearchMounted] = useState(false);
   const [query, setQuery] = useState('');
@@ -232,7 +245,7 @@ export function CommandPalette() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [setOpen]);
 
   const handoff = useOverlayHandoff(open, executeCommand);
   const runCommand = (cmd: CommandItem) => {

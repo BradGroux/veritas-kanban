@@ -1,4 +1,4 @@
-import { Menu, type MenuItemConstructorOptions } from 'electron';
+import { Menu, dialog, type MenuItemConstructorOptions } from 'electron';
 
 import {
   createDesktopCommandRequest,
@@ -120,7 +120,23 @@ export function dispatchDesktopMenuCommand(
   dispatcher: DesktopCommandDispatcher,
   command: DesktopCommandName
 ): void {
-  void dispatcher.dispatch(createDesktopCommandRequest(command, 'menu'));
+  void dispatcher
+    .dispatch(createDesktopCommandRequest(command, 'menu'))
+    .then((result) => {
+      if (!result.accepted)
+        return dialog.showMessageBox({
+          type: 'info',
+          message: DESKTOP_COMMAND_REGISTRY[command].label,
+          detail: result.message ?? 'This action is unavailable. Open the workspace and try again.',
+        });
+    })
+    .catch(() =>
+      dialog.showMessageBox({
+        type: 'error',
+        message: 'Unable to complete the command',
+        detail: 'Check Setup & Diagnostics, then try again.',
+      })
+    );
 }
 
 function isCommandEnabled(

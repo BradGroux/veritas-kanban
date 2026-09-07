@@ -12,6 +12,7 @@ import {
 export type DesktopBottomPanel = 'board-chat' | 'squad-chat';
 
 interface DesktopShellContextValue {
+  resetDesktopLayout: () => void;
   isDesktopClient: boolean;
   leftRailOpen: boolean;
   rightRailOpen: boolean;
@@ -40,6 +41,7 @@ export const MIN_RIGHT_PANEL_WIDTH = 320;
 export const MAX_RIGHT_PANEL_WIDTH = 640;
 
 const DEFAULT_CONTEXT: DesktopShellContextValue = {
+  resetDesktopLayout: () => undefined,
   isDesktopClient: false,
   leftRailOpen: false,
   rightRailOpen: false,
@@ -327,21 +329,9 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
     };
   }, [bottomPanel, closeBottomPanel, desktopClient, restorePanelFocus]);
 
-  useEffect(() => {
-    const desktop = (
-      window as Window & {
-        veritasDesktop?: {
-          onMenuCommand?: (listener: (payload: { command: string }) => void) => () => void;
-        };
-      }
-    ).veritasDesktop;
-    return desktop?.onMenuCommand?.((payload) => {
-      if (payload.command === 'reset-layout') resetDesktopLayout();
-    });
-  }, [resetDesktopLayout]);
-
   const value = useMemo<DesktopShellContextValue>(
     () => ({
+      resetDesktopLayout,
       isDesktopClient: desktopClient,
       leftRailOpen: desktopClient ? leftRailOpen : false,
       rightRailOpen: desktopClient ? rightRailOpen : false,
@@ -356,6 +346,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
     }),
     [
       bottomPanel,
+      resetDesktopLayout,
       closeBottomPanel,
       desktopClient,
       leftRailOpen,
