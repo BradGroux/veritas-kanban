@@ -271,3 +271,18 @@ test('task mode images cannot enter publication without their original capture m
     )
   );
 });
+
+test('focused board media cannot be published without original capture evidence', async (t) => {
+  const f = await fixture(t);
+  await writeFile(path.join(f.root, 'docs/assets/v6.1.7/board-5000.png'), 'unrecorded image');
+  f.git('add', '.');
+  f.git('commit', '-qm', 'add unrecorded board');
+  f.expected.publicationCommit = f.git('rev-parse', 'HEAD');
+  f.publication.publicationCommit = f.expected.publicationCommit;
+  await writeFile(f.evidencePath, JSON.stringify(f.publication));
+  assert(
+    (await verifyPublishedMedia(f.args)).some((error) =>
+      error.includes('original capture evidence')
+    )
+  );
+});

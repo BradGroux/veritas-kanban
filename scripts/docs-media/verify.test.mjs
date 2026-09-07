@@ -257,3 +257,26 @@ test('task mode comparison binds every view to native geometry and candidate ide
     assert(mediaEvidenceFailures(changed, expected).length);
   }
 });
+
+test('focused large-board capture requires the exact native viewport and build', () => {
+  const report = fixture();
+  report.focusedBoardAssets = [
+    {
+      ...structuredClone(report.assets[0]),
+      name: 'board-5000.png',
+      path: 'docs/assets/v6.1.7/board-5000.png',
+      capture: { ...report.assets[0].capture, width: 1360, height: 900 },
+    },
+  ];
+  assert.deepEqual(mediaEvidenceFailures(report, expected), []);
+  for (const mutate of [
+    (r) => r.focusedBoardAssets.push(r.focusedBoardAssets[0]),
+    (r) => (r.focusedBoardAssets[0].capture.packageDigest = 'c'.repeat(64)),
+    (r) => (r.focusedBoardAssets[0].capture.width = 1700),
+    (r) => (r.focusedBoardAssets[0].decision = 'retire'),
+  ]) {
+    const changed = structuredClone(report);
+    mutate(changed);
+    assert(mediaEvidenceFailures(changed, expected).length);
+  }
+});

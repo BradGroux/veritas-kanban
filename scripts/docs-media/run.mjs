@@ -2,7 +2,7 @@
 /* global window, document, innerWidth, innerHeight, getComputedStyle, requestAnimationFrame */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { chromium, expect } from '@playwright/test';
@@ -13,10 +13,10 @@ import { encodeInteraction, recordInteraction } from './record.mjs';
 import { finalizeCapture } from './finalize.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const [appArgument, outputArgument, mode = 'capture'] = process.argv.slice(2);
+const [appArgument, outputArgument, mode = 'capture', focusedBoardArgument] = process.argv.slice(2);
 assert(
   appArgument?.endsWith('.app') && outputArgument && mode === 'capture',
-  'Usage: node scripts/docs-media/run.mjs <candidate.app> <new-external-directory> [capture]'
+  'Usage: node scripts/docs-media/run.mjs <candidate.app> <new-external-directory> [capture] [board-report.json]'
 );
 assert.equal(process.platform, 'darwin', 'Desktop documentation captures require macOS');
 const output = path.join(
@@ -382,6 +382,32 @@ try {
     win.setContentSize(1700, 760);
   }, page.url());
   await button('Close task workspace').click();
+  if (focusedBoardArgument) {
+    const boardReportPath = await realpath(focusedBoardArgument);
+    const board = JSON.parse(await readFile(boardReportPath, 'utf8'));
+    assert.equal(board.status, 'passed', 'Focused board capture requires a passing feature run');
+    for (const key of ['commit', 'version', 'packageDigest'])
+      assert.equal(board[key], report[key], `Focused board capture has a different ${key}`);
+    const entry = board.entries?.find((item) => item.count === 5000);
+    assert.deepEqual(entry?.failures, [], 'Focused board capture missed a performance budget');
+    assert.equal(entry?.screenshot?.name, 'board-5000.png');
+    const source = path.join(path.dirname(boardReportPath), entry.screenshot.name);
+    assert.equal(await realpath(source), source, 'Focused capture traverses a symlink');
+    assert.equal(
+      await fileDigest(source),
+      entry.screenshot.sha256,
+      'Focused capture bytes changed'
+    );
+    await copyFile(source, path.join(output, entry.screenshot.name));
+    report.focusedBoardAssets = [
+      {
+        ...entry.screenshot,
+        decision: 'replace',
+        reason: 'Focused comparison of the matched 5000-task board fixture.',
+        path: `docs/assets/v${version}/${entry.screenshot.name}`,
+      },
+    ];
+  }
   report.assets.sort((a, b) => maintainedAssets.indexOf(a.name) - maintainedAssets.indexOf(b.name));
   report.completedAt = new Date().toISOString();
   report.status = 'captured';

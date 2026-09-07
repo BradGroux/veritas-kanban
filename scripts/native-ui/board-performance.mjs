@@ -17,7 +17,9 @@ const { SqliteDatabase } = await import(
 const { SqliteTaskRepository } = await import(
   pathToFileURL(`${root}/server/src/storage/sqlite/task-repository.ts`)
 );
-const { packageDigest } = await import(pathToFileURL(`${root}/scripts/native-ui/contract.mjs`));
+const { packageDigest, fileDigest } = await import(
+  pathToFileURL(`${root}/scripts/native-ui/contract.mjs`)
+);
 const require = createRequire(`${root}/package.json`);
 const { expect } = require('@playwright/test');
 assert(
@@ -175,6 +177,24 @@ try {
       })
     );
     await page.screenshot({ path: `${output}/board-${count}.png` });
+    entry.screenshot = {
+      name: `board-${count}.png`,
+      sha256: await fileDigest(`${output}/board-${count}.png`),
+      capture: {
+        commit,
+        version,
+        packageDigest: report.packageDigest,
+        boundary: 'packaged-macos',
+        packaged: true,
+        method: 'window-capture',
+        capturedAt: new Date().toISOString(),
+        ...(await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+          scaleFactor: window.devicePixelRatio,
+        }))),
+      },
+    };
     entry.budgets = {
       loadRenderMs: count === 100 ? 1000 : count === 1000 ? 2000 : 5000,
       inputP95Ms: 100,
