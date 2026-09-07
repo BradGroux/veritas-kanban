@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TextInput, useMantineTheme } from '@mantine/core';
 import { useTheme } from '@/hooks/useTheme';
 import { MantineRoot, testColorSchemeManager } from '@/theme/MantineRoot';
@@ -24,6 +24,21 @@ function ThemeControlProbe() {
     <button type="button" onClick={() => setTheme('light')}>
       {theme}
     </button>
+  );
+}
+
+function PreferenceProbe() {
+  const { theme, preference, setTheme } = useTheme();
+  return (
+    <>
+      <output data-testid="resolved">{theme}</output>
+      <output data-testid="preference">{preference}</output>
+      {(['system', 'light', 'dark'] as const).map((value) => (
+        <button key={value} onClick={() => setTheme(value)}>
+          {value}
+        </button>
+      ))}
+    </>
   );
 }
 
@@ -52,6 +67,7 @@ describe('Mantine foundation', () => {
 
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
+      writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
@@ -107,6 +123,67 @@ describe('Mantine foundation', () => {
       expect(document.documentElement.dataset.mantineColorScheme).toBe('light');
       expect(document.documentElement.classList.contains('dark')).toBe(false);
     });
+  });
+
+  it('follows live system changes only for System and persists explicit overrides across remounts', async () => {
+    let dark = false;
+    const listeners = new Map<string, Set<(event: { matches: boolean }) => void>>();
+    window.matchMedia = vi.fn((query: string) => {
+      const callbacks = listeners.get(query) ?? new Set();
+      listeners.set(query, callbacks);
+      return {
+        media: query,
+        get matches() {
+          return query === '(prefers-color-scheme: dark)' ? dark : !dark;
+        },
+        addEventListener: (_type: string, callback: (event: { matches: boolean }) => void) =>
+          callbacks.add(callback),
+        removeEventListener: (_type: string, callback: (event: { matches: boolean }) => void) =>
+          callbacks.delete(callback),
+      } as unknown as MediaQueryList;
+    });
+    const changeSystem = (value: boolean) =>
+      act(() => {
+        dark = value;
+        for (const [query, callbacks] of listeners)
+          for (const callback of callbacks)
+            callback({ matches: query === '(prefers-color-scheme: dark)' ? dark : !dark });
+      });
+    window.localStorage.setItem('veritas-kanban-theme', 'light');
+    let view = render(
+      <MantineRoot>
+        <PreferenceProbe />
+      </MantineRoot>
+    );
+    await waitFor(() => expect(screen.getByTestId('preference').textContent).toBe('light'));
+    changeSystem(true);
+    expect(screen.getByTestId('resolved').textContent).toBe('light');
+    fireEvent.click(screen.getByRole('button', { name: 'system' }));
+    await waitFor(() => expect(screen.getByTestId('resolved').textContent).toBe('dark'));
+    expect(window.localStorage.getItem('veritas-kanban-theme')).toBe('auto');
+    changeSystem(false);
+    await waitFor(() => expect(document.documentElement.dataset.mantineColorScheme).toBe('light'));
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    view.unmount();
+    view = render(
+      <MantineRoot>
+        <PreferenceProbe />
+      </MantineRoot>
+    );
+    await waitFor(() => expect(screen.getByTestId('preference').textContent).toBe('system'));
+    changeSystem(true);
+    await waitFor(() => expect(document.documentElement.classList.contains('dark')).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'dark' }));
+    changeSystem(false);
+    expect(screen.getByTestId('resolved').textContent).toBe('dark');
+    view.unmount();
+    render(
+      <MantineRoot>
+        <PreferenceProbe />
+      </MantineRoot>
+    );
+    await waitFor(() => expect(screen.getByTestId('preference').textContent).toBe('dark'));
+    expect(screen.getByTestId('resolved').textContent).toBe('dark');
   });
 
   it('covers required v5 status semantics and accessibility defaults', () => {

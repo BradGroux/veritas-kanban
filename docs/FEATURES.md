@@ -114,7 +114,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Task types** — Configurable type system with icons and color-coded card borders (code, research, content, automation, and custom types)
 - **Priority levels** — Low, medium, and high with visual indicators on cards
 - **Markdown storage** — Tasks stored as human-readable `.md` files with YAML frontmatter
-- **Dark/light mode** — Ships dark by default with a toggle in Settings → General → Appearance; persists to localStorage; inline script in `index.html` prevents flash of wrong theme on load
+- **Appearance** — Choose Follow System, Light, or Dark in Settings → General → Appearance. System responds to OS/browser changes while open; explicit preferences and the default dark appearance are preserved across relaunches. The toolbar toggle selects an explicit override. Preferences stay local to the browser or desktop profile; the initial page script applies the choice before rendering
 - **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params
 - **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, a left-sidebar control, a Board-only right-sidebar control, and visually distinct Board Chat and Squad Chat actions; auxiliary rails and Workbench collapse when the native window crosses into compact width
 - **Primary page shell** — Activity, Backlog, Archive, Templates, Workflows, Operations Digest, Evidence Timeline, Time Breakdowns, Drift Monitor, Decision Audit Trail, Scoring, and Policies share one macOS route header with an icon-only Back action, one focused page heading, tokenized subtitle/status/action slots, and a common content baseline; dense data routes use the documented full-width `wide` variant while action groups move to a predictable second row below 1280px
@@ -2095,7 +2095,7 @@ closed instead of replacing newer data from an older backup.
 
 | Tab               | What It Controls                                                                                               |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| **General**       | Application-wide preferences, appearance (dark/light mode toggle with moon/sun icon)                           |
+| **General**       | Application-wide preferences, appearance (Follow System, Light, or Dark)                                       |
 | **Board**         | Column visibility and board layout                                                                             |
 | **Tasks**         | Default values, auto-complete behavior                                                                         |
 | **Agents**        | Agent CRUD (add/edit/remove), default agent selection, custom agent types with any string slug                 |

@@ -3,13 +3,13 @@ import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 import {
   applyVeritasColorScheme,
   normalizeVeritasColorScheme,
-  type VeritasColorScheme,
+  type VeritasThemePreference,
 } from '@/theme/color-scheme';
 
-type Theme = VeritasColorScheme;
+type Theme = VeritasThemePreference;
 
 export function useTheme() {
-  const { setColorScheme } = useMantineColorScheme();
+  const { colorScheme, setColorScheme } = useMantineColorScheme();
   const computedColorScheme = useComputedColorScheme('dark', {
     getInitialValueInEffect: true,
   });
@@ -21,8 +21,8 @@ export function useTheme() {
 
   const setTheme = useCallback(
     (t: Theme) => {
-      applyVeritasColorScheme(t);
-      setColorScheme(t);
+      if (t !== 'system') applyVeritasColorScheme(t);
+      setColorScheme(t === 'system' ? 'auto' : t);
     },
     [setColorScheme]
   );
@@ -31,5 +31,10 @@ export function useTheme() {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   }, [setTheme, theme]);
 
-  return { theme, setTheme, toggleTheme };
+  return {
+    theme,
+    preference: colorScheme === 'auto' ? 'system' : colorScheme,
+    setTheme,
+    toggleTheme,
+  };
 }

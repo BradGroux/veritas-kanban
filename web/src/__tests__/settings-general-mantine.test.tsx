@@ -62,6 +62,7 @@ vi.mock('@/hooks/useFeatureSettings', () => ({
 vi.mock('@/hooks/useTheme', () => ({
   useTheme: () => ({
     theme: 'dark',
+    preference: 'dark',
     setTheme: mocks.setTheme,
   }),
 }));
@@ -80,13 +81,13 @@ describe('General settings Mantine migration', () => {
   it('renders the base general settings controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<GeneralTab />);
 
-    expect(screen.getByRole('switch', { name: 'Toggle dark mode' })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'Appearance' })).toBeDefined();
     expect(screen.getByRole('combobox', { name: 'Product Mode' })).toBeDefined();
     expect(screen.getAllByText('Advanced / Operator').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('textbox', { name: 'Display Name (Squad Chat)' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Add Repo' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Default' })).toBeDefined();
-    expect(container.querySelector('.mantine-Switch-root')).toBeDefined();
+    expect(container.querySelector('.mantine-Select-root')).not.toBeNull();
     expect(container.querySelector('.mantine-TextInput-root')).toBeDefined();
     expect(container.querySelector('.mantine-Button-root')).toBeDefined();
     expect(container.querySelector('.mantine-Badge-root')).toBeDefined();
@@ -99,9 +100,10 @@ describe('General settings Mantine migration', () => {
         ?.className
     ).toContain('w-full');
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Toggle dark mode' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Appearance' }));
 
-    expect(mocks.setTheme).toHaveBeenCalledWith('light');
+    fireEvent.click(await screen.findByRole('option', { name: 'Follow System' }));
+    expect(mocks.setTheme).toHaveBeenCalledWith('system');
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Product Mode' }));
     fireEvent.click(await screen.findByRole('option', { name: 'QA Review' }));
