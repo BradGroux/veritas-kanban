@@ -24,6 +24,7 @@ const agents: AgentConfig[] = [
 ];
 
 const mocks = vi.hoisted(() => ({
+  isMobile: false,
   archiveSprint: vi.fn(),
   bulkArchiveByIds: vi.fn(),
   bulkDemote: vi.fn(),
@@ -39,6 +40,15 @@ const mocks = vi.hoisted(() => ({
   useProjects: vi.fn(),
   useTaskTypes: vi.fn(),
 }));
+
+vi.mock('@mantine/hooks', async () => {
+  const actual = await vi.importActual<typeof import('@mantine/hooks')>('@mantine/hooks');
+  return {
+    ...actual,
+    useMediaQuery: (query: string) =>
+      query === '(max-width: 639px)' ? mocks.isMobile : actual.useMediaQuery(query),
+  };
+});
 
 vi.mock('@/hooks/useConfig', () => ({
   useConfig: mocks.useConfig,
@@ -100,6 +110,7 @@ function defaultFilters(overrides: Partial<FilterState> = {}): FilterState {
 
 describe('Board chrome Mantine migration', () => {
   beforeEach(() => {
+    mocks.isMobile = false;
     Element.prototype.scrollIntoView = vi.fn();
     mocks.useProjects.mockReturnValue({
       data: [createMockProject({ id: 'veritas', label: 'Veritas' })],
@@ -175,6 +186,42 @@ describe('Board chrome Mantine migration', () => {
       type: null,
       agent: null,
     });
+  });
+
+  it('discloses mobile filters, applies changes, and restores focus on dismissal', async () => {
+    mocks.isMobile = true;
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    renderWithProviders(
+      <FilterBar
+        tasks={[]}
+        filters={defaultFilters({ project: 'veritas' })}
+        onFiltersChange={onFiltersChange}
+        onSaveSavedView={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('textbox', { name: 'Search tasks' })).toBeDefined();
+    expect(screen.getByText('1 active filter')).toBeDefined();
+    expect(screen.queryByRole('combobox', { name: 'Filter by project' })).toBeNull();
+    const opener = screen.getByRole('button', { name: 'Filters and views' });
+    opener.focus();
+    await user.keyboard('{Enter}');
+    expect(opener.getAttribute('aria-expanded')).toBe('true');
+    const project = screen.getByRole('combobox', { name: 'Filter by project' });
+    expect(screen.getByRole('combobox', { name: 'Saved board view' })).toBeDefined();
+    await user.click(project);
+    await user.click(screen.getByRole('option', { name: 'All Projects' }));
+    expect(onFiltersChange).toHaveBeenCalledWith(defaultFilters());
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(document.activeElement).toBe(opener);
+    expect(screen.queryByRole('region', { name: 'More task filters' })).toBeNull();
+    await user.keyboard('{Enter}');
+    screen.getByRole('combobox', { name: 'Filter by type' }).focus();
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(opener);
+    expect(opener.getAttribute('aria-expanded')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Clear all filters' }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith(defaultFilters());
   });
 
   it('manages saved board views through Mantine primitives', () => {
