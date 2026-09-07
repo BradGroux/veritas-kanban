@@ -1,8 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AuthenticatedRequest } from '../../middleware/auth.js';
+import type { AuthPermission, AuthenticatedRequest } from '../../middleware/auth.js';
 import { errorHandler } from '../../middleware/error-handler.js';
+import { workProductAccess } from '../../routes/v1/permissions.js';
 import { workProductRoutes } from '../../routes/work-products.js';
 
 const mocks = vi.hoisted(() => ({
@@ -301,4 +302,56 @@ describe('work product artifact routes', () => {
       confirmation: productId,
     });
   });
+});
+
+describe('mounted artifact permissions', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function appFor(permissions: AuthPermission[]) {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      (req as AuthenticatedRequest).auth = {
+        role: 'agent',
+        isLocalhost: false,
+        workspaceId: 'local',
+        permissions,
+      };
+      next();
+    });
+    app.use(['/api/work-products', '/api/v1/work-products'], workProductAccess, workProductRoutes);
+    app.use(errorHandler);
+    return app;
+  }
+
+  it('preserves read-scoped preview audit access for mixed-case routes', async () => {
+    mocks.listVersions.mockResolvedValue([
+      { id: 'wpa_html', version: 1, mediaType: 'text/html', state: 'available' },
+    ]);
+    const response = await request(appFor(['work_product:read']))
+      .post('/api/v1/work-products/wp_MixedCase/ARTIFACT/Preview/Audit/')
+      .send({ action: 'close', version: 1 });
+    expect(response.status).toBe(204);
+    expect(mocks.auditLog).toHaveBeenCalledOnce();
+  });
+
+  for (const prefix of ['/api/work-products', '/api/v1/work-products']) {
+    for (const suffix of ['artifact', 'ARTIFACT', 'ArTiFaCt/']) {
+      it(`enforces purge authority at ${prefix}/:id/${suffix}`, async () => {
+        const productId = `wp_${'MixedCase'.repeat(3)}`;
+        const path = `${prefix}/${productId}/${suffix}?confirm=${productId}`;
+        const denied = await request(appFor(['work_product:write'])).delete(path);
+        expect(denied.status).toBe(403);
+        expect(mocks.purge).not.toHaveBeenCalled();
+        mocks.purge.mockResolvedValue({ productId, artifactsDeleted: 1, bytesDeleted: 14 });
+        const allowed = await request(appFor(['admin:manage'])).delete(path);
+        expect(allowed.status).toBe(200);
+        expect(mocks.purge).toHaveBeenCalledExactlyOnceWith({
+          workspaceId: 'local',
+          productId,
+          confirmation: productId,
+        });
+      });
+    }
+  }
 });
