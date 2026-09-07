@@ -375,7 +375,6 @@ export function KanbanBoard() {
   // Register filtered tasks with keyboard context
   useEffect(() => {
     setTasks(filteredTasks);
-    return () => setTasks([]);
   }, [filteredTasks, setTasks]);
 
   // Handler for opening a task
@@ -532,9 +531,17 @@ export function KanbanBoard() {
     [allTasksByStatus, announce, canWriteTasks, columns, commitBoardMove, filteredTasks, isOnline]
   );
 
-  // Register callbacks with keyboard context (refs, so no need for useEffect)
-  setOnOpenTask(handleTaskClick);
-  setOnMoveTask(handleMoveTask);
+  // Board-owned callbacks must not outlive this view.
+  useEffect(() => {
+    setOnOpenTask(handleTaskClick);
+    setOnMoveTask(handleMoveTask);
+    return () => {
+      setOnOpenTask(null);
+      setOnMoveTask(null);
+    };
+  }, [handleTaskClick, handleMoveTask, setOnOpenTask, setOnMoveTask]);
+
+  useEffect(() => () => setTasks([]), [setTasks]);
 
   // Drag and drop logic
   const {
