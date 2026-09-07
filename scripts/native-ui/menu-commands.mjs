@@ -1,5 +1,7 @@
-/* global window */
+/* global window, setTimeout, clearTimeout */
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { expect } from '@playwright/test';
 
 /** Uses the installed native menu, preload, and real mounted application. */
@@ -85,23 +87,39 @@ export async function verifyNativeWindowMenu(app, page) {
     'togglefullscreen',
   ]) {
     assert(
-      items.some((item) => item.role === role),
+      items.some((item) => item.role?.toLowerCase() === role.toLowerCase()),
       `Missing native role: ${role}`
     );
   }
-  const clickRole = (role) =>
-    app.evaluate(({ Menu }, role) => {
-      const find = (menu) => {
-        for (const item of menu.items) {
-          if (item.role === role) return item;
-          const nested = item.submenu && find(item.submenu);
-          if (nested) return nested;
-        }
-      };
-      const item = find(Menu.getApplicationMenu());
-      if (!item?.enabled) throw new Error(`Role unavailable: ${role}`);
-      item.click();
-    }, role);
+  const clickRole = async (role) => {
+    const shortcuts = {
+      zoomIn: '+',
+      resetZoom: '0',
+      zoomOut: '-',
+      togglefullscreen: 'f',
+      close: 'w',
+    };
+    assert(shortcuts[role], `No native shortcut defined for ${role}`);
+    const modifiers =
+      role === 'togglefullscreen' ? '{control down, command down}' : '{command down}';
+    // Target the disposable packaged process by PID, never the installed app name.
+    await promisify(execFile)(
+      'osascript',
+      [
+        '-e',
+        `on run argv
+      tell application "System Events"
+        set targetProcess to first application process whose unix id is (item 1 of argv as integer)
+        set frontmost of targetProcess to true
+        tell targetProcess to keystroke (item 2 of argv) using ${modifiers}
+      end tell
+    end run`,
+        String(app.process().pid),
+        shortcuts[role],
+      ],
+      { timeout: 10000 }
+    );
+  };
   const zoom = () =>
     app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].webContents.getZoomFactor()
@@ -114,13 +132,22 @@ export async function verifyNativeWindowMenu(app, page) {
   await expect.poll(zoom).toBeLessThan(1);
   await clickRole('resetZoom');
   await expect.poll(zoom).toBe(1);
-  await clickRole('togglefullscreen');
-  await expect
-    .poll(() =>
-      app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())
-    )
-    .toBe(true);
-  await clickRole('togglefullscreen');
+  for (const event of ['enter-full-screen', 'leave-full-screen']) {
+    const transition = app.evaluate(
+      ({ BrowserWindow }, event) =>
+        new Promise((resolve, reject) => {
+          const window = BrowserWindow.getAllWindows()[0];
+          const timeout = setTimeout(() => reject(new Error(`No ${event} event`)), 10000);
+          window.once(event, () => {
+            clearTimeout(timeout);
+            resolve(true);
+          });
+        }),
+      event
+    );
+    await clickRole('togglefullscreen');
+    await transition;
+  }
   await expect
     .poll(() =>
       app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())

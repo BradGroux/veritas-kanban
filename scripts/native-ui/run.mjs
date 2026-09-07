@@ -671,7 +671,7 @@ try {
     const response = await fetch(`/api/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'blocked' }),
+      body: JSON.stringify({ status: 'done' }),
     });
     if (!response.ok) throw new Error(`Fixture status failed: ${response.status}`);
   }, fixtureTask.id);
