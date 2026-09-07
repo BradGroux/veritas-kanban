@@ -153,6 +153,33 @@ describe('desktop shell recovery', () => {
     expect(window.localStorage.getItem('veritas.desktop.rightRailOpen')).toBe('false');
   });
 
+  it('keeps the task history and focus when resize collapses the chat behind it', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+    const taskState = { ...window.history.state, veritasTaskDetail: 'task-open-above-chat' };
+    window.history.pushState(taskState, '', '/');
+    const taskControl = screen.getByRole('button', { name: 'Reset layout' });
+    taskControl.focus();
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    try {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+      act(() => window.dispatchEvent(new Event('resize')));
+      expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
+      expect(window.history.state.veritasTaskDetail).toBe('task-open-above-chat');
+      expect(window.history.state.veritasBottomPanel).toBeUndefined();
+      expect(back).not.toHaveBeenCalled();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      expect(document.activeElement).toBe(taskControl);
+    } finally {
+      back.mockRestore();
+    }
+  });
+
   it('minimizes both sidebars before opening Workbench at compact width', async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
