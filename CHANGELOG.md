@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [6.2.0]
+## [6.2.0] - 2026-09-07
 
-Unpublished release candidate. Veritas Kanban 6.2.0 improves Settings persistence, keyboard and native macOS interactions, and large-board behavior.
+Veritas Kanban 6.2.0 improves Settings persistence, keyboard and native macOS interactions, and large-board behavior.
 
 ### Changed
 
@@ -25,10 +25,15 @@ Unpublished release candidate. Veritas Kanban 6.2.0 improves Settings persistenc
 - Kept modified keys and IME composition out of board letter shortcuts. Keyboard selection follows visible order, brings tasks into view, and uses help derived from configured columns (#1526, #1533, #1534).
 - Corrected primary-action, filter and code-token contrast; separated browser onboarding from native desktop diagnostics (#1532, #1535).
 - Rejected empty or ambiguous task identifiers in CLI/MCP mutations; bounded API waits and retained structured errors. File notification writes preserve recoverable state and report malformed or unreadable data (#1527, #1528, #1538).
+- Kept authenticated context reads out of login throttling, prevented mixed legacy SQLite file families during migration, and preserved an open task when compact chat closes (#1571).
+
+### Security
+
+- Aligned permission overrides with route matching, protected managed attempt authority during task edits, bounded routing preview counts, and rejected redirected desktop verification requests (#1556–#1559).
 
 ### Compatibility
 
-- All maintained package versions move together to 6.2.0. REST API `v1` and existing full-task/summary clients remain compatible. This candidate adds no database migration.
+- All maintained package versions move together to 6.2.0. REST API `v1` and existing full-task/summary clients remain compatible. This release adds no database migration.
 - Existing explicit Light/Dark choices are retained. System appearance is an additional preference. Failed Settings writes need an explicit retry; closing the macOS Settings window keeps its pending edits alive.
 - CLI/MCP task suffixes must identify exactly one task. Use the complete task ID when several matches exist.
 

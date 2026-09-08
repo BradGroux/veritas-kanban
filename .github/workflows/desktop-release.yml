@@ -180,7 +180,8 @@ jobs:
           set -euo pipefail
           command -v ffmpeg >/dev/null || brew install ffmpeg
           pnpm exec playwright install chromium
-          node scripts/docs-media/run.mjs "${VERIFIED_NATIVE_APP}" "${RUNNER_TEMP}/documentation-media" capture
+          pnpm --dir server exec node --import tsx ../scripts/native-ui/board-performance.mjs "${VERIFIED_NATIVE_APP}" "${RUNNER_TEMP}/large-board-evidence"
+          node scripts/docs-media/run.mjs "${VERIFIED_NATIVE_APP}" "${RUNNER_TEMP}/documentation-media" capture "${RUNNER_TEMP}/large-board-evidence/report.json"
 
       - name: Retain native macOS evidence even on failure
         if: always()
@@ -191,6 +192,7 @@ jobs:
             ${{ runner.temp }}/native-ui-evidence
             ${{ runner.temp }}/native-distribution.sha256
             ${{ runner.temp }}/documentation-media
+            ${{ runner.temp }}/large-board-evidence
           if-no-files-found: warn
           retention-days: 14
 
@@ -213,7 +215,7 @@ jobs:
             "release/Veritas-Kanban-${version}-mac-arm64.zip.blockmap" \
             "release/Veritas-Kanban-${version}-mac-arm64.dmg.blockmap" \
             release/latest-mac.yml \
-            -C "${RUNNER_TEMP}" release-candidate.json native-distribution.sha256 native-ui-evidence documentation-media
+            -C "${RUNNER_TEMP}" release-candidate.json native-distribution.sha256 native-ui-evidence documentation-media large-board-evidence
 
       - name: Retain signed candidate without publishing
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
