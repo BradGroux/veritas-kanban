@@ -67,7 +67,6 @@ const report = {
     unmatched: [
       'Original showcase dataset is unavailable; uses the documentation fixture.',
       'Native content capture excludes the baseline window frame and shadow.',
-      'Host OS differs from the baseline macOS 15.7.9.',
     ],
   },
 };
@@ -279,6 +278,13 @@ try {
   const launched = await session.launch();
   ({ app, page } = launched);
   report.identity = launched.identity;
+  const baseline = JSON.parse(
+    await readFile(path.join(root, report.taskModeComparison.baseline), 'utf8')
+  );
+  const osMatch = baseline.host.osVersion === launched.identity.osVersion;
+  report.taskModeComparison[osMatch ? 'matched' : 'unmatched'].push(
+    `Host macOS: baseline ${baseline.host.osVersion}; candidate ${launched.identity.osVersion}.`
+  );
   await app.evaluate(({ BrowserWindow }, sizes) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.isVisible());
     win.webContents.setZoomFactor(1);
