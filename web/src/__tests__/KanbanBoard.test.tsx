@@ -89,14 +89,13 @@ vi.mock('@/hooks/useAgentStatus', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useKeyboard', () => ({
-  useKeyboard: () => ({
-    selectedTaskId: null,
-    setTasks: vi.fn(),
-    setOnOpenTask: vi.fn(),
-    setOnMoveTask: vi.fn(),
-  }),
+const keyboardRegistration = vi.hoisted(() => ({
+  selectedTaskId: null,
+  setTasks: vi.fn(),
+  setOnOpenTask: vi.fn(),
+  setOnMoveTask: vi.fn(),
 }));
+vi.mock('@/hooks/useKeyboard', () => ({ useKeyboard: () => keyboardRegistration }));
 
 vi.mock('@/hooks/useFeatureSettings', () => ({
   useFeatureSettings: () => mockFeatureSettingsResult,
@@ -310,6 +309,17 @@ afterEach(() => {
 // ── Tests ────────────────────────────────────────────────────
 
 describe('KanbanBoard', () => {
+  it('removes task navigation and callbacks when the board unmounts', () => {
+    mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+    const view = renderBoard();
+    expect(keyboardRegistration.setOnOpenTask).toHaveBeenLastCalledWith(expect.any(Function));
+    expect(keyboardRegistration.setOnMoveTask).toHaveBeenLastCalledWith(expect.any(Function));
+    view.unmount();
+    expect(keyboardRegistration.setTasks).toHaveBeenLastCalledWith([]);
+    expect(keyboardRegistration.setOnOpenTask).toHaveBeenLastCalledWith(null);
+    expect(keyboardRegistration.setOnMoveTask).toHaveBeenLastCalledWith(null);
+  });
+
   it('shows loading skeleton when data is loading', () => {
     mockUseTasks = () => ({ data: undefined, isLoading: true, error: null });
     renderBoard();

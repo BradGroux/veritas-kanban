@@ -203,3 +203,17 @@ describe('shared API permission metadata', () => {
     ).toEqual(['agent:write']);
   });
 });
+
+describe('case-insensitive API permission metadata', () => {
+  it.each([
+    ['/API/V1/WORK-PRODUCTS/wp_MixedCase/ARTIFACT', 'DELETE', 'admin:manage'],
+    ['/api/work-products/wp_MixedCase/ArTiFaCt/', 'DELETE', 'admin:manage'],
+    ['/API/DIFF/task_MixedCase/CODEX-REVIEW', 'POST', 'workflow:execute'],
+    ['/api/v1/diff/task_MixedCase/CoDeX-ReViEw/', 'POST', 'workflow:execute'],
+    ['/api/work-products/wp_MixedCase/ARTIFACT/PREVIEW/AUDIT', 'POST', 'work_product:read'],
+  ])('matches server permissions for %s', (path, method, permission) => {
+    const requirement = getApiPermissionRequirement(path, { method });
+    expect(requirement.permissions).toEqual([permission]);
+    expect(requirement.path).toContain('MixedCase');
+  });
+});

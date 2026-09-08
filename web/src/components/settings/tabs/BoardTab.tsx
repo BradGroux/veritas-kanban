@@ -14,7 +14,7 @@ import { Plus, Trash2 } from 'lucide-react';
 
 export function BoardTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
   const boardSettings = settings.board ?? DEFAULT_FEATURE_SETTINGS.board;
   const columns = normalizeBoardColumns(boardSettings.columns);
   const defaultStatus = normalizeBoardDefaultStatus(boardSettings.defaultStatus, columns);
@@ -83,7 +83,7 @@ export function BoardTab() {
     <SettingsPage
       title="Board"
       description="Control board structure, card density, visible metadata, and direct manipulation."
-      actions={<SaveIndicator isPending={isPending} />}
+      actions={<SaveIndicator isPending={isPending} error={saveError} />}
     >
       <SettingsSection
         id="board-display"

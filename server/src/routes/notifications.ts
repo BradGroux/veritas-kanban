@@ -17,9 +17,15 @@
 import { Router, type NextFunction, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getNotificationService } from '../services/notification-service.js';
+import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError } from '../middleware/error-handler.js';
 import { authorize, type AuthenticatedRequest } from '../middleware/auth.js';
+
+const notificationPagingSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
 
 const router: RouterType = Router();
 const requireAdmin = authorize('admin');
@@ -70,13 +76,15 @@ router.post(
 router.get(
   '/',
   requireAdminForGlobalNotifications,
+  validate({ query: notificationPagingSchema }),
   asyncHandler(async (req, res) => {
+    const paging = req.validated?.query as z.infer<typeof notificationPagingSchema>;
     const agent = String(req.query.agent || '');
     if (!agent) {
       const service = getNotificationService();
       const notifications = await service.getAllNotifications({
         undelivered: req.query.undelivered === 'true' || req.query.unsent === 'true',
-        limit: req.query.limit ? Number(String(req.query.limit)) : undefined,
+        ...paging,
       });
       return res.json(notifications);
     }
@@ -86,7 +94,7 @@ router.get(
       agent,
       undelivered: req.query.undelivered === 'true',
       taskId: String(req.query.taskId || ''),
-      limit: req.query.limit ? Number(String(req.query.limit)) : undefined,
+      ...paging,
     });
 
     res.json(notifications);

@@ -78,6 +78,17 @@ describe('General settings Mantine migration', () => {
     cleanup();
   });
 
+  it('queues display-name edits before blur or unmount', () => {
+    const view = renderWithProviders(<GeneralTab />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Display Name (Squad Chat)' }), {
+      target: { value: 'Retained name' },
+    });
+    view.unmount();
+    expect(mocks.debouncedUpdate).toHaveBeenCalledWith({
+      general: { humanDisplayName: 'Retained name' },
+    });
+  });
+
   it('renders the base general settings controls through direct Mantine primitives', async () => {
     const { container } = renderWithProviders(<GeneralTab />);
 

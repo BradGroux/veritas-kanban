@@ -26,7 +26,7 @@ const predictByMetadataSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).optional(),
   project: z.string().optional(),
   description: z.string().optional(),
-  subtaskCount: z.number().int().nonnegative().optional(),
+  subtaskCount: z.number().int().min(0).max(500).optional(),
 });
 
 // ─── Routes ──────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ router.post(
         priority,
         project,
         description,
-        subtasks: subtaskCount ? Array.from({ length: subtaskCount }) : undefined,
+        subtaskCount,
       });
       return res.json(prediction);
     }

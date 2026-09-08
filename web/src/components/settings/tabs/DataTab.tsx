@@ -13,7 +13,7 @@ import {
 
 export function DataTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
 
   const updateTelemetry = (key: string, value: unknown) => {
     debouncedUpdate({ telemetry: { [key]: value } });
@@ -56,7 +56,7 @@ export function DataTab() {
     <SettingsPage
       title="Data"
       description="Manage telemetry retention, operating budgets, and archive lifecycle."
-      actions={<SaveIndicator isPending={isPending} />}
+      actions={<SaveIndicator isPending={isPending} error={saveError} />}
     >
       <SettingsLocalNav
         label="Data settings sections"

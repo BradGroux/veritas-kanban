@@ -16,7 +16,7 @@ import {
 
 export function TasksTab() {
   const { settings } = useFeatureSettings();
-  const { debouncedUpdate, isPending } = useDebouncedFeatureUpdate();
+  const { debouncedUpdate, isPending, error: saveError } = useDebouncedFeatureUpdate();
 
   const update = <K extends keyof TaskBehaviorSettings>(key: K, value: TaskBehaviorSettings[K]) => {
     debouncedUpdate({ tasks: { [key]: value } });
@@ -38,7 +38,7 @@ export function TasksTab() {
     <SettingsPage
       title="Tasks"
       description="Set defaults and optional capabilities for task authoring and completion."
-      actions={<SaveIndicator isPending={isPending} />}
+      actions={<SaveIndicator isPending={isPending} error={saveError} />}
     >
       <SettingsSection
         id="task-behavior"

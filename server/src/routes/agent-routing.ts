@@ -41,7 +41,7 @@ const routeByMetadataSchema = z
     type: z.string().optional(),
     priority: z.enum(['low', 'medium', 'high']).optional(),
     project: z.string().optional(),
-    subtaskCount: z.number().int().nonnegative().optional(),
+    subtaskCount: z.number().int().min(0).max(500).optional(),
     requiredRuntimeCapabilities: requiredRuntimeCapabilitiesSchema,
   })
   .strict();
@@ -129,14 +129,7 @@ router.post(
           type: type || 'feature',
           priority: priority || 'medium',
           project,
-          subtasks: subtaskCount
-            ? Array.from({ length: subtaskCount }, (_, i) => ({
-                id: `stub_${i}`,
-                title: '',
-                completed: false,
-                created: new Date().toISOString(),
-              }))
-            : undefined,
+          subtaskCount,
         },
         { requiredRuntimeCapabilities }
       );

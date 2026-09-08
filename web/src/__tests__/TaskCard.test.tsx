@@ -156,6 +156,19 @@ describe('TaskCard', () => {
     cleanup();
   });
 
+  it('focuses and reveals keyboard selection with an accessible label', () => {
+    ensureMantineBrowserApis();
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    try {
+      renderCard(createMockTask({ title: 'Keyboard target' }), { isSelected: true });
+      const card = screen.getByRole('article', { name: /^Selected\. Task: Keyboard target/ });
+      expect(document.activeElement).toBe(card);
+      expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+    } finally {
+      scroll.mockRestore();
+    }
+  });
+
   it('renders task title', () => {
     const task = createMockTask({ title: 'Implement login' });
     renderCard(task);
