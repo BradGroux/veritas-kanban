@@ -176,6 +176,13 @@ describe('SettingsDialog Mantine shell', () => {
     );
   });
 
+  it('renders shared Settings as a modeless native surface', () => {
+    renderWithProviders(<SettingsDialog open presentation="window" onOpenChange={vi.fn()} />);
+    expect(screen.getByRole('main', { name: 'Settings' })).toBeDefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Search settings' })).toBeDefined();
+  });
+
   it('finds an existing appearance control and focuses it through keyboard selection', async () => {
     renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
     const input = screen.getByRole('combobox', { name: 'Search settings' });

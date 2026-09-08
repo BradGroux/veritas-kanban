@@ -98,7 +98,9 @@ export interface VeritasDesktopApi {
   onUpdateStatus(listener: BridgeEventListener<'updateStatus'>): () => void;
   onNotificationAction(listener: BridgeEventListener<'notificationAction'>): () => void;
   onMenuCommand(
-    listener: (request: DesktopCommandDispatchRequest) => { accepted: boolean; message?: string }
+    listener: (
+      request: DesktopCommandDispatchRequest
+    ) => { accepted: boolean; message?: string } | Promise<{ accepted: boolean; message?: string }>
   ): () => void;
   onUploadProgress(listener: BridgeEventListener<'uploadProgress'>): () => void;
   onWorkProductExportProgress(
@@ -188,13 +190,13 @@ const api: VeritasDesktopApi = {
   onUpdateStatus: (listener) => onDesktopEvent('updateStatus', listener),
   onNotificationAction: (listener) => onDesktopEvent('notificationAction', listener),
   onMenuCommand: (listener) => {
-    const handler = (
+    const handler = async (
       _event: Electron.IpcRendererEvent,
       request: DesktopCommandDispatchRequest & { requestId?: string }
     ) => {
       if (!request.requestId) return;
       try {
-        const result = listener(request);
+        const result = await listener(request);
         ipcRenderer.send('desktop:menu-command-result', {
           requestId: request.requestId,
           accepted: result?.accepted === true,
@@ -209,7 +211,11 @@ const api: VeritasDesktopApi = {
       }
     };
     ipcRenderer.on('desktop:menu-command', handler);
-    return () => ipcRenderer.off('desktop:menu-command', handler);
+    ipcRenderer.send('desktop:menu-command-ready');
+    return () => {
+      ipcRenderer.off('desktop:menu-command', handler);
+      ipcRenderer.send('desktop:menu-command-not-ready');
+    };
   },
   onUploadProgress: (listener) => onDesktopEvent('uploadProgress', listener),
   onWorkProductExportProgress: (listener) => onDesktopEvent('workProductExportProgress', listener),

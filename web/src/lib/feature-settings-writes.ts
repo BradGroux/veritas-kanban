@@ -27,6 +27,7 @@ function overlay(settings: FeatureSettings, patch: FeatureSettingsPatch): Featur
 /** One serialized writer per query cache; tab unmounts do not own pending work. */
 class FeatureSettingsWrites {
   private pending: FeatureSettingsPatch = {};
+  private settleWaiters: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
   private disposed = false;
   private activeWaiters: Array<{
     resolve: (settings: FeatureSettings) => void;
@@ -100,11 +101,23 @@ class FeatureSettingsWrites {
     void this.flush();
   };
 
+  /** Flush pending work before a native window session ends; failures require explicit retry. */
+  settle = (): Promise<void> => {
+    if (this.disposed) return Promise.reject(new Error('The settings session has ended'));
+    if (this.snapshot.error) return Promise.reject(this.snapshot.error);
+    if (!this.active && Object.keys(this.pending).length === 0) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      this.settleWaiters.push({ resolve, reject });
+      void this.flush();
+    });
+  };
+
   dispose() {
     this.disposed = true;
     this.dismissFailure?.();
     if (this.timer) clearTimeout(this.timer);
     const error = new Error('The settings session has ended');
+    this.settleWaiters.splice(0).forEach((waiter) => waiter.reject(error));
     [...this.waiters, ...this.activeWaiters].forEach(({ reject }) => reject(error));
     this.waiters = [];
     this.activeWaiters = [];
@@ -131,9 +144,13 @@ class FeatureSettingsWrites {
       this.dismissFailure?.();
       this.dismissFailure = undefined;
       this.client.setQueryData(FEATURE_SETTINGS_QUERY_KEY, overlay(saved, this.pending));
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('veritas:settings-saved'));
       waiters.forEach(({ resolve }) => resolve(saved));
       this.publish();
-      if (Object.keys(this.pending).length > 0 && !this.timer) void this.flush();
+      if (Object.keys(this.pending).length === 0)
+        this.settleWaiters.splice(0).forEach((waiter) => waiter.resolve());
+      if (Object.keys(this.pending).length > 0 && (!this.timer || this.settleWaiters.length > 0))
+        void this.flush();
     } catch (cause) {
       if (this.disposed) return;
       this.activeWaiters = [];
@@ -145,6 +162,7 @@ class FeatureSettingsWrites {
       this.timer = undefined;
       [...waiters, ...this.waiters].forEach(({ reject }) => reject(error));
       this.waiters = [];
+      this.settleWaiters.splice(0).forEach((waiter) => waiter.reject(error));
       this.publish(error);
       this.dismissFailure?.();
       this.dismissFailure = this.onFailure?.(error);

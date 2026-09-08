@@ -258,6 +258,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   defaultTab?: string;
   defaultControl?: string;
+  presentation?: 'modal' | 'window';
 }
 
 // ============ Main Settings Dialog ============
@@ -267,6 +268,7 @@ export function SettingsDialog({
   onOpenChange,
   defaultTab,
   defaultControl,
+  presentation = 'modal',
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [pendingFocus, setPendingFocus] = useState<{ section: string; controlId?: string } | null>(
@@ -620,40 +622,26 @@ export function SettingsDialog({
     );
   };
 
-  return (
-    <Modal
-      variant="authoring"
-      compound
-      opened={open}
-      onClose={() => onOpenChange(false)}
-      title={
-        <Group gap="xs" wrap="nowrap">
-          <Text component="span" size="sm" fw={600}>
-            Settings
+  const title = (
+    <Group gap="xs" wrap="nowrap">
+      <Text component="span" size="sm" fw={600}>
+        Settings
+      </Text>
+      {isBoardOnly && <UiPill>Board Only</UiPill>}
+      {saveError && (
+        <Group gap="xs" role="alert">
+          <Text size="xs" c="red">
+            Changes not saved.
           </Text>
-          {isBoardOnly && <UiPill>Board Only</UiPill>}
-          {saveError && (
-            <Group gap="xs" role="alert">
-              <Text size="xs" c="red">
-                Changes not saved.
-              </Text>
-              <UiAction variant="quiet" onClick={retrySave}>
-                Retry
-              </UiAction>
-            </Group>
-          )}
+          <UiAction variant="quiet" onClick={retrySave}>
+            Retry
+          </UiAction>
         </Group>
-      }
-      centered
-      trapFocus
-      returnFocus
-      closeButtonProps={{ 'aria-label': 'Close settings' }}
-      classNames={{
-        content: 'settings-dialog-content h-dvh',
-        header: 'settings-dialog-header',
-        body: 'settings-dialog-body',
-      }}
-    >
+      )}
+    </Group>
+  );
+  const content = (
+    <>
       <ErrorBoundary level="section">
         <div ref={dialogContentRef} className="settings-dialog flex h-full min-h-0">
           <input
@@ -884,6 +872,37 @@ export function SettingsDialog({
           </UiAction>
         </OverlayFooter>
       </Modal>
+    </>
+  );
+  if (presentation === 'window')
+    return (
+      <main
+        data-settings-window
+        className="flex h-dvh flex-col bg-background text-foreground"
+        aria-label="Settings"
+      >
+        <header className="shrink-0 border-b px-4 py-3">{title}</header>
+        <div className="min-h-0 flex-1">{content}</div>
+      </main>
+    );
+  return (
+    <Modal
+      variant="authoring"
+      compound
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      title={title}
+      centered
+      trapFocus
+      returnFocus
+      closeButtonProps={{ 'aria-label': 'Close settings' }}
+      classNames={{
+        content: 'settings-dialog-content h-dvh',
+        header: 'settings-dialog-header',
+        body: 'settings-dialog-body',
+      }}
+    >
+      {content}
     </Modal>
   );
 }

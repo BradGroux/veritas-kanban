@@ -1,4 +1,4 @@
-import type { IpcMain, Shell } from 'electron';
+import type { IpcMain, IpcMainInvokeEvent, Shell } from 'electron';
 import { lookup } from 'node:dns/promises';
 import { blockedRemoteConnectionDestinationReason } from '@veritas-kanban/shared';
 
@@ -303,7 +303,8 @@ export function registerDesktopBridge(
   appVersion: string,
   commandDispatcher?: DesktopCommandDispatcher,
   updateService?: DesktopUpdateService,
-  windowControls?: DesktopWindowControls
+  windowControls?: DesktopWindowControls,
+  authorizeSender?: (event: IpcMainInvokeEvent) => boolean
 ): void {
   const handlers = createDesktopBridgeHandlers(
     runtime,
@@ -321,8 +322,10 @@ export function registerDesktopBridge(
     const validator = DESKTOP_BRIDGE_METHOD_VALIDATORS[method] as
       ((payload: unknown) => unknown) | undefined;
 
-    ipcMain.handle(definition.channel, async (_event, request: unknown) => {
+    ipcMain.handle(definition.channel, async (event, request: unknown) => {
       try {
+        if (authorizeSender && !authorizeSender(event))
+          throw new Error('This window cannot use the desktop bridge.');
         return await handler(validator ? validator(request) : request);
       } catch (error) {
         // Do not attach the original cause to errors crossing the desktop bridge.

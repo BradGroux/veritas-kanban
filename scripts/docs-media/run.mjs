@@ -6,6 +6,7 @@ import { copyFile, mkdir, readFile, realpath, writeFile } from 'node:fs/promises
 import path from 'node:path';
 import os from 'node:os';
 import { chromium, expect } from '@playwright/test';
+import { nativeSettingsPage, closeNativeSettings } from '../native-ui/settings-window.mjs';
 import { createNativeSession } from '../native-ui/session.mjs';
 import { contentSizes, fileDigest, packageDigest } from '../native-ui/contract.mjs';
 import { maintainedAssets, taskModeAssets, mediaSchema, mediaEvidenceFailures } from './verify.mjs';
@@ -131,8 +132,8 @@ async function capture(taskMode = false) {
       scaleFactor: 1,
     };
   }
-  const native = await app.evaluate(async ({ BrowserWindow, screen }) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+  const native = await app.evaluate(async ({ BrowserWindow, screen }, url) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
     return {
       bounds: win.getBounds(),
       contentBounds: win.getContentBounds(),
@@ -316,8 +317,20 @@ try {
   await openTask();
   await still('task-workspace.png');
   await button('Close task workspace').click();
+  const boardPage = page;
   await button('Settings').click();
-  const settings = page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ });
+  page = await nativeSettingsPage(app);
+  await app.evaluate(
+    ({ BrowserWindow }, size) => {
+      const window = BrowserWindow.getAllWindows().find(
+        (window) => window.webContents.getURL() === size.url
+      );
+      window.webContents.setZoomFactor(1);
+      window.setContentSize(size.width, size.height);
+    },
+    { ...contentSizes.normal, url: page.url() }
+  );
+  const settings = page.getByRole('main', { name: 'Settings', exact: true });
   await expect(settings).toBeVisible();
   await expect(settings.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
   await still('settings-navigation.png');
@@ -330,7 +343,8 @@ try {
     await expect(settings.getByRole('heading', { name, exact: true })).toBeVisible();
     await still(file);
   }
-  await button('Close settings').click();
+  await closeNativeSettings(app, page);
+  page = boardPage;
   await button('Command palette').click();
   await expect(page.getByRole('textbox', { name: 'Search commands' })).toBeVisible();
   await still('command-palette.png');

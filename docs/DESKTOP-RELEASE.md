@@ -336,3 +336,13 @@ The custom header follows the macOS title-bar double-click preference (zoom/fill
 minimize, or no action). Configure it in [Desktop & Dock settings](https://support.apple.com/guide/mac-help/change-desktop-dock-settings-mchlp1119/mac).
 The native gate records the current preference and verifies its action without
 changing the operator's system preferences.
+
+### Settings window ownership
+
+On macOS, Settings and Command-comma focus one reusable, modeless native window. The main board remains usable. Browser clients and other desktop platforms retain the shared modal presentation. Settings links and native Import, Export, Backup, and Debug Bundle commands select the corresponding shared section after the authenticated renderer acknowledges the request.
+
+The native window uses the existing isolated, sandboxed preload with Node integration disabled. Bridge calls and command receipts are restricted to owned top-level renderers at the current application origin; generated startup status pages are a separate main-window-only case. Settings navigation stays in the settings surface, and external links use the existing validated OS opener.
+
+Closing Settings hides its renderer and restores focus to the board, retaining pending edits and failed writes for retry. Reopening restores that session. Quit waits for its serialized settings writes before stopping the local server. A failed or stalled save keeps the app open and directs the user back to Settings. Normal native close, minimize, restore, and focus controls apply to this window independently of the board's saved bounds.
+
+The two windows share the existing browser profile. Appearance uses the existing local preference store. Settings/configuration changes send same-origin invalidation notices, without values or credentials, and each renderer refetches through its authenticated API. Sign-in changes refresh each window's auth guard; workspace selection follows the shared profile. Hidden Settings continues to receive updates and remains subject to the same server permissions.
