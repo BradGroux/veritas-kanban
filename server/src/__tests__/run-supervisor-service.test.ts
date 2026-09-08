@@ -426,14 +426,16 @@ describe('RunSupervisorService', () => {
       undefined,
       { checkpoint } as unknown as RunSupervisorService
     ) as unknown as {
-      reconcileRecoveredRunCursor(
-        taskId: string,
-        attemptId: string,
-        record: RunSupervisorRecord
-      ): Promise<void>;
+      recovery: {
+        reconcileRecoveredRunCursor(
+          taskId: string,
+          attemptId: string,
+          record: RunSupervisorRecord
+        ): Promise<void>;
+      };
     };
 
-    await orchestration.reconcileRecoveredRunCursor(
+    await orchestration.recovery.reconcileRecoveredRunCursor(
       supervisor.taskId,
       supervisor.attemptId,
       supervisor
