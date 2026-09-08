@@ -383,7 +383,10 @@ try {
   await still('mobile-task-workspace.png');
   await button('Close task workspace').click();
   await button('Mobile settings').click();
-  await expect(page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ })).toBeVisible();
+  const mobileSettings = page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ });
+  await expect(mobileSettings).toBeVisible();
+  await expect(mobileSettings.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await expect(mobileSettings.getByLabel('Appearance', { exact: true })).toBeVisible();
   await still('mobile-settings.png');
   page = boardPage;
   mobile = false;
