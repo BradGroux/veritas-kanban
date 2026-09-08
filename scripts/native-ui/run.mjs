@@ -685,6 +685,15 @@ async function checkSeededRendererFailures() {
 }
 try {
   await launch();
+  report.display = await app.evaluate(({ screen }) => {
+    const { bounds, workArea, scaleFactor } = screen.getPrimaryDisplay();
+    return { bounds, workArea, scaleFactor };
+  });
+  await persist();
+  assert(
+    report.display.workArea.width >= 1780 && report.display.workArea.height >= 960,
+    'Native capture needs a work area of at least 1780x960; configure the runner display first'
+  );
   report.titlebarAction = await verifyConfiguredTitlebarAction(app, page);
   report.menuCommands = await verifyNativeMenuCommands(app, page);
   report.settingsWindow = await verifyNativeSettingsWindow(app, page);

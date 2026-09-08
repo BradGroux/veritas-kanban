@@ -36,8 +36,8 @@ export const settingsSections = [
   'Maintenance',
 ];
 export const contentSizes = {
-  // Hosted macOS runners expose only 760px of usable content height. Keep the
-  // expanded width while using a height the native window manager can honor.
+  // Retain the original matched capture sizes. The hosted workflow configures
+  // a 1920x1080 display before packaging; default runner displays can be smaller.
   normal: { width: 1700, height: 760 },
   minimum: { width: 1180, height: 760 },
 };
