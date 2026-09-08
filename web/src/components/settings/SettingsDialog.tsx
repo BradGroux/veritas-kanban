@@ -39,6 +39,13 @@ import {
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import type { ClientAuthPermission } from '@veritas-kanban/shared';
 import { SettingsActionGroup, SettingsErrorBoundary } from './shared';
+import { SettingsSearch } from './SettingsSearch';
+import {
+  SETTINGS_CONTROL_INDEX,
+  SETTINGS_SECTION_DESCRIPTIONS,
+  settingsSupportHash,
+  type SettingsSearchEntry,
+} from './settings-search-index';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
 // Lazy-load tab components
@@ -250,12 +257,21 @@ interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTab?: string;
+  defaultControl?: string;
 }
 
 // ============ Main Settings Dialog ============
 
-export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialogProps) {
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  defaultTab,
+  defaultControl,
+}: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  const [pendingFocus, setPendingFocus] = useState<{ section: string; controlId?: string } | null>(
+    null
+  );
   // Only mount the visible navigation: CSS-hidden controls are still counted
   // by the focus trap while a lazy tab has no controls of its own.
   const showSidebar = useMediaQuery('(min-width: 40em)');
@@ -267,6 +283,42 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     [hasPermission]
   );
   const isBoardOnly = currentSettings.productMode?.selectedMode === 'board-only';
+  const searchEntries = useMemo(() => {
+    const allowed = new Set(TABS.filter(canUseTab).map((tab) => tab.id));
+    const optionalSections = new Set([
+      'agents',
+      'delegation',
+      'scheduler',
+      'queue-monitors',
+      'reflections',
+      'tool-policies',
+      'enforcement',
+    ]);
+    const sections: SettingsSearchEntry[] = TABS.filter(canUseTab).map((tab) => ({
+      id: `section-${tab.id}`,
+      section: tab.id,
+      title: tab.label,
+      description: SETTINGS_SECTION_DESCRIPTIONS[tab.id],
+      optionalInBoardOnly: optionalSections.has(tab.id),
+    }));
+    const controls = SETTINGS_CONTROL_INDEX.filter(
+      (entry) =>
+        allowed.has(entry.section as TabId) &&
+        (!entry.requiredPermission || hasPermission(entry.requiredPermission))
+    );
+    return [...controls, ...sections];
+  }, [canUseTab, hasPermission]);
+
+  const selectSearchEntry = useCallback((entry: SettingsSearchEntry) => {
+    setActiveTab(entry.section as TabId);
+    setPendingFocus({ section: entry.section, controlId: entry.controlId });
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}${settingsSupportHash(entry.section, entry.controlId)}`
+    );
+  }, []);
+
   const mobileTabOptions = useMemo(
     () =>
       SETTINGS_NAVIGATION_GROUPS.map((group) => ({
@@ -285,8 +337,12 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
     const requestedTab = TABS.find((t) => t.id === defaultTab);
     if (requestedTab && canUseTab(requestedTab)) {
       setActiveTab(defaultTab as TabId);
+      const target = searchEntries.find(
+        (entry) => entry.section === defaultTab && entry.controlId === defaultControl
+      );
+      setPendingFocus({ section: requestedTab.id, controlId: target?.controlId });
     }
-  }, [canUseTab, defaultTab]);
+  }, [canUseTab, defaultTab, defaultControl, open, searchEntries]);
 
   useEffect(() => {
     const currentTab = TABS.find((tab) => tab.id === activeTab);
@@ -315,6 +371,36 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
       contentAreaRef.current.scrollIntoView({ block: 'start' });
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!open || !pendingFocus || !contentAreaRef.current) return;
+    if (pendingFocus.section !== activeTab) {
+      setPendingFocus(null);
+      return;
+    }
+    const root = contentAreaRef.current;
+    const focusTarget = () => {
+      const section = pendingFocus.controlId
+        ? document.getElementById(pendingFocus.controlId)
+        : root;
+      if (!section || !root.contains(section)) return false;
+      const target =
+        section.querySelector<HTMLElement>(
+          'input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), a[href]'
+        ) ?? section;
+      if (target === section) target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'nearest' });
+      setPendingFocus(null);
+      return true;
+    };
+    if (focusTarget()) return;
+    const observer = new MutationObserver(() => {
+      if (focusTarget()) observer.disconnect();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [activeTab, open, pendingFocus]);
 
   const handleExportSettings = () => {
     const blob = new Blob([JSON.stringify(currentSettings, null, 2)], { type: 'application/json' });
@@ -632,7 +718,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
                               disabled={!allowed}
                               title={
                                 allowed
-                                  ? tab.label
+                                  ? `${tab.label}: ${SETTINGS_SECTION_DESCRIPTIONS[tab.id]}`
                                   : `${tab.requiredPermission} permission required`
                               }
                               fullWidth
@@ -701,6 +787,13 @@ export function SettingsDialog({ open, onOpenChange, defaultTab }: SettingsDialo
 
           {/* Content */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            <div className="shrink-0 border-b px-4 py-3">
+              <SettingsSearch
+                entries={searchEntries}
+                boardOnly={isBoardOnly}
+                onSelect={selectSearchEntry}
+              />
+            </div>
             {!showSidebar && (
               <div
                 data-settings-mobile-header

@@ -115,13 +115,14 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Priority levels** — Low, medium, and high with visual indicators on cards
 - **Markdown storage** — Tasks stored as human-readable `.md` files with YAML frontmatter
 - **Appearance** — Choose Follow System, Light, or Dark in Settings → General → Appearance. System responds to OS/browser changes while open; explicit preferences and the default dark appearance are preserved across relaunches. The toolbar toggle selects an explicit override. Preferences stay local to the browser or desktop profile; the initial page script applies the choice before rendering
-- **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params
+- **Filter bar** — Search tasks by text, filter by project and task type; filters persist in URL query params. On narrow screens, search and the active-filter count stay visible while **Filters and views** opens the secondary filters and saved views. Changes apply immediately; **Done** or Escape closes the controls and returns focus to the opener
 - **Desktop shell controls** — Native-app-style toolbar with workspace selection, health state, a left-sidebar control, a Board-only right-sidebar control, and visually distinct Board Chat and Squad Chat actions; auxiliary rails and Workbench collapse when the native window crosses into compact width
 - **Primary page shell** — Activity, Backlog, Archive, Templates, Workflows, Operations Digest, Evidence Timeline, Time Breakdowns, Drift Monitor, Decision Audit Trail, Scoring, and Policies share one macOS route header with an icon-only Back action, one focused page heading, tokenized subtitle/status/action slots, and a common content baseline; dense data routes use the documented full-width `wide` variant while action groups move to a predictable second row below 1280px
 - **Native version identity** — The macOS application menu opens an offline About panel and copies a redacted support string from the same authoritative Electron version, embedded release commit, release channel, OS, and architecture record exposed by the desktop bridge
 - **Mobile shell controls** — Compact navigation uses bounded labels and full accessible names; Board Chat stays fixed above the bottom navigation and device safe area
 - **Resizable Workbench** — Board Chat and Squad Chat open in one bounded right-side dock, preserve the active conversation when switching channels, and clamp their width to keep the application shell recoverable
 - **Bulk operations** — Select multiple tasks to move, archive, or delete in batch; select-all toggle
+- **Client-aware first setup** — Browsers secure the connected server without native readiness checks or promises of local storage creation. The desktop app retains its native setup paths. Existing server or desktop data requires review before password creation.
 - **Keyboard shortcuts** — Navigate visible tasks in saved board order (j/k, arrows), focus and reveal the selected card, open (Enter), close (Esc), create (c), move to configured column (1-9), help (?)
 - **Loading skeleton** — Shimmer placeholders while the board loads
 - **Blocked column** — Dedicated column for blocked tasks with categorized reasons (waiting on feedback, technical snag, prerequisite, other)
@@ -2645,3 +2646,11 @@ A persistent header status bar that gives you a real-time overview of system hea
 ---
 
 _Last updated: 2026-03-21 · [Back to README](../README.md)_
+
+### Find and link to settings
+
+Use **Search settings** to find a category or control by its label or common terms such as theme, backup, token, and default agent. Arrow keys select a result; Enter opens its existing section and moves focus to the target. Empty results leave focus in the search field. Results respect the section and control permissions. Board Only is a focus preset, not a permission boundary: optional agent and automation results remain available, are marked optional, and follow core results.
+
+Support links can append a settings fragment to the app URL, for example `/#settings/general/general-appearance`, `/#settings/maintenance/maintenance-backup`, or `/#settings/multi-user/multi-user-api-access`. Selecting a search result updates this fragment so the current URL can be copied. Closing Settings clears it. Links never perform the setting's action, and a control target that is unknown or unavailable falls back to an allowed section.
+
+Data configures telemetry, budgets, and archiving; Maintenance contains backup, restore, logs, and storage tools; Manage contains task-data management. The existing categories have not moved.

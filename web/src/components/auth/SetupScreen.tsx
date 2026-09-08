@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { Button, Checkbox, PasswordInput } from '@mantine/core';
 import { useAuth } from '@/hooks/useAuth';
 import { Copy, Download, Check, Shield, Key } from 'lucide-react';
-import { DesktopOnboardingScreen, shouldShowDesktopOnboarding } from './DesktopOnboarding';
+import {
+  DesktopOnboardingScreen,
+  shouldShowDesktopOnboarding,
+  hasDesktopSetupCapabilities,
+} from './DesktopOnboarding';
 
 // Password strength calculation
 function getPasswordStrength(password: string): { score: number; label: string; color: string } {
@@ -22,6 +26,7 @@ function getPasswordStrength(password: string): { score: number; label: string; 
 
 export function SetupScreen() {
   const { setup, status } = useAuth();
+  const isDesktopSetup = hasDesktopSetupCapabilities();
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowDesktopOnboarding());
   const [existingDataAcknowledged, setExistingDataAcknowledged] = useState(false);
   const [password, setPassword] = useState('');
@@ -42,7 +47,7 @@ export function SetupScreen() {
   const requiresExistingDataReview =
     status?.setupContext?.hasExistingData === true && !existingDataAcknowledged;
 
-  if (showOnboarding || requiresExistingDataReview) {
+  if (isDesktopSetup && (showOnboarding || requiresExistingDataReview)) {
     return (
       <DesktopOnboardingScreen
         onContinue={() => {
@@ -51,6 +56,24 @@ export function SetupScreen() {
         }}
         setupContext={status?.setupContext}
       />
+    );
+  }
+
+  if (requiresExistingDataReview) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md space-y-4">
+          <h1 className="text-2xl font-bold">Secure Existing Server Data</h1>
+          <p className="text-muted-foreground">
+            This server already contains board data. Creating a password protects that existing
+            data; it does not import, replace, or migrate it.
+          </p>
+          <p className="text-muted-foreground">
+            Continue only if you administer this server. Keep your recovery key in a safe place.
+          </p>
+          <Button onClick={() => setExistingDataAcknowledged(true)}>Secure Existing Data</Button>
+        </div>
+      </div>
     );
   }
 
@@ -167,7 +190,9 @@ export function SetupScreen() {
           </div>
           <h1 className="text-2xl font-bold">Secure Your Board</h1>
           <p className="text-muted-foreground">
-            Create a password to protect your Veritas Kanban board.
+            {isDesktopSetup
+              ? 'Create a password to protect your Veritas Kanban board.'
+              : 'Create a password to protect the Veritas Kanban server you are connected to. Your board data stays on that server.'}
           </p>
         </div>
 
