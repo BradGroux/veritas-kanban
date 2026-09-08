@@ -79,6 +79,21 @@ test('candidate archives reject traversal, links, devices, and unexpected roots'
     assert.throws(() => validateArchiveEntries('release/file', mode), /link or special/);
 });
 
+test('signed large-board evidence survives archive validation without accepting unsafe paths', () => {
+  assert.doesNotThrow(() =>
+    validateArchiveEntries(
+      'large-board-evidence/\nlarge-board-evidence/report.json\nlarge-board-evidence/board-5000.png\n',
+      'drwxr-xr-x folder\n-rw-r--r-- report\n-rw-r--r-- image\n'
+    )
+  );
+  for (const name of ['large-board-evidence/../outside', 'large-board-evidence-other/report.json'])
+    assert.throws(() => validateArchiveEntries(name, '-rw-r--r-- file'), /Unsafe/);
+  assert.throws(
+    () => validateArchiveEntries('large-board-evidence/report.json', 'lrwxrwxrwx link'),
+    /link or special/
+  );
+});
+
 test('the distribution checksum list contains each exact release artifact once', () => {
   const names = [
     'latest-mac.yml',

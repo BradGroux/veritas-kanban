@@ -38,7 +38,7 @@ export function validateArchiveEntries(names, listing) {
       name &&
         !path.posix.isAbsolute(name) &&
         !name.split('/').includes('..') &&
-        /^(?:release\/|native-ui-evidence\/|documentation-media\/|native-distribution\.sha256$|release-candidate\.json$)/.test(
+        /^(?:release\/|native-ui-evidence\/|documentation-media\/|large-board-evidence\/|native-distribution\.sha256$|release-candidate\.json$)/.test(
           name
         ),
       `Unsafe candidate archive entry: ${name}`
