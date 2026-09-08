@@ -11,10 +11,11 @@ Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
 
 - [x] Root, shared, server, web, CLI, MCP and desktop package versions are aligned at 6.2.0, with candidate release notes and compatibility guidance.
 - [x] Complete the appropriate local integration verification.
-- [ ] Complete final delivery readback for every finding; #1544 is explicitly dispositioned as not reproducible.
+- [x] Complete final delivery readback for all 25 findings: 24 implemented fixes and #1544 explicitly dispositioned as not reproducible.
 - [x] Inspect the actual packaged candidate, all matched screenshots and complete GIF/video playback; retain revision and package hashes.
 - [ ] Complete review and the repository delivery workflow using the owner-authorized existing CI capacity.
-- [ ] Obtain final approval for release, distribution changes, installed-app replacement and public writing.
+- [x] Obtain owner approval for the 6.2.0 release and advisory publication.
+- [ ] Obtain separate approval for installed-app replacement and public writing.
 - [ ] Verify signing, notarization, distributed assets and the installed application before calling 6.2.0 stable.
 
 ## Historical 6.1.7 Release Gate
@@ -166,8 +167,8 @@ Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
 
 ## Final Release Validation Commands
 
-GitHub CI is prohibited for this candidate. Inspect triggers before any push, PR, merge or
-release action; publication must wait when that action would trigger prohibited automation.
+The owner authorized the existing GitHub CI capacity for this candidate without a credit card,
+capacity purchase, or spending-limit change. Release publication still requires separate approval.
 Run verification locally and retain the actual command, revision and result. Group focused
 checks by completed feature and run the assembled integration gate once; repeat only for a
 relevant change, failure or unresolved concern.
