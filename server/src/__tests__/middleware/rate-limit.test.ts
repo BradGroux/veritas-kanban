@@ -11,6 +11,7 @@ import {
   rateLimit,
   apiRateLimit,
   authRateLimit,
+  authStatusRateLimit,
   writeRateLimit,
   readRateLimit,
   uploadRateLimit,
@@ -47,6 +48,35 @@ function createUploadLimiter(limit = 2) {
 // ── Factory tests ──────────────────────────────────────────────────────────────
 
 describe('Rate Limit Middleware', () => {
+  it('keeps ordinary auth context reads separate from the login attempt budget', async () => {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use('/auth', authRateLimit);
+    app.get('/auth/context', authStatusRateLimit, (_req, res) => res.json({ ok: true }));
+    app.post('/auth/login', (_req, res) => res.json({ ok: true }));
+    app.post('/auth/context', (_req, res) => res.json({ ok: true }));
+    const remote = '198.51.100.63';
+    for (let i = 0; i < 12; i++) {
+      const response = await request(app).get('/auth/context').set('X-Forwarded-For', remote);
+      expect(response.status).toBe(200);
+      expectConfiguredLimit(response, 120);
+    }
+    for (let i = 0; i < 10; i++) {
+      expect((await request(app).post('/auth/login').set('X-Forwarded-For', remote)).status).toBe(
+        200
+      );
+    }
+    expect((await request(app).post('/auth/login').set('X-Forwarded-For', remote)).status).toBe(
+      429
+    );
+    expect((await request(app).post('/auth/context').set('X-Forwarded-For', remote)).status).toBe(
+      429
+    );
+    expect((await request(app).get('/auth/context').set('X-Forwarded-For', remote)).status).toBe(
+      200
+    );
+  });
+
   describe('rateLimit factory', () => {
     it('should create middleware with default options', () => {
       const limiter = rateLimit();

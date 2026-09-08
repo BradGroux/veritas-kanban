@@ -314,7 +314,15 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       setRightRailOpenState(false);
       writeStoredValue(LEFT_RAIL_STORAGE_KEY, 'false');
       writeStoredValue(RIGHT_RAIL_STORAGE_KEY, 'false');
-      if (bottomPanel) closeBottomPanel();
+      if (bottomPanel) {
+        // A layout collapse is not navigation: a task opened above the dock
+        // inherits its history marker. Going Back would dismiss that task.
+        setBottomPanel(null);
+        removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
+        panelTriggerRef.current = null;
+        const { [BOTTOM_PANEL_HISTORY_STATE_KEY]: _panel, ...rest } = window.history.state ?? {};
+        window.history.replaceState(rest, '', window.location.href);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
