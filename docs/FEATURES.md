@@ -122,7 +122,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Mobile shell controls** — Compact navigation uses bounded labels and full accessible names; Board Chat stays fixed above the bottom navigation and device safe area
 - **Resizable Workbench** — Board Chat and Squad Chat open in one bounded right-side dock, preserve the active conversation when switching channels, and clamp their width to keep the application shell recoverable
 - **Bulk operations** — Select multiple tasks to move, archive, or delete in batch; select-all toggle
-- **Keyboard shortcuts** — Navigate tasks (j/k, arrows), open (Enter), close (Esc), create (c), move to column (1-4), help (?)
+- **Keyboard shortcuts** — Navigate visible tasks in saved board order (j/k, arrows), focus and reveal the selected card, open (Enter), close (Esc), create (c), move to configured column (1-9), help (?)
 - **Loading skeleton** — Shimmer placeholders while the board loads
 - **Blocked column** — Dedicated column for blocked tasks with categorized reasons (waiting on feedback, technical snag, prerequisite, other)
 - **Comments** — Add, edit, and delete comments on tasks with author attribution and relative timestamps

@@ -57,7 +57,7 @@ function PageFallback({ error, onRetry: _onRetry }: Omit<ErrorFallbackProps, 'le
 
         <button
           onClick={() => window.location.reload()}
-          className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-md bg-primary-action text-primary-foreground hover:bg-primary-action-hover transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
           Reload

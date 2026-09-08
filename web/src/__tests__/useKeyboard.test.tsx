@@ -4,7 +4,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import type { Task, TaskStatus } from '@veritas-kanban/shared';
+import { taskBoardRankAtIndex, type Task, type TaskStatus } from '@veritas-kanban/shared';
 import { createMockTask } from './test-utils';
 
 // Mock toast — vi.mock is hoisted before imports.
@@ -98,6 +98,54 @@ describe('KeyboardProvider', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('follows positions and durable ranks across custom columns, reorder, and filtering', () => {
+    featureSettingsMock.settings.board.columns = [
+      { id: 'ready', title: 'Ready' },
+      { id: 'todo', title: 'To Do' },
+    ];
+    const legacy = createMockTask({ id: 'legacy', title: 'Zulu', status: 'ready', position: 1 });
+    const later = createMockTask({ id: 'later', title: 'Alpha', status: 'ready', position: 5 });
+    const ranked = createMockTask({
+      id: 'ranked',
+      title: 'Middle',
+      status: 'ready',
+      position: 99,
+      boardRank: taskBoardRankAtIndex([legacy, later], 1),
+    });
+    const todo = createMockTask({ id: 'todo', status: 'todo', position: -100 });
+    const hidden = createMockTask({ id: 'hidden', status: 'retired', position: -200 });
+    const tasks = [todo, later, ranked, legacy, hidden];
+    const view = renderWithProvider({ tasks });
+    for (const id of ['legacy', 'ranked', 'later', 'todo']) {
+      fireEvent.keyDown(window, { key: 'j' });
+      expect(screen.getByTestId('selected').textContent).toBe(id);
+    }
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+    expect(screen.getByTestId('selected').textContent).toBe('later');
+    const reordered = [
+      todo,
+      { ...later, boardRank: taskBoardRankAtIndex([legacy, ranked], 0) },
+      ranked,
+      legacy,
+    ];
+    view.rerender(
+      <KeyboardProvider>
+        <TestConsumer tasks={reordered} />
+      </KeyboardProvider>
+    );
+    expect(screen.getByTestId('selected').textContent).toBe('later');
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    expect(screen.getByTestId('selected').textContent).toBe('legacy');
+    view.rerender(
+      <KeyboardProvider>
+        <TestConsumer tasks={[ranked, todo]} />
+      </KeyboardProvider>
+    );
+    expect(screen.getByTestId('selected').textContent).toBe('none');
+    fireEvent.keyDown(window, { key: 'k' });
+    expect(screen.getByTestId('selected').textContent).toBe('todo');
   });
 
   it('throws when useKeyboard is used outside provider', () => {

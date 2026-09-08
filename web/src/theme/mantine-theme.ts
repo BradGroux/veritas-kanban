@@ -1,4 +1,4 @@
-import { createTheme, type MantineColorsTuple } from '@mantine/core';
+import { createTheme, defaultVariantColorsResolver, type MantineColorsTuple } from '@mantine/core';
 import { VERITAS_UI_METRICS } from './ui-contract';
 
 export const veritasPrimary: MantineColorsTuple = [
@@ -27,6 +27,19 @@ export const veritasStatusColors = {
 
 export const veritasMantineTheme = createTheme({
   primaryColor: 'veritas',
+  // Filled surfaces need a darker swatch than accent text on dark backgrounds.
+  variantColorResolver: (input) => {
+    const resolved = defaultVariantColorsResolver(input);
+    if (input.variant === 'filled' && (input.color ?? input.theme.primaryColor) === 'veritas') {
+      return {
+        ...resolved,
+        background: 'var(--primary-action)',
+        hover: 'var(--primary-action-hover)',
+        color: '#ffffff',
+      };
+    }
+    return resolved;
+  },
   primaryShade: { light: 6, dark: 4 },
   colors: {
     veritas: veritasPrimary,

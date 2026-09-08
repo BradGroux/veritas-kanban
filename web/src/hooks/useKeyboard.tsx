@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_FEATURE_SETTINGS,
   normalizeBoardColumns,
+  sortTasksByBoardPosition,
   type Task,
   type TaskStatus,
 } from '@veritas-kanban/shared';
@@ -33,13 +34,15 @@ interface KeyboardContextValue {
   selectedTaskId: string | null;
   setSelectedTaskId: (id: string | null) => void;
 
+  columns: ReturnType<typeof normalizeBoardColumns>;
+
   // Task list for navigation
   tasks: Task[];
   setTasks: (tasks: Task[]) => void;
 
   // Callbacks (using refs to avoid re-render loops)
-  setOnOpenTask: (fn: (task: Task) => void) => void;
-  setOnMoveTask: (fn: (taskId: string, status: TaskStatus) => void) => void;
+  setOnOpenTask: (fn: ((task: Task) => void) | null) => void;
+  setOnMoveTask: (fn: ((taskId: string, status: TaskStatus) => void) | null) => void;
 }
 
 const KeyboardContext = createContext<KeyboardContextValue | null>(null);
@@ -52,7 +55,11 @@ function getColumnForShortcut(key: string, columns: Array<{ id: TaskStatus }>): 
 export function KeyboardProvider({ children }: { children: ReactNode }) {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, updateTasks] = useState<Task[]>([]);
+  const setTasks = useCallback((next: Task[]) => {
+    updateTasks(next);
+    setSelectedTaskId((id) => (id && next.some((task) => task.id === id) ? id : null));
+  }, []);
   const { settings } = useFeatureSettings();
   const columns = useMemo(
     () => normalizeBoardColumns(settings.board?.columns ?? DEFAULT_FEATURE_SETTINGS.board.columns),
@@ -89,24 +96,23 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     setIsHelpOpen(false);
   }, []);
 
-  const setOnOpenTask = useCallback((fn: (task: Task) => void) => {
+  const setOnOpenTask = useCallback((fn: ((task: Task) => void) | null) => {
     onOpenTaskRef.current = fn;
   }, []);
 
-  const setOnMoveTask = useCallback((fn: (taskId: string, status: TaskStatus) => void) => {
+  const setOnMoveTask = useCallback((fn: ((taskId: string, status: TaskStatus) => void) | null) => {
     onMoveTaskRef.current = fn;
   }, []);
 
-  // Get flat list of tasks sorted by column then position
-  const getTaskList = useCallback(() => {
-    const statusOrder = columns.map((column) => column.id);
-    return [...tasks].sort((a, b) => {
-      const aIndex = statusOrder.indexOf(a.status);
-      const bIndex = statusOrder.indexOf(b.status);
-      if (aIndex !== bIndex) return aIndex - bIndex;
-      return a.title.localeCompare(b.title);
-    });
-  }, [columns, tasks]);
+  // Match the rendered column order and the board's canonical rank/position order.
+  // Compute once per snapshot, rather than sorting during each keystroke.
+  const taskList = useMemo(
+    () =>
+      columns.flatMap((column) =>
+        sortTasksByBoardPosition(tasks.filter((task) => task.status === column.id))
+      ),
+    [columns, tasks]
+  );
 
   // Keyboard event handler
   useEffect(() => {
@@ -141,7 +147,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const taskList = getTaskList();
       const currentIndex = selectedTaskId ? taskList.findIndex((t) => t.id === selectedTaskId) : -1;
 
       // Cmd+Shift+C (or Ctrl+Shift+C on Windows/Linux) - Toggle chat panel
@@ -237,7 +242,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [getTaskList, selectedTaskId, isHelpOpen, openCreateDialog, openChatPanel, columns]);
+  }, [taskList, selectedTaskId, isHelpOpen, openCreateDialog, openChatPanel, columns]);
 
   const value = useMemo<KeyboardContextValue>(
     () => ({
@@ -250,6 +255,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       isHelpOpen,
       selectedTaskId,
       setSelectedTaskId,
+      columns,
       tasks,
       setTasks,
       setOnOpenTask,
@@ -265,6 +271,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       isHelpOpen,
       selectedTaskId,
       setSelectedTaskId,
+      columns,
       tasks,
       setTasks,
       setOnOpenTask,

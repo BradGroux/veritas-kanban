@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { DesktopPaths } from './types.js';
+import { DESKTOP_MIN_WINDOW } from './app-metadata.js';
 
 export interface DesktopWindowState {
   width: number;
@@ -45,7 +46,7 @@ export function writeDesktopWindowStateSync(paths: DesktopPaths, state: DesktopW
 }
 
 export function captureDesktopWindowState(window: BrowserWindow): DesktopWindowState {
-  const bounds = window.getBounds();
+  const bounds = window.getNormalBounds();
   return {
     ...boundsToWindowState(bounds),
     maximized: window.isMaximized(),
@@ -54,14 +55,56 @@ export function captureDesktopWindowState(window: BrowserWindow): DesktopWindowS
 
 export function applyDesktopWindowState(
   state: DesktopWindowState,
-  fallback = DEFAULT_DESKTOP_WINDOW_STATE
+  fallback = DEFAULT_DESKTOP_WINDOW_STATE,
+  workAreas: readonly Rectangle[] = []
 ): Required<Pick<DesktopWindowState, 'width' | 'height'>> & Pick<DesktopWindowState, 'x' | 'y'> {
   const sanitized = sanitizeWindowState(state);
-  return {
+  const bounds = {
     width: sanitized.width || fallback.width,
     height: sanitized.height || fallback.height,
     x: sanitized.x,
     y: sanitized.y,
+  };
+  const areas = workAreas.filter(
+    (area) =>
+      [area.x, area.y, area.width, area.height].every(Number.isFinite) &&
+      area.width > 0 &&
+      area.height > 0
+  );
+  if (!areas.length) return bounds;
+  // Electron's bounds and display work areas both use device-independent pixels.
+  // Keep the monitor containing the largest part of the saved window. With no
+  // intersection (disconnected display), use the first, primary work area.
+  let area = areas[0];
+  let largest = 0;
+  if (bounds.x !== undefined && bounds.y !== undefined) {
+    for (const candidate of areas) {
+      const overlap =
+        Math.max(
+          0,
+          Math.min(bounds.x + bounds.width, candidate.x + candidate.width) -
+            Math.max(bounds.x, candidate.x)
+        ) *
+        Math.max(
+          0,
+          Math.min(bounds.y + bounds.height, candidate.y + candidate.height) -
+            Math.max(bounds.y, candidate.y)
+        );
+      if (overlap > largest) {
+        largest = overlap;
+        area = candidate;
+      }
+    }
+  }
+  const width = Math.min(area.width, Math.max(DESKTOP_MIN_WINDOW.width, bounds.width));
+  const height = Math.min(area.height, Math.max(DESKTOP_MIN_WINDOW.height, bounds.height));
+  const x = largest > 0 && bounds.x !== undefined ? bounds.x : area.x + (area.width - width) / 2;
+  const y = largest > 0 && bounds.y !== undefined ? bounds.y : area.y + (area.height - height) / 2;
+  return {
+    width,
+    height,
+    x: Math.round(Math.max(area.x, Math.min(x, area.x + area.width - width))),
+    y: Math.round(Math.max(area.y, Math.min(y, area.y + area.height - height))),
   };
 }
 

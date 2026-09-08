@@ -405,9 +405,10 @@ export function DriftMonitor({ onBack }: DriftMonitorProps) {
                 className={cn(
                   'rounded-md px-3 py-1.5 text-sm capitalize transition-colors',
                   severity === level
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary-action text-primary-foreground'
                     : 'text-muted-foreground'
                 )}
+                aria-pressed={severity === level}
                 onClick={() => setSeverity(level)}
               >
                 {level}

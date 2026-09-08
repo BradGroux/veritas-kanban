@@ -435,9 +435,9 @@ export function Header({
       }
       void (
         window as Window & {
-          veritasDesktop?: { toggleWindowMaximize?: () => Promise<{ maximized: boolean }> };
+          veritasDesktop?: { performTitlebarAction?: () => Promise<{ maximized: boolean }> };
         }
-      ).veritasDesktop?.toggleWindowMaximize?.();
+      ).veritasDesktop?.performTitlebarAction?.();
     },
     [isDesktopClient]
   );

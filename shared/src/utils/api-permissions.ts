@@ -81,9 +81,9 @@ function normalizeApiPath(path: string): string {
   const url = new URL(path, 'http://veritas.local');
   let normalized = url.pathname.replace(/\/+$/, '') || '/';
 
-  if (normalized === '/api/v1') {
+  if (normalized.toLowerCase() === '/api/v1') {
     normalized = '/api';
-  } else if (normalized.startsWith('/api/v1/')) {
+  } else if (normalized.toLowerCase().startsWith('/api/v1/')) {
     normalized = `/api${normalized.slice('/api/v1'.length)}`;
   }
 
@@ -95,11 +95,12 @@ function routeRequirement(
   path: string,
   method: string
 ): ApiPermissionRequirement | null {
-  if (path !== config.prefix && !path.startsWith(`${config.prefix}/`)) {
+  const matchingPath = path.toLowerCase();
+  if (matchingPath !== config.prefix && !matchingPath.startsWith(`${config.prefix}/`)) {
     return null;
   }
 
-  const relativePath = path.slice(config.prefix.length) || '/';
+  const relativePath = matchingPath.slice(config.prefix.length) || '/';
   const override = config.overrides?.find((candidate) => {
     const methodMatches =
       !candidate.methods ||
@@ -500,7 +501,7 @@ export function getApiPermissionRequirement(
   const method = (options.method || 'GET').toUpperCase();
   const normalizedPath = normalizeApiPath(path);
 
-  if (isPublicApiPath(normalizedPath)) {
+  if (isPublicApiPath(normalizedPath.toLowerCase())) {
     return { permissions: [], path: normalizedPath, method, public: true };
   }
 

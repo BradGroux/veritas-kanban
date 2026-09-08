@@ -6,7 +6,12 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect } from '@playwright/test';
 import { createNativeSession } from './session.mjs';
-import { verifyNativeMenuCommands } from './menu-commands.mjs';
+import { verifyRouteContrast } from './contrast.mjs';
+import {
+  verifyNativeMenuCommands,
+  verifyNativeWindowMenu,
+  verifyConfiguredTitlebarAction,
+} from './menu-commands.mjs';
 import {
   fileDigest,
   evidenceFailures,
@@ -210,6 +215,9 @@ async function capture(entry) {
   entry.screenshot = { path: name, sha256: await fileDigest(path.join(output, name)) };
   assert.deepEqual(geometryFailures(entry.geometry), [], entry.id);
   const route = routes.find(([name]) => entry.id.endsWith(`/route-${name}`));
+  if (route && ['board', 'drift', 'operations'].includes(route[0])) {
+    entry.contrast = await verifyRouteContrast(page, route[0]);
+  }
   if (route)
     assert.deepEqual(
       pageHeaderFailures(
@@ -653,7 +661,20 @@ async function checkSeededRendererFailures() {
 }
 try {
   await launch();
+  report.titlebarAction = await verifyConfiguredTitlebarAction(app, page);
   report.menuCommands = await verifyNativeMenuCommands(app, page);
+  const windowMenu = await verifyNativeWindowMenu(app, page);
+  page = windowMenu.page;
+  report.menuRoles = windowMenu.roles;
+  fixtureTask = await createTask('Native public-safe fixture');
+  await page.evaluate(async (id) => {
+    const response = await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'blocked' }),
+    });
+    if (!response.ok) throw new Error(`Fixture status failed: ${response.status}`);
+  }, fixtureTask.id);
   await persist();
   for (const mode of modes) {
     for (const state of states) {

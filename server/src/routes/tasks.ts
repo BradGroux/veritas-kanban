@@ -1,3 +1,4 @@
+import { assertLegacyAttemptEditable } from '../utils/task-attempt-edit.js';
 import { Router, type NextFunction, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getTaskService } from '../services/task-service.js';
@@ -1014,27 +1015,7 @@ router.patch(
     if (!oldTask) {
       throw new NotFoundError('Task not found');
     }
-    const authoritativeAttempt = oldTask.attempt;
-    if (
-      input.attempt &&
-      authoritativeAttempt &&
-      (authoritativeAttempt.taskEnvelope || authoritativeAttempt.completionResult)
-    ) {
-      if (input.attempt.id !== authoritativeAttempt.id) {
-        throw new ValidationError(
-          'Generic task updates cannot replace an attempt with an authoritative run contract'
-        );
-      }
-      input.attempt = {
-        ...input.attempt,
-        ...(authoritativeAttempt.taskEnvelope
-          ? { taskEnvelope: authoritativeAttempt.taskEnvelope }
-          : {}),
-        ...(authoritativeAttempt.completionResult
-          ? { completionResult: authoritativeAttempt.completionResult }
-          : {}),
-      };
-    }
+    if (input.attempt) assertLegacyAttemptEditable(oldTask.attempt);
     assertFreshRevision(req, 'task', oldTask.id, oldTask);
 
     const authReq = req as AuthenticatedRequest;
@@ -1100,7 +1081,11 @@ router.patch(
       input.blockedReason = null;
     }
 
-    const task = await taskService.updateTask(req.params.id as string, input);
+    const task = input.attempt
+      ? await taskService.updateTask(req.params.id as string, input, {
+          protectManagedAttempt: true,
+        })
+      : await taskService.updateTask(req.params.id as string, input);
     if (!task) {
       throw new NotFoundError('Task not found');
     }
