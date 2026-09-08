@@ -162,8 +162,16 @@ export function markDesktopOnboardingComplete(): void {
   }
 }
 
+export function hasDesktopSetupCapabilities(): boolean {
+  const bridge = getDesktopBridge();
+  return (
+    typeof bridge?.getSetupDiagnostics === 'function' &&
+    typeof bridge?.validateConnectionConfig === 'function'
+  );
+}
+
 export function shouldShowDesktopOnboarding(): boolean {
-  return !readOnboardingComplete();
+  return hasDesktopSetupCapabilities() && !readOnboardingComplete();
 }
 
 function stateLabel(state: HealthState): string {
