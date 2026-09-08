@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   ipcMain,
   Notification,
   safeStorage,
@@ -17,10 +18,15 @@ import { DESKTOP_APP_ID, DESKTOP_APP_NAME, DESKTOP_MIN_WINDOW } from './app-meta
 import { registerDesktopBridge } from './bridge.js';
 import { DesktopCommandDispatcher } from './commands.js';
 import { applyTitlebarAction, resolveTitlebarAction } from './titlebar-action.js';
+import { SettingsWindowController, SETTINGS_WINDOW_COMMANDS } from './settings-window.js';
 import { sendAcknowledgedRendererCommand } from './renderer-commands.js';
 import { extractDeepLinkFromArgv, parseDesktopDeepLink } from './deep-links.js';
 import { configureDesktopMenu, dispatchDesktopMenuCommand } from './menu.js';
-import { hasSameOriginNavigation, openValidatedExternalUrl } from './navigation.js';
+import {
+  hasSameOriginNavigation,
+  isOwnedDesktopSender,
+  openValidatedExternalUrl,
+} from './navigation.js';
 import { DesktopNotificationCenter, ElectronNotificationAdapter } from './notifications.js';
 import { createDesktopPaths, resolveRepoRoot } from './paths.js';
 import { findAvailablePort } from './ports.js';
@@ -57,6 +63,7 @@ const DESKTOP_HELP_URL =
 
 let mainWindow: BrowserWindow | null = null;
 let runtime: DesktopRuntime | null = null;
+let settingsWindow: SettingsWindowController | null = null;
 let commandDispatcher: DesktopCommandDispatcher | null = null;
 let updateService: DesktopUpdateService | null = null;
 let windowStatePaths: ReturnType<typeof createDesktopPaths> | null = null;
@@ -309,17 +316,63 @@ async function boot(): Promise<void> {
     ),
     forceDevUpdateConfig: process.env.VERITAS_DESKTOP_UPDATER_FORCE_DEV === 'true',
     emitStatus: (status) => {
-      activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
+      for (const window of [activeMainWindow(), settingsWindow?.getWindow()])
+        window?.webContents.send(DESKTOP_BRIDGE_EVENTS.updateStatus.channel, status);
       refreshDesktopMenu();
     },
   });
+
+  const activeRuntime = runtime;
+  const nativeSettings = new SettingsWindowController({
+    ipc: ipcMain,
+    origin: () => activeRuntime.getRendererOrigin(),
+    quitting: () => quitting,
+    returnFocus: () => activeMainWindow()?.focus(),
+    createWindow: () => {
+      const area = screen.getPrimaryDisplay().workArea;
+      const window = new BrowserWindow({
+        title: 'Settings — Veritas Kanban',
+        width: Math.min(1040, area.width),
+        height: Math.min(800, area.height),
+        minWidth: Math.min(640, area.width),
+        minHeight: Math.min(480, area.height),
+        show: false,
+        backgroundColor: '#111318',
+        webPreferences: {
+          preload: path.join(__dirname, '../preload/index.cjs'),
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+        },
+      });
+      window.webContents.setWindowOpenHandler(({ url }) => {
+        void openValidatedExternalUrl(shell, url);
+        return { action: 'deny' };
+      });
+      window.webContents.on('will-navigate', (event, url) => {
+        const parsed = new URL(url);
+        if (
+          !hasSameOriginNavigation(url, activeRuntime.getRendererOrigin()) ||
+          parsed.searchParams.get('desktop-settings') !== '1'
+        ) {
+          event.preventDefault();
+          void openValidatedExternalUrl(shell, url);
+        }
+      });
+      return window;
+    },
+  });
+
+  settingsWindow = nativeSettings;
 
   commandDispatcher = new DesktopCommandDispatcher({
     runtime,
     shell,
     quit: () => app.quit(),
     sendRendererCommand: (command) =>
-      sendAcknowledgedRendererCommand(ipcMain, activeMainWindow()?.webContents, command),
+      process.platform === 'darwin' && SETTINGS_WINDOW_COMMANDS.has(command.command)
+        ? nativeSettings.open(command)
+        : sendAcknowledgedRendererCommand(ipcMain, activeMainWindow()?.webContents, command),
     checkForUpdates: () =>
       updateService?.checkForUpdates() ?? Promise.resolve(updateServiceFallback(packaged)),
     downloadUpdate: () =>
@@ -359,11 +412,19 @@ async function boot(): Promise<void> {
               : ''
           )
         ),
-    }
+    },
+    (event) =>
+      isOwnedDesktopSender(
+        event,
+        [activeMainWindow()?.webContents, settingsWindow?.getWindow()?.webContents],
+        activeRuntime.getRendererOrigin(),
+        activeMainWindow()?.webContents
+      )
   );
   refreshDesktopMenu();
   runtime.on('status', (status) => {
-    activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
+    for (const window of [activeMainWindow(), settingsWindow?.getWindow()])
+      window?.webContents.send(DESKTOP_BRIDGE_EVENTS.serverStatus.channel, status);
     refreshDesktopMenu();
   });
 
@@ -406,13 +467,37 @@ app.on('second-instance', (_event, argv) => {
   }
 });
 
+let preparingQuit = false;
 app.on('before-quit', (event) => {
-  quitting = true;
-  if (runtime && !shutdownStarted) {
-    event.preventDefault();
-    shutdownStarted = true;
-    void runtime.stop().finally(() => app.quit());
+  if (shutdownStarted) {
+    quitting = true;
+    return;
   }
+  event.preventDefault();
+  if (preparingQuit) return;
+  preparingQuit = true;
+  void (async () => {
+    try {
+      if (settingsWindow && !(await settingsWindow.prepareToQuit())) {
+        await dialog.showMessageBox({
+          type: 'warning',
+          title: 'Settings are not saved',
+          message: 'Wait for Settings to finish saving, or retry the failed save, then quit again.',
+          buttons: ['Return to Settings'],
+        });
+        return;
+      }
+      quitting = true;
+      shutdownStarted = true;
+      try {
+        await runtime?.stop();
+      } finally {
+        app.quit();
+      }
+    } finally {
+      preparingQuit = false;
+    }
+  })();
 });
 
 app.on('window-all-closed', () => {

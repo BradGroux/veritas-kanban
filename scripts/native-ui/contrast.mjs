@@ -51,12 +51,13 @@ export async function verifyRouteContrast(page, route) {
     targets.push(['selected-filter', page.getByRole('button', { name: 'all', exact: true })]);
   if (route === 'operations') {
     const code = page.locator('main code').first();
-    await expect(code).toBeVisible(); // Requires the real seeded blocked task, never an empty-state pass.
+    await expect(code).toBeVisible(); // Requires the real seeded completed task, never an empty-state pass.
     targets.push(['task-id', code]);
   }
   const results = [];
   for (const [label, target] of targets) {
     await expect(target).toBeVisible();
+    await target.scrollIntoViewIfNeeded();
     for (const state of label === 'task-id' ? ['normal'] : ['normal', 'hover', 'focus']) {
       if (state === 'hover') await target.hover();
       if (state === 'focus') {

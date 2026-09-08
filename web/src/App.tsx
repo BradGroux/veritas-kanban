@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { resetFeatureSettingsWrites } from './lib/feature-settings-writes';
+import { isNativeSettingsWindow } from './lib/desktop-settings';
+import { useSettingsWindowSync } from './hooks/useSettingsWindowSync';
 import { Box } from '@mantine/core';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/toaster';
@@ -24,6 +26,12 @@ import { DesktopShellProvider, useDesktopShell } from './components/layout/Deskt
 import { DesktopLeftSidebar } from './components/layout/DesktopLeftSidebar';
 import { DesktopBottomPanel } from './components/layout/DesktopBottomPanel';
 import { RunSessionShareView } from './components/task/RunSessionSharesSection';
+
+const NativeSettingsWindow = lazy(() =>
+  import('./components/settings/NativeSettingsWindow').then((mod) => ({
+    default: mod.NativeSettingsWindow,
+  }))
+);
 
 const LAZY_VIEW_COMPONENTS = Object.fromEntries(
   NAVIGATION_VIEWS.map((definition) => {
@@ -208,6 +216,8 @@ function AppContent() {
     };
   }, [queryClient]);
 
+  useSettingsWindowSync();
+
   // Connect to WebSocket for real-time task updates
   const { isConnected, connectionState, reconnectAttempt, reconnect } = useTaskSync();
   const { status: authStatus, refreshStatus } = useAuth();
@@ -237,12 +247,18 @@ function AppContent() {
               <ViewProvider>
                 <IdentityProvider>
                   <DesktopShellProvider>
-                    <DesktopAwareAppShell
-                      authStatus={authStatus}
-                      refreshStatus={refreshStatus}
-                      showDesktopOnboarding={showDesktopOnboarding}
-                      setShowDesktopOnboarding={setShowDesktopOnboarding}
-                    />
+                    {isNativeSettingsWindow() ? (
+                      <Suspense fallback={<div>Loading Settings…</div>}>
+                        <NativeSettingsWindow />
+                      </Suspense>
+                    ) : (
+                      <DesktopAwareAppShell
+                        authStatus={authStatus}
+                        refreshStatus={refreshStatus}
+                        showDesktopOnboarding={showDesktopOnboarding}
+                        setShowDesktopOnboarding={setShowDesktopOnboarding}
+                      />
+                    )}
                   </DesktopShellProvider>
                 </IdentityProvider>
               </ViewProvider>

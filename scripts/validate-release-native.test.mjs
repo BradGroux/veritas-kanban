@@ -242,10 +242,13 @@ test('settings captures wait for rendered page content instead of the loading sk
   const documentationShot = documentationCapture.indexOf("still('settings-navigation.png')");
   assert(documentationReady >= 0 && documentationReady < documentationShot);
 
-  const selectedTab = nativeCapture.indexOf("'aria-selected',\n      'true'");
+  const selectedTab = nativeCapture.search(/'aria-selected',\s*'true'/);
   const renderedHeading = nativeCapture.indexOf(
-    "dialog.getByRole('heading', { name: tab, exact: true })"
+    "settings.getByRole('heading', { name: tab, exact: true })"
   );
-  const settingsShot = nativeCapture.indexOf('await shot();', renderedHeading);
+  const settingsShot = nativeCapture.indexOf(
+    "await shot({ windowRole: 'settings' });",
+    renderedHeading
+  );
   assert(selectedTab >= 0 && selectedTab < renderedHeading && renderedHeading < settingsShot);
 });
