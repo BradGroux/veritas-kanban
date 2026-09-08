@@ -16,7 +16,11 @@
         } catch (error) {
           value = null;
         }
-        var theme = value === 'light' ? 'light' : 'dark';
+        var theme =
+          value === 'light' ||
+          (value === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches)
+            ? 'light'
+            : 'dark';
         document.documentElement.dataset.mantineColorScheme = theme;
         if (theme === 'dark') {
           document.documentElement.classList.add('dark');

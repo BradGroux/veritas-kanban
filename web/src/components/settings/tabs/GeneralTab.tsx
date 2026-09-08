@@ -2,7 +2,7 @@ import { UiModal as Modal, OverlayFooter } from '@/components/ui/UiOverlay';
 import { UiPill, UiAction, UiIconAction } from '@/components/ui/UiVocabulary';
 import { SettingsGroup } from '@/components/settings/shared/SettingsLayout';
 import { useState } from 'react';
-import { Group, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Group, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import {
   useConfig,
   useAddRepo,
@@ -11,19 +11,7 @@ import {
   useSetDefaultAgent,
 } from '@/hooks/useConfig';
 import { useFeatureSettings, useDebouncedFeatureUpdate } from '@/hooks/useFeatureSettings';
-import {
-  Plus,
-  Trash2,
-  Check,
-  X,
-  Loader2,
-  FolderGit2,
-  Bot,
-  Star,
-  Moon,
-  Sun,
-  User,
-} from 'lucide-react';
+import { Plus, Trash2, Check, X, Loader2, FolderGit2, Bot, Star, User } from 'lucide-react';
 import type { RepoConfig, AgentConfig, ProductModeId } from '@veritas-kanban/shared';
 import { DEFAULT_FEATURE_SETTINGS } from '@veritas-kanban/shared';
 import { cn } from '@/lib/utils';
@@ -39,7 +27,7 @@ const PRODUCT_MODE_OPTIONS = PRODUCT_MODE_DEFINITIONS.map((mode) => ({
 export function GeneralTab() {
   const { data: config, isLoading } = useConfig();
   const [showAddForm, setShowAddForm] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, preference, setTheme } = useTheme();
   const { settings } = useFeatureSettings();
   const { debouncedUpdate } = useDebouncedFeatureUpdate();
   const selectedProductMode =
@@ -61,23 +49,26 @@ export function GeneralTab() {
         description="Theme preference for this browser or desktop app."
       >
         <SettingRow
-          label="Dark mode"
-          description={theme === 'dark' ? 'Dark theme active' : 'Light theme active'}
+          label="Appearance"
+          description={
+            preference === 'system'
+              ? `Following system (${theme})`
+              : `${theme === 'dark' ? 'Dark' : 'Light'} theme active`
+          }
         >
-          <div className="flex items-center justify-end gap-3">
-            {theme === 'dark' ? (
-              <Moon className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Sun className="h-4 w-4 text-muted-foreground" />
-            )}
-            <Switch
-              checked={theme === 'dark'}
-              onChange={(event) => setTheme(event.currentTarget.checked ? 'dark' : 'light')}
-              aria-label="Toggle dark mode"
-              className="flex min-h-8 items-center"
-              size="sm"
-            />
-          </div>
+          <Select
+            aria-label="Appearance"
+            value={preference}
+            data={[
+              { value: 'system', label: 'Follow System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+            allowDeselect={false}
+            onChange={(value) => {
+              if (value === 'system' || value === 'light' || value === 'dark') setTheme(value);
+            }}
+          />
         </SettingRow>
       </SettingsSection>
 
