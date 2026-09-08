@@ -52,7 +52,17 @@ vi.mock('@/hooks/useToast', () => ({
 }));
 
 vi.mock('@/components/settings/tabs/GeneralTab', () => ({
-  GeneralTab: () => <div>General settings loaded</div>,
+  GeneralTab: () => (
+    <div>
+      General settings loaded
+      <section id="general-appearance">
+        <input aria-label="Fixture theme" />
+      </section>
+      <section id="general-default-agent">
+        <button>Fixture default agent</button>
+      </section>
+    </div>
+  ),
 }));
 
 vi.mock('@/components/settings/tabs/BoardTab', () => ({
@@ -113,6 +123,7 @@ vi.mock('@/components/settings/tabs/MultiUserTab', () => ({
 
 describe('SettingsDialog Mantine shell', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/');
     mocks.saveError = null;
     mocks.hasPermission.mockReturnValue(true);
     mocks.productMode.selectedMode = 'advanced';
@@ -162,6 +173,57 @@ describe('SettingsDialog Mantine shell', () => {
     );
     expect(mocks.toast).not.toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Import complete' })
+    );
+  });
+
+  it('finds an existing appearance control and focuses it through keyboard selection', async () => {
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    const input = screen.getByRole('combobox', { name: 'Search settings' });
+    input.focus();
+    fireEvent.change(input, { target: { value: 'theme' } });
+    expect(screen.getByRole('option', { name: /Theme and appearance/ })).toBeDefined();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Fixture theme'))
+    );
+    expect(window.location.hash).toBe('#settings/general/general-appearance');
+  });
+
+  it('keeps focus in search for empty results and filters permission-restricted controls', () => {
+    mocks.hasPermission.mockImplementation((permission) => permission !== 'admin:manage');
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    const input = screen.getByRole('combobox', { name: 'Search settings' });
+    input.focus();
+    fireEvent.change(input, { target: { value: 'token' } });
+    expect(screen.queryByRole('option', { name: /API tokens/ })).toBeNull();
+    expect(screen.getByText(/No matching settings/)).toBeDefined();
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('identifies optional controls under the Board Only focus preset', () => {
+    mocks.productMode.selectedMode = 'board-only';
+    renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search settings' }), {
+      target: { value: 'default agent' },
+    });
+    expect(
+      screen.getByRole('option', { name: /Default agent.*Optional in Board Only/ })
+    ).toBeDefined();
+  });
+
+  it('opens a control from a support target after its lazy section mounts', async () => {
+    renderWithProviders(
+      <SettingsDialog
+        open
+        onOpenChange={vi.fn()}
+        defaultTab="general"
+        defaultControl="general-appearance"
+      />
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Fixture theme'))
     );
   });
 
