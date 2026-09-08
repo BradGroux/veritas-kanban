@@ -4,7 +4,12 @@ import { createHash } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileDigest } from '../native-ui/contract.mjs';
-import { maintainedAssets, verifyMediaEvidence } from './verify.mjs';
+import {
+  maintainedAssets,
+  taskModeAssets,
+  focusedBoardAssets,
+  verifyMediaEvidence,
+} from './verify.mjs';
 
 export const publicationSchema = 'documentation-media-publication/v1';
 const sha = (value) => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
@@ -24,7 +29,9 @@ function publicationPath(file, version) {
     file === 'docs/index.html' ||
     file === 'docs/demo/index.html' ||
     ['assets/demo-overview.mp4', 'docs/assets/demo-overview.mp4'].includes(file) ||
-    maintainedAssets.some((name) => file === `docs/assets/v${version}/${name}`)
+    [...maintainedAssets, ...taskModeAssets, ...focusedBoardAssets].some(
+      (name) => file === `docs/assets/v${version}/${name}`
+    )
   );
 }
 
@@ -158,7 +165,42 @@ export async function verifyPublishedMedia({
       maintainedContents,
     });
     if (errors.length) return errors;
-    for (const asset of capture.assets) {
+    const committedTaskModes = taskModeAssets.filter((name) =>
+      git(
+        root,
+        'ls-tree',
+        expected.publicationCommit,
+        '--',
+        `docs/assets/v${expected.version}/${name}`
+      ).trim()
+    );
+    if (committedTaskModes.length)
+      assert.deepEqual(
+        (capture.taskModeAssets ?? []).map((asset) => asset.name).sort(),
+        [...taskModeAssets].sort(),
+        'Published task mode media requires the complete original capture manifest'
+      );
+    for (const name of focusedBoardAssets) {
+      if (
+        git(
+          root,
+          'ls-tree',
+          expected.publicationCommit,
+          '--',
+          `docs/assets/v${expected.version}/${name}`
+        ).trim()
+      )
+        assert.equal(
+          capture.focusedBoardAssets?.[0]?.name,
+          name,
+          'Published focused board media requires original capture evidence'
+        );
+    }
+    for (const asset of [
+      ...capture.assets,
+      ...(capture.taskModeAssets ?? []),
+      ...(capture.focusedBoardAssets ?? []),
+    ]) {
       if (asset.decision === 'retire') continue;
       verifyCommittedFile(root, expected.publicationCommit, asset.path, asset.sha256);
       assert.equal(

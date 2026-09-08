@@ -1,13 +1,24 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist contains the active stable-release gate for Veritas Kanban
-6.1.7 and retains the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
+This checklist contains the active candidate gate for Veritas Kanban
+6.2.0 and retains the completed 6.1.7, 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
 Command results, platform details, workflow links, limitations, and artifact hashes belong in
 [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
 
-Documentation freshness: 2026-09-04 for the completed Veritas Kanban 6.1.7 release.
+Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
 
-## 6.1.7 Release Gate
+## 6.2.0 Candidate Gate
+
+- [x] Root, shared, server, web, CLI, MCP and desktop package versions are aligned at 6.2.0, with candidate release notes and compatibility guidance.
+- [x] Complete the appropriate local integration verification.
+- [x] Complete final delivery readback for all 25 findings: 24 implemented fixes and #1544 explicitly dispositioned as not reproducible.
+- [x] Inspect the actual packaged candidate, all matched screenshots and complete GIF/video playback; retain revision and package hashes.
+- [ ] Complete review and the repository delivery workflow using the owner-authorized existing CI capacity.
+- [x] Obtain owner approval for the 6.2.0 release and advisory publication.
+- [ ] Obtain separate approval for installed-app replacement and public writing.
+- [ ] Verify signing, notarization, distributed assets and the installed application before calling 6.2.0 stable.
+
+## Historical 6.1.7 Release Gate
 
 - [x] macOS UI tracker #1389 and child issues #1378-#1388 are complete through focused merged work, the final signed candidate, refreshed documentation media, and the separately verified installed app.
 - [x] Root, shared, server, web, CLI, MCP, desktop, changelog, reviewed release source, and public documentation identify 6.1.7 without an API or database migration.
@@ -156,53 +167,50 @@ Documentation freshness: 2026-09-04 for the completed Veritas Kanban 6.1.7 relea
 
 ## Final Release Validation Commands
 
-Apply `ci:full` to the release pull request and keep it applied through the
-final candidate synchronization. That single milestone runs the complete
-workspace suite, critical-path coverage, unsigned desktop artifacts, and
-Docker image contract. Run the following commands once from the clean 6.1.7
-release candidate at the supported Node floor and current supported Node:
+The owner authorized the existing GitHub CI capacity for this candidate without a credit card,
+capacity purchase, or spending-limit change. Release publication still requires separate approval.
+Run verification locally and retain the actual command, revision and result. Group focused
+checks by completed feature and run the assembled integration gate once; repeat only for a
+relevant change, failure or unresolved concern.
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm check:pnpm-settings
 pnpm check:security-artifacts
-pnpm check:delivery-cadence
-pnpm test:ci-scope
+pnpm check:service-filesystem-boundary
 pnpm audit --prod --audit-level=high
-pnpm audit:all
 pnpm check:gitleaks
 pnpm lint
 pnpm lint:budget
-pnpm lint:report
 pnpm qa:mantine
 pnpm typecheck
-pnpm build
-pnpm test
 pnpm test:unit
+pnpm desktop:test
 pnpm test:e2e
 pnpm smoke:cli-mcp
-pnpm desktop:test
-pnpm desktop:build
-pnpm desktop:check:electron-artifacts
 pnpm desktop:test:readiness
-pnpm desktop:dev:fresh
-pnpm desktop:smoke:mac:local
-pnpm desktop:package:mac:unsigned
 pnpm test:release-format
-pnpm validate:release -- --version 6.1.7 --skip-build-output --source-only
-pnpm validate:release -- --version 6.1.7 --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --docker-build
+pnpm test:release-native
+pnpm desktop:package:mac:unsigned
+node scripts/native-ui/run.mjs /absolute/path/candidate.app /absolute/path/new-native-evidence
+node --import tsx scripts/native-ui/board-performance.mjs /absolute/path/candidate.app /absolute/path/new-board-evidence
+pnpm docs:capture-media /absolute/path/candidate.app /absolute/path/new-media-evidence
+pnpm validate:release -- --version 6.2.0 --skip-build-output --source-only
 ```
 
-Source preflight is not release acceptance. Full validation requires the exact clean candidate's fresh native matrix and retained screenshots; signing, installed-app, documentation-media, and publication evidence remain separate gates. See [desktop release verification](DESKTOP-RELEASE.md#native-gate-before-macos-upload).
+The packaging command includes the workspace build. Source preflight is not release
+acceptance. After reviewing and committing the exact captured bytes, run the existing
+media-publication verifier, then full release validation with the native report, exact app
+and media publication manifest. See [desktop release verification](DESKTOP-RELEASE.md#native-gate-before-macos-upload).
 
-Mount and inspect the unsigned DMG and ZIP, exercise the visible native
-single-instance/reopen/clean-close/quit lifecycle with an isolated profile, and
-run the production image as its non-root user against an isolated volume.
-Record health, auth, SQLite, static-web, canonical-path, backup, integrity,
-image-size, and clean-shutdown evidence. The same candidate must pass these
-gates at Node 22.22.1 and the current supported Node runtime.
+Mount and inspect the unsigned DMG and ZIP, exercise the native single-instance, reopen,
+close and quit lifecycle using an isolated profile, and record the supported-runtime checks
+actually performed. Signing, notarization, Docker distribution, installed-app replacement
+and publication remain distinct evidence boundaries; do not infer them from local tests.
 
 ## Distribution And Post-Publication
+
+Version 6.2.0 is not published. The following is retained historical evidence.
 
 The 6.1.7 release is published and verified. Annotated tag `v6.1.7` peels to
 `6befd39cbc1264b18fa272d25bc64642f2b60383`; the exact live release body,

@@ -2,22 +2,22 @@
 /* global window, document, innerWidth, innerHeight, getComputedStyle, requestAnimationFrame */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { chromium, expect } from '@playwright/test';
 import { nativeSettingsPage, closeNativeSettings } from '../native-ui/settings-window.mjs';
 import { createNativeSession } from '../native-ui/session.mjs';
 import { contentSizes, fileDigest, packageDigest } from '../native-ui/contract.mjs';
-import { maintainedAssets, mediaSchema, mediaEvidenceFailures } from './verify.mjs';
+import { maintainedAssets, taskModeAssets, mediaSchema, mediaEvidenceFailures } from './verify.mjs';
 import { encodeInteraction, recordInteraction } from './record.mjs';
 import { finalizeCapture } from './finalize.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
-const [appArgument, outputArgument, mode = 'capture'] = process.argv.slice(2);
+const [appArgument, outputArgument, mode = 'capture', focusedBoardArgument] = process.argv.slice(2);
 assert(
   appArgument?.endsWith('.app') && outputArgument && mode === 'capture',
-  'Usage: node scripts/docs-media/run.mjs <candidate.app> <new-external-directory> [capture]'
+  'Usage: node scripts/docs-media/run.mjs <candidate.app> <new-external-directory> [capture] [board-report.json]'
 );
 assert.equal(process.platform, 'darwin', 'Desktop documentation captures require macOS');
 const output = path.join(
@@ -50,6 +50,26 @@ const report = {
   startedAt: new Date().toISOString(),
   macOS: os.release(),
   assets: [],
+  fixture: {
+    source: 'scripts/docs-media/run.mjs',
+    kind: 'synthetic-public-safe',
+    taskTitle: 'Prepare the release candidate',
+    status: 'todo',
+  },
+  taskModeComparison: {
+    baseline: 'docs/assets/v6.1.7/task-mode-audit/manifest.json',
+    matched: [
+      'native window 1180x900',
+      'dark theme',
+      'Overview/Plan/Run/Results/History',
+      'drawer then expanded',
+    ],
+    unmatched: [
+      'Original showcase dataset is unavailable; uses the documentation fixture.',
+      'Native content capture excludes the baseline window frame and shadow.',
+      'Host OS differs from the baseline macOS 15.7.9.',
+    ],
+  },
 };
 const persist = () =>
   writeFile(path.join(output, 'evidence.json'), JSON.stringify(report, null, 2) + '\n');
@@ -101,7 +121,7 @@ async function settle() {
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   );
 }
-async function capture() {
+async function capture(taskMode = false) {
   if (mobile) {
     assert.deepEqual(await page.evaluate(() => [innerWidth, innerHeight]), [390, 844]);
     assert.equal(await page.evaluate(() => typeof window.veritasDesktop), 'undefined');
@@ -112,6 +132,9 @@ async function capture() {
       scaleFactor: 1,
     };
   }
+  // DOM readiness and animation frames can precede Electron's last composited frame.
+  // Synchronize the renderer first; the published bytes still come from capturePage.
+  await page.screenshot({ fullPage: false });
   const native = await app.evaluate(async ({ BrowserWindow, screen }, url) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
     return {
@@ -121,19 +144,28 @@ async function capture() {
       png: (await win.capturePage()).toPNG().toString('base64'),
     };
   }, page.url());
-  assert.equal(native.contentBounds.width, contentSizes.normal.width);
-  assert.equal(native.contentBounds.height, contentSizes.normal.height);
+  if (taskMode) {
+    assert.equal(native.bounds.width, 1180);
+    assert.equal(native.bounds.height, 900);
+    assert.equal(native.contentBounds.width, 1180);
+    assert(native.contentBounds.height >= 760 && native.contentBounds.height <= 900);
+  } else {
+    assert.equal(native.contentBounds.width, contentSizes.normal.width);
+    assert.equal(native.contentBounds.height, contentSizes.normal.height);
+  }
   return {
     bytes: Buffer.from(native.png, 'base64'),
-    width: contentSizes.normal.width,
-    height: contentSizes.normal.height,
+    width: native.contentBounds.width,
+    height: native.contentBounds.height,
     scaleFactor: native.scaleFactor,
     nativeWindow: { bounds: native.bounds, contentBounds: native.contentBounds },
   };
 }
 async function recordAsset(name, captured, method, recording) {
   const file = path.join(output, name);
-  report.assets.push({
+  const taskMode = taskModeAssets.includes(name);
+  const destination = taskMode ? (report.taskModeAssets ??= []) : report.assets;
+  destination.push({
     name,
     decision: 'replace',
     reason: 'Recaptured the converged interface from the candidate',
@@ -149,6 +181,7 @@ async function recordAsset(name, captured, method, recording) {
       height: captured.height,
       scaleFactor: captured.scaleFactor,
       nativeWindow: captured.nativeWindow,
+      ...(taskMode ? { framing: 'native-content-without-window-frame' } : {}),
       method,
       capturedAt: new Date().toISOString(),
     },
@@ -159,7 +192,7 @@ async function recordAsset(name, captured, method, recording) {
 }
 async function still(name) {
   await settle();
-  const captured = await capture();
+  const captured = await capture(taskModeAssets.includes(name));
   await writeFile(path.join(output, name), captured.bytes, { flag: 'wx' });
   await recordAsset(name, captured, 'window-capture');
 }
@@ -350,8 +383,58 @@ try {
   await still('mobile-task-workspace.png');
   await button('Close task workspace').click();
   await button('Mobile settings').click();
-  await expect(page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ })).toBeVisible();
+  const mobileSettings = page.getByRole('dialog', { name: /^Settings(?: Board Only)?$/ });
+  await expect(mobileSettings).toBeVisible();
+  await expect(mobileSettings.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await expect(mobileSettings.getByRole('combobox', { name: 'Appearance', exact: true })).toBeVisible();
   await still('mobile-settings.png');
+  page = boardPage;
+  mobile = false;
+  await openTask();
+  // Match the retained task-mode audit's native window dimensions. Native
+  // capturePage excludes its frame/shadow; that framing difference is recorded.
+  await app.evaluate(({ BrowserWindow }, url) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
+    win.setSize(1180, 900);
+  }, page.url());
+  for (const presentation of ['drawer', 'expanded']) {
+    if (presentation === 'expanded') await button('Expand task workspace').click();
+    for (const name of ['Overview', 'Plan', 'Run', 'Results', 'History']) {
+      await workspaceMode(name);
+      await still(`task-${presentation}-${name.toLowerCase()}.png`);
+    }
+  }
+  await app.evaluate(({ BrowserWindow }, url) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
+    win.setContentSize(1700, 760);
+  }, page.url());
+  await button('Close task workspace').click();
+  if (focusedBoardArgument) {
+    const boardReportPath = await realpath(focusedBoardArgument);
+    const board = JSON.parse(await readFile(boardReportPath, 'utf8'));
+    assert.equal(board.status, 'passed', 'Focused board capture requires a passing feature run');
+    for (const key of ['commit', 'version', 'packageDigest'])
+      assert.equal(board[key], report[key], `Focused board capture has a different ${key}`);
+    const entry = board.entries?.find((item) => item.count === 5000);
+    assert.deepEqual(entry?.failures, [], 'Focused board capture missed a performance budget');
+    assert.equal(entry?.screenshot?.name, 'board-5000.png');
+    const source = path.join(path.dirname(boardReportPath), entry.screenshot.name);
+    assert.equal(await realpath(source), source, 'Focused capture traverses a symlink');
+    assert.equal(
+      await fileDigest(source),
+      entry.screenshot.sha256,
+      'Focused capture bytes changed'
+    );
+    await copyFile(source, path.join(output, entry.screenshot.name));
+    report.focusedBoardAssets = [
+      {
+        ...entry.screenshot,
+        decision: 'replace',
+        reason: 'Focused comparison of the matched 5000-task board fixture.',
+        path: `docs/assets/v${version}/${entry.screenshot.name}`,
+      },
+    ];
+  }
   report.assets.sort((a, b) => maintainedAssets.indexOf(a.name) - maintainedAssets.indexOf(b.name));
   report.completedAt = new Date().toISOString();
   report.status = 'captured';

@@ -1,8 +1,14 @@
-# Veritas Kanban 6.1.6 Release Notes
+# Veritas Kanban 6.2.0 Candidate Release Notes
+
+The 6.2.0 candidate improves Settings persistence, native macOS interactions, keyboard navigation and large-board behavior. Read the [6.2.0 release source](releases/v6.2.0.md) for current changes and compatibility notes. Verification and publication remain separate stages in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md).
+
+The latest published stable release remains 6.1.7. Veritas Kanban 6.0.0 remains quarantined.
+
+## Historical 6.1.6 release
 
 Veritas Kanban 6.1.6 is a focused desktop reliability and interface consistency release. It corrects chat and drag layout overflow, makes consecutive board moves reliable, polishes Settings and Command+K, removes the redundant desktop wordmark, unifies action and selected-navigation styling, refreshes maintained media, and updates vulnerable transitive dependencies.
 
-> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.6 is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
+> Veritas Kanban 6.0.0 remains a quarantined prerelease. Version 6.1.6 was a supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
 
 ## 6.1.6 Desktop Reliability Outcomes
 

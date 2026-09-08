@@ -6,6 +6,7 @@ import path from 'node:path';
 import { mkdir, writeFile, readFile, realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { verifyLargeBoardJourney } from './large-board-journey.mjs';
 const root = path.resolve(import.meta.dirname, '../..');
 const { createNativeSession } = await import(
   pathToFileURL(`${root}/scripts/native-ui/session.mjs`)
@@ -16,7 +17,9 @@ const { SqliteDatabase } = await import(
 const { SqliteTaskRepository } = await import(
   pathToFileURL(`${root}/server/src/storage/sqlite/task-repository.ts`)
 );
-const { packageDigest } = await import(pathToFileURL(`${root}/scripts/native-ui/contract.mjs`));
+const { packageDigest, fileDigest } = await import(
+  pathToFileURL(`${root}/scripts/native-ui/contract.mjs`)
+);
 const require = createRequire(`${root}/package.json`);
 const { expect } = require('@playwright/test');
 assert(
@@ -174,6 +177,24 @@ try {
       })
     );
     await page.screenshot({ path: `${output}/board-${count}.png` });
+    entry.screenshot = {
+      name: `board-${count}.png`,
+      sha256: await fileDigest(`${output}/board-${count}.png`),
+      capture: {
+        commit,
+        version,
+        packageDigest: report.packageDigest,
+        boundary: 'packaged-macos',
+        packaged: true,
+        method: 'window-capture',
+        capturedAt: new Date().toISOString(),
+        ...(await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+          scaleFactor: window.devicePixelRatio,
+        }))),
+      },
+    };
     entry.budgets = {
       loadRenderMs: count === 100 ? 1000 : count === 1000 ? 2000 : 5000,
       inputP95Ms: 100,
@@ -190,6 +211,10 @@ try {
     if (responses.some((response) => !response.query.includes('view=board')))
       entry.failures.push('Initial board requested full task records');
     await persist();
+    if (count === 5000) {
+      report.journey = await verifyLargeBoardJourney(page, count);
+      await persist();
+    }
   }
   report.status = report.entries.some((entry) => entry.failures.length) ? 'failed' : 'passed';
   if (report.status === 'failed') process.exitCode = 1;

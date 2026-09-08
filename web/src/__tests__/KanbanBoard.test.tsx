@@ -46,7 +46,9 @@ function createFeatureSettings(
 }
 
 vi.mock('@/hooks/useTasks', () => ({
-  useTasks: () => mockUseTasks(),
+  useBoardTasks: () => mockUseTasks(),
+  useBoardSearch: () => ({ data: [], isFetching: false, error: null, refetch: vi.fn() }),
+  useTask: (id: string) => ({ data: mockUseTasks().data?.find((task: Task) => task.id === id) }),
   useTasksByStatus: (tasks: Task[], columns?: Array<{ id: string }>) => {
     const result: Record<string, Task[]> = Object.fromEntries(
       (columns ?? [{ id: 'todo' }, { id: 'in-progress' }, { id: 'blocked' }, { id: 'done' }]).map(

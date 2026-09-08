@@ -73,21 +73,18 @@ export const requiredEntries = modes.flatMap((mode) =>
 );
 export function requiresOverlay(id) {
   const state = id.split('/')[1];
-  return (
-    state?.startsWith('settings-') ||
-    [
-      'task-chat',
-      'task-drawer',
-      'task-expanded',
-      'create-task',
-      'create-template',
-      'edit-template',
-      'search',
-      'command-palette',
-      'preview',
-      'confirmation',
-    ].includes(state)
-  );
+  return [
+    'task-chat',
+    'task-drawer',
+    'task-expanded',
+    'create-task',
+    'create-template',
+    'edit-template',
+    'search',
+    'command-palette',
+    'preview',
+    'confirmation',
+  ].includes(state);
 }
 
 // Expected production parts are keyed by the exercised surface, not whatever CSS
@@ -96,7 +93,6 @@ export function requiredOverlayParts(id) {
   const state = id.split('/')[1];
   if (['task-chat', 'task-drawer', 'task-expanded'].includes(state))
     return ['task-header', 'task-body'];
-  if (state?.startsWith('settings-')) return ['header', 'body', 'scroll'];
   if (state === 'search') return ['header', 'body'];
   if (requiresOverlay(id) || ['clipped-modal', 'overlay-padding'].includes(state))
     return ['header', 'body', 'scroll', 'footer'];
@@ -325,6 +321,15 @@ export function evidenceFailures(report, expected, now = Date.now()) {
       !report.identity?.osVersion
     )
       errors.push(`${id}: missing native environment`);
+    if (
+      id.split('/')[1]?.startsWith('settings-') &&
+      (entry.windowRole !== 'settings' ||
+        native?.role !== 'settings' ||
+        native?.visible !== true ||
+        native?.modal !== false ||
+        native?.settingsWindowCount !== 1)
+    )
+      errors.push(`${id}: missing modeless native Settings window`);
     if (requiresOverlay(id) && !entry.geometry?.overlays?.length)
       errors.push(`${id}: missing required overlay`);
     for (const overlay of entry.geometry?.overlays ?? []) {

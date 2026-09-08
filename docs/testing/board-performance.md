@@ -51,7 +51,7 @@ Candidate acceptance budgets, chosen before candidate measurements:
 Run from the repository root with a clean build-bound candidate and a new output directory:
 
 ```bash
-node --import tsx scripts/native-ui/board-performance.mjs /absolute/path/candidate.app /absolute/path/new-board-evidence
+pnpm --dir server exec node --import tsx ../scripts/native-ui/board-performance.mjs /absolute/path/candidate.app /absolute/path/new-board-evidence
 ```
 
 The runner uses only an isolated synthetic profile, stops its packaged server before seeding,

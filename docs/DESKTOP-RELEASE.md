@@ -1,5 +1,11 @@
 # Veritas Kanban Desktop Release
 
+> For the 6.2.0 candidate, retain local verification and exact package/media provenance.
+> The owner authorized existing GitHub CI capacity without purchases or spending changes.
+> Release and advisory publication are approved. Signing and publication still require verification.
+> Installed-app replacement and public writing remain separate owner decisions.
+> Follow the [current candidate gate](V6-GA-CHECKLIST.md#final-release-validation-commands).
+
 This guide covers desktop packaging paths for macOS GA artifacts and
 Linux/Windows preview artifact scaffolding: unsigned PR artifacts, signed
 release artifacts, update metadata, and smoke testing.

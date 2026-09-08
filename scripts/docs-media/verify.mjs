@@ -20,6 +20,13 @@ export const maintainedAssets = [
   'workbench-panel.png',
 ];
 
+export const taskModeAssets = ['drawer', 'expanded'].flatMap((presentation) =>
+  ['overview', 'plan', 'run', 'results', 'history'].map(
+    (mode) => `task-${presentation}-${mode}.png`
+  )
+);
+export const focusedBoardAssets = ['board-5000.png'];
+
 const digest = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const text = (value) => typeof value === 'string' && value.trim().length > 0;
 
@@ -75,14 +82,38 @@ export function mediaEvidenceFailures(report, expected, now = Date.now()) {
     new Set(assets.map((asset) => asset?.name)).size !== maintainedAssets.length
   )
     errors.push('missing or duplicate maintained media decisions');
-  for (const name of maintainedAssets) {
-    const asset = assets.find((item) => item?.name === name);
+  const supplemental = report.taskModeAssets ?? [];
+  const focused = report.focusedBoardAssets ?? [];
+  if (!Array.isArray(focused)) return [...errors, 'invalid focused board capture list'];
+  if (
+    report.focusedBoardAssets !== undefined &&
+    (focused.length !== 1 || focused[0]?.name !== focusedBoardAssets[0])
+  )
+    errors.push('missing or duplicate focused board capture');
+  if (!Array.isArray(supplemental)) return [...errors, 'invalid task mode capture list'];
+  if (
+    report.taskModeAssets !== undefined &&
+    (supplemental.length !== taskModeAssets.length ||
+      new Set(supplemental.map((asset) => asset?.name)).size !== taskModeAssets.length)
+  )
+    errors.push('missing or duplicate task mode captures');
+  const expectedNames = [
+    ...maintainedAssets,
+    ...(report.taskModeAssets === undefined ? [] : taskModeAssets),
+    ...(report.focusedBoardAssets === undefined ? [] : focusedBoardAssets),
+  ];
+  for (const name of expectedNames) {
+    const asset = [...assets, ...supplemental, ...focused].find((item) => item?.name === name);
     if (!asset || !['keep', 'replace', 'retire'].includes(asset.decision) || !text(asset.reason)) {
       errors.push(`${name}: missing explicit media decision and reason`);
       continue;
     }
     if (asset.decision === 'retire') {
-      if (name.endsWith('.gif'))
+      if (
+        name.endsWith('.gif') ||
+        taskModeAssets.includes(name) ||
+        focusedBoardAssets.includes(name)
+      )
         errors.push(`${name}: named interaction GIF must remain maintained`);
       if (asset.path !== undefined || asset.sha256 !== undefined || asset.capture !== undefined)
         errors.push(`${name}: retired media must not claim a current capture`);
@@ -100,9 +131,25 @@ export function mediaEvidenceFailures(report, expected, now = Date.now()) {
     if (capture?.boundary !== boundary) errors.push(`${name}: wrong capture boundary`);
     if (boundary === 'packaged-macos' && capture?.packaged !== true)
       errors.push(`${name}: desktop capture did not use the packaged application`);
-    const viewport =
-      boundary === 'mobile-browser' ? { width: 390, height: 844 } : contentSizes.normal;
-    if (capture?.width !== viewport.width || capture?.height !== viewport.height)
+    const viewport = focusedBoardAssets.includes(name)
+      ? { width: 1360, height: 900 }
+      : boundary === 'mobile-browser'
+        ? { width: 390, height: 844 }
+        : contentSizes.normal;
+    const taskMode = taskModeAssets.includes(name);
+    if (
+      taskMode &&
+      (capture?.nativeWindow?.bounds?.width !== 1180 ||
+        capture?.nativeWindow?.bounds?.height !== 900 ||
+        capture?.width !== 1180 ||
+        capture?.height < 760 ||
+        capture?.height > 900 ||
+        capture?.nativeWindow?.contentBounds?.width !== capture?.width ||
+        capture?.nativeWindow?.contentBounds?.height !== capture?.height ||
+        capture?.framing !== 'native-content-without-window-frame')
+    )
+      errors.push(`${name}: missing matched task window geometry or explicit framing`);
+    if (!taskMode && (capture?.width !== viewport.width || capture?.height !== viewport.height))
       errors.push(
         `${name}: wrong supported ${boundary === 'mobile-browser' ? 'mobile' : 'packaged macOS'} viewport`
       );
@@ -172,7 +219,11 @@ export async function verifyMediaEvidence({ evidencePath, root, expected, mainta
   } catch (error) {
     return [`missing candidate media directory: ${error.message}`];
   }
-  for (const asset of report.assets) {
+  for (const asset of [
+    ...report.assets,
+    ...(report.taskModeAssets ?? []),
+    ...(report.focusedBoardAssets ?? []),
+  ]) {
     if (asset.decision === 'retire') continue;
     try {
       const intendedFile = path.join(root, asset.path);
