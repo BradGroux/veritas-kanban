@@ -12,7 +12,7 @@ Documentation freshness: 2026-09-07. Local native and media acceptance passed; d
 
 ## 6.2.0 candidate
 
-The candidate is prepared locally from the audit backlog. No 6.2.0 release, installation replacement, distribution update or media publication has occurred. The implementation branch is not a public delivery artifact.
+The candidate is prepared from the audit backlog delivered through individually reviewed public pull requests. No 6.2.0 release, installation replacement, or distribution update has occurred. The evidence below records the retained local package; final integrated candidate provenance will replace it before this release packet is approved.
 
 - Package versions: root, shared, server, web, CLI, MCP and desktop identify 6.2.0.
 - Focused local checks cover the affected storage, Settings, keyboard, board, native bridge and recovery behavior.
@@ -22,8 +22,8 @@ The candidate is prepared locally from the audit backlog. No 6.2.0 release, inst
 - Packaged 100/1,000/5,000-task fixtures passed the recorded performance budgets. The 5,000-task journey also passed offscreen keyboard navigation, full-detail retrieval, status move, complete-description search, realtime updates, pointer dragging and reload persistence.
 - All 14 maintained media assets, ten task-mode PNGs and the focused large-board image were captured from this build, inspected, and retained with original hashes. Both GIFs and the demo MP4 completed playback inspection. [Capture provenance](assets/v6.2.0/README.md) and the [comparison gallery](releases/v6.2.0-comparison.md) disclose baseline fixture and environment differences.
 - Earlier Node 26.8.1 server runs had intermittent failures. Their cause remains unproven; passing supported-runtime checks do not establish remediation of #1544.
-- The original external-tracker approval failure has not recurred in the instrumented full server run. Its original worker/order information was not retained; #1544 remains open pending a reproducible failure or explicit disposition.
-- GitHub CI is prohibited. Publication is blocked while applicable repository triggers remain enabled. No controls have been changed.
+- The original external-tracker approval failure has not recurred in the instrumented full server run. Its original worker/order information was not retained. #1544 was explicitly dispositioned as not reproducible, with the evidence and limits recorded in the issue; no historical fix is claimed.
+- The owner explicitly authorized existing GitHub CI capacity for delivery. No credit card, capacity purchase, spending-limit change, or repository-control change was made. Local verification remains the basis of the application acceptance evidence.
 - Signing/notarization, installed-app replacement, release/distribution changes and public writing require their separate acceptance and authorization.
 
 ## 6.1.7 macOS UI and interaction release
