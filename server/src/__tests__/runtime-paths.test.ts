@@ -83,6 +83,52 @@ describe('runtime storage contract', () => {
     }
   });
 
+  it.each(['veritas.db', 'veritas.db-wal'])(
+    'does not mix legacy SQLite files with retained %s',
+    async (retainedFile) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-sqlite-migration-'));
+      const legacy = path.join(root, 'legacy');
+      const current = path.join(root, 'current');
+      try {
+        await fs.mkdir(legacy);
+        await fs.mkdir(current);
+        for (const suffix of ['', '-wal', '-shm', '-journal']) {
+          await fs.writeFile(path.join(legacy, `veritas.db${suffix}`), `legacy${suffix}`);
+        }
+        await fs.writeFile(path.join(current, retainedFile), 'retained generation');
+        await fs.writeFile(path.join(legacy, 'config.json'), 'legacy configuration');
+        await expect(migrateLegacyRuntimeState([legacy], current)).resolves.toBe(1);
+        expect((await fs.readdir(current)).sort()).toEqual(['config.json', retainedFile].sort());
+        await expect(fs.readFile(path.join(current, retainedFile), 'utf8')).resolves.toBe(
+          'retained generation'
+        );
+        expect(await fs.readdir(legacy)).toHaveLength(5);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it('copies a legacy SQLite family only into an empty destination family', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'veritas-sqlite-migration-'));
+    const legacy = path.join(root, 'legacy');
+    const current = path.join(root, 'current');
+    try {
+      await fs.mkdir(legacy);
+      for (const suffix of ['', '-wal', '-shm']) {
+        await fs.writeFile(path.join(legacy, `veritas.db${suffix}`), `legacy${suffix}`);
+      }
+      await expect(migrateLegacyRuntimeState([legacy], current)).resolves.toBe(3);
+      for (const suffix of ['', '-wal', '-shm']) {
+        await expect(fs.readFile(path.join(current, `veritas.db${suffix}`), 'utf8')).resolves.toBe(
+          `legacy${suffix}`
+        );
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps Docker persistence on the single DATA_DIR volume', async () => {
     const projectRoot = getProjectRoot();
     const dockerfile = await fs.readFile(path.join(projectRoot, 'Dockerfile'), 'utf-8');

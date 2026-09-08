@@ -29,6 +29,26 @@ async function copyMissingTree(
 
   await fs.mkdir(destination, { recursive: true });
   let copied = 0;
+  // SQLite files belong to one database generation. Copying a missing legacy
+  // WAL beside an existing canonical database can corrupt that database.
+  // Snapshot destination presence before copying anything from this source.
+  const sqliteFamily = (name: string) =>
+    /^(.*\.(?:db|sqlite|sqlite3))(?:-(?:wal|shm|journal))?$/i.exec(name)?.[1];
+  const retainedFamilies = new Set<string>();
+  const families = entries
+    .map((entry) => sqliteFamily(entry.name))
+    .filter((family): family is string => Boolean(family));
+  for (const family of new Set(families)) {
+    for (const suffix of ['', '-wal', '-shm', '-journal']) {
+      try {
+        await fs.lstat(path.join(destination, `${family}${suffix}`));
+        retainedFamilies.add(family);
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+  }
 
   for (const entry of entries) {
     const from = path.join(source, entry.name);
@@ -46,6 +66,8 @@ async function copyMissingTree(
 
     // Runtime state is files and directories. Never follow legacy symlinks.
     if (!entry.isFile()) continue;
+    const family = sqliteFamily(entry.name);
+    if (family && retainedFamilies.has(family)) continue;
 
     try {
       await fs.copyFile(from, to, fs.constants.COPYFILE_EXCL);

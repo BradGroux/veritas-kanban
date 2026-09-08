@@ -4,7 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { evaluateTaskReadiness } from '@veritas-kanban/shared';
-import type { Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
+import type { BoardTask, Task, TaskPriority, BlockedCategory } from '@veritas-kanban/shared';
 import {
   Check,
   Ban,
@@ -60,7 +60,7 @@ const blockedCategoryInfo: Record<
 };
 
 interface TaskCardProps {
-  task: Task;
+  task: Task & { boardSummary?: BoardTask['boardSummary'] };
   dragEnabled?: boolean;
   isDragging?: boolean;
   isDragActive?: boolean;
@@ -97,6 +97,7 @@ function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolea
   const pt = prev.task;
   const nt = next.task;
   if (pt !== nt) {
+    if (pt.boardSummary !== nt.boardSummary) return false;
     if (pt.id !== nt.id) return false;
     if (pt.title !== nt.title) return false;
     if (pt.description !== nt.description) return false;
@@ -206,6 +207,11 @@ export const TaskCard = memo(function TaskCard({
   showStatusControl = false,
   statusOptions,
 }: TaskCardProps) {
+  const summary = task.boardSummary;
+  const attempt = summary?.attempt ?? task.attempt;
+  const checkpoint = summary?.checkpoint ?? task.checkpoint;
+  const attachmentCount = summary?.attachmentCount ?? task.attachments?.length ?? 0;
+  const deliverableCount = summary?.deliverableCount ?? task.deliverables?.length ?? 0;
   const { taskTypes, projects, sprints } = useTaskConfig();
   const {
     attributes,
@@ -295,12 +301,12 @@ export const TaskCard = memo(function TaskCard({
     toggleSelect(task.id);
   };
 
-  const isAgentRunning = task.attempt?.status === 'running';
-  const isAttemptFailed = task.attempt?.status === 'failed';
+  const isAgentRunning = attempt?.status === 'running';
+  const isAttemptFailed = attempt?.status === 'failed';
   const isBlockedState = isBlocked || task.status === 'blocked';
   const isAwaitingReview =
     task.status.toLowerCase().includes('review') ||
-    ((task.reviewComments?.length ?? 0) > 0 && !task.review?.decision);
+    (summary?.awaitingReview ?? ((task.reviewComments?.length ?? 0) > 0 && !task.review?.decision));
 
   // Memoize type info
   const { typeLabel, TypeIconComponent, typeColorToken } = useMemo(() => {
@@ -325,30 +331,35 @@ export const TaskCard = memo(function TaskCard({
   // Memoize subtask progress
   const { subtaskTotal, subtaskCompleted, allSubtasksDone } = useMemo(() => {
     const subtasks = task.subtasks || [];
-    const total = subtasks.length;
-    const completed = subtasks.filter((s) => s.completed).length;
+    const total = summary?.subtaskTotal ?? subtasks.length;
+    const completed = summary?.subtaskCompleted ?? subtasks.filter((s) => s.completed).length;
     return {
       subtaskTotal: total,
       subtaskCompleted: completed,
       allSubtasksDone: total > 0 && completed === total,
     };
-  }, [task.subtasks]);
+  }, [task.subtasks, summary]);
 
   // Memoize verification progress
   const { verificationTotal, verificationChecked, allVerificationDone } = useMemo(() => {
     const steps = task.verificationSteps || [];
-    const total = steps.length;
-    const checked = steps.filter((s) => s.checked).length;
+    const total = summary?.verificationTotal ?? steps.length;
+    const checked = summary?.verificationChecked ?? steps.filter((s) => s.checked).length;
     return {
       verificationTotal: total,
       verificationChecked: checked,
       allVerificationDone: total > 0 && checked === total,
     };
-  }, [task.verificationSteps]);
+  }, [task.verificationSteps, summary]);
 
   const readinessSummary = useMemo(
-    () => (task.type === 'code' ? evaluateTaskReadiness(task, { isCodeTask: true }) : null),
-    [task]
+    () =>
+      summary
+        ? summary.readiness
+        : task.type === 'code'
+          ? evaluateTaskReadiness(task, { isCodeTask: true })
+          : null,
+    [task, summary]
   );
   const readinessColor = readinessSummary?.ready
     ? 'vk-signal-chip--verified'
@@ -450,19 +461,18 @@ export const TaskCard = memo(function TaskCard({
                 <div>
                   <p className="font-medium">Agent Active</p>
                   <p className="text-sm">
-                    {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is working on
-                    this task
+                    {agentNames[attempt?.agent || ''] || attempt?.agent} is working on this task
                   </p>
                 </div>
               }
             >
               <span className="vk-signal-chip vk-signal-chip--running">
                 <span className="sr-only">
-                  Agent {agentNames[task.attempt?.agent || ''] || task.attempt?.agent} is actively
-                  running on this task
+                  Agent {agentNames[attempt?.agent || ''] || attempt?.agent} is actively running on
+                  this task
                 </span>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                {agentNames[task.attempt?.agent || ''] || 'Agent'} running
+                {agentNames[attempt?.agent || ''] || 'Agent'} running
               </span>
             </Tooltip>
           )}
@@ -531,16 +541,16 @@ export const TaskCard = memo(function TaskCard({
             );
           })()}
           {/* Checkpoint indicator */}
-          {task.checkpoint && (
+          {checkpoint && (
             <Tooltip
               label={
                 <div className="space-y-1">
                   <p className="font-medium">Checkpoint Saved</p>
-                  <p className="text-sm">Step {task.checkpoint.step}</p>
-                  {task.checkpoint.resumeCount && task.checkpoint.resumeCount > 0 && (
+                  <p className="text-sm">Step {checkpoint.step}</p>
+                  {checkpoint.resumeCount && checkpoint.resumeCount > 0 && (
                     <p className="text-sm flex items-center gap-1">
                       <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                      Resumed {task.checkpoint.resumeCount} time(s)
+                      Resumed {checkpoint.resumeCount} time(s)
                     </p>
                   )}
                 </div>
@@ -549,7 +559,7 @@ export const TaskCard = memo(function TaskCard({
               <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 flex items-center gap-1">
                 <Save className="h-3 w-3" aria-hidden="true" />
                 <span className="sr-only">Checkpoint saved at </span>
-                Step {task.checkpoint.step}
+                Step {checkpoint.step}
               </span>
             </Tooltip>
           )}
@@ -626,17 +636,17 @@ export const TaskCard = memo(function TaskCard({
             </Tooltip>
           )}
           {/* Attachment indicator */}
-          {task.attachments && task.attachments.length > 0 && (
+          {attachmentCount > 0 && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex items-center gap-1">
               <Paperclip className="h-3 w-3" />
-              {task.attachments.length}
+              {attachmentCount}
             </span>
           )}
           {/* Deliverable indicator */}
-          {task.deliverables && task.deliverables.length > 0 && (
+          {deliverableCount > 0 && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex items-center gap-1">
               <FileText className="h-3 w-3" />
-              {task.deliverables.length}
+              {deliverableCount}
             </span>
           )}
           {/* Plan indicator removed — planning was agent-internal */}

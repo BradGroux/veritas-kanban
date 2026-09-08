@@ -41,6 +41,7 @@ import {
 } from '../schemas/telemetry-schemas.js';
 import {
   MAX_TASK_REORDER_ITEMS,
+  MoveTaskBodySchema,
   ReorderTasksBodySchema,
   ApplyTemplateBodySchema,
 } from '../schemas/task-mutation-schemas.js';
@@ -683,6 +684,20 @@ describe('Telemetry Schemas', () => {
 // ============ New Mutation Schemas ============
 
 describe('Task Mutation Schemas', () => {
+  it('allows a single move into a large column while rejecting invalid positions', () => {
+    const move = {
+      operationId: '00000000-0000-4000-8000-000000000001',
+      sourceStatus: 'todo',
+      sourcePosition: 0,
+      destinationStatus: 'blocked',
+      destinationIndex: 1250,
+    };
+    expect(MoveTaskBodySchema.parse(move).destinationIndex).toBe(1250);
+    for (const destinationIndex of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => MoveTaskBodySchema.parse({ ...move, destinationIndex })).toThrow();
+    }
+  });
+
   describe('ReorderTasksBodySchema', () => {
     it('should accept valid orderedIds', () => {
       const result = ReorderTasksBodySchema.parse({ orderedIds: ['task_1', 'task_2'] });

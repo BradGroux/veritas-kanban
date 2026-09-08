@@ -1,6 +1,8 @@
 import type { MantineColorScheme } from '@mantine/core';
 
 export type VeritasColorScheme = 'light' | 'dark';
+// Mantine persists the System preference as `auto` under the existing key.
+export type VeritasThemePreference = VeritasColorScheme | 'system';
 
 export const VERITAS_COLOR_SCHEME_STORAGE_KEY = 'veritas-kanban-theme';
 

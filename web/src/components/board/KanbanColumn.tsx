@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
-import { useDroppable } from '@dnd-kit/core';
+import { useVirtualColumn } from '@/hooks/useVirtualColumn';
+import { memo, useMemo } from 'react';
+import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { BadgeCheck, Ban, CircleDashed, CircleDot, OctagonAlert, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TaskCard } from '@/components/task/TaskCard';
-import { isTaskBlocked, getTaskBlockers } from '@/hooks/useTasks';
+import { getTaskBlockers, type TaskDependencyIndex } from '@/hooks/useTasks';
 import { useBulkTaskMetrics } from '@/hooks/useBulkTaskMetrics';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useFeatureSettings } from '@/hooks/useFeatureSettings';
@@ -16,6 +17,7 @@ interface KanbanColumnProps {
   title: string;
   tasks: Task[];
   allTasks: Task[];
+  taskIndex?: TaskDependencyIndex;
   onTaskClick?: (task: Task) => void;
   onTaskStatusChange?: (taskId: string, status: TaskStatus) => void;
   selectedTaskId?: string | null;
@@ -45,11 +47,12 @@ function getStatusPresentation(status: string) {
   );
 }
 
-export function KanbanColumn({
+export const KanbanColumn = memo(function KanbanColumn({
   id,
   title,
   tasks,
   allTasks,
+  taskIndex,
   onTaskClick,
   onTaskStatusChange,
   selectedTaskId,
@@ -62,15 +65,23 @@ export function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !dragEnabled });
   const { settings: featureSettings } = useFeatureSettings();
   const { isSelecting, selectedIds, toggleGroup } = useBulkActions();
+  const dependencyIndex = useMemo(
+    () => taskIndex ?? new Map(allTasks.map((task) => [task.id, task])),
+    [taskIndex, allTasks]
+  );
   const showDoneMetrics = featureSettings.board.showDoneMetrics;
   const statusPresentation = getStatusPresentation(id);
   const StatusIcon = statusPresentation.icon;
 
+  const { active } = useDndContext();
+  const taskIds = useMemo(() => tasks.map((task) => task.id), [tasks]);
+  const windowed = useVirtualColumn(taskIds, selectedTaskId, active ? String(active.id) : null);
+
   // Get task IDs for done column to fetch bulk metrics
   const doneTaskIds = useMemo(() => {
     if (id !== 'done' || !showDoneMetrics) return [];
-    return tasks.map((t) => t.id);
-  }, [id, tasks, showDoneMetrics]);
+    return windowed.rows.map((row) => row.id);
+  }, [id, windowed.rows, showDoneMetrics]);
 
   // Fetch bulk metrics only for done column
   const { data: metricsMap } = useBulkTaskMetrics(doneTaskIds, id === 'done' && showDoneMetrics);
@@ -125,45 +136,107 @@ export function KanbanColumn({
         </div>
       </div>
 
-      <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex-1 p-2 space-y-2 min-h-24 overflow-y-auto md:min-h-[calc(100vh-200px)]">
-          {tasks.length === 0 ? (
-            <div
-              className={cn(
-                'flex items-center justify-center h-24 text-sm text-muted-foreground rounded-md border-2 border-dashed',
-                dragEnabled && isOver && 'border-primary/50 bg-primary/5'
-              )}
-            >
-              {dragEnabled && isOver ? 'Drop here' : 'No tasks'}
-            </div>
-          ) : (
-            tasks.map((task) => {
-              const blocked = isTaskBlocked(task, allTasks);
-              const blockers = blocked ? getTaskBlockers(task, allTasks) : [];
-              const taskMetrics =
-                id === 'done' && showDoneMetrics ? metricsMap?.get(task.id) : undefined;
-              return (
-                <ErrorBoundary key={task.id} level="widget">
-                  <TaskCard
-                    task={task}
-                    dragEnabled={dragEnabled}
-                    onClick={() => onTaskClick?.(task)}
-                    onStatusChange={(status) => onTaskStatusChange?.(task.id, status)}
-                    isSelected={task.id === selectedTaskId}
-                    isBlocked={blocked}
-                    blockerTitles={blockers.map((b) => b.title)}
-                    cardMetrics={taskMetrics}
-                    canChangeStatus={canChangeStatus}
-                    isDragActive={isDragActive}
-                    showStatusControl={showStatusControls}
-                    statusOptions={statusOptions}
-                  />
-                </ErrorBoundary>
-              );
-            })
+      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+        <div
+          ref={windowed.viewport}
+          onScroll={windowed.updateView}
+          onFocusCapture={(event) =>
+            windowed.setFocusedId(
+              (event.target as HTMLElement).closest<HTMLElement>('[data-virtual-task]')?.dataset
+                .virtualTask ?? null
+            )
+          }
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) windowed.setFocusedId(null);
+          }}
+          className={cn(
+            'flex-1 p-2 min-h-24 overflow-y-auto',
+            windowed.enabled
+              ? 'h-[calc(100dvh-240px)] max-h-[calc(100dvh-240px)]'
+              : 'space-y-2 md:min-h-[calc(100vh-200px)]'
           )}
+        >
+          <div
+            role="list"
+            aria-label={`${title} tasks`}
+            className={windowed.enabled ? 'relative' : 'space-y-2'}
+            style={windowed.enabled ? { height: windowed.height } : undefined}
+          >
+            {tasks.length === 0 ? (
+              <div
+                className={cn(
+                  'flex items-center justify-center h-24 text-sm text-muted-foreground rounded-md border-2 border-dashed',
+                  dragEnabled && isOver && 'border-primary/50 bg-primary/5'
+                )}
+              >
+                {dragEnabled && isOver ? 'Drop here' : 'No tasks'}
+              </div>
+            ) : (
+              windowed.rows.map((row) => {
+                const task = tasks[row.index];
+                const blockers = getTaskBlockers(task, dependencyIndex);
+                const blocked = blockers.length > 0;
+                const taskMetrics =
+                  id === 'done' && showDoneMetrics ? metricsMap?.get(task.id) : undefined;
+                return (
+                  <div
+                    key={task.id}
+                    role="listitem"
+                    aria-posinset={row.index + 1}
+                    aria-setsize={tasks.length}
+                    data-virtual-task={task.id}
+                    ref={(element) => windowed.measure(task.id, element)}
+                    style={
+                      windowed.enabled
+                        ? { position: 'absolute', top: row.offset, left: 0, right: 0 }
+                        : undefined
+                    }
+                  >
+                    <ErrorBoundary level="widget">
+                      <TaskCard
+                        task={task}
+                        dragEnabled={dragEnabled}
+                        onClick={() => onTaskClick?.(task)}
+                        onStatusChange={(status) => onTaskStatusChange?.(task.id, status)}
+                        isSelected={task.id === selectedTaskId}
+                        isBlocked={blocked}
+                        blockerTitles={blockers.map((b) => b.title)}
+                        cardMetrics={taskMetrics}
+                        canChangeStatus={canChangeStatus}
+                        isDragActive={isDragActive}
+                        showStatusControl={showStatusControls}
+                        statusOptions={statusOptions}
+                      />
+                    </ErrorBoundary>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </SortableContext>
+      {windowed.enabled && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+          <button
+            className="rounded px-1 focus-visible:outline disabled:opacity-40"
+            disabled={windowed.start === 0}
+            onClick={() => windowed.reveal(tasks[Math.max(0, windowed.start - 10)].id, true)}
+            aria-label={`Previous tasks in ${title}`}
+          >
+            Previous tasks
+          </button>
+          <button
+            className="rounded px-1 focus-visible:outline disabled:opacity-40"
+            disabled={windowed.end >= tasks.length}
+            onClick={() =>
+              windowed.reveal(tasks[Math.min(tasks.length - 1, windowed.end)].id, true)
+            }
+            aria-label={`Next tasks in ${title}`}
+          >
+            Next tasks
+          </button>
+        </div>
+      )}
     </div>
   );
-}
+});

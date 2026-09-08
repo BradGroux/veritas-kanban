@@ -1,3 +1,4 @@
+import { toBoardTask } from '@veritas-kanban/shared';
 import { assertLegacyAttemptEditable } from '../utils/task-attempt-edit.js';
 import { Router, type NextFunction, type Response, type Router as RouterType } from 'express';
 import { z } from 'zod';
@@ -426,8 +427,12 @@ const appendProgressSchema = z.object({
  *         description: Filter by agent name (exact match)
  *       - in: query
  *         name: view
- *         schema: { type: string, enum: [summary] }
- *         description: '"summary" returns lightweight TaskSummary objects'
+ *         schema: { type: string, enum: [summary, board] }
+ *         description: '"summary" returns TaskSummary objects; "board" returns bounded card content'
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Case-insensitive search across full title, description and ID
  *       - in: query
  *         name: fields
  *         schema: { type: string }
@@ -479,6 +484,14 @@ router.get(
       tasks = tasks.filter((t) => t.agent === agentFilter);
     }
 
+    const search = typeof req.query.search === 'string' ? req.query.search.toLowerCase() : '';
+    if (search)
+      tasks = tasks.filter(
+        (task) =>
+          task.title.toLowerCase().includes(search) ||
+          task.description.toLowerCase().includes(search) ||
+          task.id.toLowerCase().includes(search)
+      );
     const total = tasks.length;
 
     // --- Last-Modified (computed before slicing) ---
@@ -526,6 +539,8 @@ router.get(
         }
         return picked;
       });
+    } else if (viewParam === 'board') {
+      result = tasks.map(toBoardTask);
     } else if (viewParam === 'summary') {
       // Summary mode: lightweight board-view payload
       result = tasks.map((task): TaskSummary => ({

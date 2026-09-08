@@ -23,7 +23,8 @@ export const MoveTaskBodySchema = z.object({
   sourceStatus: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN),
   sourcePosition: z.number().finite().nullable(),
   destinationStatus: z.string().min(1).max(50).regex(BOARD_COLUMN_ID_PATTERN),
-  destinationIndex: z.number().int().min(0).max(MAX_TASK_REORDER_ITEMS),
+  // This is one position, not a bulk payload. The service checks column length.
+  destinationIndex: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   expectedRevision: z.number().int().min(0).optional(),
 });
 
