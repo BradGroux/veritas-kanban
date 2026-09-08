@@ -26,7 +26,7 @@ import {
   type DesktopBridgeResponse,
   type DesktopConnectionConfigRequest,
   type DesktopConnectionValidationResult,
-  type DesktopWindowToggleMaximizeResult,
+  type DesktopWindowTitlebarActionResult,
 } from '../shared/desktop-bridge-contracts.js';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -38,7 +38,7 @@ export type DesktopBridgeHandlerMap = {
 };
 
 export interface DesktopWindowControls {
-  toggleMaximize(): DesktopWindowToggleMaximizeResult;
+  performTitlebarAction(): DesktopWindowTitlebarActionResult;
 }
 
 async function remoteConnectionDestinationError(serverUrl: string): Promise<string | null> {
@@ -114,6 +114,7 @@ async function validateRemoteConnection(
   try {
     const response = await fetch(statusUrl, {
       method: 'GET',
+      redirect: 'error',
       headers: serverToken ? { Authorization: `Bearer ${serverToken}` } : undefined,
       signal: controller.signal,
     });
@@ -161,6 +162,7 @@ async function exchangeRemotePairingPayload(
   try {
     const response = await fetch(exchangeUrl, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(parseRemotePairingPayload(pairingPayload)),
       signal: controller.signal,
@@ -289,7 +291,7 @@ export function createDesktopBridgeHandlers(
       await shell.openExternal(url);
       return undefined;
     },
-    toggleWindowMaximize: () => windowControls?.toggleMaximize() ?? { maximized: false },
+    performTitlebarAction: () => windowControls?.performTitlebarAction() ?? { maximized: false },
   };
 }
 

@@ -316,6 +316,8 @@ PATCH /api/tasks/:id
 
 **Body**: Partial task fields to update (title, description, status, priority, assignee, etc.).
 
+Managed attempt state is owned by the run lifecycle APIs. Generic task updates reject an `attempt` replacement when the current attempt contains runtime, launch, admission, supervision, or other server-owned evidence. Ordinary task fields remain editable. Historical attempts containing only the legacy editor fields remain editable through this endpoint.
+
 **Headers**:
 
 ```http
@@ -1040,7 +1042,7 @@ POST /api/auth/login
 
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "token": "<jwt-token>",
   "role": "admin",
   "expiresIn": "24h"
 }
@@ -2405,7 +2407,7 @@ Mounted at `/api/agents`.
 POST /api/agents/route
 ```
 
-Accepts either a task ID or ad-hoc metadata:
+Accepts either a task ID or ad-hoc metadata: Metadata `subtaskCount` must be an integer from 0 through 500; it is evaluated as a count without creating task records.
 
 **By task ID**:
 
@@ -3899,6 +3901,8 @@ Mounted at `/api/cost-prediction`.
 ```
 POST /api/cost-prediction/predict
 ```
+
+Metadata `subtaskCount` accepts integers from 0 through 500. Existing tasks are evaluated using their stored subtask count.
 
 **By task ID**:
 

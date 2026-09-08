@@ -8,34 +8,6 @@ interface Shortcut {
   description: string;
 }
 
-const shortcuts: { category: string; items: Shortcut[] }[] = [
-  {
-    category: 'Navigation',
-    items: [
-      { keys: ['j', '↓'], description: 'Select next task' },
-      { keys: ['k', '↑'], description: 'Select previous task' },
-      { keys: ['Enter'], description: 'Open selected task' },
-      { keys: ['Esc'], description: 'Close panel / Clear selection' },
-    ],
-  },
-  {
-    category: 'Actions',
-    items: [
-      { keys: ['c'], description: 'Create new task' },
-      { keys: ['⌘⇧C'], description: 'Open agent chat' },
-      { keys: ['1'], description: 'Move to To Do' },
-      { keys: ['2'], description: 'Move to Planning' },
-      { keys: ['3'], description: 'Move to In Progress' },
-      { keys: ['4'], description: 'Move to Blocked' },
-      { keys: ['5'], description: 'Move to Done' },
-    ],
-  },
-  {
-    category: 'General',
-    items: [{ keys: ['?'], description: 'Toggle this help' }],
-  },
-];
-
 function KeyBadge({ children }: { children: React.ReactNode }) {
   return (
     <Kbd className="inline-flex min-w-[24px] items-center justify-center px-2 text-xs font-medium">
@@ -45,7 +17,34 @@ function KeyBadge({ children }: { children: React.ReactNode }) {
 }
 
 export function KeyboardShortcutsDialog() {
-  const { isHelpOpen, closeHelpDialog } = useKeyboard();
+  const { isHelpOpen, closeHelpDialog, columns } = useKeyboard();
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const shortcuts: { category: string; items: Shortcut[] }[] = [
+    {
+      category: 'Navigation',
+      items: [
+        { keys: ['j', '↓'], description: 'Select next task' },
+        { keys: ['k', '↑'], description: 'Select previous task' },
+        { keys: ['Enter'], description: 'Open selected task' },
+        { keys: ['Esc'], description: 'Close panel / Clear selection' },
+      ],
+    },
+    {
+      category: 'Actions',
+      items: [
+        { keys: ['c'], description: 'Create new task' },
+        { keys: [isMac ? '⌘⇧C' : 'Ctrl+Shift+C'], description: 'Open agent chat' },
+        ...columns.slice(0, 9).map((column, index) => ({
+          keys: [String(index + 1)],
+          description: `Move to ${column.title}`,
+        })),
+      ],
+    },
+    {
+      category: 'General',
+      items: [{ keys: ['?'], description: 'Toggle this help' }],
+    },
+  ];
 
   return (
     <Modal
@@ -87,6 +86,12 @@ export function KeyboardShortcutsDialog() {
             </dl>
           </section>
         ))}
+        {columns.length > 9 && (
+          <Text size="sm" c="dimmed">
+            Number shortcuts cover the first nine columns. Use the card status control for other
+            columns.
+          </Text>
+        )}
       </Stack>
       <OverlayFooter>
         <div className="text-xs text-muted-foreground">

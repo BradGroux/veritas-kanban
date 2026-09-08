@@ -317,3 +317,17 @@ menu and the mounted renderer. File data commands and Debug Bundle open the exis
 Maintenance flow; they do not automatically export, restore, or create files.
 Renderer commands wait for an acknowledgement. Finish setup and unlock the workspace
 before using them; unavailable actions display a reason instead of reporting success.
+
+On macOS, Command-W closes the window while the managed server stays running.
+Reopen the window from the Dock. Command-Q quits and stops the managed server.
+Standard Hide, Hide Others, Show All and Services commands are available in the
+application menu; View provides text zoom and full screen.
+
+Saved window bounds are fitted to the current display work areas at launch or
+reopen. If a monitor was disconnected, the window returns to the primary display.
+Maximized windows retain their previous normal bounds for unmaximizing.
+
+The custom header follows the macOS title-bar double-click preference (zoom/fill,
+minimize, or no action). Configure it in [Desktop & Dock settings](https://support.apple.com/guide/mac-help/change-desktop-dock-settings-mchlp1119/mac).
+The native gate records the current preference and verifies its action without
+changing the operator's system preferences.

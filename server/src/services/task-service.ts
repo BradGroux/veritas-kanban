@@ -1,3 +1,4 @@
+import { assertLegacyAttemptEditable } from '../utils/task-attempt-edit.js';
 import { nanoid } from 'nanoid';
 import type {
   Task,
@@ -93,6 +94,7 @@ interface BoardStatusConfig {
 }
 
 type TaskMutationInput = UpdateTaskInput & {
+  protectManagedAttempt?: boolean;
   attemptPatch?: Pick<TaskAttempt, 'id'> & Partial<Omit<TaskAttempt, 'id'>>;
   lastBoardMove?: TaskBoardMoveReceipt;
   boardRank?: string | null;
@@ -781,10 +783,17 @@ export class TaskService {
     return task;
   }
 
-  async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
+  async updateTask(
+    id: string,
+    input: UpdateTaskInput,
+    options: { protectManagedAttempt?: boolean } = {}
+  ): Promise<Task | null> {
     const affectsBoard = input.position !== undefined || input.status !== undefined;
-    const mutationInput: TaskMutationInput =
-      input.position !== undefined ? { ...input, boardRank: null } : input;
+    const mutationInput: TaskMutationInput = {
+      ...input,
+      ...(input.position !== undefined ? { boardRank: null } : {}),
+      protectManagedAttempt: options.protectManagedAttempt,
+    };
     if (affectsBoard) {
       return this.withBoardMoveMutex((commitStorage) =>
         this.withTaskMutex(id, () =>
@@ -838,6 +847,7 @@ export class TaskService {
       boardRank: boardRankUpdate,
       expectedRevision: _expectedRevision,
       attemptPatch,
+      protectManagedAttempt,
       ...restInput
     } = input;
 
@@ -873,6 +883,12 @@ export class TaskService {
       const freshTask = this.sqliteTasks
         ? ((await this.sqliteTasks.findById(id)) ?? task)
         : (fileMutationTask ?? task);
+
+      // Check inside the storage lock: launch may have installed a managed
+      // attempt after the generic route read the previous task revision.
+      if (protectManagedAttempt && input.attempt) {
+        assertLegacyAttemptEditable(freshTask.attempt);
+      }
 
       if (attemptPatch && freshTask.attempt?.id !== attemptPatch.id) {
         updatedTask = freshTask;

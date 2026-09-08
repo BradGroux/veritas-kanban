@@ -41,7 +41,9 @@ import { selectProviderRuntimeManifest } from './provider-runtime-capability-ser
 
 const log = createLogger('agent-routing');
 
-type RoutableTask = Pick<Task, 'type' | 'priority' | 'project' | 'subtasks'>;
+type RoutableTask = Pick<Task, 'type' | 'priority' | 'project' | 'subtasks'> & {
+  subtaskCount?: number;
+};
 
 interface RoutingTraceContext {
   taskId?: string;
@@ -114,7 +116,7 @@ export class AgentRoutingService {
         type: task.type,
         priority: task.priority,
         project: task.project,
-        subtaskCount: task.subtasks?.length,
+        subtaskCount: task.subtasks?.length ?? task.subtaskCount,
       },
       config.teamRoster
     );
@@ -433,7 +435,7 @@ export class AgentRoutingService {
    * Used when an agent fails and `fallbackOnFailure` is enabled.
    */
   async getFallback(
-    task: Pick<Task, 'type' | 'priority' | 'project' | 'subtasks'>,
+    task: RoutableTask,
     failedAgent: AgentType,
     context: FallbackRoutingContext = {}
   ): Promise<RoutingResult | null> {
@@ -636,10 +638,7 @@ export class AgentRoutingService {
    * All specified criteria must match (AND logic).
    * Unspecified criteria are ignored (wildcard).
    */
-  private matchesRule(
-    task: Pick<Task, 'type' | 'priority' | 'project' | 'subtasks'>,
-    match: RoutingMatchCriteria
-  ): boolean {
+  private matchesRule(task: RoutableTask, match: RoutingMatchCriteria): boolean {
     // Type check
     if (match.type !== undefined) {
       if (!this.matchesValue(task.type, match.type)) return false;
@@ -658,7 +657,7 @@ export class AgentRoutingService {
 
     // Complexity (subtask count)
     if (match.minSubtasks !== undefined) {
-      const subtaskCount = task.subtasks?.length ?? 0;
+      const subtaskCount = task.subtasks?.length ?? task.subtaskCount ?? 0;
       if (subtaskCount < match.minSubtasks) return false;
     }
 

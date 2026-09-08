@@ -215,7 +215,7 @@ function SubmitTab() {
               className={[
                 'rounded-full border px-3 py-1 text-sm transition-colors',
                 selectedCategories.includes(cat)
-                  ? 'border-primary bg-primary text-primary-foreground'
+                  ? 'border-primary bg-primary-action text-primary-foreground'
                   : 'border-border bg-transparent hover:bg-muted',
               ].join(' ')}
             >

@@ -720,6 +720,8 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: #6541d5;
+  --primary-action: #6541d5;
+  --primary-action-hover: #5132b4;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -794,8 +796,10 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  /* Keep Tailwind controls on the same bright Veritas shade as Mantine. */
+  /* Preserve bright accent text; filled actions have their own contrast pair. */
   --primary: #8d68f8;
+  --primary-action: #754fe8;
+  --primary-action-hover: #6541d5;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -1334,6 +1338,8 @@ html[data-client='desktop'] .desktop-board-with-right-rail {
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-action: var(--primary-action);
+  --color-primary-action-hover: var(--primary-action-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);

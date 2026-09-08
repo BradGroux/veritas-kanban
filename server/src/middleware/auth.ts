@@ -724,7 +724,15 @@ function normalizePermissions(permissions: PermissionInput): AuthPermission[] {
 export function authorizePermissionByMethod(config: MethodPermissionConfig) {
   const readPermissions = normalizePermissions(config.read);
   const writePermissions = normalizePermissions(config.write ?? config.read);
-  const overrides = config.overrides ?? [];
+  // Express routers match route literals case-insensitively by default. Match
+  // their permission overrides the same way without changing parameter values.
+  // Stateful regex flags must not make authorization depend on earlier requests.
+  const overrides = (config.overrides ?? []).map((override) => ({
+    ...override,
+    path: override.path
+      ? new RegExp(override.path.source, override.path.flags.replace(/[giy]/g, '') + 'i')
+      : undefined,
+  }));
 
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     const override = overrides.find((candidate) => {

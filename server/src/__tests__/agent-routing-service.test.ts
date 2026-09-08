@@ -462,7 +462,7 @@ describe('AgentRoutingService', () => {
               id: 'high-code',
               name: 'High-priority code owner',
               enabled: true,
-              match: { type: 'code', priority: 'high' },
+              match: { type: 'code', priority: 'high', minSubtasks: 5 },
               memberId: 'ops-lead',
             },
           ],
@@ -472,6 +472,7 @@ describe('AgentRoutingService', () => {
       const result = await service.resolveAgentWithTrace({
         type: 'code',
         priority: 'high',
+        subtaskCount: 5,
       });
 
       expect(result.result.agent).toBe('amp');
@@ -693,6 +694,36 @@ describe('AgentRoutingService', () => {
       });
       expect(result.agent).toBe('amp');
       expect(result.rule).toBe('complex');
+    });
+
+    it('routes scalar counts like real subtask collections', async () => {
+      const config = structuredClone(BASE_CONFIG);
+      requireRouting(config).rules = [
+        {
+          id: 'complex',
+          name: 'Complex tasks',
+          match: { minSubtasks: 5 },
+          agent: 'amp',
+          enabled: true,
+        },
+      ];
+      mockGetConfig.mockResolvedValue(config);
+      expect(
+        (await service.resolveAgent({ type: 'feature', priority: 'medium', subtaskCount: 5 })).rule
+      ).toBe('complex');
+      expect(
+        (await service.resolveAgent({ type: 'feature', priority: 'medium', subtaskCount: 4 })).rule
+      ).toBeUndefined();
+      expect(
+        (
+          await service.resolveAgent({
+            type: 'feature',
+            priority: 'medium',
+            subtasks: [],
+            subtaskCount: 5,
+          })
+        ).rule
+      ).toBeUndefined();
     });
 
     it('does NOT match when subtasks below threshold', async () => {

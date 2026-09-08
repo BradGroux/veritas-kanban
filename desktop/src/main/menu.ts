@@ -27,6 +27,7 @@ export function configureDesktopMenu(options: ConfigureDesktopMenuOptions): void
 export function createDesktopMenuTemplate(
   options: ConfigureDesktopMenuOptions
 ): MenuItemConstructorOptions[] {
+  const isMac = (options.platform ?? process.platform) === 'darwin';
   const command = (name: DesktopCommandName): MenuItemConstructorOptions => {
     const definition = DESKTOP_COMMAND_REGISTRY[name];
     return {
@@ -37,25 +38,24 @@ export function createDesktopMenuTemplate(
     };
   };
 
-  const macosMenus: MenuItemConstructorOptions[] =
-    (options.platform ?? process.platform) === 'darwin'
-      ? [
-          { role: 'windowMenu' },
-          {
-            role: 'help',
-            submenu: [
-              {
-                label: 'Veritas Kanban Help',
-                click: () => options.openHelp(),
-              },
-              {
-                ...command('open-onboarding'),
-                label: 'Show Setup && Diagnostics',
-              },
-            ],
-          },
-        ]
-      : [];
+  const macosMenus: MenuItemConstructorOptions[] = isMac
+    ? [
+        { role: 'windowMenu' },
+        {
+          role: 'help',
+          submenu: [
+            {
+              label: 'Veritas Kanban Help',
+              click: () => options.openHelp(),
+            },
+            {
+              ...command('open-onboarding'),
+              label: 'Show Setup && Diagnostics',
+            },
+          ],
+        },
+      ]
+    : [];
 
   return [
     {
@@ -76,7 +76,17 @@ export function createDesktopMenuTemplate(
         command('download-update'),
         command('install-update'),
         { type: 'separator' },
-        command('quit'),
+        ...(isMac
+          ? [
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const, accelerator: 'Command+H' },
+              { role: 'hideOthers' as const, accelerator: 'Command+Alt+H' },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+            ]
+          : []),
+        { role: 'quit', accelerator: 'CommandOrControl+Q' },
       ],
     },
     {
@@ -86,9 +96,21 @@ export function createDesktopMenuTemplate(
         command('import-data'),
         command('export-data'),
         command('create-backup'),
+        { type: 'separator' },
+        { role: 'close', accelerator: 'CommandOrControl+W' },
       ],
     },
     { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'resetZoom', accelerator: 'CommandOrControl+0' },
+        { role: 'zoomIn', accelerator: 'CommandOrControl+Plus' },
+        { role: 'zoomOut', accelerator: 'CommandOrControl+-' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', accelerator: isMac ? 'Control+Command+F' : 'F11' },
+      ],
+    },
     {
       label: 'Navigate',
       submenu: [

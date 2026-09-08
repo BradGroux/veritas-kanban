@@ -116,6 +116,7 @@ vi.mock('../../middleware/cache-control.js', async () => {
 // Import after mocking
 import { taskRoutes } from '../../routes/tasks.js';
 import { errorHandler } from '../../middleware/error-handler.js';
+import { taskAccess } from '../../routes/v1/permissions.js';
 
 describe('Tasks Routes (actual module)', () => {
   let app: express.Express;
@@ -635,7 +636,8 @@ describe('Tasks Routes (actual module)', () => {
             model: 'llama3.2',
             threadId: 'thread_docs_refresh',
           }),
-        })
+        }),
+        { protectManagedAttempt: true }
       );
     });
 
@@ -691,7 +693,7 @@ describe('Tasks Routes (actual module)', () => {
       expect(mockTaskService.updateTask).not.toHaveBeenCalled();
     });
 
-    it('preserves authoritative run contracts when patching the same attempt', async () => {
+    it('rejects generic same-ID changes to managed attempt authority and status', async () => {
       const taskEnvelope = { digest: 'immutable-envelope' };
       const completionResult = { status: 'success' };
       mockTaskService.getTask.mockResolvedValue({
@@ -708,17 +710,26 @@ describe('Tasks Routes (actual module)', () => {
       });
       mockTaskService.updateTask.mockImplementation(async (_id, input) => input);
 
-      const res = await request(app)
-        .patch('/api/tasks/t1')
-        .send({ attempt: { id: 'attempt_1', agent: 'codex', status: 'complete' } });
-
-      expect(res.status).toBe(200);
-      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
-        't1',
-        expect.objectContaining({
-          attempt: expect.objectContaining({ taskEnvelope, completionResult }),
-        })
-      );
+      const scopedApp = express();
+      scopedApp.use(express.json());
+      scopedApp.use((req, _res, next) => {
+        (req as import('../../middleware/auth.js').AuthenticatedRequest).auth = {
+          role: 'agent',
+          isLocalhost: false,
+          permissions: ['task:write'],
+        };
+        next();
+      });
+      scopedApp.use(['/api/tasks', '/api/v1/tasks'], taskAccess, taskRoutes);
+      scopedApp.use(errorHandler);
+      for (const prefix of ['/api/tasks', '/api/v1/tasks']) {
+        const res = await request(scopedApp)
+          .patch(`${prefix}/t1`)
+          .send({ attempt: { id: 'attempt_1', agent: 'codex', status: 'complete' } });
+        expect(res.status).toBe(400);
+        expect(res.body.message).toContain('run lifecycle APIs');
+      }
+      expect(mockTaskService.updateTask).not.toHaveBeenCalled();
     });
 
     it('rejects replacing an attempt that owns authoritative run contracts', async () => {
