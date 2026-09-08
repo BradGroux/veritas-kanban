@@ -243,12 +243,22 @@ export async function verifyConfiguredTitlebarAction(app, page) {
   const preference = await app.evaluate(({ systemPreferences }) =>
     systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string')
   );
-  await app.evaluate(({ BrowserWindow }) => {
+  const original = await app.evaluate(({ BrowserWindow, screen }) => {
     const window = BrowserWindow.getAllWindows().find(
       (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
     );
+    const bounds = window.getBounds();
+    const minimum = window.getMinimumSize();
+    const area = screen.getDisplayMatching(bounds).workArea;
+    // A window whose minimum fills the display remains geometrically maximized on macOS.
+    // Give this isolated behavior check room to zoom, then restore the application geometry.
+    const width = Math.min(bounds.width, area.width - 80);
+    const height = Math.min(bounds.height, area.height - 80);
+    window.setMinimumSize(Math.min(minimum[0], width), Math.min(minimum[1], height));
     window.restore();
     window.unmaximize();
+    window.setBounds({ x: area.x + 40, y: area.y + 40, width, height });
+    return { bounds, minimum };
   });
   const state = () =>
     app.evaluate(({ BrowserWindow }) => ({
@@ -263,20 +273,25 @@ export async function verifyConfiguredTitlebarAction(app, page) {
         )
         .isMinimized(),
     }));
-  await expect.poll(state).toEqual({ maximized: false, minimized: false });
-  await page.getByRole('navigation', { name: 'Main navigation' }).dispatchEvent('dblclick');
-  const expected = {
-    maximized: ['', 'Maximize', 'Fill'].includes(preference),
-    minimized: preference === 'Minimize',
-  };
-  await expect.poll(state).toEqual(expected);
-  await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().find(
-      (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
-    );
-    window.restore();
-    window.unmaximize();
-    window.focus();
-  });
-  return { preference: preference || 'system default', expected };
+  try {
+    await expect.poll(state).toEqual({ maximized: false, minimized: false });
+    await page.getByRole('navigation', { name: 'Main navigation' }).dispatchEvent('dblclick');
+    const expected = {
+      maximized: ['', 'Maximize', 'Fill'].includes(preference),
+      minimized: preference === 'Minimize',
+    };
+    await expect.poll(state).toEqual(expected);
+    return { preference: preference || 'system default', expected };
+  } finally {
+    await app.evaluate(({ BrowserWindow }, original) => {
+      const window = BrowserWindow.getAllWindows().find(
+        (window) => !new URL(window.webContents.getURL()).searchParams.has('desktop-settings')
+      );
+      window.restore();
+      window.unmaximize();
+      window.setMinimumSize(...original.minimum);
+      window.setBounds(original.bounds);
+      window.focus();
+    }, original);
+  }
 }
