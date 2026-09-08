@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { useMediaQuery } from '@mantine/hooks';
 import { Bookmark, Edit3, Filter, Save, Search, Star, StarOff, Trash2, X } from 'lucide-react';
 import { ActionIcon, Badge, Button, Group, Select, Text, TextInput, Tooltip } from '@mantine/core';
 import type { BoardSavedView, Task, TaskType } from '@veritas-kanban/shared';
@@ -57,6 +58,14 @@ export function FilterBar({
   const [nameModalMode, setNameModalMode] = useState<SavedViewNameModalMode>(null);
   const [viewName, setViewName] = useState('');
   const [deleteViewId, setDeleteViewId] = useState<string | null>(null);
+  const isMobile = useMediaQuery('(max-width: 639px)');
+  const [filtersOpened, setFiltersOpened] = useState(false);
+  const filterToggle = useRef<HTMLButtonElement>(null);
+  const filterPanelId = useId();
+  const closeFilters = () => {
+    setFiltersOpened(false);
+    filterToggle.current?.focus();
+  };
   const agents = config?.agents || [];
   const selectedSavedView = savedViews.find((view) => view.id === selectedSavedViewId) ?? null;
   const deleteSavedView = savedViews.find((view) => view.id === deleteViewId) ?? null;
@@ -141,6 +150,145 @@ export function FilterBar({
     setDeleteViewId(null);
   };
 
+  const secondaryFilters = (
+    <>
+      {/* Project filter */}
+      <Select
+        value={filters.project || 'all'}
+        onChange={(value) =>
+          onFiltersChange({ ...filters, project: value && value !== 'all' ? value : null })
+        }
+        disabled={projectsLoading}
+        data={projectOptions}
+        aria-label="Filter by project"
+        className="w-full sm:w-[160px]"
+        allowDeselect={false}
+      />
+
+      {/* Type filter */}
+      <Select
+        value={filters.type || 'all'}
+        onChange={(value) =>
+          onFiltersChange({
+            ...filters,
+            type: value && value !== 'all' ? (value as TaskType) : null,
+          })
+        }
+        disabled={typesLoading}
+        data={typeOptions}
+        aria-label="Filter by type"
+        className="w-full sm:w-[160px]"
+        allowDeselect={false}
+      />
+
+      {/* Agent filter */}
+      <Select
+        value={filters.agent || 'all'}
+        onChange={(value) =>
+          onFiltersChange({ ...filters, agent: value && value !== 'all' ? value : null })
+        }
+        data={agentOptions}
+        aria-label="Filter by agent"
+        className="w-full sm:w-[160px]"
+        allowDeselect={false}
+      />
+    </>
+  );
+  const savedViewControls = shouldShowSavedViews && (
+    <div
+      className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center"
+      aria-label="Saved board views"
+    >
+      <Select
+        value={selectedSavedView?.id ?? 'custom'}
+        onChange={handleSavedViewChange}
+        data={savedViewOptions}
+        aria-label="Saved board view"
+        className="w-full sm:w-[220px]"
+        allowDeselect={false}
+        leftSection={<Bookmark className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+      />
+      <Group gap="xs" wrap={isMobile ? 'wrap' : 'nowrap'} className="min-w-0">
+        <Button
+          variant="light"
+          size="xs"
+          leftSection={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
+          onClick={openCreateSavedView}
+          loading={isSavingSavedView && nameModalMode === 'create'}
+        >
+          Save view
+        </Button>
+        {selectedSavedView && (
+          <>
+            <Tooltip label="Update saved view">
+              <ActionIcon
+                variant={hasUnsavedSavedViewChanges ? 'filled' : 'subtle'}
+                size="sm"
+                aria-label="Update saved view"
+                onClick={() => onUpdateSavedView?.(selectedSavedView.id)}
+                loading={isSavingSavedView}
+              >
+                <Save className="h-4 w-4" aria-hidden="true" />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Rename saved view">
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                aria-label="Rename saved view"
+                onClick={openRenameSavedView}
+              >
+                <Edit3 className="h-4 w-4" aria-hidden="true" />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip
+              label={
+                isSelectedSavedViewDefault
+                  ? 'Clear default saved view'
+                  : 'Set saved view as default'
+              }
+            >
+              <ActionIcon
+                variant={isSelectedSavedViewDefault ? 'light' : 'subtle'}
+                size="sm"
+                aria-label={
+                  isSelectedSavedViewDefault
+                    ? 'Clear default saved view'
+                    : 'Set saved view as default'
+                }
+                onClick={() =>
+                  onSetDefaultSavedView?.(isSelectedSavedViewDefault ? null : selectedSavedView.id)
+                }
+              >
+                {isSelectedSavedViewDefault ? (
+                  <StarOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Star className="h-4 w-4" aria-hidden="true" />
+                )}
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Delete saved view">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                aria-label="Delete saved view"
+                onClick={() => setDeleteViewId(selectedSavedView.id)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </ActionIcon>
+            </Tooltip>
+            {hasUnsavedSavedViewChanges && (
+              <Badge variant="light" color="yellow">
+                Modified
+              </Badge>
+            )}
+          </>
+        )}
+      </Group>
+    </div>
+  );
+
   return (
     <div className="flex w-full flex-col items-stretch gap-2">
       <div
@@ -174,46 +322,19 @@ export function FilterBar({
           />
         </div>
 
-        {/* Project filter */}
-        <Select
-          value={filters.project || 'all'}
-          onChange={(value) =>
-            onFiltersChange({ ...filters, project: value && value !== 'all' ? value : null })
-          }
-          disabled={projectsLoading}
-          data={projectOptions}
-          aria-label="Filter by project"
-          className="w-full sm:w-[160px]"
-          allowDeselect={false}
-        />
-
-        {/* Type filter */}
-        <Select
-          value={filters.type || 'all'}
-          onChange={(value) =>
-            onFiltersChange({
-              ...filters,
-              type: value && value !== 'all' ? (value as TaskType) : null,
-            })
-          }
-          disabled={typesLoading}
-          data={typeOptions}
-          aria-label="Filter by type"
-          className="w-full sm:w-[160px]"
-          allowDeselect={false}
-        />
-
-        {/* Agent filter */}
-        <Select
-          value={filters.agent || 'all'}
-          onChange={(value) =>
-            onFiltersChange({ ...filters, agent: value && value !== 'all' ? value : null })
-          }
-          data={agentOptions}
-          aria-label="Filter by agent"
-          className="w-full sm:w-[160px]"
-          allowDeselect={false}
-        />
+        {isMobile && (
+          <Button
+            ref={filterToggle}
+            variant="light"
+            leftSection={<Filter className="h-4 w-4" aria-hidden="true" />}
+            aria-expanded={filtersOpened}
+            aria-controls={filtersOpened ? filterPanelId : undefined}
+            onClick={() => setFiltersOpened((opened) => !opened)}
+          >
+            Filters and views
+          </Button>
+        )}
+        {!isMobile && secondaryFilters}
 
         {/* Active filter indicator & clear */}
         {activeFilterCount > 0 && (
@@ -240,100 +361,27 @@ export function FilterBar({
         )}
       </div>
 
-      {shouldShowSavedViews && (
+      {!isMobile && savedViewControls}
+      {isMobile && filtersOpened && (
         <div
-          className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center"
-          aria-label="Saved board views"
+          id={filterPanelId}
+          role="region"
+          aria-label="More task filters"
+          className="flex flex-col gap-2 rounded-md border border-border p-3"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            // A select's first Escape belongs to its open options list.
+            if ((event.target as HTMLElement).getAttribute('aria-expanded') === 'true') return;
+            event.preventDefault();
+            event.stopPropagation();
+            closeFilters();
+          }}
         >
-          <Select
-            value={selectedSavedView?.id ?? 'custom'}
-            onChange={handleSavedViewChange}
-            data={savedViewOptions}
-            aria-label="Saved board view"
-            className="w-full sm:w-[220px]"
-            allowDeselect={false}
-            leftSection={<Bookmark className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-          />
-          <Group gap="xs" wrap="nowrap" className="min-w-0">
-            <Button
-              variant="light"
-              size="xs"
-              leftSection={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
-              onClick={openCreateSavedView}
-              loading={isSavingSavedView && nameModalMode === 'create'}
-            >
-              Save view
-            </Button>
-            {selectedSavedView && (
-              <>
-                <Tooltip label="Update saved view">
-                  <ActionIcon
-                    variant={hasUnsavedSavedViewChanges ? 'filled' : 'subtle'}
-                    size="sm"
-                    aria-label="Update saved view"
-                    onClick={() => onUpdateSavedView?.(selectedSavedView.id)}
-                    loading={isSavingSavedView}
-                  >
-                    <Save className="h-4 w-4" aria-hidden="true" />
-                  </ActionIcon>
-                </Tooltip>
-                <Tooltip label="Rename saved view">
-                  <ActionIcon
-                    variant="subtle"
-                    size="sm"
-                    aria-label="Rename saved view"
-                    onClick={openRenameSavedView}
-                  >
-                    <Edit3 className="h-4 w-4" aria-hidden="true" />
-                  </ActionIcon>
-                </Tooltip>
-                <Tooltip
-                  label={
-                    isSelectedSavedViewDefault
-                      ? 'Clear default saved view'
-                      : 'Set saved view as default'
-                  }
-                >
-                  <ActionIcon
-                    variant={isSelectedSavedViewDefault ? 'light' : 'subtle'}
-                    size="sm"
-                    aria-label={
-                      isSelectedSavedViewDefault
-                        ? 'Clear default saved view'
-                        : 'Set saved view as default'
-                    }
-                    onClick={() =>
-                      onSetDefaultSavedView?.(
-                        isSelectedSavedViewDefault ? null : selectedSavedView.id
-                      )
-                    }
-                  >
-                    {isSelectedSavedViewDefault ? (
-                      <StarOff className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <Star className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </ActionIcon>
-                </Tooltip>
-                <Tooltip label="Delete saved view">
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    size="sm"
-                    aria-label="Delete saved view"
-                    onClick={() => setDeleteViewId(selectedSavedView.id)}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </ActionIcon>
-                </Tooltip>
-                {hasUnsavedSavedViewChanges && (
-                  <Badge variant="light" color="yellow">
-                    Modified
-                  </Badge>
-                )}
-              </>
-            )}
-          </Group>
+          {secondaryFilters}
+          {savedViewControls}
+          <Button variant="light" onClick={closeFilters}>
+            Done
+          </Button>
         </div>
       )}
 
