@@ -63,6 +63,19 @@ describe('desktop UI vocabulary', () => {
     expect(click).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps filled action text above AA contrast in both schemes and hover states', () => {
+    const css = readFileSync('src/globals.css', 'utf8');
+    const fills = [...css.matchAll(/--primary-action(?:-hover)?: (#[a-f0-9]{6});/g)].map(
+      (match) => match[1]
+    );
+    expect(fills).toHaveLength(4);
+    for (const fill of fills) {
+      expect((luminance('#ffffff') + 0.05) / (luminance(fill) + 0.05), fill).toBeGreaterThanOrEqual(
+        4.5
+      );
+    }
+  });
+
   it('keeps every semantic foreground above 4.5:1 and the rendered CSS palette in sync', () => {
     const css = readFileSync('src/globals.css', 'utf8');
     for (const [scheme, palette] of Object.entries(VERITAS_SEMANTIC_PALETTE)) {

@@ -415,7 +415,7 @@ export const TaskCard = memo(function TaskCard({
               className={cn(
                 'h-4 w-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors',
                 isChecked
-                  ? 'bg-primary border-primary text-primary-foreground'
+                  ? 'bg-primary-action border-primary text-primary-foreground'
                   : 'border-muted-foreground/50 hover:border-primary'
               )}
             >

@@ -422,7 +422,7 @@ export function CommandPalette({
                             cmd.disabledReason
                               ? 'cursor-not-allowed border border-dashed border-border/70 bg-muted/15 text-muted-foreground'
                               : isSelected
-                                ? 'bg-primary text-white shadow-sm'
+                                ? 'bg-primary-action text-white shadow-sm'
                                 : 'text-foreground hover:bg-muted/50'
                           )}
                           style={

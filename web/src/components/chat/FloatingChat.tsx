@@ -57,7 +57,7 @@ export function FloatingChat() {
         classNames={{ icon: 'floating-chat-icon' }}
         className={cn(
           'floating-chat-trigger z-40 h-14 w-14 rounded-full shadow-lg',
-          'bg-primary hover:bg-primary/90 text-primary-foreground',
+          'bg-primary-action hover:bg-primary-action-hover text-primary-foreground',
           'transition-colors duration-150',
           open && 'hidden'
         )}
