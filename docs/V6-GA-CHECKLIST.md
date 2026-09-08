@@ -11,9 +11,9 @@ Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
 
 - [x] Root, shared, server, web, CLI, MCP and desktop package versions are aligned at 6.2.0, with candidate release notes and compatibility guidance.
 - [x] Complete the appropriate local integration verification.
-- [ ] Resolve or explicitly disposition every remaining finding; #1544 remains open.
+- [ ] Complete final delivery readback for every finding; #1544 is explicitly dispositioned as not reproducible.
 - [x] Inspect the actual packaged candidate, all matched screenshots and complete GIF/video playback; retain revision and package hashes.
-- [ ] Complete review and the permitted repository delivery workflow without triggering GitHub CI.
+- [ ] Complete review and the repository delivery workflow using the owner-authorized existing CI capacity.
 - [ ] Obtain final approval for release, distribution changes, installed-app replacement and public writing.
 - [ ] Verify signing, notarization, distributed assets and the installed application before calling 6.2.0 stable.
 
