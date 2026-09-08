@@ -1,39 +1,40 @@
-# 6.2.0 candidate media provenance
+# 6.2.0 signed media provenance
 
-These are reviewed local-candidate captures, not evidence of a published or signed release.
+These reviewed captures come from the signed and notarized distribution candidate. Release upload and destination readback are recorded separately in the [release evidence packet](../../V6-RC-EVIDENCE-PACKET.md).
 
-- Build: `a2b8fbba0e2851d65611238624d8c9de347a2a27`; version: 6.2.0; bundle: `io.digitalmeld.veritas-kanban`.
-- Whole-app SHA-256: `476a61cbc81f2a78b76657a87ccc98e2be645d2886d78e5df5fe51d7424dedcb`; macOS 26.6.2, Apple silicon, unsigned review package.
-- Capture completed: 2026-09-08T00:35:55.632Z. Dark theme, reduced motion, isolated public-safe tasks. Native captures use the real package; mobile captures have no desktop bridge.
-- Original JSON capture manifest: `media-public-620-4/evidence.json`, SHA-256 `bb92f226413b403639f0b6dcc5bbe9ef415fc1a4ea3302904bbd7f435de6d90d`. The original files, recording frames and manifest are retained outside public documentation under the [capture contract](../../design/DOCUMENTATION-MEDIA-CONTRACT.md).
-- All 23 PNGs were individually inspected. The two new GIFs and retained baseline GIFs were played through complete cycles, and the MP4 reached its end without a playback error. Desktop and mobile recordings preserve the original input sequence: board, open task in Plan, select Plan, switch to Overview, close to board. Native captures omit the system cursor; visible focus rings remain. No synthetic cursor was added.
+- Build: `0b5d65754735716edfd8ebe8ecb93633b70bfbc7`; version: 6.2.0; bundle: `io.digitalmeld.veritas-kanban`.
+- Whole-app SHA-256: `fab61cf2514475b2d872d8f041735ba3fe59bee54d80a6dcb9ccabe27de69fba`; macOS 15.7.9, Apple silicon, extracted from the signed distribution ZIP.
+- [Signed capture run](https://github.com/BradGroux/veritas-kanban/actions/runs/34181935829) retained the original distribution, native and large-board evidence, and documentation media. Signature and Gatekeeper checks passed on the extracted app.
+- Capture completed: 2026-09-08T03:16:39.694Z. Dark theme, reduced motion, isolated public-safe tasks. Native captures use the actual distribution app; mobile captures use a 390×844 browser without a desktop bridge.
+- Original capture manifest: `signed-620-run34181935829/retained-macos-candidate/documentation-media/evidence.json`, SHA-256 `5e39dacf39fdc8cbef11d05c01fd8e05da6b6f0251b224f62d94b9bd34964891`. Original frames and files are retained unchanged under the [capture contract](../../design/DOCUMENTATION-MEDIA-CONTRACT.md).
+- All 23 PNGs were individually inspected; both GIFs were played through complete cycles and the MP4 reached its end without a playback error. The retained baseline GIFs were also reviewed. Native captures omit the system cursor; visible focus rings remain, with no synthetic cursor.
 
-Desktop maintained captures use 1700×760 content dimensions; mobile browser views use 390×844. Task-mode views use an actual 1180×900 native window and measured content dimensions. The original task-mode audit includes a frame/shadow and uses a different blocked showcase task with failed history; this candidate uses a To Do documentation task with no run. The older maintained captures used macOS 15.7.9. The 5,000-task comparison uses the same synthetic generator and 1360×900 content dimensions on the current host. The original maintained board has a collapsed left rail; the candidate shows the current expanded default. These differences are disclosed in the [gallery](../../releases/v6.2.0-comparison.md).
+Desktop maintained captures use 1700×760 content dimensions; mobile browser views use 390×844. Task-mode captures use an actual 1180×900 native window and measured content dimensions. The original task-mode audit includes a frame/shadow and uses a different blocked showcase task with failed history; the candidate uses a To Do documentation task with no run. The baseline maintained captures used macOS 15.7.9; the signed candidate used macOS 15.7.9. The baseline 5,000-task image was captured on the local macOS 26.6.2 host, while the signed candidate image came from the signing runner. Both use the same synthetic generator and 1360×900 content dimensions; hardware and host conditions differ, so the pair is not a performance benchmark. The baseline maintained board has a collapsed rail; the candidate shows its expanded default. These differences are disclosed in the [gallery](../../releases/v6.2.0-comparison.md).
 
 | Asset                                                    | Capture boundary | Content dimensions | SHA-256                                                            |
 | -------------------------------------------------------- | ---------------- | ------------------ | ------------------------------------------------------------------ |
-| [agent-providers.png](agent-providers.png)               | packaged-macos   | 1700×760           | `738dcb078ed9d04f392bdc61d388b677138412834261ecc07dce92352cb78990` |
-| [board-overview.png](board-overview.png)                 | packaged-macos   | 1700×760           | `04fdd6a0bd465ab6d05c60c51b3bed4deab1bbb10c4cbf5ce325c39ae9f1b338` |
-| [board-to-workspace.gif](board-to-workspace.gif)         | packaged-macos   | 1700×760           | `ce440813e19cb05ea211407811622e75b7f835f3994a255990a5e815b1902bdc` |
-| [command-palette.png](command-palette.png)               | packaged-macos   | 1700×760           | `db25eeca42d00a7b8056c99df58ea34822914f355833a0ac7db6debaedf5a700` |
-| [maintenance-center.png](maintenance-center.png)         | packaged-macos   | 1700×760           | `b9a97426d7677917283d71c1055f2b87bb270770561beb0ce11c37e7065d65a7` |
-| [mobile-board.png](mobile-board.png)                     | mobile-browser   | 390×844            | `2f7be6ede22fc17da4d771e3e251ba620f126ee2f6b6f0cfc1b058b3e02fa7f0` |
-| [mobile-flow.gif](mobile-flow.gif)                       | mobile-browser   | 390×844            | `270017e341f9b03d1467b597391c5c1df0e40a0efbf3403f016608eb644ee163` |
-| [mobile-settings.png](mobile-settings.png)               | mobile-browser   | 390×844            | `bb670a6ee3035beb37f8b143b1aabff81d5a51a2ba5767181383b842e7f26ccf` |
-| [mobile-task-workspace.png](mobile-task-workspace.png)   | mobile-browser   | 390×844            | `7a55723b0ab0915c32d1e852d80a3dbe8c77026ef64336c947d019fcf2015b08` |
-| [notification-adapters.png](notification-adapters.png)   | packaged-macos   | 1700×760           | `ff0ce568a5f7701a7ca63c0a0a54c1f61886f03443777e3bd17590f39793ae71` |
-| [settings-navigation.png](settings-navigation.png)       | packaged-macos   | 1700×760           | `37061022142096d82227e692063687e157b62005fb622306e4b949bea351124f` |
-| [squad-chat.png](squad-chat.png)                         | packaged-macos   | 1700×760           | `06aa4e29fd285a2cab281a211843cd3ec1afd1561446f8903642d4c4bf1d91fe` |
-| [task-workspace.png](task-workspace.png)                 | packaged-macos   | 1700×760           | `022d92c0c1ef907fff22cb44a3c812c4ac54b5e2dfc99a3be4e73f43b3df9a32` |
-| [workbench-panel.png](workbench-panel.png)               | packaged-macos   | 1700×760           | `b6f3de6615368e970d531e2666d324e94f8a1d1946fa633a6deb505d7c182334` |
-| [task-drawer-overview.png](task-drawer-overview.png)     | packaged-macos   | 1180×900           | `c3792f8911f7313658421f75145729180148f771b47cfb63c646eda62f2df243` |
-| [task-drawer-plan.png](task-drawer-plan.png)             | packaged-macos   | 1180×900           | `3879c43f95e90cfb40a3f56ef99478b15d2f25e0901f00c1a9092c4d0d967a4c` |
-| [task-drawer-run.png](task-drawer-run.png)               | packaged-macos   | 1180×900           | `0eb3e06c6f8b0427e51ba76018028c1598dbd84efec54a48b413c1fb86948563` |
-| [task-drawer-results.png](task-drawer-results.png)       | packaged-macos   | 1180×900           | `adfb2ed99bda4c5bdc36d585888e469770194d3de9b115b936b384b2b9d44027` |
-| [task-drawer-history.png](task-drawer-history.png)       | packaged-macos   | 1180×900           | `ee445e7f5024928bce46451af5fc5cd86ab6e860cea7ee6cd8474139bb351169` |
-| [task-expanded-overview.png](task-expanded-overview.png) | packaged-macos   | 1180×900           | `faa98937bc33c7bd6581934e234b68b0b193e008ee29f801ad3cbc43656f4b22` |
-| [task-expanded-plan.png](task-expanded-plan.png)         | packaged-macos   | 1180×900           | `0583ae2332857c7236fbe2ab6abf34a4f180462b419c639ee2f349eb1e0fc40d` |
-| [task-expanded-run.png](task-expanded-run.png)           | packaged-macos   | 1180×900           | `1d2722305131bddb02c0c3a735714aac659149cdab525e1250548b7df2b2767f` |
-| [task-expanded-results.png](task-expanded-results.png)   | packaged-macos   | 1180×900           | `e560f15b6e563ceebad24076ba872628e07c20ff6117d0781ead931c692c58cb` |
-| [task-expanded-history.png](task-expanded-history.png)   | packaged-macos   | 1180×900           | `3ab524f5d0953b76c36c6443a9e126fc8fb86ba45d11c5ce5ee82c9bbbbeb8c8` |
-| [board-5000.png](board-5000.png)                         | packaged-macos   | 1360×900           | `2f1c3e9c230e5d14e19de61cc5121d5191faee0b7fe85d5a6d3cbfa676b4e3e4` |
+| [agent-providers.png](agent-providers.png)               | packaged-macos   | 1700×760           | `86f855eccc9a6295a77421e90ed13a3ee30b8fec09d1b575446ac5ef23a4ddf0` |
+| [board-overview.png](board-overview.png)                 | packaged-macos   | 1700×760           | `d2afe7d50426e7fe630b2a77e748f0ba36608f6383536bd18f4fd48e48a51892` |
+| [board-to-workspace.gif](board-to-workspace.gif)         | packaged-macos   | 1700×760           | `f8ec67b35d16d3f89784be8dd9716e82f147d613856e0e764b51367e27f0cac7` |
+| [command-palette.png](command-palette.png)               | packaged-macos   | 1700×760           | `11bbc247d260a7a3a1c342126a83c90a88ec41f88ea4a20e7698de85247a9e2c` |
+| [maintenance-center.png](maintenance-center.png)         | packaged-macos   | 1700×760           | `e4767366297f3df085513d71217a1b63af42680c82d45316ca1543d44f7d62a5` |
+| [mobile-board.png](mobile-board.png)                     | mobile-browser   | 390×844            | `916b0018c04f6e46fb1868e6aad93c522e21c507d3dd71066617b18f55c85dc9` |
+| [mobile-flow.gif](mobile-flow.gif)                       | mobile-browser   | 390×844            | `4122d4d737598b08da2054b6d23afdcbe1295d8f40d67bdb6a4baff27a67cded` |
+| [mobile-settings.png](mobile-settings.png)               | mobile-browser   | 390×844            | `6600cf869b0cf6807ce8bcf6dfa156249d5b791fbc199dc9e5ff50fb50a7438b` |
+| [mobile-task-workspace.png](mobile-task-workspace.png)   | mobile-browser   | 390×844            | `ca7b6a26143a6ed51a749571bf9b0298270b997876ccab96568e4c8bba1040e4` |
+| [notification-adapters.png](notification-adapters.png)   | packaged-macos   | 1700×760           | `a645c2df2eac479c0e9e463b102ba7928a4090a7d565a058515ca93546e018e4` |
+| [settings-navigation.png](settings-navigation.png)       | packaged-macos   | 1700×760           | `c72334db0fe71f57777aa306bd64c19f5502bd39bb394e975f8b7985dd4dff65` |
+| [squad-chat.png](squad-chat.png)                         | packaged-macos   | 1700×760           | `8040c086dc8405fc4d2b9f2642833cae71c728812935632859bfeb0077f07a77` |
+| [task-workspace.png](task-workspace.png)                 | packaged-macos   | 1700×760           | `4b0ce1b9b68b118f329125227686f1fcedb7c7a818ca6ea90039bbaecb27926a` |
+| [workbench-panel.png](workbench-panel.png)               | packaged-macos   | 1700×760           | `3c505dac2cdc6d8f45a5ac7aadd1a0a684ad6c0dfe6879dcd69043b1fc31c79f` |
+| [task-drawer-overview.png](task-drawer-overview.png)     | packaged-macos   | 1180×900           | `8f7a91716f6ae6ce357de6356963e079560e24479fbb85e276c48bcd5458ef26` |
+| [task-drawer-plan.png](task-drawer-plan.png)             | packaged-macos   | 1180×900           | `3832ea90c490960dff76dd2d02566a954da478a9eb93830d0e5e4e2190c59aeb` |
+| [task-drawer-run.png](task-drawer-run.png)               | packaged-macos   | 1180×900           | `070b6f3dae9f46823ac83b5236e6da70b53b5b89e185d28935ead1966ddaa159` |
+| [task-drawer-results.png](task-drawer-results.png)       | packaged-macos   | 1180×900           | `bf35067ffc3c9a83fbfe5f487bf4523379180b64b5ce3baa3a4b167c353f1be7` |
+| [task-drawer-history.png](task-drawer-history.png)       | packaged-macos   | 1180×900           | `0de39821066e1c75eea7728fb746bf2f02d5bb7e488ff841bf998c93a2589bfb` |
+| [task-expanded-overview.png](task-expanded-overview.png) | packaged-macos   | 1180×900           | `90bdcbae12552d0b59965364e870b370b4124c74473919290f4e2c5f790eec40` |
+| [task-expanded-plan.png](task-expanded-plan.png)         | packaged-macos   | 1180×900           | `a96b4f5fb5add4b964bc8dcab43719d8a0eaabf282f43979e187ab232b585292` |
+| [task-expanded-run.png](task-expanded-run.png)           | packaged-macos   | 1180×900           | `5ebf795b9205a263f1059dad641a7eabf95a6019d38d5c4c27c7a9167625cc96` |
+| [task-expanded-results.png](task-expanded-results.png)   | packaged-macos   | 1180×900           | `2af152fb1d7615699b78ad72f4b62d3fa8e81fbcb2154360b64fd5fe249c2d4c` |
+| [task-expanded-history.png](task-expanded-history.png)   | packaged-macos   | 1180×900           | `b096988469cf01b54fb9da8fafdf60b46d634daddf5cd9a926fdaffe03e5b24b` |
+| [board-5000.png](board-5000.png)                         | packaged-macos   | 1360×900           | `5e4f6e3c8af51c42416cadbcd2b321f519d781625e6a60db81e2633f0ceef92a` |
