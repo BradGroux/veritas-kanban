@@ -4,7 +4,12 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
-import { cacheControl, apiCacheHeaders, setLastModified, type CacheProfile } from '../../middleware/cache-control.js';
+import {
+  cacheControl,
+  apiCacheHeaders,
+  setLastModified,
+  type CacheProfile,
+} from '../../middleware/cache-control.js';
 
 function mockRequest(overrides: Partial<Request> = {}): Request {
   return {
@@ -18,7 +23,9 @@ function mockResponse(): Response & { _headers: Record<string, string> } {
   const headers: Record<string, string> = {};
   return {
     _headers: headers,
-    set: vi.fn((key: string, value: string) => { headers[key] = value; }),
+    set: vi.fn((key: string, value: string) => {
+      headers[key] = value;
+    }),
   } as unknown as Response & { _headers: Record<string, string> };
 }
 
@@ -53,7 +60,7 @@ describe('Cache Control Middleware', () => {
       const next = vi.fn();
 
       middleware(req, res, next);
-      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, max-age=10, must-revalidate');
+      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
       expect(next).toHaveBeenCalled();
     });
 
@@ -64,7 +71,7 @@ describe('Cache Control Middleware', () => {
       const next = vi.fn();
 
       middleware(req, res, next);
-      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, max-age=60');
+      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
       expect(next).toHaveBeenCalled();
     });
 
@@ -140,7 +147,7 @@ describe('Cache Control Middleware', () => {
       const next = vi.fn();
 
       apiCacheHeaders(req, res, next);
-      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, max-age=10, must-revalidate');
+      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
       expect(next).toHaveBeenCalled();
     });
 
@@ -150,7 +157,7 @@ describe('Cache Control Middleware', () => {
       const next = vi.fn();
 
       apiCacheHeaders(req, res, next);
-      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, max-age=10, must-revalidate');
+      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
       expect(next).toHaveBeenCalled();
     });
 
@@ -160,7 +167,7 @@ describe('Cache Control Middleware', () => {
       const next = vi.fn();
 
       apiCacheHeaders(req, res, next);
-      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, max-age=60');
+      expect(res.set).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
       expect(next).toHaveBeenCalled();
     });
 

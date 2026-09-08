@@ -1,3 +1,4 @@
+import type { BoardTask } from '@veritas-kanban/shared';
 /**
  * Task API endpoints: CRUD, archive, subtasks, comments, blocking, reorder.
  */
@@ -11,6 +12,15 @@ import type {
 import { API_BASE, apiFetch } from './helpers';
 
 export const tasksApi = {
+  listBoard: async (signal?: AbortSignal): Promise<BoardTask[]> =>
+    apiFetch<BoardTask[]>(`${API_BASE}/tasks?view=board`, { cache: 'no-store', signal }),
+  searchIds: async (search: string, signal?: AbortSignal): Promise<string[]> => {
+    const result = await apiFetch<Array<{ id: string }>>(
+      `${API_BASE}/tasks?fields=id&search=${encodeURIComponent(search)}`,
+      { signal }
+    );
+    return result.map((task) => task.id);
+  },
   list: async (): Promise<Task[]> => {
     return apiFetch<Task[]>(`${API_BASE}/tasks`, { cache: 'no-store' });
   },

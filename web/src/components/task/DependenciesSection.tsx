@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { Plus, X, Ban, CheckCircle2, Link as LinkIcon } from 'lucide-react';
 import { ActionIcon, Badge, Button, Group, Paper, Select, Stack, Text } from '@mantine/core';
-import { useTasks, isTaskBlocked } from '@/hooks/useTasks';
+import { useBoardTasks, isTaskBlocked } from '@/hooks/useTasks';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
 import type { Task } from '@veritas-kanban/shared';
@@ -17,7 +17,7 @@ export function DependenciesSection({
   task,
   onBlockedByChange: _onBlockedByChange,
 }: DependenciesSectionProps) {
-  const { data: allTasks } = useTasks();
+  const { data: allTasks } = useBoardTasks();
   const [isAddingDependsOn, setIsAddingDependsOn] = useState(false);
   const [isAddingBlocks, setIsAddingBlocks] = useState(false);
   const { toast } = useToast();

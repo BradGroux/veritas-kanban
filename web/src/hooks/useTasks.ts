@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWebSocketStatus } from '@/contexts/WebSocketContext';
@@ -13,6 +13,8 @@ import {
 } from '@/hooks/useTaskConflicts';
 import {
   DEFAULT_FEATURE_SETTINGS,
+  toBoardTask,
+  type BoardTask,
   normalizeBoardColumns,
   normalizeBoardDefaultStatus,
   sortTasksByBoardPosition,
@@ -40,6 +42,10 @@ function patchTaskInCaches(queryClient: QueryClient, task: Task): void {
   );
   // Also update the individual task cache
   queryClient.setQueryData(['tasks', task.id], task);
+  queryClient.setQueryData<BoardTask[]>(['tasks', 'board'], (old) =>
+    old?.map((item) => (item.id === task.id ? toBoardTask(task) : item))
+  );
+  queryClient.invalidateQueries({ queryKey: ['tasks', 'search'] });
 }
 
 type ApiMutationError = Error & { code?: string; details?: unknown };
@@ -47,7 +53,10 @@ type ApiMutationError = Error & { code?: string; details?: unknown };
 function cachedTaskRevision(queryClient: QueryClient, taskId: string): number | undefined {
   const detailTask = queryClient.getQueryData<Task>(['tasks', taskId]);
   const listTask = queryClient.getQueryData<Task[]>(['tasks'])?.find((task) => task.id === taskId);
-  const revisions = [detailTask?.revision, listTask?.revision].filter(
+  const boardTask = queryClient
+    .getQueryData<BoardTask[]>(['tasks', 'board'])
+    ?.find((task) => task.id === taskId);
+  const revisions = [detailTask?.revision, listTask?.revision, boardTask?.revision].filter(
     (revision): revision is number => typeof revision === 'number'
   );
   return revisions.length > 0 ? Math.max(...revisions) : undefined;
@@ -151,6 +160,33 @@ export function useTasks() {
   });
 }
 
+/** Separate card projection cache; realtime invalidates the shared tasks prefix. */
+export function useBoardTasks() {
+  const { isConnected } = useWebSocketStatus();
+  const queryClient = useQueryClient();
+  const wasConnected = useRef(isConnected);
+  useEffect(() => {
+    if (isConnected && !wasConnected.current) {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'board'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'search'] });
+    }
+    wasConnected.current = isConnected;
+  }, [isConnected, queryClient]);
+  return useQuery({
+    queryKey: ['tasks', 'board'],
+    retry: false,
+    queryFn: ({ signal }) => api.tasks.listBoard(signal),
+  });
+}
+
+export function useBoardSearch(search: string) {
+  return useQuery({
+    queryKey: ['tasks', 'search', search],
+    queryFn: ({ signal }) => api.tasks.searchIds(search, signal),
+    enabled: Boolean(search),
+  });
+}
+
 export function useArchivedTasks() {
   return useQuery({
     queryKey: ['tasks', 'archived'],
@@ -250,6 +286,12 @@ export function useUpdateTask() {
 
       const cachedTask = queryClient.getQueryData<Task>(['tasks', serverTask.id]);
       queryClient.setQueryData(['tasks', serverTask.id], mergeWithCachedTimeTracking(cachedTask));
+      queryClient.setQueryData<BoardTask[]>(['tasks', 'board'], (old) =>
+        old?.map((task) =>
+          task.id === serverTask.id ? toBoardTask(mergeWithCachedTimeTracking(task)) : task
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'search'] });
 
       // GH-87: Invalidate metrics cache if status changed to keep sidebar in sync.
       // The sidebar relies on useMetrics() which has a 30s refetch interval + 10s staleTime.
@@ -758,41 +800,47 @@ export function useTasksByStatus(
   tasks: Task[] | undefined,
   columns?: BoardColumnConfig[]
 ): Record<string, Task[]> {
-  const statuses = normalizeBoardColumns(columns ?? DEFAULT_FEATURE_SETTINGS.board.columns).map(
-    (column) => column.id
-  );
-  const grouped = Object.fromEntries(statuses.map((status) => [status, [] as Task[]])) as Record<
-    string,
-    Task[]
-  >;
+  return useMemo(() => {
+    const statuses = normalizeBoardColumns(columns ?? DEFAULT_FEATURE_SETTINGS.board.columns).map(
+      (column) => column.id
+    );
+    const grouped = Object.fromEntries(statuses.map((status) => [status, [] as Task[]])) as Record<
+      string,
+      Task[]
+    >;
 
-  for (const task of tasks ?? []) {
-    if (!grouped[task.status]) {
-      grouped[task.status] = [];
+    for (const task of tasks ?? []) {
+      if (!grouped[task.status]) {
+        grouped[task.status] = [];
+      }
+      grouped[task.status].push(task);
     }
-    grouped[task.status].push(task);
-  }
 
-  for (const status of Object.keys(grouped)) {
-    grouped[status] = sortTasksByBoardPosition(grouped[status]);
-  }
+    for (const status of Object.keys(grouped)) {
+      grouped[status] = sortTasksByBoardPosition(grouped[status]);
+    }
 
-  return grouped;
+    return grouped;
+  }, [tasks, columns]);
 }
 
-// Check if a task is blocked by incomplete dependencies
-export function isTaskBlocked(task: Task, allTasks: Task[]): boolean {
-  if (!task.blockedBy?.length) return false;
+// A shared snapshot index avoids scanning the whole board for every card.
+export type TaskDependencyIndex = ReadonlyMap<string, Task>;
 
-  const blockingTasks = allTasks.filter((t) => task.blockedBy?.includes(t.id));
-  return blockingTasks.some((t) => t.status !== 'done');
+export function isTaskBlocked(task: Task, allTasks: Task[] | TaskDependencyIndex): boolean {
+  return getTaskBlockers(task, allTasks).length > 0;
 }
 
-// Get the blockers for a task
-export function getTaskBlockers(task: Task, allTasks: Task[]): Task[] {
+export function getTaskBlockers(task: Task, allTasks: Task[] | TaskDependencyIndex): Task[] {
   if (!task.blockedBy?.length) return [];
-
-  return allTasks.filter((t) => task.blockedBy?.includes(t.id) && t.status !== 'done');
+  if (Array.isArray(allTasks)) {
+    const ids = new Set(task.blockedBy);
+    return allTasks.filter((candidate) => ids.has(candidate.id) && candidate.status !== 'done');
+  }
+  return [...new Set(task.blockedBy)].flatMap((id) => {
+    const blocker = allTasks.get(id);
+    return blocker && blocker.status !== 'done' ? [blocker] : [];
+  });
 }
 
 // Archive suggestions - sprints where all tasks are done

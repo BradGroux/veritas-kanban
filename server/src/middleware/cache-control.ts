@@ -10,26 +10,23 @@ import type { Request, Response, NextFunction } from 'express';
  * Profiles:
  *   static-immutable  – Vite hashed assets (1 year, immutable)
  *   static-html       – SPA shell (must revalidate every request)
- *   task-list          – GET /api/tasks (short TTL, private)
- *   task-detail        – GET /api/tasks/:id (moderate TTL, private)
+ *   task-list          – GET /api/tasks (private, revalidate)
+ *   task-detail        – GET /api/tasks/:id (private, revalidate)
  *   config             – GET /api/config (always revalidate)
  *   no-store           – Mutating responses / sensitive data
  */
 
 export type CacheProfile =
-  | 'static-immutable'
-  | 'static-html'
-  | 'task-list'
-  | 'task-detail'
-  | 'config'
-  | 'no-store';
+  'static-immutable' | 'static-html' | 'task-list' | 'task-detail' | 'config' | 'no-store';
 
 const CACHE_PROFILES: Record<CacheProfile, string> = {
   'static-immutable': 'public, max-age=31536000, immutable',
   'static-html': 'no-cache',
-  'task-list': 'private, max-age=10, must-revalidate',
-  'task-detail': 'private, max-age=60',
-  'config': 'private, no-cache',
+  // Subresource mutations (such as /tasks/:id/move) do not invalidate the
+  // browser's cached parent URL. Revalidate mutable task data using its ETag.
+  'task-list': 'private, no-cache',
+  'task-detail': 'private, no-cache',
+  config: 'private, no-cache',
   'no-store': 'no-store',
 };
 
