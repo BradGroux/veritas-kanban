@@ -132,6 +132,9 @@ async function capture(taskMode = false) {
       scaleFactor: 1,
     };
   }
+  // DOM readiness and animation frames can precede Electron's last composited frame.
+  // Synchronize the renderer first; the published bytes still come from capturePage.
+  await page.screenshot({ fullPage: false });
   const native = await app.evaluate(async ({ BrowserWindow, screen }, url) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
     return {
