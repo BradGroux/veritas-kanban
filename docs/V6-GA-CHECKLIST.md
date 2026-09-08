@@ -13,10 +13,12 @@ Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
 - [x] Complete the appropriate local integration verification.
 - [x] Complete final delivery readback for all 25 findings: 24 implemented fixes and #1544 explicitly dispositioned as not reproducible.
 - [x] Inspect the actual packaged candidate, all matched screenshots and complete GIF/video playback; retain revision and package hashes.
-- [ ] Complete review and the repository delivery workflow using the owner-authorized existing CI capacity.
+- [x] Complete review and the repository delivery workflow using the owner-authorized existing CI capacity.
 - [x] Obtain owner approval for the 6.2.0 release and advisory publication.
 - [ ] Obtain separate approval for installed-app replacement and public writing.
-- [ ] Verify signing, notarization, distributed assets and the installed application before calling 6.2.0 stable.
+- [x] Verify signing, notarization, and the exact signed package with native, board, and media acceptance.
+- [ ] Verify the public distributed assets and updater metadata before marking 6.2.0 stable.
+- [ ] Verify installed-application acceptance if the owner separately authorizes replacing the installed application.
 
 ## Historical 6.1.7 Release Gate
 
