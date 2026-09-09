@@ -1,7 +1,7 @@
 import type {
   DesktopCommandDispatchRequest,
   DesktopCommandDispatchResult,
-} from '../../../desktop/src/shared/desktop-bridge-contracts';
+} from '@veritas-kanban/shared';
 
 export function desktopSettingsBridge() {
   return (
