@@ -19,8 +19,8 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^26.4.0",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3"
   },
   "license": "MIT",

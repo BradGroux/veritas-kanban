@@ -19,10 +19,27 @@ updates:
         update-types:
           - 'version-update:semver-major'
     groups:
-      # Group minor/patch updates to reduce PR noise
+      # Electron ships in the desktop app despite being a devDependency.
+      desktop-runtime:
+        patterns:
+          - 'electron'
+        update-types:
+          - 'minor'
+          - 'patch'
       production-dependencies:
+        dependency-type: 'production'
         patterns:
           - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+      development-dependencies:
+        dependency-type: 'development'
+        patterns:
+          - '*'
+        exclude-patterns:
+          - 'electron'
         update-types:
           - 'minor'
           - 'patch'
