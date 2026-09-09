@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.2.1] - 2026-09-09
+
+### Fixed
+
+- Restored Docker builds by moving browser/desktop command contracts into the shared package. The web build no longer depends on desktop source or test-only Node type declarations (#1578).
+
+### Compatibility
+
+- All maintained packages move together to 6.2.1. Existing command payloads, REST API v1, and stored data remain compatible; no database migration is required.
+
 ## [6.2.0] - 2026-09-07
 
 Veritas Kanban 6.2.0 improves Settings persistence, keyboard and native macOS interactions, and large-board behavior.

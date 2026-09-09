@@ -1,6 +1,6 @@
-# Veritas Kanban 6.2.0 Candidate Release Notes
+# Veritas Kanban 6.2.1 Candidate Release Notes
 
-The 6.2.0 candidate improves Settings persistence, native macOS interactions, keyboard navigation and large-board behavior. Read the [6.2.0 release source](releases/v6.2.0.md) for current changes and compatibility notes. Verification and publication remain separate stages in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md).
+The 6.2.1 candidate restores Docker builds by moving browser/desktop command contracts into the shared package. Read the [6.2.1 release source](releases/v6.2.1.md) for changes and compatibility notes. Verification and publication remain separate stages in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md).
 
 The latest published stable release remains 6.1.7. Veritas Kanban 6.0.0 remains quarantined.
 
