@@ -62,9 +62,9 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/ws": "^8.5.13",
     "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^10.9.1",
+    "eslint": "^10.10.0",
     "supertest": "^7.2.2",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3"
   },
   "license": "MIT",
