@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Restored Docker builds by moving browser/desktop command contracts into the shared package. The web build no longer depends on desktop source or test-only Node type declarations (#1578).
 
+### Changed
+
+- Updated Electron, Mantine, the Codex SDK, and related runtime libraries from the dependency refresh in #1547.
+
 ### Security
 
 - Updated transitive Hono and js-yaml dependencies to patched versions for the four September dependency advisories.
