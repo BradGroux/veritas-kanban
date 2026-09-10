@@ -427,14 +427,18 @@ function renderOpenClawCompletion(taskEnvelope: TaskEnvelope): string {
   });
   return `## Completion (OpenClaw callback)
 
-When the work reaches a terminal state, report it to Veritas.
+When the work reaches a terminal state, report it through an operator-provisioned authenticated completion tool.
+
+Native OpenClaw dispatch does not provision callback credentials. Before starting work, confirm that the operator has separately configured a trusted completion tool with Veritas API authentication and \`task:write\` permission. The gateway token authenticates Veritas to OpenClaw; it is not a Veritas callback credential. The attempt and manifest identifiers below are provenance, not authentication.
+
+If authenticated completion tooling is unavailable, report that blocker in the OpenClaw session for the operator to resolve. Do not send an unauthenticated callback, obtain an administrator key, disable authentication, or claim that Veritas recorded completion. Do not place credential values in the task prompt or completion payload.
 
 - Endpoint: \`POST ${callbackUrl}\`
+- This generated address assumes Veritas is reachable at localhost:3001 from the worker. A remote or container worker requires an operator-verified callback address as well as authentication.
+- Use the existing completion tool's authenticated request mechanism with this JSON payload:
 
-\`\`\`bash
-curl -X POST ${callbackUrl} \\
-  -H "Content-Type: application/json" \\
-  -d '${payload}'
+\`\`\`json
+${payload}
 \`\`\`
 
 For failure, send \`success: false\` and include an \`error\` message.
