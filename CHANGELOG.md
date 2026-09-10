@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Clarified that native OpenClaw dispatch does not provision completion credentials. Generated instructions now require separately authenticated tooling and explain the localhost callback limitation; automatic authenticated delivery remains tracked in #1587.
+- Added server-owned native OpenClaw completion through authenticated gateway terminal replies. Launch readiness, persisted run bindings, restart observation, and idempotent completion replace unauthenticated child callbacks; native tasks require OpenClaw v2026.9.2 or later (#1587).
 
 - Restored Docker builds by moving browser/desktop command contracts into the shared package. The web build no longer depends on desktop source or test-only Node type declarations (#1578).
 

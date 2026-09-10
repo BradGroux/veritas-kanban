@@ -1279,87 +1279,101 @@ filtered out.
 
 ---
 
-## OpenClaw (v2026.6.11)
+## OpenClaw (native tasks: v2026.9.2 or later)
 
 **Provider ID:** `openclaw`  
-**Tested version:** OpenClaw v2026.6.11
+**Tested terminal contract:** OpenClaw v2026.9.2, build `3928bad`
 
-### Overview
+### Server-owned completion
 
-OpenClaw task and workflow runs are dispatched through the OpenClaw gateway HTTP API using
-`POST /tools/invoke` with the `sessions_spawn` tool. The spawn acknowledgement is the reachability
-and policy check: if it fails, Veritas returns an actionable configuration error and rolls the
-attempt back to `todo` rather than leaving it in a stuck `running` state. Veritas does not issue a
-separate probe because OpenClaw v2026.6.11 ignores the endpoint's reserved `dryRun` field.
+Starting with 6.2.1, native task completion is captured by Veritas through the authenticated
+OpenClaw gateway. The child returns a small JSON completion report as its final reply; it
+receives no Veritas API credential or callback URL. This resolves [#1587](https://github.com/BradGroux/veritas-kanban/issues/1587).
 
-### Completion authentication in 6.2.0
+Before creating an active attempt, Veritas authenticates to the configured gateway and probes
+`agent.wait`. Native tasks require v2026.9.2 or later because the adapter consumes terminal
+reply snapshots. The gateway's reported version becomes verified runtime-manifest evidence;
+`OPENCLAW_GATEWAY_VERSION` cannot substitute for this check.
 
-Native OpenClaw dispatch does **not** provision callback credentials or an authenticated completion tool for the spawned child. This remains an integration gap, tracked in [#1587](https://github.com/BradGroux/veritas-kanban/issues/1587), rather than a missing gateway setting. Successful `sessions_spawn` proves dispatch, not authenticated end-to-end completion.
+Veritas dispatches with `POST /tools/invoke` and `sessions_spawn`, then persists the returned
+run ID and child session key with the workspace, task, attempt, runtime manifest, task envelope,
+and launch manifest identities. The server observes only that run through `agent.wait` and
+passes a validated terminal claim to the existing completion authority. Session history,
+ordinary chat messages, and a spawn acknowledgement are not completion evidence.
 
-Both `/api/agents/:taskId/complete` and `/api/v1/agents/:taskId/complete` require Veritas API authentication and `task:write` permission. `attemptId` and `providerRuntimeManifestDigest` bind completion to the attempt; they are not credentials. `OPENCLAW_GATEWAY_TOKEN` authenticates requests to OpenClaw and does not authorize a callback to Veritas. The credential-broker exclusion described above does not provide another callback-authentication path.
+The final reply must be a JSON object with `schemaVersion: "veritas-openclaw-completion/v1"`,
+`status` (`success`, `failed`, or `blocked`), a `summary`, and an optional `error`. The generated
+task instructions include the exact format. Runtime errors become failed results; missing or
+invalid final reports become blocked results. Veritas still checks the task's completion
+requirements before accepting success.
 
-A separately trusted worker can use existing, operator-provisioned Veritas API authentication through its own completion tooling. That is a manually integrated REST client, not automatic native child provisioning. Configure its credentials outside the task prompt, use the narrowest available API access, and verify callback delivery from that worker with authentication enabled before relying on it. Existing general API credentials do not become task/attempt-scoped or single-use merely because an environment variable holds them. Veritas does not implement a native per-spawn credential/environment handoff here.
+A wait timeout is not a failed run. Observation resumes after a Veritas restart from the saved
+run binding, through the durable supervisor ownership checks. Lost connectivity, changed gateway
+version/origin, missing identity, or an unresolved 20-minute observation deadline requires
+operator recovery. Restore the bound gateway and restart Veritas to retry observation. The server
+never relaunches a child to recover its result. Duplicate terminal
+results use the existing idempotent completion path; mismatched or conflicting results cannot
+replace the active attempt.
 
-If that trusted completion path is unavailable, use a provider with harness-owned terminal capture, such as Codex CLI/SDK, rather than relying on a native OpenClaw task to complete automatically. Do not disable API authentication or distribute an administrator key to make the example work. For remote/container workers, the generated localhost:3001 callback address also requires an independently verified reachable origin; changing the origin does not solve authentication.
+### Required gateway policy and setup
 
-A completion-only capability is a possible implementation direction for #1587, not a configuration option in 6.2.0. It needs server-enforced scope, expiry, terminal revocation, replay/idempotency semantics, and a verified delivery channel before it can be documented as supported.
+1. Run OpenClaw v2026.9.2 or later for native tasks. Workflow sessions retain their separate
+   v2026.6.11 transport contract.
+2. Allow `sessions_spawn` in `gateway.tools.allow` and the active agent/tool profile. Add
+   `sessions_send` if using workflow session reuse. Apply the change through your gateway's
+   normal configuration procedure.
+3. Set `OPENCLAW_GATEWAY_URL` in the **Veritas server** environment (default:
+   `http://127.0.0.1:18789`) and set `OPENCLAW_GATEWAY_TOKEN` to the configured gateway credential.
+   Native tasks require authentication even if the gateway otherwise permits anonymous access.
+4. The server connection must be authorized for `agent.wait` (`operator.write`). Direct loopback
+   uses OpenClaw's documented backend helper authentication. Remote gateways require HTTPS and
+   must authorize this connection; a device-pairing requirement fails closed. The adapter does
+   not create device identities, bypass pairing, or copy a user's device credentials. A configured
+   secure tunnel to loopback is another deployment option.
+5. Enable the OpenClaw provider profile in **Settings → Agents**. Use an agent ID configured in
+   the gateway. Check runtime readiness before dispatch.
 
-### Required gateway tool policy
-
-`sessions_spawn` and `sessions_send` are **blocked by default** in a fresh OpenClaw v2026.6.11
-install at the operator-level endpoint. You must explicitly allow them:
-
-1. Add `sessions_spawn` to `gateway.tools.allow` in the OpenClaw configuration.
-2. Add `sessions_send` too if workflow session reuse is enabled.
-3. Confirm the active agent/tool profile also permits these tools.
-4. Save the configuration and restart the gateway.
-
-### Setup
-
-1. Run an OpenClaw v2026.6.11 instance locally or on a reachable host.
-2. Configure the gateway tool policy (see above).
-3. Set `OPENCLAW_GATEWAY_URL` to the gateway base URL (default: `http://127.0.0.1:18789`).
-4. Optionally set `OPENCLAW_GATEWAY_TOKEN` for bearer-authenticated gateways.
-5. Establish and verify the separately trusted completion path described above before enabling native task runs. Gateway policy alone does not provision it.
-6. Enable the OpenClaw provider profile in **Settings → Agents**.
+Only Veritas needs to reach the gateway. Remote/container children need no route back to Veritas.
+Existing manual REST completion endpoints still require Veritas authentication and `task:write`;
+the gateway credential does not authorize those endpoints.
 
 ### Environment variables
 
-| Variable                         | Default                  | Purpose                                                                                  |
-| -------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
-| `OPENCLAW_GATEWAY_URL`           | `http://127.0.0.1:18789` | Gateway base URL                                                                         |
-| `OPENCLAW_GATEWAY_TOKEN`         | _(none)_                 | Bearer token for the gateway                                                             |
-| `OPENCLAW_GATEWAY_SESSION_KEY`   | `main`                   | Parent session key                                                                       |
-| `OPENCLAW_GATEWAY_ALLOW_PRIVATE` | `false`                  | Allow private IP gateway URLs                                                            |
-| `OPENCLAW_GATEWAY_VERSION`       | _(none)_                 | Operator-declared version hint; the manifest remains degraded until runtime verification |
+| Variable                         | Default                  | Purpose                                                                          |
+| -------------------------------- | ------------------------ | -------------------------------------------------------------------------------- |
+| `OPENCLAW_GATEWAY_URL`           | `http://127.0.0.1:18789` | Bound dispatch and completion gateway base URL; no embedded credentials or query |
+| `OPENCLAW_GATEWAY_TOKEN`         | _(none)_                 | Server-owned gateway credential; required for native task completion             |
+| `OPENCLAW_GATEWAY_SESSION_KEY`   | `main`                   | Parent session key                                                               |
+| `OPENCLAW_GATEWAY_ALLOW_PRIVATE` | `false`                  | Permit private IP gateway addresses; remote completion still requires HTTPS      |
+| `OPENCLAW_GATEWAY_VERSION`       | _(none)_                 | Legacy workflow version hint; native tasks verify the gateway version directly   |
 
-### Dispatch flow
+### Local integration check
 
-1. Veritas calls `sessions_spawn` with the OpenClaw-owned task-envelope
-   transport, including the callback URL and required `attemptId` plus
-   `providerRuntimeManifestDigest` completion provenance.
-2. A policy or connection failure rolls the task attempt back to `todo` with an error message.
-3. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
-4. The OpenClaw sub-session can report completion only through separately provisioned authenticated tooling. Without that operator-managed path, native dispatch does not provide automatic completion.
+With the exact OpenClaw v2026.9.2 executable on `PATH`:
 
-Late or replayed callbacks are rejected when either provenance value differs
-from the active attempt.
+```bash
+pnpm --filter @veritas-kanban/shared build
+VK_OPENCLAW_SMOKE=1 pnpm --filter @veritas-kanban/server exec vitest run src/__tests__/openclaw-completion.smoke.test.ts src/__tests__/codex-provider-service.test.ts -t @smoke
+```
 
-### Limitations
+This starts a temporary loopback gateway with isolated configuration/state and a deterministic
+local model endpoint. It launches actual OpenClaw child runs for success and failure and verifies
+terminal replay through a new connection and completion through Veritas's normal attempt
+lifecycle against an isolated task store. It uses no real model credential and does not alter the
+operator's gateway. It tests the native transport contract, not hosted-model behavior or an
+operator's production configuration.
 
-- Callback authentication is not provisioned by native dispatch; see [Completion authentication in 6.2.0](#completion-authentication-in-620).
-- Stop/cancel is not supported for individual sub-sessions in OpenClaw v2026.6.11. A stop request
-  logs a warning but cannot forcibly terminate the sub-session.
-- Session resume is driven by the callback flow; no explicit `--resume` flag is used.
-- OpenClaw v2026.6.11 does not accept per-spawn run timeouts. Configure
-  `agents.defaults.subagents.runTimeoutSeconds` in OpenClaw instead.
+### Limitations and recovery
 
-### Troubleshooting
+- Veritas does not yet stop, resume, or send follow-ups to native task children. Terminal
+  observation after restart is not conversation resume.
+- Gateway restarts can discard retained run results. If the exact run cannot be reconciled,
+  inspect it in OpenClaw before resolving the blocked Veritas attempt or starting more work.
+- A crash after gateway acceptance but before the run binding is persisted requires manual
+  reconciliation; Veritas cannot safely guess which remote run belongs to the attempt.
+- The observation deadline does not terminate the child. Configure child execution limits in
+  OpenClaw; no per-spawn timeout flag is assumed by the adapter.
+- Older 6.2.0 native attempts have no run binding and retain their existing manual recovery path.
 
-| Symptom                                                      | Fix                                                                                                                                  |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Callback returns `401` or `403`                              | Verify the separately provisioned Veritas authentication and `task:write` permission; the gateway token is not a callback credential |
-| `sessions_spawn is not allowed` on start                     | Add `sessions_spawn` to `gateway.tools.allow`; add `sessions_send` for workflow reuse                                                |
-| `OpenClaw gateway did not respond`                           | Check `OPENCLAW_GATEWAY_URL` and gateway process is running                                                                          |
-| Task stuck in `running` after old request files appear       | Old request-file artifacts can be safely deleted from `.veritas-kanban/agent-requests/`                                              |
-| `OpenClaw sessions_spawn did not return a child session key` | Verify the gateway is running OpenClaw v2026.6.11 or later                                                                           |
+Protocol references: [gateway authentication](https://docs.openclaw.ai/gateway/protocol/auth)
+and [agent RPC methods](https://docs.openclaw.ai/gateway/protocol/rpc-talk-config-and-agents).

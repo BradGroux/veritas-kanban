@@ -319,9 +319,15 @@ const DEFINITIONS: Record<ExecutableAgentProvider, ProviderRuntimeAdapterDefinit
       'Hermes starts in the worktree without an enforceable write boundary.'
     ),
   }),
-  openclaw: definition('openclaw', 'OpenClaw', 'openclaw-tools/v1', {
+  openclaw: definition('openclaw', 'OpenClaw', 'openclaw-task-terminal/v1', {
     ...COMMON_SUPPORTED,
     ...NOT_YET_IMPLEMENTED,
+    'run.complete': supported(
+      'The server captures the authenticated gateway agent.wait terminal reply for the persisted run ID.'
+    ),
+    'run.reattach': supported(
+      'The server resumes terminal observation of the bound gateway run after restart; it never relaunches the child.'
+    ),
     'run.stop': unsupported('OpenClaw does not expose a task-session stop API.'),
     'run.streaming': unknown('Task-session streaming has not been conformance tested.'),
     'run.structured-events': unknown('OpenClaw task event normalization is tracked by issue #850.'),
@@ -352,6 +358,7 @@ export function getProviderRuntimeAdapterDefinition(
   if (provider !== 'openclaw' || surface !== 'workflow') return base;
 
   const overrides: ProviderRuntimeCapabilityOverrides = {
+    'run.complete': COMMON_SUPPORTED['run.complete'],
     'run.follow-up': supported(
       'The workflow adapter sends follow-up prompts to an existing OpenClaw session.'
     ),

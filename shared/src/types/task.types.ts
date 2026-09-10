@@ -68,6 +68,21 @@ export interface TaskAttempt {
   model?: string;
   threadId?: string;
   sessionKey?: string;
+  /** Server-owned native completion identity; no child or gateway credentials. */
+  openclawRun?: {
+    schemaVersion: 'openclaw-task-run/v1';
+    gatewayUrl: string;
+    gatewayVersion: string;
+    runId: string;
+    sessionKey: string;
+    workspaceId: string;
+    taskId: string;
+    attemptId: string;
+    providerRuntimeManifestDigest: string;
+    taskEnvelopeDigest: string;
+    runLaunchManifestDigest: string;
+    observeUntil: string;
+  };
   cloudUrl?: string;
   cloudTarget?: string;
   orchestration?: import('./workflow.js').WorkflowPipelineSummary;

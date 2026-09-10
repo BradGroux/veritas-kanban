@@ -58,6 +58,8 @@ export interface RunSupervisorCheckpoint {
 }
 
 export interface RunSupervisorRecoveryBindings {
+  /** Adapter-owned observation; invoked only after durable ownership checks pass. */
+  sessionProbe?: (record: RunSupervisorRecord) => Promise<boolean>;
   provider: ExecutableAgentProvider;
   adapter: string;
   providerRuntimeManifestDigest: string;
@@ -406,7 +408,8 @@ export class RunSupervisorService {
           'Leave the remote session untouched, inspect it in the provider, and launch a new attempt only after its state is known.'
         );
       }
-      const reachable = this.sessionProbe ? await this.sessionProbe(record) : false;
+      const probe = bindings.sessionProbe ?? this.sessionProbe;
+      const reachable = probe ? await probe(record) : false;
       if (!reachable) {
         return this.recoveryRequiredResult(
           id,
