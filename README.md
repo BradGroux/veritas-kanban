@@ -695,6 +695,8 @@ VK also documents the Codex and Hermes operating model:
 
 ### Any Platform (REST API)
 
+These examples assume an already authenticated REST client. Native OpenClaw dispatch does not provision callback credentials for its child; see [OpenClaw completion authentication](docs/AGENT-PROVIDERS.md#completion-authentication-in-620) before relying on automatic completion.
+
 > 💡 **Using the CLI?** Skip the curl commands — `vk begin <id>` and `vk done <id> "summary"` handle the full lifecycle in one shot. See the [CLI Guide](docs/CLI-GUIDE.md) for details.
 
 ```bash
@@ -708,11 +710,11 @@ curl -X POST http://localhost:3001/api/tasks \
 curl -X POST http://localhost:3001/api/tasks/<id>/time/start \
   -H "X-API-Key: $YOUR_KEY"
 
-# Mark complete
+# Report completion using the active managed attempt provenance
 curl -X POST http://localhost:3001/api/agents/<id>/complete \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $YOUR_KEY" \
-  -d '{"success": true, "summary": "What was done"}'
+  -d '{"attemptId": "<active-attempt-id>", "providerRuntimeManifestDigest": "<active-provider-runtime-manifest-digest>", "success": true, "summary": "What was done"}'
 ```
 
 ### GitHub Issues Sync

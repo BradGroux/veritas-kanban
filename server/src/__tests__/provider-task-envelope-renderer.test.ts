@@ -159,6 +159,14 @@ describe('provider task-envelope renderers', () => {
     expect(transport.content).toContain(
       'No native structured-output support is assumed; Veritas validates and normalizes the callback.'
     );
+    expect(transport.content).toContain(
+      'Native OpenClaw dispatch does not provision callback credentials.'
+    );
+    expect(transport.content).toContain('`task:write` permission');
+    expect(transport.content).toContain('provenance, not authentication');
+    expect(transport.content).toContain('Do not send an unauthenticated callback');
+    expect(transport.content).toContain('operator-verified callback address');
+    expect(transport.content).not.toContain('curl -X POST');
     expect(transport.content).toMatchSnapshot();
   });
 

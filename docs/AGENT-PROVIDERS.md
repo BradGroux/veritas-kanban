@@ -1292,6 +1292,18 @@ and policy check: if it fails, Veritas returns an actionable configuration error
 attempt back to `todo` rather than leaving it in a stuck `running` state. Veritas does not issue a
 separate probe because OpenClaw v2026.6.11 ignores the endpoint's reserved `dryRun` field.
 
+### Completion authentication in 6.2.0
+
+Native OpenClaw dispatch does **not** provision callback credentials or an authenticated completion tool for the spawned child. This remains an integration gap, tracked in [#1587](https://github.com/BradGroux/veritas-kanban/issues/1587), rather than a missing gateway setting. Successful `sessions_spawn` proves dispatch, not authenticated end-to-end completion.
+
+Both `/api/agents/:taskId/complete` and `/api/v1/agents/:taskId/complete` require Veritas API authentication and `task:write` permission. `attemptId` and `providerRuntimeManifestDigest` bind completion to the attempt; they are not credentials. `OPENCLAW_GATEWAY_TOKEN` authenticates requests to OpenClaw and does not authorize a callback to Veritas. The credential-broker exclusion described above does not provide another callback-authentication path.
+
+A separately trusted worker can use existing, operator-provisioned Veritas API authentication through its own completion tooling. That is a manually integrated REST client, not automatic native child provisioning. Configure its credentials outside the task prompt, use the narrowest available API access, and verify callback delivery from that worker with authentication enabled before relying on it. Existing general API credentials do not become task/attempt-scoped or single-use merely because an environment variable holds them. Veritas does not implement a native per-spawn credential/environment handoff here.
+
+If that trusted completion path is unavailable, use a provider with harness-owned terminal capture, such as Codex CLI/SDK, rather than relying on a native OpenClaw task to complete automatically. Do not disable API authentication or distribute an administrator key to make the example work. For remote/container workers, the generated localhost:3001 callback address also requires an independently verified reachable origin; changing the origin does not solve authentication.
+
+A completion-only capability is a possible implementation direction for #1587, not a configuration option in 6.2.0. It needs server-enforced scope, expiry, terminal revocation, replay/idempotency semantics, and a verified delivery channel before it can be documented as supported.
+
 ### Required gateway tool policy
 
 `sessions_spawn` and `sessions_send` are **blocked by default** in a fresh OpenClaw v2026.6.11
@@ -1308,7 +1320,8 @@ install at the operator-level endpoint. You must explicitly allow them:
 2. Configure the gateway tool policy (see above).
 3. Set `OPENCLAW_GATEWAY_URL` to the gateway base URL (default: `http://127.0.0.1:18789`).
 4. Optionally set `OPENCLAW_GATEWAY_TOKEN` for bearer-authenticated gateways.
-5. Enable the OpenClaw provider profile in **Settings → Agents**.
+5. Establish and verify the separately trusted completion path described above before enabling native task runs. Gateway policy alone does not provision it.
+6. Enable the OpenClaw provider profile in **Settings → Agents**.
 
 ### Environment variables
 
@@ -1327,13 +1340,14 @@ install at the operator-level endpoint. You must explicitly allow them:
    `providerRuntimeManifestDigest` completion provenance.
 2. A policy or connection failure rolls the task attempt back to `todo` with an error message.
 3. OpenClaw returns a `childSessionKey` which Veritas stores in the attempt record.
-4. The OpenClaw sub-session runs autonomously and calls the Veritas callback URL when done.
+4. The OpenClaw sub-session can report completion only through separately provisioned authenticated tooling. Without that operator-managed path, native dispatch does not provide automatic completion.
 
 Late or replayed callbacks are rejected when either provenance value differs
 from the active attempt.
 
 ### Limitations
 
+- Callback authentication is not provisioned by native dispatch; see [Completion authentication in 6.2.0](#completion-authentication-in-620).
 - Stop/cancel is not supported for individual sub-sessions in OpenClaw v2026.6.11. A stop request
   logs a warning but cannot forcibly terminate the sub-session.
 - Session resume is driven by the callback flow; no explicit `--resume` flag is used.
@@ -1342,9 +1356,10 @@ from the active attempt.
 
 ### Troubleshooting
 
-| Symptom                                                      | Fix                                                                                     |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `sessions_spawn is not allowed` on start                     | Add `sessions_spawn` to `gateway.tools.allow`; add `sessions_send` for workflow reuse   |
-| `OpenClaw gateway did not respond`                           | Check `OPENCLAW_GATEWAY_URL` and gateway process is running                             |
-| Task stuck in `running` after old request files appear       | Old request-file artifacts can be safely deleted from `.veritas-kanban/agent-requests/` |
-| `OpenClaw sessions_spawn did not return a child session key` | Verify the gateway is running OpenClaw v2026.6.11 or later                              |
+| Symptom                                                      | Fix                                                                                                                                  |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Callback returns `401` or `403`                              | Verify the separately provisioned Veritas authentication and `task:write` permission; the gateway token is not a callback credential |
+| `sessions_spawn is not allowed` on start                     | Add `sessions_spawn` to `gateway.tools.allow`; add `sessions_send` for workflow reuse                                                |
+| `OpenClaw gateway did not respond`                           | Check `OPENCLAW_GATEWAY_URL` and gateway process is running                                                                          |
+| Task stuck in `running` after old request files appear       | Old request-file artifacts can be safely deleted from `.veritas-kanban/agent-requests/`                                              |
+| `OpenClaw sessions_spawn did not return a child session key` | Verify the gateway is running OpenClaw v2026.6.11 or later                                                                           |

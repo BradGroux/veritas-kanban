@@ -551,14 +551,18 @@ Continue from this checkpoint. Do not repeat work already represented in the sav
 
 ## Completion (OpenClaw callback)
 
-When the work reaches a terminal state, report it to Veritas.
+When the work reaches a terminal state, report it through an operator-provisioned authenticated completion tool.
+
+Native OpenClaw dispatch does not provision callback credentials. Before starting work, confirm that the operator has separately configured a trusted completion tool with Veritas API authentication and \`task:write\` permission. The gateway token authenticates Veritas to OpenClaw; it is not a Veritas callback credential. The attempt and manifest identifiers below are provenance, not authentication.
+
+If authenticated completion tooling is unavailable, report that blocker in the OpenClaw session for the operator to resolve. Do not send an unauthenticated callback, obtain an administrator key, disable authentication, or claim that Veritas recorded completion. Do not place credential values in the task prompt or completion payload.
 
 - Endpoint: \`POST http://localhost:3001/api/agents/task_transport/complete\`
+- This generated address assumes Veritas is reachable at localhost:3001 from the worker. A remote or container worker requires an operator-verified callback address as well as authentication.
+- Use the existing completion tool's authenticated request mechanism with this JSON payload:
 
-\`\`\`bash
-curl -X POST http://localhost:3001/api/agents/task_transport/complete \\
-  -H "Content-Type: application/json" \\
-  -d '{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:be3844c45a6aef384fb2c6d8dd0e15365b9cd06170272607396278beb052db68","success":true,"summary":"Brief description of what was done"}'
+\`\`\`json
+{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:be3844c45a6aef384fb2c6d8dd0e15365b9cd06170272607396278beb052db68","success":true,"summary":"Brief description of what was done"}
 \`\`\`
 
 For failure, send \`success: false\` and include an \`error\` message.
