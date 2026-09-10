@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HttpOpenClawTaskAdapter } from '../services/openclaw-workflow-adapter.js';
 import type { AgentConfig } from '@veritas-kanban/shared';
 import { ClawdbotAgentService } from '../services/clawdbot-agent-service.js';
 import type { AgentHealthChecker } from '../services/agent-health-service.js';
@@ -6,8 +7,15 @@ import { normalizeHarnessSupportProfile } from '../services/harness-support-prof
 import { resolveExecutableAgentProvider } from '../services/provider-runtime-resolution.js';
 
 const originalOpenClawVersion = process.env.OPENCLAW_GATEWAY_VERSION;
+beforeEach(() => {
+  vi.spyOn(HttpOpenClawTaskAdapter.prototype, 'probeCompletion').mockResolvedValue({
+    gatewayUrl: 'http://127.0.0.1:18789',
+    version: '2026.9.2',
+  });
+});
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (originalOpenClawVersion === undefined) {
     delete process.env.OPENCLAW_GATEWAY_VERSION;
   } else {
@@ -187,7 +195,7 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
     ['codex-sdk', 'openai-codex-sdk/v1', 'supported', 'ready'],
     ['claude-code', 'claude-code-stream-json/v1', 'supported', 'ready'],
     ['hermes-cli', 'hermes-one-shot/v1', 'supported', 'ready'],
-    ['openclaw', 'openclaw-tools/v1', 'unsupported', 'degraded'],
+    ['openclaw', 'openclaw-task-terminal/v1', 'unsupported', 'ready'],
   ] as const)(
     'probes the %s adapter manifest',
     async (provider, protocolVersion, stopState, probeState) => {
@@ -247,7 +255,8 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
       'workflow'
     );
 
-    expect(taskManifest.protocolVersion).toBe('openclaw-tools/v1');
+    expect(taskManifest.protocolVersion).toBe('openclaw-task-terminal/v1');
+    expect(taskManifest.providerVersion).toBe('2026.9.2');
     expect(
       taskManifest.capabilities.find((capability) => capability.id === 'run.follow-up')?.state
     ).toBe('unsupported');
@@ -262,5 +271,14 @@ describe('ClawdbotAgentService provider runtime adapters', () => {
       workflowManifest.capabilities.find((capability) => capability.id === 'artifact.write')?.state
     ).toBe('supported');
     expect(workflowManifest.digest).not.toBe(taskManifest.digest);
+  });
+
+  it('refuses native launch evidence when authenticated completion is unavailable', async () => {
+    vi.mocked(HttpOpenClawTaskAdapter.prototype.probeCompletion).mockRejectedValue(
+      new Error('completion unauthorized')
+    );
+    await expect(
+      new ClawdbotAgentService(health).probeProviderRuntime(config('openclaw'))
+    ).rejects.toThrow('completion unauthorized');
   });
 });

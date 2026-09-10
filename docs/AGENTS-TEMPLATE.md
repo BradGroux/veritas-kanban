@@ -65,15 +65,15 @@ When Veritas Kanban launches this work:
 
 ## How each managed harness receives VK context
 
-| Harness                         | VK transport                              | Agent-facing behavior                                                                                                                        |
-| ------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Buzz Agent                      | ACP v1 stdio                              | Receives the immutable task envelope and selected run tools through the ACP session. Session load/resume is unavailable.                     |
-| Grok Build                      | ACP v1 stdio                              | Receives the immutable task envelope and selected catalog in a dedicated `grok agent --no-leader ... stdio` process.                         |
-| GitHub Copilot CLI              | ACP v1 stdio                              | Receives the immutable task envelope and selected catalog with remote, plugins, custom instructions, and experimental features disabled.     |
-| OpenAI Codex CLI/SDK/app-server | Native process, SDK, or app-server stream | Receives the task envelope plus supported run-scoped MCP configuration. The adapter owns terminal capture.                                   |
-| Claude Code                     | Supervised bare-mode stream               | Receives the task envelope and an explicit run-scoped MCP configuration. It does not inherit arbitrary local plugins, hooks, or MCP servers. |
-| Hermes                          | Supervised one-shot process               | Reads `AGENTS.md` from the assigned worktree and returns scripted stdout. Resume is unavailable.                                             |
-| OpenClaw                        | Gateway tool invocation                   | Receives the task request through the configured gateway and reports through the attempt-bound callback.                                     |
+| Harness                         | VK transport                              | Agent-facing behavior                                                                                                                           |
+| ------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Buzz Agent                      | ACP v1 stdio                              | Receives the immutable task envelope and selected run tools through the ACP session. Session load/resume is unavailable.                        |
+| Grok Build                      | ACP v1 stdio                              | Receives the immutable task envelope and selected catalog in a dedicated `grok agent --no-leader ... stdio` process.                            |
+| GitHub Copilot CLI              | ACP v1 stdio                              | Receives the immutable task envelope and selected catalog with remote, plugins, custom instructions, and experimental features disabled.        |
+| OpenAI Codex CLI/SDK/app-server | Native process, SDK, or app-server stream | Receives the task envelope plus supported run-scoped MCP configuration. The adapter owns terminal capture.                                      |
+| Claude Code                     | Supervised bare-mode stream               | Receives the task envelope and an explicit run-scoped MCP configuration. It does not inherit arbitrary local plugins, hooks, or MCP servers.    |
+| Hermes                          | Supervised one-shot process               | Reads `AGENTS.md` from the assigned worktree and returns scripted stdout. Resume is unavailable.                                                |
+| OpenClaw                        | Gateway tool invocation                   | Receives the task request through the configured gateway; Veritas captures its final report through authenticated gateway terminal observation. |
 
 The current support tier is determined by runtime evidence, not this table.
 Before enabling a profile, the operator must run:

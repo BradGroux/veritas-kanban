@@ -228,6 +228,8 @@ import {
   type CompletionEvidenceSource,
 } from '../services/task-envelope-service.js';
 import { ProviderCompletionService } from '../services/provider-completion-service.js';
+import { HttpOpenClawTaskAdapter } from '../services/openclaw-workflow-adapter.js';
+import { startOpenClawCompletionFixture } from './fixtures/openclaw-completion-gateway.js';
 import type { ReflectionExtractionJobService } from '../services/reflection-extraction-job-service.js';
 import type {
   CreateRunApprovalRequestInput,
@@ -877,6 +879,177 @@ describe('ClawdbotAgentService Codex providers', () => {
     vi.unstubAllEnvs();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
+
+  it.each(['success', 'failed'] as const)(
+    'records native OpenClaw %s through the normal attempt lifecycle',
+    async (outcome) => {
+      task = {
+        ...task,
+        agent: 'openclaw',
+        subtasks: task.subtasks?.map((item) => ({ ...item, completed: true })),
+        verificationSteps: task.verificationSteps?.map((item) => ({ ...item, checked: true })),
+      };
+      mockGetConfig.mockResolvedValue({
+        agents: [
+          {
+            type: 'openclaw',
+            name: 'OpenClaw',
+            command: 'openclaw',
+            args: [],
+            enabled: true,
+            provider: 'openclaw',
+          },
+        ],
+      });
+      const readiness = vi
+        .spyOn(HttpOpenClawTaskAdapter.prototype, 'probeCompletion')
+        .mockResolvedValue({ gatewayUrl: 'http://127.0.0.1:18789', version: '2026.9.2' });
+      const spawnTask = vi.spyOn(HttpOpenClawTaskAdapter.prototype, 'spawnTask').mockResolvedValue({
+        sessionKey: 'agent:openclaw:subagent:fixture',
+        runId: 'run-fixture',
+        status: 'accepted',
+      });
+      const wait = vi.spyOn(HttpOpenClawTaskAdapter.prototype, 'waitForRun').mockResolvedValue({
+        version: '2026.9.2',
+        result: {
+          runId: 'run-fixture',
+          status: 'ok',
+          endedAt: Date.now(),
+          terminalReply: {
+            disposition: 'visible',
+            text: JSON.stringify({
+              schemaVersion: 'veritas-openclaw-completion/v1',
+              status: outcome,
+              summary: 'Native completion lifecycle verified',
+            }),
+          },
+        },
+      });
+      try {
+        const service = testableService(tmpDir);
+        const active = await service.startAgent(task.id, 'openclaw', { commitPolicy: 'allowed' });
+        expect(active.status).toBe('running');
+        await vi.waitFor(() => expect(task.attempt?.completionResult?.status).toBe(outcome));
+        expect(task.attempt?.completionResult?.terminalSource).toBe('remote-session');
+        expect(task.attempt?.openclawRun).toMatchObject({
+          runId: 'run-fixture',
+          attemptId: active.attemptId,
+          providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+        });
+        expect(spawnTask).toHaveBeenCalledOnce();
+        expect(spawnTask.mock.calls[0][0].prompt).not.toContain('/api/agents/');
+        expect(readiness).toHaveBeenCalledTimes(2);
+        expect(wait).toHaveBeenCalledWith('run-fixture', 30_000, expect.any(AbortSignal));
+        const updated = mockUpdateTask.mock.calls.length;
+        await service.completeAgent(
+          task.id,
+          { status: outcome, summary: 'Native completion lifecycle verified' },
+          {
+            attemptId: active.attemptId,
+            providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+            terminalSource: 'remote-session',
+          }
+        );
+        expect(mockUpdateTask.mock.calls.length).toBe(updated);
+      } finally {
+        readiness.mockRestore();
+        spawnTask.mockRestore();
+        wait.mockRestore();
+      }
+    }
+  );
+
+  it('rejects OpenClaw without completion readiness before creating an active attempt', async () => {
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'openclaw',
+          name: 'OpenClaw',
+          command: 'openclaw',
+          args: [],
+          enabled: true,
+          provider: 'openclaw',
+        },
+      ],
+    });
+    const readiness = vi
+      .spyOn(HttpOpenClawTaskAdapter.prototype, 'probeCompletion')
+      .mockRejectedValue(new Error('Completion authentication unavailable'));
+    const spawnTask = vi.spyOn(HttpOpenClawTaskAdapter.prototype, 'spawnTask');
+    try {
+      await expect(testableService(tmpDir).startAgent(task.id, 'openclaw')).rejects.toThrow(
+        'Completion authentication unavailable'
+      );
+      expect(task.attempt).toBeUndefined();
+      expect(task.status).toBe('todo');
+      expect(mockUpdateTask).not.toHaveBeenCalled();
+      expect(spawnTask).not.toHaveBeenCalled();
+    } finally {
+      readiness.mockRestore();
+      spawnTask.mockRestore();
+    }
+  });
+
+  it.skipIf(process.env.VK_OPENCLAW_SMOKE !== '1')(
+    '@smoke native OpenClaw child reaches persisted success and failure',
+    async () => {
+      const { spawn: actualSpawn } =
+        await vi.importActual<typeof import('node:child_process')>('node:child_process');
+      const fixture = await startOpenClawCompletionFixture(actualSpawn);
+      vi.stubEnv('OPENCLAW_GATEWAY_URL', fixture.gatewayUrl);
+      vi.stubEnv('OPENCLAW_GATEWAY_TOKEN', fixture.token);
+      try {
+        mockGetConfig.mockResolvedValue({
+          agents: [
+            {
+              type: 'openclaw',
+              name: 'OpenClaw',
+              command: 'openclaw',
+              args: [],
+              enabled: true,
+              provider: 'openclaw',
+            },
+          ],
+        });
+        for (const outcome of ['success', 'failed'] as const) {
+          task = {
+            ...task,
+            id: `task_native_openclaw_${outcome}`,
+            attempt: undefined,
+            attempts: [],
+            status: 'todo',
+            agent: 'openclaw',
+            description: `${task.description} ${outcome === 'failed' ? 'FIXTURE_OUTCOME_FAILED' : 'FIXTURE_OUTCOME_SUCCESS'}`,
+            subtasks: task.subtasks?.map((item) => ({ ...item, completed: true })),
+            verificationSteps: task.verificationSteps?.map((item) => ({ ...item, checked: true })),
+          };
+          const service = testableService(tmpDir);
+          const active = await service.startAgent(task.id, 'openclaw', { commitPolicy: 'allowed' });
+          await vi.waitFor(() => expect(task.attempt?.completionResult?.status).toBe(outcome), {
+            timeout: 30_000,
+            interval: 100,
+          });
+          expect(task.attempt?.completionResult).toMatchObject({
+            terminalSource: 'remote-session',
+            summary: 'Isolated native child completed',
+          });
+          expect(task.attempt?.openclawRun).toMatchObject({
+            taskId: task.id,
+            attemptId: active.attemptId,
+            providerRuntimeManifestDigest: active.providerRuntimeManifest.digest,
+          });
+          expect(task.status).toBe(outcome === 'success' ? 'done' : 'in-progress');
+          expect(task.attempt?.status).toBe(outcome === 'success' ? 'complete' : 'failed');
+          const persisted = JSON.parse(JSON.stringify(task));
+          expect(persisted.attempt.completionResult.attemptId).toBe(active.attemptId);
+          expect(fixture.modelCalls).toBeGreaterThan(0);
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+    90_000
+  );
 
   it('isolates independent roots and preserves identity across provider handoffs', () => {
     const service = testableService(tmpDir);

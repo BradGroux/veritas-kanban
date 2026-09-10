@@ -70,7 +70,7 @@ describe('run egress launch policy', () => {
   });
 
   it('reports local gateway injection as host-enforced and remote OpenClaw as advisory', () => {
-    expect(PROVIDER_RUNTIME_PROBE_REVISION).toBe(16);
+    expect(PROVIDER_RUNTIME_PROBE_REVISION).toBe(17);
 
     for (const provider of [
       'codex-cli',

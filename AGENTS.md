@@ -6,7 +6,7 @@
 > Harness-specific supplements (for example `CLAUDE.md`) extend, never duplicate or contradict,
 > these rules. See `docs/AGENTS-TEMPLATE.md` for the managed-run and external-agent protocols.
 >
-> **Version:** 6.1.3
+> **Version:** 6.1.4
 > **Freshness policy:** update within two working days of any toolchain or architecture change.
 > Stale fields (package manager, Node version, provider list, test commands) are caught by
 > `pnpm check:pnpm-settings` and the smoke-test CI job.
@@ -330,13 +330,17 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 
 ## Agent provider notes
 
-### OpenClaw (v2026.6.11)
+### OpenClaw (native tasks: v2026.9.2 or later)
 
 - Task dispatch uses the gateway `/tools/invoke` endpoint with `sessions_spawn`.
+- Native completion is server-owned: probe authenticated `agent.wait` before launch, persist the run ID
+  and immutable attempt bindings, and capture only the gateway terminal reply. Never give a child
+  a Veritas callback credential or infer completion from session history.
+- Restart recovery resumes observation of the exact run; changed or missing identity requires recovery.
 - **Required gateway policy:** `sessions_spawn` and `sessions_send` must be explicitly allowed
   on the operator-level gateway; they are blocked by default on fresh OpenClaw installs.
-- Set `OPENCLAW_GATEWAY_URL` (default `http://127.0.0.1:18789`) and optionally
-  `OPENCLAW_GATEWAY_TOKEN`.
+- Set `OPENCLAW_GATEWAY_URL` (default `http://127.0.0.1:18789`) and
+  `OPENCLAW_GATEWAY_TOKEN` (required for native task completion).
 - A pre-flight check is run before a task is marked active; policy denial returns an actionable
   configuration error.
 - See `docs/AGENT-PROVIDERS.md` § OpenClaw for full setup instructions.
@@ -549,4 +553,4 @@ it.
 | Codex / GPT        | `AGENTS.md` plus Veritas task envelope                                 | Canonical repository rules and managed-run contract |
 | Claude Code        | `AGENTS.md`, `CLAUDE.md`, and Veritas task envelope                    | Canonical rules plus Claude-specific lessons        |
 | Hermes             | `AGENTS.md` plus Veritas task envelope                                 | Hermes reads `AGENTS.md` from the worktree          |
-| OpenClaw           | `AGENTS.md` plus the gateway task request                              | Canonical rules and callback completion contract    |
+| OpenClaw           | `AGENTS.md` plus the gateway task request                              | Canonical rules and server-owned gateway completion |

@@ -1,6 +1,8 @@
 import { createLogger } from '../lib/logger.js';
 import type { UrlValidationOptions } from '../utils/url-validation.js';
 import { getOutboundIntegrationService } from './outbound-integration-service.js';
+import { randomUUID } from 'node:crypto';
+import { waitForOpenClawRun } from '../utils/openclaw-gateway-rpc.js';
 
 const log = createLogger('openclaw-workflow-adapter');
 
@@ -81,7 +83,7 @@ export interface OpenClawTaskSpawnInput {
 export interface OpenClawTaskSpawnResult {
   /** Durable session key returned by OpenClaw sessions_spawn */
   sessionKey: string;
-  runId?: string;
+  runId: string;
   status: string;
   error?: string;
   raw?: unknown;
@@ -451,8 +453,8 @@ export class HttpOpenClawWorkflowAdapter implements OpenClawWorkflowAdapter {
  * synchronous acknowledgement: if sessions_spawn succeeds, a durable session key
  * is returned and the task attempt is safe to mark active.
  *
- * The spawned OpenClaw sub-session receives the full task prompt, which includes
- * the Veritas callback URL so the agent can POST completion status.
+ * The child receives the task prompt and final-report instructions. Veritas observes
+ * the returned run ID through the authenticated gateway; the child has no callback credential.
  */
 export class HttpOpenClawTaskAdapter {
   private readonly gatewayUrl: string;
@@ -481,22 +483,55 @@ export class HttpOpenClawTaskAdapter {
     };
   }
 
+  /** Uses the same authenticated origin as dispatch, before any attempt is created. */
+  async probeCompletion(): Promise<{ gatewayUrl: string; version: string }> {
+    const { version } = await this.waitForRun(`veritas-readiness-${randomUUID()}`, 0);
+    const parts = /^(\d+)\.(\d+)\.(\d+)(?:\D|$)/.exec(version);
+    if (
+      !parts ||
+      Number(parts[1]) * 10_000 + Number(parts[2]) * 100 + Number(parts[3]) < 20260902
+    ) {
+      throw new Error(
+        'Native OpenClaw completion requires gateway v2026.9.2 or later with terminal reply snapshots.'
+      );
+    }
+    return { gatewayUrl: this.gatewayUrl, version };
+  }
+
+  assertGatewayBinding(gatewayUrl: string): void {
+    if (gatewayUrl !== this.gatewayUrl) {
+      throw new Error(
+        'OpenClaw completion gateway changed since launch; restore the bound gateway before recovery.'
+      );
+    }
+  }
+
+  waitForRun(runId: string, timeoutMs = 30_000, signal?: AbortSignal) {
+    return waitForOpenClawRun(
+      { gatewayUrl: this.gatewayUrl, token: this.token, validationOptions: this.validationOptions },
+      runId,
+      timeoutMs,
+      signal
+    );
+  }
+
   /** Spawn an OpenClaw sub-session for a Veritas task. */
   async spawnTask(input: OpenClawTaskSpawnInput): Promise<OpenClawTaskSpawnResult> {
     const result = await this.invokeTool('sessions_spawn', buildOpenClawTaskSpawnArguments(input));
     const sessionKey =
       this.readString(result, 'childSessionKey') || this.readString(result, 'sessionKey');
 
-    if (!sessionKey) {
+    const runId = this.readString(result, 'runId');
+    if (!sessionKey || !runId) {
       throw new Error(
-        'OpenClaw sessions_spawn did not return a child session key; ' +
-          'confirm the gateway is running OpenClaw v2026.6.11 or later'
+        'OpenClaw sessions_spawn did not return both a child session key and run ID; ' +
+          'inspect the gateway before starting another attempt'
       );
     }
 
     return {
       sessionKey,
-      runId: this.readString(result, 'runId'),
+      runId,
       status: this.readString(result, 'status') || 'accepted',
       error: this.readString(result, 'error'),
       raw: result,

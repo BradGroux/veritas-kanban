@@ -58,6 +58,8 @@ export interface RunRecoveryHost<Pending extends RecoveryPendingRun> {
   launch(taskId: string, agent: AgentType, options: AgentStartOptions): Promise<AgentLaunchStatus>;
   validateFallback(taskId: string, agent: AgentType, options: AgentStartOptions): Promise<void>;
   pendingRun(taskId: string): Pending | undefined;
+  probeRemoteSession?(task: Task, supervisor: RunSupervisorRecord): Promise<boolean>;
+  observeRecoveredRemoteRun?(task: Task): void;
   attachRecoveredRun(
     task: Task,
     attempt: TaskAttempt,
@@ -234,6 +236,9 @@ export class RunRecoveryCoordinator<Pending extends RecoveryPendingRun> {
             worktreePath: attempt.taskEnvelope.workspace.worktreePath,
             worktreeManifestId: attempt.taskEnvelope.workspace.worktreeManifestId,
             worktreeLeaseId: attempt.taskEnvelope.workspace.ownershipLeaseId,
+            sessionProbe: this.host.probeRemoteSession
+              ? (record) => this.host.probeRemoteSession?.(task, record) ?? Promise.resolve(false)
+              : undefined,
           });
         }
         if (recovery.outcome === 'lease-held') {
@@ -813,6 +818,8 @@ export class RunRecoveryCoordinator<Pending extends RecoveryPendingRun> {
       );
       if (supervisor.control.kind === 'local-process') {
         this.monitorRecoveredProcess(task.id, pending, supervisor);
+      } else if (supervisor.control.kind === 'remote-session') {
+        this.host.observeRecoveredRemoteRun?.(task);
       }
     } catch (error) {
       this.clearRecoveredProcessMonitor(task.id);

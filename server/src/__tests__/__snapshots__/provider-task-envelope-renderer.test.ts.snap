@@ -6,10 +6,10 @@ exports[`provider task-envelope renderers > renders a callback-free Claude Code 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:8e7a438fdc0475439622eee6dc2e00879466d807b6f1eddd7fe8da4160b3bc64\`
+- Digest: \`sha256:68c6046d6263138cf372acbc26f3eb3452a89faa1ebc89e9ec350d1d754cf0eb\`
 - Provider: \`claude-code\`
 - Adapter: \`claude-code\`
-- Runtime manifest: \`sha256:88e24bd4e81c1188c99ba752fa246b15e2cbe1610d8c7ebeb435a983e66dc348\`
+- Runtime manifest: \`sha256:b0783b93f5dd5d7c8a7dc6fe71d977d61deb9a62d1c7b8c8c1aba96a88d9e8f4\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -97,10 +97,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex CLI tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:e12e89c8ebe506051d179c44fd53893ea8624b7ea44f3a11de888adf35b0145e\`
+- Digest: \`sha256:6ce6a65225d891d12c4f6cbe78f4653c0b4ff7f988ae0993ec649d2954ebefe2\`
 - Provider: \`codex-cli\`
 - Adapter: \`codex-cli\`
-- Runtime manifest: \`sha256:d8ad6b2c4913ff3b21f6ce902b77cb362401ef86f32aa4f3f28cbbd9d88082c9\`
+- Runtime manifest: \`sha256:b9bfb7442bb3d31be56ed1a50e5a46b3a11edb153b5586030108bb2fa1c2896f\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -185,10 +185,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex SDK tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:a9aa614dee26324078c21a97e8821292b9b7fc1f42ec80db3320e3d440c20f8f\`
+- Digest: \`sha256:47c956ce8c8faf76f5392dbc07b7a58bfd8a540d8fccf4fba06efcce6c9c1a95\`
 - Provider: \`codex-sdk\`
 - Adapter: \`codex-sdk\`
-- Runtime manifest: \`sha256:a0d6c0f07b4c24419c37b4526f183951db10d5c6ec9bf3451f2daa1ef7cf368a\`
+- Runtime manifest: \`sha256:44bb4a5be9a524568ba9175218a680b565c2f1b8f4b0aaeef3321e09862496b0\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -274,10 +274,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex app-se
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:752997c167a25a9ec8781076a8e8c093d6b9f1fdf269c18797f346bfdb1de341\`
+- Digest: \`sha256:ad4711e35d3880327fdd2c6c6f4f9ad1f26905c88df6ec336be5b9c5708673fb\`
 - Provider: \`codex-app-server\`
 - Adapter: \`codex-app-server\`
-- Runtime manifest: \`sha256:d5a32f42bfe25fc1a2d4e93a35b31f1cded947bfbf24041b8fd96ebd86c299a3\`
+- Runtime manifest: \`sha256:1ffd607a48e4863b3ff2a3c2ba07a63a3257e8e6fc224bd4569be6f5b85e9a52\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -365,10 +365,10 @@ exports[`provider task-envelope renderers > renders a callback-free Hermes scrip
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:61f6a557435b2ec3fabc10cf9ef6a190b8bb882910fe6ada1855597b8b119215\`
+- Digest: \`sha256:e5b16872911eb3db1518b3336d057d9971558a835d4ee86a4096c03bba5eaf6b\`
 - Provider: \`hermes-cli\`
 - Adapter: \`hermes-cli\`
-- Runtime manifest: \`sha256:105fc11b1236086a7d0181f73ac7201e519ef667c27ad7f7b71d44a28ee4360c\`
+- Runtime manifest: \`sha256:52d653db2a011818561aeaa75341663d2f7a225b7ea997f7296e19bca97b1480\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -450,16 +450,16 @@ Do not call the Veritas completion callback. The harness owns terminal-state cap
 No native structured-output support is assumed; Veritas validates and normalizes scripted process output."
 `;
 
-exports[`provider task-envelope renderers > renders an OpenClaw callback transport from a required-commit envelope 1`] = `
+exports[`provider task-envelope renderers > renders an OpenClaw gateway completion transport from a required-commit envelope 1`] = `
 "# OpenClaw Task Envelope
 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:6fb7e306ba5d86aa966cc32814ac2ae33915b7c55c68a8455171ff6a7a795c0f\`
+- Digest: \`sha256:aa1cec7fb29b6b0fb40c7c9f80309ed4dfa93f4116864695d91dff0178e6262c\`
 - Provider: \`openclaw\`
 - Adapter: \`openclaw\`
-- Runtime manifest: \`sha256:be3844c45a6aef384fb2c6d8dd0e15365b9cd06170272607396278beb052db68\`
+- Runtime manifest: \`sha256:029694eea4481d65f9c35ff846b84e6ab3e0d2cc2c403ec4964fc056fd2472da\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -549,23 +549,15 @@ Follow the release checklist.
 Continue from this checkpoint. Do not repeat work already represented in the saved state.
 
 
-## Completion (OpenClaw callback)
+## Completion (OpenClaw gateway)
 
-When the work reaches a terminal state, report it through an operator-provisioned authenticated completion tool.
-
-Native OpenClaw dispatch does not provision callback credentials. Before starting work, confirm that the operator has separately configured a trusted completion tool with Veritas API authentication and \`task:write\` permission. The gateway token authenticates Veritas to OpenClaw; it is not a Veritas callback credential. The attempt and manifest identifiers below are provenance, not authentication.
-
-If authenticated completion tooling is unavailable, report that blocker in the OpenClaw session for the operator to resolve. Do not send an unauthenticated callback, obtain an administrator key, disable authentication, or claim that Veritas recorded completion. Do not place credential values in the task prompt or completion payload.
-
-- Endpoint: \`POST http://localhost:3001/api/agents/task_transport/complete\`
-- This generated address assumes Veritas is reachable at localhost:3001 from the worker. A remote or container worker requires an operator-verified callback address as well as authentication.
-- Use the existing completion tool's authenticated request mechanism with this JSON payload:
+End the run with a single JSON object describing the actual outcome:
 
 \`\`\`json
-{"attemptId":"attempt_transport","providerRuntimeManifestDigest":"sha256:be3844c45a6aef384fb2c6d8dd0e15365b9cd06170272607396278beb052db68","success":true,"summary":"Brief description of what was done"}
+{"schemaVersion":"veritas-openclaw-completion/v1","status":"success","summary":"What changed and how it was verified"}
 \`\`\`
 
-For failure, send \`success: false\` and include an \`error\` message.
+Use \`status: "failed"\` when the work failed, or \`status: "blocked"\` when it cannot proceed, and include an \`error\` string explaining why. Do not report success unless the task's completion requirements are satisfied.
 
-No native structured-output support is assumed; Veritas validates and normalizes the callback."
+Veritas reads this final reply through its authenticated OpenClaw gateway connection and validates the persisted run identity before recording completion. No Veritas credential or callback request is needed in the child session. Do not call the Veritas completion callback or request an API key. A normal chat message is not a recorded Veritas completion; the server owns terminal-state capture."
 `;

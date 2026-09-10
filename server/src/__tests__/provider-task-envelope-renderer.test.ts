@@ -119,7 +119,7 @@ describe('provider task-envelope renderers', () => {
     expect(transport.content).toContain('Guidance: Inspect the schema and nearby tests first.');
   });
 
-  it('renders an OpenClaw callback transport from a required-commit envelope', async () => {
+  it('renders an OpenClaw gateway completion transport from a required-commit envelope', async () => {
     const taskEnvelope = await envelope('openclaw', 'required');
 
     const transport = renderOpenClawTaskEnvelope({
@@ -137,7 +137,7 @@ describe('provider task-envelope renderers', () => {
       schemaVersion: 'provider-task-envelope-transport/v1',
       provider: 'openclaw',
       taskEnvelopeDigest: taskEnvelope.digest,
-      callbackPosture: 'veritas-http',
+      callbackPosture: 'harness-owned',
       completionNormalization: 'harness',
     });
     expect(Object.isFrozen(transport)).toBe(true);
@@ -150,22 +150,11 @@ describe('provider task-envelope renderers', () => {
     expect(transport.content).toContain(
       '- Required `provider-output` `terminal-state`: Harness-verified provider terminal state from the native transport.'
     );
-    expect(transport.content).toContain(
-      'POST http://localhost:3001/api/agents/task_transport/complete'
-    );
-    expect(transport.content).toContain(
-      `"providerRuntimeManifestDigest":"${taskEnvelope.launchManifest.digest}"`
-    );
-    expect(transport.content).toContain(
-      'No native structured-output support is assumed; Veritas validates and normalizes the callback.'
-    );
-    expect(transport.content).toContain(
-      'Native OpenClaw dispatch does not provision callback credentials.'
-    );
-    expect(transport.content).toContain('`task:write` permission');
-    expect(transport.content).toContain('provenance, not authentication');
-    expect(transport.content).toContain('Do not send an unauthenticated callback');
-    expect(transport.content).toContain('operator-verified callback address');
+    expect(transport.content).toContain('veritas-openclaw-completion/v1');
+    expect(transport.content).toContain('authenticated OpenClaw gateway connection');
+    expect(transport.content).toContain('No Veritas credential or callback request is needed');
+    expect(transport.content).toContain('Do not call the Veritas completion callback');
+    expect(transport.content).not.toContain('/api/agents/task_transport/complete');
     expect(transport.content).not.toContain('curl -X POST');
     expect(transport.content).toMatchSnapshot();
   });

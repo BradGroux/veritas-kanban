@@ -320,6 +320,42 @@ describe('RunSupervisorService', () => {
     });
   });
 
+  it('runs an attempt-specific remote probe only after durable bindings are verified', async () => {
+    const repository = new InMemoryRunSupervisorRepository();
+    const owner = service(repository);
+    const input = registerInput({
+      provider: 'openclaw',
+      adapter: 'openclaw',
+      controlKind: 'remote-session',
+      sessionId: 'child-bound',
+      recoveryOperations: ['reattach'],
+    });
+    const record = await owner.register(input);
+    const probe = vi.fn(
+      async (candidate: RunSupervisorRecord) =>
+        candidate.control.kind === 'remote-session' && candidate.control.sessionId === 'child-bound'
+    );
+    const bindings = {
+      provider: input.provider,
+      adapter: input.adapter,
+      providerRuntimeManifestDigest: SHA_A,
+      taskEnvelopeDigest: SHA_B,
+      runLaunchManifestDigest: SHA_C,
+      worktreePath: input.worktreePath,
+      worktreeManifestId: input.worktreeManifestId,
+      worktreeLeaseId: input.worktreeLeaseId,
+      sessionProbe: probe,
+    };
+    await expect(
+      owner.recover(record.id, { ...bindings, taskEnvelopeDigest: SHA_C })
+    ).resolves.toMatchObject({ outcome: 'recovery-required' });
+    expect(probe).not.toHaveBeenCalled();
+    await expect(owner.recover(record.id, bindings)).resolves.toMatchObject({
+      outcome: 'reattached',
+    });
+    expect(probe).toHaveBeenCalledOnce();
+  });
+
   it('signals the persisted process group and never an unverified reused PID', async () => {
     const repository = new InMemoryRunSupervisorRepository();
     let alive = true;

@@ -54,6 +54,12 @@ import { buildSafeCodexEnv } from '../utils/codex-env.js';
 import { getRuntimeDir, getLogsDir } from '../utils/paths.js';
 import { buildSafeHermesEnv } from '../utils/hermes-env.js';
 import { HttpOpenClawTaskAdapter } from './openclaw-workflow-adapter.js';
+import {
+  OpenClawCompletionService,
+  assertOpenClawRunBinding,
+  openClawCompletionProbeSource,
+  type OpenClawRunBinding,
+} from './openclaw-completion-service.js';
 import { type ProviderTaskEnvelopeTransport } from './provider-task-envelope-renderer.js';
 import type { ThreadEvent } from '@openai/codex-sdk';
 import {
@@ -524,6 +530,7 @@ interface PendingAgent {
   egressGateway?: RunEgressGatewayHandle;
   /** Durable session key returned by OpenClaw sessions_spawn (openclaw provider only) */
   openclawSessionKey?: string;
+  openclawRun?: OpenClawRunBinding;
   /** Hermes session identity captured from process output (hermes-cli provider only) */
   hermesSessionId?: string;
   /**
@@ -639,6 +646,7 @@ export class ClawdbotAgentService {
   private runFileExecutionPolicy: Pick<RunFileExecutionPolicyService, 'evaluate' | 'revalidate'>;
   private workspaceCheckpoints: Pick<WorkspaceCheckpointService, 'captureBoundary'>;
   private logsDir: string;
+  private openclawCompletion: OpenClawCompletionService;
 
   constructor(
     agentHealth?: AgentHealthChecker,
@@ -705,6 +713,16 @@ export class ClawdbotAgentService {
     this.runLaunchManifests = new RunLaunchManifestService();
     this.providerCompletions = providerCompletions;
     this.attemptLifecycle = new AttemptLifecycleCoordinator(this.taskService);
+    this.openclawCompletion = new OpenClawCompletionService({
+      getTask: (taskId) => this.taskService.getTask(taskId),
+      complete: (binding, claim) =>
+        this.completeAgent(binding.taskId, claim, {
+          attemptId: binding.attemptId,
+          providerRuntimeManifestDigest: binding.providerRuntimeManifestDigest,
+          terminalSource: 'remote-session',
+        }),
+      requireRecovery: (binding, reason) => this.requireOpenClawRecovery(binding, reason),
+    });
     this.credentialLeases = credentialLeases;
     this.workspaceFiles = workspaceFiles;
     this.worktrees =
@@ -780,6 +798,14 @@ export class ClawdbotAgentService {
       },
       pendingRun: (taskId) => pendingAgents.get(taskId),
       attachRecoveredRun: (...args) => this.attachRecoveredRun(...args),
+      probeRemoteSession: (task, supervisor) =>
+        supervisor.control.kind === 'remote-session' &&
+        supervisor.control.sessionId === task.attempt?.openclawRun?.sessionKey
+          ? this.openclawCompletion.canRecover(task)
+          : Promise.resolve(false),
+      observeRecoveredRemoteRun: (task) => {
+        if (task.attempt?.openclawRun) this.openclawCompletion.start(task.attempt.openclawRun);
+      },
       dropPendingRun: (taskId) => {
         pendingAgents.delete(taskId);
       },
@@ -1102,6 +1128,7 @@ export class ClawdbotAgentService {
       recoveredControl: true,
       threadId: attempt.threadId ?? sessionId,
       openclawSessionKey: provider === 'openclaw' ? (attempt.sessionKey ?? sessionId) : undefined,
+      openclawRun: provider === 'openclaw' ? attempt.openclawRun : undefined,
       hermesSessionId: provider === 'hermes-cli' ? sessionId : undefined,
     };
     pendingAgents.set(task.id, pending);
@@ -3205,6 +3232,8 @@ export class ClawdbotAgentService {
           provider: pending.provider,
           model: pending.model,
           threadId: pending.threadId,
+          sessionKey: pending.openclawSessionKey,
+          openclawRun: pending.openclawRun,
           budget: pending.budget,
           agentProfile: pending.agentProfile,
           providerRuntimeManifest: pending.providerRuntimeManifest,
@@ -3301,6 +3330,7 @@ export class ClawdbotAgentService {
     if (pendingAgents.get(taskId) === pending) {
       pendingAgents.delete(taskId);
     }
+    this.openclawCompletion.stop(taskId, attemptId);
     this.recovery.clearRecoveredProcessMonitor(taskId);
     await this.releaseAdmission(
       pending.admissionReservationId,
@@ -4660,10 +4690,24 @@ export class ClawdbotAgentService {
 
   private createProviderAdapterRegistry(): AgentProviderAdapterRegistry {
     const host: AgentProviderAdapterHost = {
-      probe: (provider, context, definition) =>
-        this.providerRuntimeManifests.probe(
-          buildProviderRuntimeProbeRequest(provider, context, definition)
-        ),
+      probe: async (provider, context, definition) => {
+        const request = buildProviderRuntimeProbeRequest(provider, context, definition);
+        if (
+          provider === 'openclaw' &&
+          definition.protocolVersion !== 'openclaw-workflow-session/v1'
+        ) {
+          const completion = await new HttpOpenClawTaskAdapter().probeCompletion();
+          request.command = completion.gatewayUrl;
+          request.identity = {
+            providerVersion: completion.version,
+            verified: true,
+            authenticated: true,
+            source: openClawCompletionProbeSource(completion.gatewayUrl),
+            diagnostics: [],
+          };
+        }
+        return this.providerRuntimeManifests.probe(request);
+      },
       probeAcp: (context, definition) => this.probeAcpProviderRuntime(context, definition),
       assertTransport: (provider, transport, manifest) =>
         this.assertProviderAdapterTransport(provider, transport, manifest),
@@ -4882,6 +4926,18 @@ export class ClawdbotAgentService {
   private async startOpenClawAdapter(context: AgentProviderStartContext): Promise<void> {
     const { transport, task, attemptId, agentConfig } = context;
     const openclawAdapter = new HttpOpenClawTaskAdapter();
+    const completion = await openclawAdapter.probeCompletion();
+    const pending = pendingAgents.get(task.id);
+    if (
+      !pending ||
+      pending.attemptId !== attemptId ||
+      !pending.supervisorId ||
+      pending.providerRuntimeManifest.providerVersion !== completion.version ||
+      pending.providerRuntimeManifest.probe.source !==
+        openClawCompletionProbeSource(completion.gatewayUrl)
+    ) {
+      throw new ConflictError('OpenClaw launch no longer matches its verified completion runtime.');
+    }
     const result = await openclawAdapter.spawnTask({
       taskId: task.id,
       attemptId,
@@ -4891,8 +4947,23 @@ export class ClawdbotAgentService {
       prompt: transport.content,
       timeoutSeconds: 900,
     });
+    const binding: OpenClawRunBinding = {
+      schemaVersion: 'openclaw-task-run/v1',
+      gatewayUrl: completion.gatewayUrl,
+      gatewayVersion: completion.version,
+      runId: result.runId,
+      sessionKey: result.sessionKey,
+      workspaceId: pending.taskEnvelope.workspace.workspaceId,
+      taskId: task.id,
+      attemptId,
+      providerRuntimeManifestDigest: pending.providerRuntimeManifest.digest,
+      taskEnvelopeDigest: pending.taskEnvelope.digest,
+      runLaunchManifestDigest: pending.runLaunchManifest.digest,
+      observeUntil: new Date(Date.now() + 20 * 60_000).toISOString(),
+    };
     await this.attemptLifecycle.patchActiveAttempt(task.id, attemptId, {
       sessionKey: result.sessionKey,
+      openclawRun: binding,
     });
     await this.recordConversationIdentity(task.id, attemptId, {
       conversationId: result.sessionKey,
@@ -4904,19 +4975,49 @@ export class ClawdbotAgentService {
       'openclaw',
       agentConfig
     );
-    const pending = pendingAgents.get(task.id);
-    if (!pending || pending.attemptId !== attemptId || !pending.supervisorId) {
+    if (pendingAgents.get(task.id) !== pending) {
       throw new ConflictError('OpenClaw session has no durable run supervisor binding.', {
         taskId: task.id,
         attemptId,
       });
     }
     pending.openclawSessionKey = result.sessionKey;
+    pending.openclawRun = binding;
     await this.runSupervisor.attachRemoteSession(pending.supervisorId, result.sessionKey);
+    this.openclawCompletion.start(binding);
     log.info(
       { taskId: task.id, attemptId, sessionKey: result.sessionKey },
       '[ClawdbotAgent] OpenClaw session spawned via gateway'
     );
+  }
+
+  private async requireOpenClawRecovery(
+    binding: OpenClawRunBinding,
+    reason: string
+  ): Promise<void> {
+    const task = await this.taskService.getTask(binding.taskId);
+    if (
+      !task ||
+      task.attempt?.id !== binding.attemptId ||
+      task.attempt.completionResult ||
+      task.attempt.status !== 'running'
+    )
+      return;
+    assertOpenClawRunBinding(task, binding);
+    if (!task.attempt.runSupervisorId) return;
+    const supervisor = await this.runSupervisor.requireRecovery(
+      task.attempt.runSupervisorId,
+      'session-unreachable',
+      reason,
+      'Restore the authenticated gateway connection and restart Veritas to retry observation. Do not start another attempt until the remote session is reconciled.'
+    );
+    await this.attemptLifecycle.persistActiveAttempt({
+      task,
+      attempt: { ...task.attempt, runRecovery: supervisor.recovery },
+      ...(task.status === 'in-progress' ? { status: 'blocked' } : {}),
+    });
+    const pending = pendingAgents.get(task.id);
+    if (pending?.attemptId === binding.attemptId) pendingAgents.delete(task.id);
   }
 
   private assertProviderAdapterLaunchManifest(

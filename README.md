@@ -695,7 +695,7 @@ VK also documents the Codex and Hermes operating model:
 
 ### Any Platform (REST API)
 
-These examples assume an already authenticated REST client. Native OpenClaw dispatch does not provision callback credentials for its child; see [OpenClaw completion authentication](docs/AGENT-PROVIDERS.md#completion-authentication-in-620) before relying on automatic completion.
+These examples assume an already authenticated REST client. Native OpenClaw tasks use [server-owned gateway completion](docs/AGENT-PROVIDERS.md#server-owned-completion) and need no child callback credentials.
 
 > 💡 **Using the CLI?** Skip the curl commands — `vk begin <id>` and `vk done <id> "summary"` handle the full lifecycle in one shot. See the [CLI Guide](docs/CLI-GUIDE.md) for details.
 
