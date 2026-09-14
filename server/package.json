@@ -16,11 +16,11 @@
     "reset-password": "tsx src/scripts/reset-password.ts"
   },
   "dependencies": {
-    "@openai/codex-sdk": "0.153.3",
+    "@openai/codex-sdk": "0.154.0",
     "@veritas-kanban/shared": "workspace:*",
     "ajv": "^8.20.0",
     "bcrypt": "^6.0.0",
-    "compression": "^1.8.1",
+    "compression": "^1.8.2",
     "content-disposition": "^3.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -28,7 +28,7 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
-    "file-type": "^22.0.2",
+    "file-type": "^22.1.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.12.2",
@@ -44,8 +44,8 @@
     "swagger-ui-express": "^5.0.1",
     "unpdf": "^1.8.1",
     "ws": "^8.21.3",
-    "yaml": "^2.9.0",
-    "zod": "^4.5.4"
+    "yaml": "^2.9.1",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
