@@ -114,8 +114,8 @@ importers:
         specifier: ^26.4.1
         version: 26.5.0
       electron:
-        specifier: ^44.2.0
-        version: 44.2.0
+        specifier: ^44.4.3
+        version: 44.4.3
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
@@ -391,7 +391,7 @@ importers:
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
+        version: 4.3.3(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
       '@testing-library/jest-dom':
         specifier: ^7.0.1
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11)
@@ -412,7 +412,7 @@ importers:
         version: 19.2.7(@types/react@19.2.18)
       '@vitejs/plugin-react':
         specifier: ^6.1.1
-        version: 6.1.1(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
+        version: 6.1.1(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
       autoprefixer:
         specifier: ^10.5.5
         version: 10.5.5(postcss@8.5.26)
@@ -439,10 +439,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: ^8.2.2
-        version: 8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
+        version: 8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@26.5.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
+        version: 4.1.11(@types/node@26.6.2)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
 
 packages:
 
@@ -1556,14 +1556,17 @@ packages:
   '@types/node@14.18.63':
     resolution: {integrity: sha512-fAtCfv4jJg+ExtXhvCkCqUKZ+4ok/JQk01qDKhL5BDDoS3AxKXhV5/MAVUZyQnSEd2GT92fkgZl0pz0Q0AzcIQ==}
 
-  '@types/node@24.13.3':
-    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+  '@types/node@24.13.6':
+    resolution: {integrity: sha512-SGrw/h3KPFshy3OE6ZL53LMBG5vGQQ8/gIpiqz/kRZhPJ7HgwCEs8LBuNtWLa8dvGZVpSF7+Bf+c11HUrCb/yg==}
 
   '@types/node@26.4.0':
     resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
 
   '@types/node@26.5.0':
     resolution: {integrity: sha512-dVSGpriSoCgz8WnDNTuSSuSv1PC/ALXihO4ulRZt7Md8k9mlbdin3lGOcDE8SnWOgf513ByWlXd7BK4azmyg/A==}
+
+  '@types/node@26.6.2':
+    resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
 
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
@@ -2540,8 +2543,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@44.2.0:
-    resolution: {integrity: sha512-oK1icjhapp3xsUZycO9WZaLmd3hJnA7ieobC4mpdtO1pEN+PPGWpA3m1Mgzzuc1wzSD2Wai4zcH4yfpGJqxFMA==}
+  electron@44.4.3:
+    resolution: {integrity: sha512-LTpSFTB40qVCXIX5xMo+cgHI/Jjkbjw7VpB26PccEbroqOn72LBukeaDwPVo1fBYzSzs0c9iPuAucFCO7Tw81Q==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -6246,12 +6249,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))':
+  '@tailwindcss/vite@4.3.3(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
 
   '@tanstack/query-core@5.102.8': {}
 
@@ -6281,7 +6284,7 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
     optionalDependencies:
-      vitest: 4.1.11(@types/node@26.5.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@26.6.2)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
@@ -6315,13 +6318,13 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/cacheable-request@6.0.3':
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
       '@types/responselike': 1.0.3
 
   '@types/chai@5.2.3':
@@ -6336,7 +6339,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/cookie-parser@1.4.10(@types/express@5.0.6)':
     dependencies:
@@ -6405,7 +6408,7 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/hast@3.0.4':
     dependencies:
@@ -6424,7 +6427,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -6440,7 +6443,7 @@ snapshots:
 
   '@types/node@14.18.63': {}
 
-  '@types/node@24.13.3':
+  '@types/node@24.13.6':
     dependencies:
       undici-types: 7.18.2
 
@@ -6449,6 +6452,10 @@ snapshots:
       undici-types: 8.3.0
 
   '@types/node@26.5.0':
+    dependencies:
+      undici-types: 8.9.0
+
+  '@types/node@26.6.2':
     dependencies:
       undici-types: 8.9.0
 
@@ -6473,7 +6480,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/sanitize-html@2.16.1':
     dependencies:
@@ -6481,18 +6488,18 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
 
   '@types/superagent@8.1.11':
     dependencies:
       '@types/cookiejar': 2.1.5
       '@types/methods': 1.1.4
-      '@types/node': 26.4.0
+      '@types/node': 26.6.2
       form-data: 4.0.6
 
   '@types/supertest@7.2.1':
@@ -6613,10 +6620,10 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
-  '@vitejs/plugin-react@6.1.1(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.1.1(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
 
   '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
     dependencies:
@@ -6648,6 +6655,14 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
+
+  '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.11
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
 
   '@vitest/pretty-format@4.1.11':
     dependencies:
@@ -7584,11 +7599,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.2.0:
+  electron@44.4.3:
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0
-      '@types/node': 24.13.3
+      '@types/node': 24.13.6
     transitivePeerDependencies:
       - supports-color
 
@@ -10743,6 +10758,22 @@ snapshots:
       tsx: 4.23.13
       yaml: 2.9.0
 
+  vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0):
+    dependencies:
+      lightningcss: 1.33.0
+      picomatch: 4.0.5
+      postcss: 8.5.26
+      rolldown: 1.2.5
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 26.6.2
+      esbuild: 0.28.1
+      fsevents: 2.3.3
+      jiti: 2.7.0
+      sugarss: 5.0.1(postcss@8.5.26)
+      tsx: 4.23.13
+      yaml: 2.9.0
+
   vitest@4.1.11(@types/node@26.5.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.11
@@ -10767,6 +10798,35 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 26.5.0
+      '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
+      jsdom: 29.1.1(@noble/hashes@2.2.0)
+    transitivePeerDependencies:
+      - msw
+
+  vitest@4.1.11(@types/node@26.6.2)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.11
+      '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.11
+      '@vitest/runner': 4.1.11
+      '@vitest/snapshot': 4.1.11
+      '@vitest/spy': 4.1.11
+      '@vitest/utils': 4.1.11
+      es-module-lexer: 2.3.2
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.1.4
+      pathe: 2.0.3
+      picomatch: 4.0.5
+      std-env: 4.2.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.0
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.1
+      vite: 8.2.2(@types/node@26.6.2)(esbuild@0.28.1)(jiti@2.7.0)(sugarss@5.0.1(postcss@8.5.26))(tsx@4.23.13)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 26.6.2
       '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
       jsdom: 29.1.1(@noble/hashes@2.2.0)
     transitivePeerDependencies:
