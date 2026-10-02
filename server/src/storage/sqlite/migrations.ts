@@ -1630,6 +1630,30 @@ export const SQLITE_BASE_MIGRATIONS: readonly SqliteMigration[] = [
         ON work_product_artifacts(workspace_id, state, created_at DESC);
     `,
   },
+  {
+    version: 35,
+    name: '0035_unique_external_auth_subjects',
+    up: `
+      CREATE UNIQUE INDEX idx_users_auth_subject_unique
+        ON users(auth_subject)
+        WHERE auth_subject IS NOT NULL;
+    `,
+  },
+  {
+    version: 36,
+    name: '0036_openai_oidc_transactions',
+    up: `
+      CREATE TABLE openai_oidc_transactions (
+        id TEXT PRIMARY KEY,
+        payload TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_openai_oidc_transactions_expires
+        ON openai_oidc_transactions(expires_at);
+    `,
+  },
 ];
 
 export function sortedMigrations(migrations: readonly SqliteMigration[]): SqliteMigration[] {

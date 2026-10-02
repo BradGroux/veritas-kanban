@@ -18,6 +18,10 @@ let testConfigDir: string;
 let testSecurityFile: string;
 let securityConfig: any = {};
 let desktopSetupContext: Record<string, unknown> | undefined;
+let openAiEnabled = false;
+const beginOpenAiSignIn = vi.fn();
+const completeOpenAiSignIn = vi.fn();
+let storedOpenAiTransaction: Record<string, string> | null = null;
 
 // Mock security module
 vi.mock('../../config/security.js', () => {
@@ -56,6 +60,24 @@ vi.mock('../../services/desktop-setup-context-service.js', () => ({
   getDesktopSetupContext: () => desktopSetupContext,
 }));
 
+vi.mock('../../services/openai-oidc-service.js', () => ({
+  isOpenAiOidcConfigured: () => openAiEnabled,
+  getOpenAiOidcService: () => ({
+    begin: beginOpenAiSignIn,
+    complete: completeOpenAiSignIn,
+  }),
+  storeOpenAiOidcTransaction: (transaction: Record<string, string>) => {
+    storedOpenAiTransaction = transaction;
+    return 'transaction-id';
+  },
+  consumeOpenAiOidcTransaction: (id: string) => {
+    if (id !== 'transaction-id') return null;
+    const transaction = storedOpenAiTransaction;
+    storedOpenAiTransaction = null;
+    return transaction;
+  },
+}));
+
 // Import auth route after mocking
 import authRouter from '../../routes/auth.js';
 import { errorHandler } from '../../middleware/error-handler.js';
@@ -67,7 +89,10 @@ import {
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 import { SqliteDeviceSessionRepository } from '../../storage/sqlite/device-session-repository.js';
 import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
-import { resetIdentityServiceForTests } from '../../services/identity-service.js';
+import {
+  getIdentityService,
+  resetIdentityServiceForTests,
+} from '../../services/identity-service.js';
 
 describe('Auth Routes', () => {
   let app: express.Express;
@@ -81,6 +106,10 @@ describe('Auth Routes', () => {
       sessionVersion: 0,
     };
     desktopSetupContext = undefined;
+    openAiEnabled = false;
+    beginOpenAiSignIn.mockReset();
+    completeOpenAiSignIn.mockReset();
+    storedOpenAiTransaction = null;
 
     app = express();
     app.use(express.json());
@@ -187,6 +216,146 @@ describe('Auth Routes', () => {
         } else {
           process.env.NODE_ENV = originalNodeEnv;
         }
+      }
+    });
+  });
+
+  describe('Sign in with ChatGPT', () => {
+    it('reports the identity provider as disabled without activation configuration', async () => {
+      const res = await request(app).get('/api/auth/openai/status');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ enabled: false, capability: 'identity' });
+    });
+
+    it('starts a PKCE transaction in an HttpOnly callback-scoped cookie', async () => {
+      openAiEnabled = true;
+      beginOpenAiSignIn.mockResolvedValue({
+        authorizationUrl: 'https://auth.openai.com/api/accounts/authorize?client_id=oaiapp_test',
+        transaction: {
+          state: 'state-value',
+          nonce: 'nonce-value',
+          codeVerifier: 'verifier-value',
+          redirectUri: 'https://kanban.example.com/api/auth/openai/callback',
+        },
+      });
+
+      const res = await request(app).get('/api/auth/openai/start');
+
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toContain('https://auth.openai.com/');
+      expect(res.headers['set-cookie']?.[0]).toContain('HttpOnly');
+      expect(res.headers['set-cookie']?.[0]).toContain('SameSite=Lax');
+      expect(res.headers['set-cookie']?.[0]).toContain('Path=/api/auth/openai/callback');
+    });
+
+    it('rejects a callback whose state does not match before token exchange', async () => {
+      openAiEnabled = true;
+      beginOpenAiSignIn.mockResolvedValue({
+        authorizationUrl: 'https://auth.openai.com/api/accounts/authorize',
+        transaction: {
+          state: 'expected-state',
+          nonce: 'nonce-value',
+          codeVerifier: 'verifier-value',
+          redirectUri: 'https://kanban.example.com/api/auth/openai/callback',
+        },
+      });
+      const start = await request(app).get('/api/auth/openai/start');
+      const cookie = start.headers['set-cookie']?.[0].split(';')[0];
+
+      const res = await request(app)
+        .get('/api/auth/openai/callback?code=secret-code&state=wrong-state')
+        .set('Cookie', cookie);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_OAUTH_STATE');
+      expect(completeOpenAiSignIn).not.toHaveBeenCalled();
+    });
+
+    it('never accepts an OAuth transaction token as an application session', async () => {
+      securityConfig.passwordHash = await bcrypt.hash('test-password', 4);
+      securityConfig.authEnabled = true;
+      const transactionToken = jwt.sign(
+        {
+          type: 'openai-oidc-browser',
+          transactionId: 'transaction-id',
+          sessionVersion: 0,
+        },
+        securityConfig.jwtSecret,
+        { expiresIn: '10m' }
+      );
+
+      const res = await request(app)
+        .get('/api/auth/status')
+        .set('Cookie', `veritas_session=${transactionToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.authenticated).toBe(false);
+    });
+
+    it('issues a Veritas session with the existing linked workspace role', async () => {
+      const fixture = createTestSqliteDatabase();
+      fixture.database.open();
+      const identities = new SqliteIdentityRepository(fixture.database);
+      identities.ensureLocalOwner({ displayName: 'Owner', email: 'owner@example.test' });
+      process.env.VERITAS_STORAGE = 'sqlite';
+      process.env.VERITAS_SQLITE_PATH = fixture.databasePath;
+      securityConfig.passwordHash = await bcrypt.hash('test-password', 4);
+      securityConfig.authEnabled = true;
+      openAiEnabled = true;
+      beginOpenAiSignIn.mockResolvedValue({
+        authorizationUrl: 'https://auth.openai.com/api/accounts/authorize',
+        transaction: {
+          state: 'expected-state',
+          nonce: 'nonce-value',
+          codeVerifier: 'verifier-value',
+          redirectUri: 'https://kanban.example.com/api/auth/openai/callback',
+        },
+      });
+      completeOpenAiSignIn.mockResolvedValue({
+        issuer: 'https://auth.openai.com',
+        clientId: 'oaiapp_test',
+        subject: 'acct_owner',
+        email: 'owner@example.test',
+        emailVerified: true,
+        displayName: 'Owner',
+        avatarUrl: null,
+      });
+
+      try {
+        getIdentityService().ensureOwnerSetup();
+        const passwordSession = jwt.sign(
+          { type: 'session', sessionVersion: 0 },
+          securityConfig.jwtSecret,
+          { expiresIn: '1h' }
+        );
+        const start = await request(app)
+          .get('/api/auth/openai/link/start')
+          .set('Cookie', `veritas_session=${passwordSession}`);
+        expect(start.status).toBe(302);
+        const transactionCookie = start.headers['set-cookie']?.[0].split(';')[0];
+        const callback = await request(app)
+          .get('/api/auth/openai/callback?code=authorization-code&state=expected-state')
+          .set('Cookie', transactionCookie);
+
+        expect(callback.status).toBe(302);
+        expect(callback.headers.location).toBe('/');
+        const sessionCookie = callback.headers['set-cookie']?.find((value: string) =>
+          value.startsWith('veritas_session=')
+        );
+        expect(sessionCookie).toContain('HttpOnly');
+        const sessionToken = sessionCookie?.split(';')[0].split('=')[1];
+        expect(sessionToken).toBeTruthy();
+        if (!sessionToken) throw new Error('Session cookie did not include a token');
+        expect(jwt.verify(sessionToken, securityConfig.jwtSecret)).toMatchObject({
+          type: 'session',
+          sessionKind: 'openai-oidc',
+          userId: 'local-user',
+          workspaceId: 'local',
+          role: 'admin',
+        });
+      } finally {
+        resetIdentityServiceForTests();
+        fixture.cleanup();
       }
     });
   });

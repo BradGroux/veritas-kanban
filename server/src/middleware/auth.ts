@@ -467,6 +467,10 @@ function requestRemoteAddress(req: Request | IncomingMessage): string | null {
 export interface SessionJwtPayload extends jwt.JwtPayload {
   type?: string;
   sessionVersion?: number;
+  sessionKind?: 'local-password' | 'openai-oidc';
+  userId?: string;
+  workspaceId?: string;
+  role?: AuthRole;
 }
 
 /**
@@ -483,6 +487,9 @@ export function verifySessionJwtToken(token: string): {
   for (const secret of secrets) {
     try {
       const payload = jwt.verify(token, secret, { algorithms: ['HS256'] }) as SessionJwtPayload;
+      if (payload.type !== 'session') {
+        return { valid: false, error: 'Invalid session type' };
+      }
       const tokenSessionVersion =
         typeof payload.sessionVersion === 'number' ? Math.floor(payload.sessionVersion) : 0;
 
@@ -511,6 +518,33 @@ function sessionAuthenticatedAt(payload: SessionJwtPayload | undefined): string 
   }
   const timestamp = new Date(payload.iat * 1_000);
   return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
+}
+
+function buildFederatedSessionContext(
+  payload: SessionJwtPayload | undefined,
+  isLocalhost: boolean
+): AuthContext | null {
+  if (
+    payload?.sessionKind !== 'openai-oidc' ||
+    typeof payload.userId !== 'string' ||
+    typeof payload.workspaceId !== 'string' ||
+    !payload.role ||
+    !VALID_LOCALHOST_ROLES.includes(payload.role)
+  ) {
+    return null;
+  }
+  return {
+    ...buildAuthContext({
+      role: payload.role,
+      keyName: 'openai-oidc',
+      isLocalhost,
+      authMethod: 'session',
+      authenticatedAt: sessionAuthenticatedAt(payload),
+    }),
+    userId: payload.userId,
+    workspaceId: payload.workspaceId,
+    actorType: 'user',
+  };
 }
 
 function verifyJwtCookie(req: Request): {
@@ -552,6 +586,11 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   if (passwordAuthEnabled) {
     const jwtResult = verifyJwtCookie(req);
     if (jwtResult.valid) {
+      const federated = buildFederatedSessionContext(jwtResult.payload, isLocalhost);
+      if (federated) {
+        req.auth = federated;
+        return next();
+      }
       if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
         blockedPasswordSession = true;
       } else {
@@ -853,6 +892,10 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
     if (token) {
       const result = verifySessionJwtToken(token);
       if (result.valid) {
+        const federated = buildFederatedSessionContext(result.payload, isLocalhost);
+        if (federated) {
+          return { authenticated: true, ...federated };
+        }
         if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
           blockedPasswordSession = true;
         } else {

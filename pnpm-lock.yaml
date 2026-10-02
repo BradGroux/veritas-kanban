@@ -198,6 +198,9 @@ importers:
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
+      jose:
+        specifier: ^6.2.9
+        version: 6.2.9
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
