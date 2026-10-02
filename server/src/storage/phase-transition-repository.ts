@@ -12,6 +12,7 @@ import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import type { PhaseTransitionRepository } from './interfaces.js';
+import { writeAll } from './fs-helpers.js';
 
 const MAX_TRANSITION_LOG_BYTES = 64 * 1024 * 1024;
 const MAX_TRANSITION_RECORDS = 100_000;
@@ -134,7 +135,7 @@ export class FilePhaseTransitionRepository implements PhaseTransitionRepository 
       0o600
     );
     try {
-      await handle.write(line, undefined, 'utf8');
+      await writeAll(handle, line);
       await handle.sync();
     } finally {
       await handle.close();

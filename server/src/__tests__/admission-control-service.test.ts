@@ -16,6 +16,7 @@ import {
 } from '../services/admission-control-service.js';
 import { acquireLock } from '../services/file-lock.js';
 import { FileAdmissionReservationRepository } from '../storage/admission-reservation-repository.js';
+import { writeAll } from '../storage/fs-helpers.js';
 import { SqliteDatabase } from '../storage/sqlite/database.js';
 import { SqliteAdmissionReservationRepository } from '../storage/sqlite/admission-reservation-repository.js';
 
@@ -99,26 +100,6 @@ async function repositoryFor(backend: 'file' | 'sqlite') {
   database.open();
   databases.push(database);
   return new SqliteAdmissionReservationRepository(database);
-}
-
-type CompleteAppend = (
-  handle: {
-    write: (
-      buffer: Uint8Array,
-      offset: number,
-      length: number,
-      position: number | null
-    ) => Promise<{ bytesWritten: number }>;
-  },
-  content: Uint8Array
-) => Promise<void>;
-
-function completeAppend(repository: FileAdmissionReservationRepository): CompleteAppend {
-  return (
-    repository as unknown as {
-      writeCompleteAppend: CompleteAppend;
-    }
-  ).writeCompleteAppend.bind(repository);
 }
 
 const treePolicy: ExecutionTreeBudgetPolicy = {
@@ -403,10 +384,7 @@ describe('AdmissionControlService', () => {
       }
     );
 
-    await completeAppend(new FileAdmissionReservationRepository('/tmp/admission.jsonl'))(
-      { write },
-      Buffer.from('{"durable":true}\n')
-    );
+    await writeAll({ write }, Buffer.from('{"durable":true}\n'));
 
     expect(writes.join('')).toBe('{"durable":true}\n');
     expect(write).toHaveBeenCalledTimes(6);
@@ -415,12 +393,9 @@ describe('AdmissionControlService', () => {
   it('fails closed when a file admission append makes no forward progress', async () => {
     const write = vi.fn().mockResolvedValue({ bytesWritten: 0 });
 
-    await expect(
-      completeAppend(new FileAdmissionReservationRepository('/tmp/admission.jsonl'))(
-        { write },
-        Buffer.from('{"durable":true}\n')
-      )
-    ).rejects.toThrow(/no forward progress/i);
+    await expect(writeAll({ write }, Buffer.from('{"durable":true}\n'))).rejects.toThrow(
+      /no forward progress/i
+    );
   });
 
   it('does not expose an incomplete admission snapshot to concurrent readers', async () => {
