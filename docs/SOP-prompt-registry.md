@@ -185,15 +185,15 @@ Example frontmatter:
 
 ```markdown
 ---
-id: cross-model-review
-name: Cross Model Review
-category: evaluation
-description: Optional independent review checklist
+id: implementation-checklist
+name: Implementation Checklist
+category: agent
+description: Focused implementation checklist
 ---
 
-# Cross Model Review
+# Implementation Checklist
 
-Review {{task_id}}.
+Implement and verify {{task_id}}.
 ```
 
 ---

@@ -1029,61 +1029,6 @@ steps:
       Try to bypass each fix (adversarial testing).
 ````
 
-### Code Review
-
-Parallel multi-model review with gate approval.
-
-```yaml
-id: code-review
-name: Multi-Model Code Review
-version: 1
-description: Get reviews from multiple models concurrently.
-
-agents:
-  - id: claude
-    name: Claude Reviewer
-    role: reviewer
-    model: github-copilot/claude-opus-4.6
-
-  - id: gpt
-    name: GPT Reviewer
-    role: reviewer
-    model: github-copilot/gpt-5
-
-  - id: gemini
-    name: Gemini Reviewer
-    role: reviewer
-    model: github-copilot/gemini-2.5-pro
-
-steps:
-  - id: review
-    name: 'Review: Multi-model analysis'
-    type: parallel
-    parallel:
-      completion: all
-      fail_fast: false
-      steps:
-        - id: claude-review
-          agent: claude
-          input: 'Review this PR for code quality and bugs'
-        - id: gpt-review
-          agent: gpt
-          input: 'Review this PR for security and performance'
-        - id: gemini-review
-          agent: gemini
-          input: 'Review this PR for architecture and design'
-
-  - id: gate
-    name: 'Gate: Approval Decision'
-    type: gate
-    condition: '{{review.failures == 0}}'
-    on_false:
-      escalate_to: human
-      escalate_message: 'One or more reviews flagged issues'
-```
-
----
-
 ## API Quick Reference
 
 | Method   | Endpoint                                          | Description                  |
