@@ -190,7 +190,7 @@ jobs:
 
       - name: Retain native macOS evidence even on failure
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-macos-ui-evidence
           path: |
@@ -223,7 +223,7 @@ jobs:
             -C "${RUNNER_TEMP}" release-candidate.json native-distribution.sha256 native-ui-evidence documentation-media large-board-evidence
 
       - name: Retain signed candidate without publishing
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-macos-release-candidate
           path: ${{ runner.temp }}/signed-macos-candidate.tar.gz
@@ -318,7 +318,7 @@ jobs:
 
       - name: Retain publication evidence even on failure
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-publication-evidence
           path: ${{ runner.temp }}/retained-macos-candidate/documentation-media/publication.json
