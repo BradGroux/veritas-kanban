@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   findTask: vi.fn(),
 }));
 
-vi.mock('../utils/api.js', () => ({
+vi.mock('../utils/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/api.js')>()),
   api: mocks.api,
 }));
 
