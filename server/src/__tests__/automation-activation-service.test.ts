@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AutomationDraftCompileInput,
   RunApprovalRequest,
@@ -8,6 +8,7 @@ import type {
   WorkflowDefinition,
 } from '@veritas-kanban/shared';
 import { AutomationActivationService } from '../services/automation-activation-service.js';
+import { SchedulerService } from '../services/scheduler-service.js';
 import { AutomationDraftService } from '../services/automation-draft-service.js';
 import { FileSchedulerStateRepository } from '../storage/scheduler-state-repository.js';
 
@@ -267,6 +268,222 @@ describe('AutomationActivationService', () => {
     });
     expect(result.version?.evidence.sourceTarget.digest).toBe(preview.evidence.sourceTarget.digest);
   });
+
+  async function activate(input = completeInput()) {
+    const draft = await drafts.save(input);
+    const service = activationService();
+    const preview = await service.preview(draft.id, 'usage-activation');
+    approval = {
+      ...approval,
+      status: 'approved',
+      revision: 2,
+      resolution: {
+        decision: 'approved',
+        actor: { id: 'operator-1', workspaceId: 'workspace-1' },
+        decidedAt: now.toISOString(),
+      },
+    };
+    const result = await service.apply({
+      draftId: draft.id,
+      requestId: preview.requestId,
+      expectedRequestRevision: preview.requestRevision,
+      approvalId: approval.id,
+    });
+    if (!result.binding) throw new Error('Expected fixture binding');
+    return { service, binding: result.binding };
+  }
+
+  it('commits failed usage and its receipt once across concurrent services and restart', async () => {
+    const { service, binding } = await activate();
+    const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+    await service.markRunStarted(claim.id, 'measured-failure');
+    const usage = { costUsd: 5, tokens: 5_000, durationMinutes: 10 };
+    const other = activationService();
+    await Promise.all([
+      service.markRunFailed(claim.id, 'Measured failure', usage),
+      other.markRunFailed(claim.id, 'Measured failure', usage),
+    ]);
+    repository = new FileSchedulerStateRepository(path.join(root, 'scheduler-state.json'));
+    const restarted = activationService();
+    await restarted.markRunFailed(claim.id, 'Repeated failure', usage);
+    const state = await repository.read();
+    expect(state.automationBindings[binding.id]).toMatchObject({
+      failedRuns: 1,
+      aggregateUsage: { runs: 1, ...usage },
+    });
+    expect(state.automationClaims[0]).toMatchObject({
+      status: 'failed',
+      usageReceipt: { ...usage, recordedAt: now.toISOString() },
+    });
+    expect(await restarted.listClaimsPendingReconciliation()).toEqual([]);
+    await expect(restarted.markRunCompleted(claim.id, usage)).rejects.toThrow(/terminal state/i);
+  });
+
+  it.each([
+    ['cost', { maxCostUsd: 5 }, { costUsd: 5, tokens: 1, durationMinutes: 1 }],
+    ['token', { maxTokens: 2_000_000 }, { costUsd: 0, tokens: 2_000_000, durationMinutes: 1 }],
+    ['duration', { maxDurationMinutes: 600 }, { costUsd: 0, tokens: 1, durationMinutes: 600 }],
+  ] as const)(
+    'blocks at the aggregate %s ceiling after failed work',
+    async (kind, budget, usage) => {
+      const input = completeInput();
+      input.hints!.aggregateBudget = { ...input.hints!.aggregateBudget!, ...budget };
+      const { service, binding } = await activate(input);
+      const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+      await service.markRunStarted(claim.id, 'ceiling-failure');
+      await service.markRunFailed(claim.id, 'Failure with consumption', usage);
+      expect((await service.list()).bindings[0]).toMatchObject({
+        status: 'blocked',
+        statusReason: expect.stringContaining(kind),
+        failedRuns: 1,
+      });
+      now = new Date('2026-08-30T15:01:00.000Z');
+      expect((await service.claimRun(binding.id, 'manual-run', now)).claim.status).toBe('blocked');
+    }
+  );
+
+  it('backfills retained historical failures without recounting failures or historical successes', async () => {
+    const { service, binding } = await activate();
+    const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+    await service.markRunStarted(claim.id, 'legacy-failed-workflow');
+    await service.markRunFailed(claim.id, 'Historical failure');
+    expect((await service.listClaimsPendingReconciliation()).map((entry) => entry.id)).toEqual([
+      claim.id,
+    ]);
+    const usage = { costUsd: 3, tokens: 700, durationMinutes: 4 };
+    await service.markRunFailed(claim.id, 'Reconciled historical failure', usage);
+    expect((await service.list()).bindings[0]).toMatchObject({
+      failedRuns: 1,
+      aggregateUsage: { runs: 1, ...usage },
+    });
+    now = new Date('2026-08-30T15:01:00.000Z');
+    const completed = await service.claimRun(binding.id, 'manual-run', now);
+    await service.markRunStarted(completed.claim.id, 'legacy-completed-workflow');
+    await service.markRunCompleted(completed.claim.id, usage);
+    await repository.update((state) => {
+      delete state.automationClaims.find((entry) => entry.id === completed.claim.id)!.usageReceipt;
+      return state;
+    });
+    const before = (await repository.read()).automationBindings[binding.id];
+    await activationService().markRunCompleted(completed.claim.id, usage);
+    expect((await repository.read()).automationBindings[binding.id]).toEqual(before);
+  });
+
+  it('retains measured usage through mixed failures, successes and a zero-usage launch failure', async () => {
+    const { service, binding } = await activate();
+    for (const [index, failed] of [true, false, true].entries()) {
+      now = new Date(`2026-08-30T15:0${index}:00.000Z`);
+      const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+      await service.markRunStarted(claim.id, `mixed-workflow-${index}`);
+      const usage = { costUsd: index + 1, tokens: (index + 1) * 100, durationMinutes: index + 1 };
+      if (failed) await service.markRunFailed(claim.id, 'Measured failure', usage);
+      else await service.markRunCompleted(claim.id, usage);
+    }
+    now = new Date('2026-08-30T15:03:00.000Z');
+    const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+    await service.markRunFailed(claim.id, 'Launch failed');
+    await service.markRunFailed(claim.id, 'Launch failed');
+    const state = await repository.read();
+    expect(state.automationBindings[binding.id]).toMatchObject({
+      failedRuns: 2,
+      aggregateUsage: { runs: 4, costUsd: 6, tokens: 600, durationMinutes: 6 },
+    });
+    expect(state.automationClaims[3].usageReceipt).toMatchObject({
+      costUsd: 0,
+      tokens: 0,
+      durationMinutes: 0,
+    });
+  });
+
+  it.each(['failed', 'completed'] as const)(
+    'reconciles an older failed claim from a %s workflow once after restart',
+    async (workflowStatus) => {
+      const { service, binding } = await activate();
+      const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+      await service.markRunStarted(claim.id, 'retained-failed-workflow');
+      await service.markRunFailed(claim.id, 'Historical failure');
+      await repository.update((state) => {
+        for (let index = 1; index <= 100; index += 1)
+          state.automationClaims.push({
+            ...claim,
+            id: `automation_claim_${index.toString(16).padStart(24, '0')}`,
+            requestId: `blocked-window-${index}`,
+            status: 'blocked',
+            reason: 'Fixture blocked window',
+          });
+        return state;
+      });
+      expect((await service.list()).recentClaims.some((entry) => entry.id === claim.id)).toBe(
+        false
+      );
+      const getRun = vi.fn(async () => ({
+        id: 'retained-failed-workflow',
+        status: workflowStatus,
+        error: 'Measured provider failure',
+        startedAt: '2026-08-30T15:00:00.000Z',
+        completedAt: '2026-08-30T15:10:00.000Z',
+        budget: { usage: { costUsd: 5, totalTokens: 5_000 } },
+      }));
+      const scheduler = (automationService: AutomationActivationService) =>
+        new SchedulerService({
+          stateRepository: repository,
+          automationService,
+          deliverablesService: { list: async () => [] } as never,
+          workflowService: { listWorkflows: async () => [] } as never,
+          workflowRunService: { getRun } as never,
+          workflowAuthoringService: {} as never,
+          queueMonitorService: { list: async () => ({ monitors: [] }) } as never,
+          telemetryService: { emit: vi.fn() } as never,
+        });
+      await Promise.all([scheduler(service).list(now), scheduler(activationService()).list(now)]);
+      repository = new FileSchedulerStateRepository(path.join(root, 'scheduler-state.json'));
+      const snapshot = (await repository.read()).automationBindings[binding.id];
+      expect(snapshot).toMatchObject({
+        failedRuns: 1,
+        aggregateUsage: { runs: 1, costUsd: 5, tokens: 5_000, durationMinutes: 10 },
+      });
+      await scheduler(activationService()).list(now);
+      expect((await repository.read()).automationBindings[binding.id]).toEqual(snapshot);
+    }
+  );
+
+  it.each(['failed', 'completed'] as const)(
+    'reconciles measured %s workflows through the scheduler',
+    async (status) => {
+      const { service, binding } = await activate();
+      const { claim } = await service.claimRun(binding.id, 'manual-run', now);
+      await service.markRunStarted(claim.id, 'terminal-workflow');
+      const scheduler = new SchedulerService({
+        stateRepository: repository,
+        automationService: service,
+        deliverablesService: { list: async () => [] } as never,
+        workflowService: { listWorkflows: async () => [] } as never,
+        workflowRunService: {
+          getRun: async () => ({
+            id: 'terminal-workflow',
+            status,
+            startedAt: '2026-08-30T15:00:00.000Z',
+            completedAt: '2026-08-30T15:10:00.000Z',
+            budget: { usage: { costUsd: 5, totalTokens: 5_000 } },
+          }),
+        } as never,
+        workflowAuthoringService: {} as never,
+        queueMonitorService: { list: async () => ({ monitors: [] }) } as never,
+        telemetryService: { emit: vi.fn() } as never,
+      });
+      await scheduler.list(now);
+      await scheduler.list(now);
+      const state = await repository.read();
+      expect(state.automationBindings[binding.id]).toMatchObject({
+        failedRuns: status === 'failed' ? 1 : 0,
+        aggregateUsage: { runs: 1, costUsd: 5, tokens: 5_000, durationMinutes: 10 },
+      });
+      expect(state.automationClaims[0]).toMatchObject({
+        status,
+        usageReceipt: { costUsd: 5, tokens: 5_000, durationMinutes: 10 },
+      });
+    }
+  );
 
   function activationService(
     draftService: AutomationDraftService = drafts,
