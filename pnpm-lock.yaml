@@ -19,15 +19,15 @@ overrides:
   js-yaml@<4.3.2: 4.3.2
   nanoid@<3.3.18: 3.3.18
   postcss: '>=8.5.27'
-  postcss-selector-parser: 7.1.5
+  postcss-selector-parser: 7.1.6
   qs: 6.16.0
   uuid@^8.3.0: 11.1.1
   minimatch: '>=10.2.3'
   path-to-regexp: '>=8.4.0'
   tar: '>=7.5.21'
   tmp: '>=0.2.6'
-  undici@>=6.0.0 <7.0.0: 6.28.0
-  undici@>=7.0.0 <8.0.0: 7.29.0
+  undici@>=6.0.0 <7.0.0: 6.28.1
+  undici@>=7.0.0 <8.0.0: 7.29.1
 
 importers:
 
@@ -4183,8 +4183,8 @@ packages:
     peerDependencies:
       postcss: '>=8.5.27'
 
-  postcss-selector-parser@7.1.5:
-    resolution: {integrity: sha512-KvvtD7SrlBP7dlgkBghEE3r84CABm5SmV2aNcG4oCA+qDnJ/tvKonFVvwWAyyWUEwxuNawdfEAZKP9zM3oZ2Uw==}
+  postcss-selector-parser@7.1.6:
+    resolution: {integrity: sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==}
     engines: {node: '>=4'}
 
   postcss-simple-vars@7.0.1:
@@ -5013,12 +5013,12 @@ packages:
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
-  undici@6.28.0:
-    resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
+  undici@6.28.1:
+    resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
     engines: {node: '>=18.17'}
 
-  undici@7.29.0:
-    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
     engines: {node: '>=20.18.1'}
 
   unified@11.0.5:
@@ -5662,7 +5662,7 @@ snapshots:
       semver: 7.8.5
       sumchecker: 3.0.1
     optionalDependencies:
-      undici: 7.29.0
+      undici: 7.29.1
     transitivePeerDependencies:
       - supports-color
 
@@ -8568,7 +8568,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.1
-      undici: 7.29.0
+      undici: 7.29.1
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -9340,7 +9340,7 @@ snapshots:
       semver: 7.8.5
       tar: 7.5.22
       tinyglobby: 0.2.17
-      undici: 6.28.0
+      undici: 6.28.1
       which: 6.0.1
 
   node-int64@0.4.0: {}
@@ -9574,7 +9574,7 @@ snapshots:
   postcss-nested@7.0.2(postcss@8.5.31):
     dependencies:
       postcss: 8.5.31
-      postcss-selector-parser: 7.1.5
+      postcss-selector-parser: 7.1.6
 
   postcss-preset-mantine@1.18.0(postcss@8.5.31):
     dependencies:
@@ -9582,7 +9582,7 @@ snapshots:
       postcss-mixins: 12.1.2(postcss@8.5.31)
       postcss-nested: 7.0.2(postcss@8.5.31)
 
-  postcss-selector-parser@7.1.5:
+  postcss-selector-parser@7.1.6:
     dependencies:
       cssesc: 3.0.0
       util-deprecate: 1.0.2
@@ -10570,9 +10570,9 @@ snapshots:
 
   undici-types@8.9.0: {}
 
-  undici@6.28.0: {}
+  undici@6.28.1: {}
 
-  undici@7.29.0: {}
+  undici@7.29.1: {}
 
   unified@11.0.5:
     dependencies:
