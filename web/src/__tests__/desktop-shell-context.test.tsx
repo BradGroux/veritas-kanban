@@ -220,6 +220,29 @@ describe('desktop shell recovery', () => {
     }
   });
 
+  it('waits for dock removal even if the next frame runs before the resize render commits', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 32, 32),
+    ] as unknown as DOMRectList);
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'Open board chat' });
+    await user.click(trigger);
+    screen.getByRole('button', { name: 'Focused dock control' }).focus();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    act(() => window.dispatchEvent(new Event('resize')));
+    expect(screen.queryByRole('button', { name: 'Focused dock control' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it('resolves the current visible opener if the responsive header remounts before restoration', async () => {
     vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (
       this: HTMLElement

@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -133,6 +134,7 @@ function isCompactDesktopLayout(): boolean {
 export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const desktopClient = isDesktopClient();
   const panelTriggerRef = useRef<HTMLElement | null>(null);
+  const collapsedPanelTriggerRef = useRef<HTMLElement | null>(null);
   const compactLayoutRef = useRef(isCompactDesktopLayout());
   const [leftRailOpen, setLeftRailOpenState] = useState(() =>
     readStoredBoolean(LEFT_RAIL_STORAGE_KEY, true)
@@ -143,6 +145,28 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   const [bottomPanel, setBottomPanel] = useState<DesktopBottomPanel | null>(null);
   const [rightPanelWidth, setRightPanelWidthState] = useState(() => readStoredRightPanelWidth());
 
+  useLayoutEffect(() => {
+    if (bottomPanel) return;
+    const trigger = collapsedPanelTriggerRef.current;
+    collapsedPanelTriggerRef.current = null;
+    if (!trigger) return;
+    // Resize updates may commit after the browser's next frame. Restore only
+    // after the dock's removal has committed, then resolve the current header.
+    const frame = requestAnimationFrame(() => {
+      const dock = document.getElementById('workbench-right-dock');
+      if (dock && !dock.hidden) return;
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        active !== document.body &&
+        !active.closest('#workbench-right-dock')
+      )
+        return;
+      resolveFocusTarget(trigger)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bottomPanel]);
+
   const setRightPanelWidth = useCallback((width: number) => {
     const next = clampRightPanelWidth(width);
     setRightPanelWidthState(next);
@@ -150,6 +174,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const restorePanelFocus = useCallback(() => {
+    collapsedPanelTriggerRef.current = null;
     const trigger = panelTriggerRef.current;
     panelTriggerRef.current = null;
     if (!trigger) return;
@@ -200,6 +225,7 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
 
   const openBottomPanel = useCallback(
     (panel: DesktopBottomPanel) => {
+      collapsedPanelTriggerRef.current = null;
       if (desktopClient && isCompactDesktopLayout()) {
         setLeftRailOpenState(false);
         setRightRailOpenState(false);
@@ -321,24 +347,10 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
         // inherits its history marker. Going Back would dismiss that task.
         const dockOwnedFocus = Boolean(document.activeElement?.closest('#workbench-right-dock'));
         const trigger = panelTriggerRef.current;
+        collapsedPanelTriggerRef.current = dockOwnedFocus ? trigger : null;
+        panelTriggerRef.current = null;
         setBottomPanel(null);
         removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
-        panelTriggerRef.current = null;
-        if (dockOwnedFocus) {
-          requestAnimationFrame(() => {
-            // A reopened dock or a surviving task surface owns any newer focus.
-            const dock = document.getElementById('workbench-right-dock');
-            if (dock && !dock.hidden) return;
-            const active = document.activeElement;
-            if (
-              active instanceof HTMLElement &&
-              active !== document.body &&
-              !active.closest('#workbench-right-dock')
-            )
-              return;
-            resolveFocusTarget(trigger)?.focus({ preventScroll: true });
-          });
-        }
         const { [BOTTOM_PANEL_HISTORY_STATE_KEY]: _panel, ...rest } = window.history.state ?? {};
         window.history.replaceState(rest, '', window.location.href);
       }
