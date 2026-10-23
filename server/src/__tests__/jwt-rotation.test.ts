@@ -91,7 +91,6 @@ import {
   getJwtRotationStatus,
   saveSecurityConfig,
   type SecurityConfig,
-  type JwtSecretEntry,
 } from '../config/security.js';
 
 describe('JWT Secret Rotation', () => {

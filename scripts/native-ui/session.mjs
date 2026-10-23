@@ -35,7 +35,10 @@ export async function createNativeSession({ packagePath, commit, version }) {
     const setup = page.getByRole('button', { name: 'Continue to Password', exact: true });
     const settings = page.getByRole('button', { name: /^(?:Settings|Mobile settings)$/ });
     const login = page.getByRole('button', { name: 'Login', exact: true });
-    await expect(setup.or(settings).or(login)).toBeVisible({ timeout: 30_000 });
+    const authenticated = settings
+      .or(page.getByRole('dialog', { name: /^Task workspace:/ }))
+      .first();
+    await expect(setup.or(authenticated).or(login)).toBeVisible({ timeout: 30_000 });
     if (await setup.isVisible()) {
       await setup.click();
       await page.getByLabel('Password', { exact: true }).fill(password);
@@ -44,12 +47,12 @@ export async function createNativeSession({ packagePath, commit, version }) {
       await expect(page.getByRole('heading', { name: 'Save Your Recovery Key' })).toBeVisible();
       await page.reload(); // Never capture recovery keys or synthetic passwords.
     }
-    await expect(login.or(settings)).toBeVisible({ timeout: 30_000 });
+    await expect(login.or(authenticated)).toBeVisible({ timeout: 30_000 });
     if (await login.isVisible()) {
       await page.getByLabel('Password', { exact: true }).fill(password);
       await login.click();
     }
-    await expect(settings).toBeVisible({ timeout: 30_000 });
+    await expect(authenticated).toBeVisible({ timeout: 30_000 });
   }
 
   async function authenticate(page) {
@@ -68,10 +71,10 @@ export async function createNativeSession({ packagePath, commit, version }) {
     origin,
     profile,
     authenticate,
-    async launch() {
+    async launch({ deepLink, beforeAuthenticate } = {}) {
       const app = await _electron.launch({
         executablePath: path.join(packagePath, 'Contents/MacOS/veritas-kanban'),
-        args: [`--user-data-dir=${profile}`],
+        args: [`--user-data-dir=${profile}`, ...(deepLink ? [deepLink] : [])],
         env,
       });
       try {
@@ -94,6 +97,7 @@ export async function createNativeSession({ packagePath, commit, version }) {
         const page = await app.firstWindow();
         page.setDefaultTimeout(10_000);
         await page.waitForURL(`${origin}/**`, { timeout: 60_000 });
+        if (beforeAuthenticate) await beforeAuthenticate({ app, page });
         await authenticate(page);
         const identity = await page.evaluate(() => window.veritasDesktop.getAppInfo());
         assert.equal(

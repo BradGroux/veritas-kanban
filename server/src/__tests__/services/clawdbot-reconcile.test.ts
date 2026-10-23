@@ -3,8 +3,15 @@
  * ClawdbotAgentService.reconcileRunningAttempts() must detect persisted running
  * attempts after a server restart and move legacy runs into an actionable blocked state.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { RunRecoveryRecord, Task, TaskAttempt } from '@veritas-kanban/shared';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { rm } from 'node:fs/promises';
+import {
+  ZERO_AGENT_BUDGET_USAGE,
+  type RunLaunchManifest,
+  type RunRecoveryRecord,
+  type Task,
+  type TaskAttempt,
+} from '@veritas-kanban/shared';
 import { providerRuntimeManifestFixture } from '../fixtures/provider-runtime-manifest.js';
 import {
   TaskEnvelopeService,
@@ -12,6 +19,11 @@ import {
 } from '../../services/task-envelope-service.js';
 import { ProviderCompletionService } from '../../services/provider-completion-service.js';
 import { RunRecoveryPolicyService } from '../../services/run-recovery-policy-service.js';
+
+const testRuntime = vi.hoisted(() => ({ directory: '' }));
+afterAll(async () => {
+  if (testRuntime.directory) await rm(testRuntime.directory, { recursive: true, force: true });
+});
 
 // ─── Mocks ────────────────────────────────────────────────────────────────
 
@@ -30,12 +42,10 @@ vi.mock('@veritas-kanban/shared', async (importOriginal) => {
   }
 });
 
-const mockListTasks = vi.fn<[], Promise<Task[]>>();
-const mockGetTask = vi.fn<[string], Promise<Task | null>>();
-const mockUpdateTask = vi.fn<
-  [string, Partial<Task> & { expectedRevision?: number }],
-  Promise<Task>
->();
+const mockListTasks = vi.fn<() => Promise<Task[]>>();
+const mockGetTask = vi.fn<(taskId: string) => Promise<Task | null>>();
+const mockUpdateTask =
+  vi.fn<(taskId: string, update: Partial<Task> & { expectedRevision?: number }) => Promise<Task>>();
 
 vi.mock('../../services/task-service.js', () => ({
   TaskService: class MockTaskService {
@@ -70,10 +80,14 @@ vi.mock('../../services/agent-health-service.js', () => ({
 
 vi.mock('../../utils/paths.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../utils/paths.js')>();
+  const { mkdtemp } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  testRuntime.directory = await mkdtemp(join(tmpdir(), 'vk-reconcile-fixture-'));
   return {
     ...actual,
-    getRuntimeDir: () => '/tmp/test-veritas-kanban',
-    getLogsDir: () => '/tmp/test-veritas-kanban/logs',
+    getRuntimeDir: () => testRuntime.directory,
+    getLogsDir: () => join(testRuntime.directory, 'logs'),
   };
 });
 
@@ -82,6 +96,8 @@ vi.mock('../../storage/fs-helpers.js', () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
   readFile: vi.fn().mockResolvedValue(''),
   writeFile: vi.fn().mockResolvedValue(undefined),
+  writeAll: vi.fn().mockResolvedValue(undefined),
+  unlink: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -511,7 +527,20 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       new RunRecoveryPolicyService(() => 0.5)
     );
     const schedule = vi
-      .spyOn((service as unknown as { recovery: never }).recovery, 'scheduleTaskRecovery')
+      .spyOn(
+        (
+          service as unknown as {
+            recovery: {
+              scheduleTaskRecovery(
+                taskId: string,
+                attemptId: string,
+                recovery: RunRecoveryRecord
+              ): void;
+            };
+          }
+        ).recovery,
+        'scheduleTaskRecovery'
+      )
       .mockImplementation(() => undefined);
 
     await (
@@ -548,20 +577,23 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
     } as Task;
     const failedAttempt = currentTask.attempt;
     if (!failedAttempt) throw new Error('Expected a failed attempt fixture');
-    failedAttempt.runLaunchManifest = {
-      digest: `sha256:${'a'.repeat(64)}`,
-      routing: {
-        requestedAgent: 'openclaw',
-        selectedAgent: 'openclaw',
-        selectedHost: 'local-process',
-        reason: 'Test routing decision.',
-        fallbackAgent: null,
-        fallbackAllowed: false,
-        fallbackOnFailure: false,
-        maxRetries: 3,
-      },
-      providerRequirements: { required: [], capabilities: [] },
-    } as TaskAttempt['runLaunchManifest'];
+    // Recovery consumes only the persisted routing policy and capability requirements.
+    const recoveryManifest: Pick<RunLaunchManifest, 'digest' | 'routing' | 'providerRequirements'> =
+      {
+        digest: `sha256:${'a'.repeat(64)}`,
+        routing: {
+          requestedAgent: 'openclaw',
+          selectedAgent: 'openclaw',
+          selectedHost: 'local-process',
+          reason: 'Test routing decision.',
+          fallbackAgent: null,
+          fallbackAllowed: false,
+          fallbackOnFailure: false,
+          maxRetries: 3,
+        },
+        providerRequirements: { required: [], capabilities: [] },
+      };
+    failedAttempt.runLaunchManifest = recoveryManifest as RunLaunchManifest;
     currentTask.attempts = [failedAttempt];
     mockGetTask.mockImplementation(async () => currentTask);
     mockUpdateTask.mockImplementation(async (_id, update) => {
@@ -673,14 +705,7 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       selectedAgent: 'openclaw',
       routingDecision: 'Matched code rule.',
       requiredRuntimeCapabilities: [],
-      cumulativeBudget: {
-        tokens: 0,
-        cost: 0,
-        runtimeSeconds: 0,
-        idleRuntimeSeconds: 0,
-        retries: 0,
-        fanOut: 1,
-      },
+      cumulativeBudget: { ...ZERO_AGENT_BUDGET_USAGE, fanOut: 1 },
     };
     let currentTask = {
       ...makeTask('task-launch-recovery', 'failed'),
@@ -701,8 +726,11 @@ describe('ClawdbotAgentService.reconcileRunningAttempts (issue #781)', () => {
       return currentTask;
     });
     const appendRunEvent = vi
-      .spyOn(service as never, 'appendRunEvent')
-      .mockResolvedValue({} as never);
+      .spyOn(
+        service as unknown as { appendRunEvent(...args: unknown[]): Promise<unknown> },
+        'appendRunEvent'
+      )
+      .mockResolvedValue({});
     const startAgent = vi.spyOn(service, 'startAgent').mockResolvedValue({
       taskId: currentTask.id,
       attemptId: 'attempt_queued',

@@ -2,11 +2,11 @@
  * Changes Service Tests
  * Tests the efficient polling endpoint for agents.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ChangesService } from '../services/changes-service.js';
 import { getTaskService } from '../services/task-service.js';
 import { activityService } from '../services/activity-service.js';
-import type { Task, CreateTaskInput } from '@veritas-kanban/shared';
+import type { CreateTaskInput } from '@veritas-kanban/shared';
 
 describe('ChangesService', () => {
   let service: ChangesService;
