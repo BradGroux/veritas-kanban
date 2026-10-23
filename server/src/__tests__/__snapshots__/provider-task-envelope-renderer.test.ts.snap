@@ -6,10 +6,10 @@ exports[`provider task-envelope renderers > renders a callback-free Claude Code 
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:68c6046d6263138cf372acbc26f3eb3452a89faa1ebc89e9ec350d1d754cf0eb\`
+- Digest: \`sha256:fac21f208c0c83a1794635ecab9ed79b35b1464c5066b92bfbc4d865cb4ebde2\`
 - Provider: \`claude-code\`
 - Adapter: \`claude-code\`
-- Runtime manifest: \`sha256:b0783b93f5dd5d7c8a7dc6fe71d977d61deb9a62d1c7b8c8c1aba96a88d9e8f4\`
+- Runtime manifest: \`sha256:c2fcc7387911be603edd297e0a67130c6bb5c76b72502d32461ecaa82a76f5d8\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -97,10 +97,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex CLI tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:6ce6a65225d891d12c4f6cbe78f4653c0b4ff7f988ae0993ec649d2954ebefe2\`
+- Digest: \`sha256:3cb51da68a8958443c81779a06be9627b7803b02fec426beb1bcaeee8cbbee3c\`
 - Provider: \`codex-cli\`
 - Adapter: \`codex-cli\`
-- Runtime manifest: \`sha256:b9bfb7442bb3d31be56ed1a50e5a46b3a11edb153b5586030108bb2fa1c2896f\`
+- Runtime manifest: \`sha256:eddec9bc2bdac4926b3ae362f23c2e09e7bc552b0293b3beac4536bc8d5e5bf7\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -185,10 +185,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex SDK tr
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:47c956ce8c8faf76f5392dbc07b7a58bfd8a540d8fccf4fba06efcce6c9c1a95\`
+- Digest: \`sha256:f1ca79d1f8f027f6b083069fc35f6b0dd9aab5688a4714e8d6ac61501744e510\`
 - Provider: \`codex-sdk\`
 - Adapter: \`codex-sdk\`
-- Runtime manifest: \`sha256:44bb4a5be9a524568ba9175218a680b565c2f1b8f4b0aaeef3321e09862496b0\`
+- Runtime manifest: \`sha256:3a2d2786a6de3e40481a419e94eb4c37bcf0c5a6102c05207aaeb5ac83b4d0ed\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -274,10 +274,10 @@ exports[`provider task-envelope renderers > renders a callback-free Codex app-se
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:ad4711e35d3880327fdd2c6c6f4f9ad1f26905c88df6ec336be5b9c5708673fb\`
+- Digest: \`sha256:b8742a978ee83f2021313721a076068f78fbc69820bf767ba4ef99b619316194\`
 - Provider: \`codex-app-server\`
 - Adapter: \`codex-app-server\`
-- Runtime manifest: \`sha256:1ffd607a48e4863b3ff2a3c2ba07a63a3257e8e6fc224bd4569be6f5b85e9a52\`
+- Runtime manifest: \`sha256:c3352cd9717484deadf5e92f8a8821ba3da2d8f4f23c935b393aa9a140c3f1de\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -365,10 +365,10 @@ exports[`provider task-envelope renderers > renders a callback-free Hermes scrip
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:e5b16872911eb3db1518b3336d057d9971558a835d4ee86a4096c03bba5eaf6b\`
+- Digest: \`sha256:35025c4cad94a0a3f11afac073382edf6daa4ac9faf6e65d9245300e0855fc06\`
 - Provider: \`hermes-cli\`
 - Adapter: \`hermes-cli\`
-- Runtime manifest: \`sha256:52d653db2a011818561aeaa75341663d2f7a225b7ea997f7296e19bca97b1480\`
+- Runtime manifest: \`sha256:c6b29d5f6f34f9170a366583b670319a78286a35e1a3cd1b333f2cd13b7fb62b\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
@@ -456,10 +456,10 @@ exports[`provider task-envelope renderers > renders an OpenClaw gateway completi
 ## Transport
 
 - Envelope: \`task-envelope/v1\`
-- Digest: \`sha256:aa1cec7fb29b6b0fb40c7c9f80309ed4dfa93f4116864695d91dff0178e6262c\`
+- Digest: \`sha256:3038db9007433078c6e8a22cadeadc92bdde78155e938b6cf4deedd3aa1ad5b6\`
 - Provider: \`openclaw\`
 - Adapter: \`openclaw\`
-- Runtime manifest: \`sha256:029694eea4481d65f9c35ff846b84e6ab3e0d2cc2c403ec4964fc056fd2472da\`
+- Runtime manifest: \`sha256:ad5b3a109064938c34a513bf8efc4e12ce8bd07559de224dd5ebe932bba07aaf\`
 - Protocol: \`fixture-runtime/v1\`
 - Task: \`task_transport\`
 - Attempt: \`attempt_transport\`
