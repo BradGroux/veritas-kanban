@@ -10,7 +10,7 @@ vi.mock('../utils/api.js', () => ({
   API_BASE: 'http://localhost:3001',
   api,
   assertApiPermissionForRequest,
-  buildApiHeaders: vi.fn(() => ({ 'content-type': 'application/json' })),
+  buildApiRequestOptions: vi.fn((options) => ({ ...options, redirect: 'error' })),
 }));
 
 import { registerWorkProductCommands } from '../commands/work-products.js';

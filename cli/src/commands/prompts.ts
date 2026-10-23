@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { API_BASE, buildApiHeaders } from '../utils/api.js';
+import { API_BASE, buildApiHeaders, buildApiRequestOptions } from '../utils/api.js';
 import type {
   CreatePromptTemplateInput,
   PromptCategory,
@@ -438,11 +438,10 @@ async function requestJson<T>(
       headers.set(key, value);
     }
 
-    const response = await deps.fetch(`${options.apiBase}${pathName}`, {
-      ...init,
-      headers,
-      signal: controller.signal,
-    });
+    const response = await deps.fetch(
+      `${options.apiBase}${pathName}`,
+      buildApiRequestOptions({ ...init, headers, signal: controller.signal }, deps.env.VK_API_KEY)
+    );
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {

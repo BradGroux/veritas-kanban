@@ -47,6 +47,10 @@ The Playwright job runs:
 pnpm test:e2e
 ```
 
+For local runs, the same command creates a fresh temporary data tree and synthetic API key, checks that both selected ports are unused, and starts only test-owned servers. It never reads `server/.env`, reuses a development server, or honors inherited `DATA_DIR`, `VERITAS_DATA_DIR`, `VERITAS_SQLITE_PATH`, or `API_BASE_URL` storage/endpoint settings. The API also runs from an owned working directory so legacy-state migration stays inside the fixture tree. Use `PLAYWRIGHT_API_PORT` and `PLAYWRIGHT_WEB_PORT` to select unused ports. An occupied port fails before either server starts; stop that server yourself or select other ports.
+
+Use `pnpm test:e2e`, `pnpm test:e2e:headed`, or `pnpm test:e2e:ui` rather than invoking Playwright directly. Arguments still pass through, for example `pnpm test:e2e -- e2e/mobile-viewport.spec.ts --project=chromium`. Playwright tears down the processes it starts. Successful runs remove their generated fixture data; failed or interrupted runs retain it at the printed temporary path for diagnosis. Browser reports and traces remain in their normal checkout locations. This fixture isolation does not authorize running GitHub CI.
+
 The job installs Chromium only. The Playwright config still owns the test
 matrix, including desktop Chromium and the mobile Chromium project for mobile
 responsive and offline tests.
