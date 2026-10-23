@@ -15,6 +15,7 @@ import {
   restoreProtocolHandler,
   releaseEnvironment,
   validateSigningEnvironment,
+  validateKeychainSigningIdentity,
 } from './capture-local-macos-release.mjs';
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -136,6 +137,49 @@ test('notarization rejects absent, partial and conflicting credential modes', ()
     { ...certificate, APPLE_ID: 'partial' },
     { ...certificate, ...password, APPLE_API_KEY: 'partial' },
     { ...certificate, ...api, ...password },
+  ])
+    assert.throws(() => validateSigningEnvironment(env));
+});
+
+test('existing Keychain identities and notarization profiles need no exported private key', () => {
+  const source = {
+    PATH: '/synthetic',
+    CSC_NAME: 'a'.repeat(40),
+    APPLE_KEYCHAIN_PROFILE: 'existing-profile',
+  };
+  assert.equal(validateSigningEnvironment(source), 'keychain-profile');
+  assert.equal(releaseEnvironment(source, commit, channel).CSC_NAME, undefined);
+  assert.equal(releaseEnvironment(source, commit, channel).APPLE_KEYCHAIN_PROFILE, undefined);
+  const signing = releaseEnvironment(source, commit, channel, true);
+  assert.equal(signing.CSC_NAME, source.CSC_NAME);
+  assert.equal(signing.APPLE_KEYCHAIN_PROFILE, source.APPLE_KEYCHAIN_PROFILE);
+  const identities =
+    '  1) ' +
+    'A'.repeat(40) +
+    ' "Developer ID Application: Example, Inc. (TEAM)"\n' +
+    '  2) ' +
+    'B'.repeat(40) +
+    ' "Apple Development: Example (TEAM)"\n';
+  validateKeychainSigningIdentity(identities, source.CSC_NAME);
+  validateKeychainSigningIdentity(identities, 'Example, Inc. (TEAM)');
+  for (const value of ['', 'b'.repeat(40), 'Unknown', 'Developer ID Application: Example'])
+    assert.throws(() => validateKeychainSigningIdentity(identities, value));
+  assert.throws(() =>
+    validateKeychainSigningIdentity(identities + identities, 'Example, Inc. (TEAM)')
+  );
+  for (const env of [
+    { ...source, CSC_LINK: 'partial' },
+    { ...source, CSC_KEY_PASSWORD: 'partial' },
+    { ...source, CSC_LINK: 'synthetic', CSC_KEY_PASSWORD: 'synthetic' },
+    { ...source, APPLE_ID: 'partial' },
+    { ...source, APPLE_API_KEY: 'partial' },
+    {
+      ...source,
+      APPLE_ID: 'synthetic',
+      APPLE_APP_SPECIFIC_PASSWORD: 'synthetic',
+      APPLE_TEAM_ID: 'synthetic',
+    },
+    { ...source, APPLE_KEYCHAIN_PROFILE: '   ' },
   ])
     assert.throws(() => validateSigningEnvironment(env));
 });

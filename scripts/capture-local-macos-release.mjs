@@ -45,8 +45,10 @@ const baselineKeys = [
   'NO_PROXY',
 ];
 const signingKeys = [
+  'CSC_NAME',
   'CSC_LINK',
   'CSC_KEY_PASSWORD',
+  'APPLE_KEYCHAIN_PROFILE',
   'APPLE_API_KEY',
   'APPLE_API_KEY_ID',
   'APPLE_API_ISSUER',
@@ -69,12 +71,39 @@ export function releaseEnvironment(source, commit, channel, signing = false) {
 }
 
 export function validateSigningEnvironment(env) {
+  const existingIdentity = typeof env.CSC_NAME === 'string' && env.CSC_NAME.trim().length > 0;
+  const importedIdentity = Boolean(env.CSC_LINK && env.CSC_KEY_PASSWORD);
   assert(
-    env.CSC_LINK && env.CSC_KEY_PASSWORD,
-    'CSC_LINK and CSC_KEY_PASSWORD are required for signed capture'
+    existingIdentity !== importedIdentity &&
+      !(existingIdentity && (env.CSC_LINK || env.CSC_KEY_PASSWORD)),
+    'Provide exactly one signing mode: CSC_NAME for an existing identity, or CSC_LINK with CSC_KEY_PASSWORD'
   );
   const credentials = getNotarytoolCredentials(env);
-  return credentials[0] === '--key' ? 'api-key' : 'apple-id';
+  return credentials[0] === '--key'
+    ? 'api-key'
+    : credentials[0] === '--keychain-profile'
+      ? 'keychain-profile'
+      : 'apple-id';
+}
+
+export function validateKeychainSigningIdentity(identities, qualifier) {
+  const selected = qualifier.trim();
+  assert(
+    selected && !selected.startsWith('Developer ID Application:'),
+    'CSC_NAME must be a certificate fingerprint or name without the Developer ID Application prefix'
+  );
+  const matches = [
+    ...identities.matchAll(
+      /^\s*\d+\)\s+([A-Fa-f0-9]{40})\s+"(Developer ID Application: [^"]+)"\s*$/gm
+    ),
+  ].filter(
+    ([, hash, name]) => hash.toLowerCase() === selected.toLowerCase() || name.includes(selected)
+  );
+  assert.equal(
+    matches.length,
+    1,
+    'CSC_NAME must match exactly one valid Developer ID Application identity'
+  );
 }
 
 export function assertRestorableProtocol(current, original, candidatePath) {
@@ -185,6 +214,13 @@ export async function preflightCapture({ version, channel, output }) {
   await check('Signed/notarized capture credentials are incomplete or ambiguous', () =>
     validateSigningEnvironment(process.env)
   );
+  if (process.env.CSC_NAME)
+    await check('Existing Developer ID signing identity is missing or ambiguous', () =>
+      validateKeychainSigningIdentity(
+        result('security', ['find-identity', '-v', '-p', 'codesigning'], env),
+        process.env.CSC_NAME
+      )
+    );
   if (process.env.APPLE_API_KEY)
     await check('APPLE_API_KEY must name an existing absolute private-key file', async () => {
       assert(path.isAbsolute(process.env.APPLE_API_KEY));

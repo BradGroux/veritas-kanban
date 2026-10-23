@@ -34,6 +34,7 @@ export function getNotarytoolCredentials(env = process.env) {
   const appleId = env.APPLE_ID;
   const applePassword = env.APPLE_APP_SPECIFIC_PASSWORD;
   const appleTeamId = env.APPLE_TEAM_ID;
+  const keychainProfile = env.APPLE_KEYCHAIN_PROFILE;
 
   const apiKeyValues = [apiKey, apiKeyId, apiIssuer].filter(Boolean).length;
   const appleIdValues = [appleId, applePassword, appleTeamId].filter(Boolean).length;
@@ -50,10 +51,18 @@ export function getNotarytoolCredentials(env = process.env) {
     );
   }
 
-  if (apiKeyValues === 3 && appleIdValues === 3) {
+  if (
+    Number(apiKeyValues === 3) + Number(appleIdValues === 3) + Number(Boolean(keychainProfile)) >
+    1
+  ) {
     throw new Error(
-      'Provide exactly one notarization credential set, not both API-key and Apple ID credentials'
+      'Provide exactly one notarization credential set: API-key, Apple ID, or existing Keychain profile'
     );
+  }
+
+  if (keychainProfile) {
+    if (!keychainProfile.trim()) throw new Error('Keychain profile name must not be blank');
+    return ['--keychain-profile', keychainProfile];
   }
 
   if (apiKeyValues === 3) {
@@ -65,7 +74,7 @@ export function getNotarytoolCredentials(env = process.env) {
   }
 
   throw new Error(
-    'Notarization credentials are required: provide App Store Connect API-key credentials or Apple ID credentials'
+    'Notarization credentials are required: provide App Store Connect API-key credentials, Apple ID credentials, or an existing Keychain profile'
   );
 }
 
