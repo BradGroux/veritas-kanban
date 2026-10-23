@@ -536,9 +536,20 @@ test.describe('Atomic board drag', () => {
     const targetWithinId = beforeWithinOrder[0] as string;
     const sourceWithinId = beforeWithinOrder[1] as string;
     const secondCard = page.locator(`[data-task-id="${sourceWithinId}"]`);
+    await expect(secondCard).toHaveAttribute('aria-roledescription', 'sortable');
     await secondCard.focus();
     await page.keyboard.press('Space');
+    await expect(
+      page.locator(`[data-board-drag-overlay] [data-task-id="${sourceWithinId}"]`)
+    ).toBeVisible();
     await page.keyboard.press('ArrowUp');
+    await expect
+      .poll(() =>
+        todoCards.evaluateAll((elements) =>
+          elements.map((element) => element.getAttribute('data-task-id'))
+        )
+      )
+      .toEqual([sourceWithinId, targetWithinId]);
     await page.keyboard.press('Space');
 
     await expect.poll(() => moveRequests.length).toBe(2);
