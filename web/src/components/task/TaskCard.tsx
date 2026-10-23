@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useMemo, useState, useRef, useEffect, useCallback, useId } from 'react';
 import { Select, Tooltip } from '@mantine/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -213,6 +213,9 @@ export const TaskCard = memo(function TaskCard({
   const attachmentCount = summary?.attachmentCount ?? task.attachments?.length ?? 0;
   const deliverableCount = summary?.deliverableCount ?? task.deliverables?.length ?? 0;
   const { taskTypes, projects, sprints } = useTaskConfig();
+  // Disabled copies (including the drag overlay) must not replace the live
+  // card's registration in the drag-and-drop registry.
+  const disabledSortableId = useId();
   const {
     attributes,
     listeners,
@@ -221,7 +224,7 @@ export const TaskCard = memo(function TaskCard({
     transition,
     isDragging: isCurrentlyDragging,
   } = useSortable({
-    id: task.id,
+    id: dragEnabled ? task.id : `non-draggable:${disabledSortableId}`,
     disabled: !dragEnabled,
   });
   const cardRef = useRef<HTMLDivElement | null>(null);
