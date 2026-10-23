@@ -1,11 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import {
-  api,
-  API_BASE,
-  assertApiPermissionForRequest,
-  buildApiRequestOptions,
-} from '../utils/api.js';
+import { api } from '../utils/api.js';
 
 export function registerSummaryCommands(program: Command): void {
   // Create summary parent command with subcommands
@@ -92,21 +87,13 @@ export function registerSummaryCommands(program: Command): void {
           const standup = await api<unknown>(`/api/summary/standup?date=${dateParam}&format=json`);
           console.log(JSON.stringify(standup, null, 2));
         } else {
-          await assertApiPermissionForRequest(
-            `/api/summary/standup?date=${dateParam}&format=${format}`
-          );
-          // Fetch markdown or text directly
-          const res = await fetch(
-            `${API_BASE}/api/summary/standup?date=${dateParam}&format=${format}`,
-            buildApiRequestOptions({
+          const content = await api<string>(
+            `/api/summary/standup?date=${dateParam}&format=${format}`,
+            {
+              responseType: 'text',
               headers: { accept: 'text/plain, text/markdown, application/json' },
-            })
+            }
           );
-          if (!res.ok) {
-            const errorBody = await res.json().catch(() => ({ error: res.statusText }));
-            throw new Error((errorBody as { error?: string }).error || `API error: ${res.status}`);
-          }
-          const content = await res.text();
           console.log(content);
         }
       } catch (err) {
@@ -128,18 +115,10 @@ export function registerSummaryCommands(program: Command): void {
           const recent = await api<unknown>(`/api/summary/recent?hours=${options.hours}`);
           console.log(JSON.stringify(recent, null, 2));
         } else {
-          await assertApiPermissionForRequest(`/api/summary/memory?hours=${options.hours}`);
-          const res = await fetch(
-            `${API_BASE}/api/summary/memory?hours=${options.hours}`,
-            buildApiRequestOptions({
-              headers: { accept: 'text/markdown, text/plain, application/json' },
-            })
-          );
-          if (!res.ok) {
-            const errorBody = await res.json().catch(() => ({ error: res.statusText }));
-            throw new Error((errorBody as { error?: string }).error || `API error: ${res.status}`);
-          }
-          const markdown = await res.text();
+          const markdown = await api<string>(`/api/summary/memory?hours=${options.hours}`, {
+            responseType: 'text',
+            headers: { accept: 'text/markdown, text/plain, application/json' },
+          });
 
           if (options.output) {
             const fs = await import('fs/promises');
