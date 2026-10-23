@@ -1,6 +1,11 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { api, API_BASE, assertApiPermissionForRequest, buildApiHeaders } from '../utils/api.js';
+import {
+  api,
+  API_BASE,
+  assertApiPermissionForRequest,
+  buildApiRequestOptions,
+} from '../utils/api.js';
 
 export function registerSummaryCommands(program: Command): void {
   // Create summary parent command with subcommands
@@ -93,9 +98,9 @@ export function registerSummaryCommands(program: Command): void {
           // Fetch markdown or text directly
           const res = await fetch(
             `${API_BASE}/api/summary/standup?date=${dateParam}&format=${format}`,
-            {
-              headers: buildApiHeaders({ accept: 'text/plain, text/markdown, application/json' }),
-            }
+            buildApiRequestOptions({
+              headers: { accept: 'text/plain, text/markdown, application/json' },
+            })
           );
           if (!res.ok) {
             const errorBody = await res.json().catch(() => ({ error: res.statusText }));
@@ -124,9 +129,12 @@ export function registerSummaryCommands(program: Command): void {
           console.log(JSON.stringify(recent, null, 2));
         } else {
           await assertApiPermissionForRequest(`/api/summary/memory?hours=${options.hours}`);
-          const res = await fetch(`${API_BASE}/api/summary/memory?hours=${options.hours}`, {
-            headers: buildApiHeaders({ accept: 'text/markdown, text/plain, application/json' }),
-          });
+          const res = await fetch(
+            `${API_BASE}/api/summary/memory?hours=${options.hours}`,
+            buildApiRequestOptions({
+              headers: { accept: 'text/markdown, text/plain, application/json' },
+            })
+          );
           if (!res.ok) {
             const errorBody = await res.json().catch(() => ({ error: res.statusText }));
             throw new Error((errorBody as { error?: string }).error || `API error: ${res.status}`);

@@ -1,35 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
-import { mkdtempSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
 import { resolve } from 'path';
+import { readBrowserEnvironment } from './scripts/browser-test-environment.mjs';
 
-// Load VERITAS_ADMIN_KEY from server/.env so E2E tests use the same key as the server
-if (!process.env.VERITAS_ADMIN_KEY) {
-  try {
-    const envContent = readFileSync(resolve(__dirname, 'server', '.env'), 'utf-8');
-    const match = envContent.match(/^VERITAS_ADMIN_KEY=(.+)$/m);
-    if (match) {
-      process.env.VERITAS_ADMIN_KEY = match[1].trim();
-    }
-  } catch {
-    // server/.env not found — fall through to default
-  }
-}
-
-const e2eDataDir =
-  process.env.VERITAS_DATA_DIR ?? mkdtempSync(resolve(tmpdir(), 'veritas-kanban-e2e-'));
-process.env.VERITAS_DATA_DIR = e2eDataDir;
-const apiPort = Number(process.env.PLAYWRIGHT_API_PORT ?? '3001');
-const webPort = Number(process.env.PLAYWRIGHT_WEB_PORT ?? '3000');
+const { root: e2eDataDir, apiPort, webPort } = readBrowserEnvironment(import.meta.dirname);
+const adminKey = process.env.VERITAS_ADMIN_KEY!;
 
 /**
  * Playwright E2E test configuration for Veritas Kanban.
  *
- * Expects the dev server to be running:
- *   - Vite dev server on http://127.0.0.1:3000 (serves frontend, proxies API)
- *   - Express API server on http://127.0.0.1:3001
- *
- * Start with: pnpm dev
+ * Run with pnpm test:e2e. The runner owns disposable storage and credentials.
+ * Existing servers are never reused; select unused ports with PLAYWRIGHT_API_PORT
+ * and PLAYWRIGHT_WEB_PORT.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -49,9 +30,9 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${webPort}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // Auth — read admin key from server/.env (loaded via dotenv above)
+    // Synthetic credential generated for this disposable test run.
     extraHTTPHeaders: {
-      'X-API-Key': process.env.VERITAS_ADMIN_KEY || 'dev-admin-key',
+      'X-API-Key': adminKey,
     },
   },
 
@@ -73,16 +54,21 @@ export default defineConfig({
     },
   ],
 
-  /* Run dev servers before starting tests (if not already running) */
+  /* Playwright owns the processes it starts and their teardown. */
   webServer: [
     {
-      command: 'cd server && node_modules/.bin/tsx src/index.ts',
+      command: 'node scripts/start-browser-api.mjs',
       port: apiPort,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 30_000,
       env: {
-        VERITAS_ADMIN_KEY: process.env.VERITAS_ADMIN_KEY || 'dev-admin-key',
+        VERITAS_ADMIN_KEY: adminKey,
+        DATA_DIR: e2eDataDir,
         VERITAS_DATA_DIR: e2eDataDir,
+        VERITAS_SQLITE_PATH: resolve(e2eDataDir, '.veritas-kanban/veritas.db'),
+        VERITAS_STORAGE: 'file',
+        HOST: '127.0.0.1',
+        NODE_ENV: 'development',
         VERITAS_DISABLE_WATCHERS: '1',
         VERITAS_AUTH_LOCALHOST_BYPASS: 'true',
         VERITAS_AUTH_LOCALHOST_ROLE: 'admin',
@@ -92,9 +78,9 @@ export default defineConfig({
       },
     },
     {
-      command: `cd web && node_modules/.bin/vite --host 127.0.0.1 --port ${webPort}`,
+      command: `cd web && node_modules/.bin/vite --host 127.0.0.1 --port ${webPort} --strictPort`,
       url: `http://127.0.0.1:${webPort}`,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 30_000,
       env: {
         VITE_API_URL: `http://127.0.0.1:${apiPort}/api`,

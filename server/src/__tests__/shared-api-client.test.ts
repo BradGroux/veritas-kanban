@@ -2,6 +2,8 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  buildApiRequestOptions,
+  encodeApiPathSegment,
   createApiClient,
   createGuardedApiClient,
   formatApiError,
@@ -150,5 +152,72 @@ describe('shared API deadlines and errors', () => {
     await expect(api('/error', { signal: controller.signal })).rejects.toBeInstanceOf(ApiError);
     expect(vi.getTimerCount()).toBe(0);
     expect(remove).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('shared API request policy', () => {
+  it.each([
+    { 'X-API-Key': 'fixture-key' },
+    new Headers({ Authorization: 'Bearer fixture-key' }),
+    [['AUTHORIZATION', 'Bearer fixture-key']] as [string, string][],
+  ])('keeps authenticated requests direct for each supported header representation', (headers) => {
+    const controller = new AbortController();
+    const options = buildApiRequestOptions(
+      { method: 'PATCH', body: '{}', headers, signal: controller.signal, redirect: 'follow' },
+      ''
+    );
+    expect(options.redirect).toBe('error');
+    expect(options.method).toBe('PATCH');
+    expect(options.body).toBe('{}');
+    expect(options.signal).toBe(controller.signal);
+  });
+
+  it('applies the same policy when authentication comes from configuration', () => {
+    const options = buildApiRequestOptions(
+      { headers: { accept: 'application/octet-stream' } },
+      'fixture-key'
+    );
+    expect(options.redirect).toBe('error');
+    expect(options.headers).toMatchObject({
+      'x-api-key': 'fixture-key',
+      accept: 'application/octet-stream',
+    });
+  });
+
+  it('preserves the caller policy for requests without authentication', () => {
+    expect(buildApiRequestOptions({ redirect: 'manual' }, '').redirect).toBe('manual');
+    expect(buildApiRequestOptions({}, '').redirect).toBeUndefined();
+  });
+});
+
+describe('API resource identifiers', () => {
+  it('preserves legacy names and literal percent sequences as one segment', () => {
+    for (const id of ['sprint_2026-10', 'Release / October', 'équipe #1?', '%2e%2e']) {
+      const url = new URL(`http://fixture.test/api/projects/${encodeApiPathSegment(id)}`);
+      expect(url.pathname.split('/')).toHaveLength(4);
+      expect(decodeURIComponent(url.pathname.split('/')[3])).toBe(id);
+      expect(url.search).toBe('');
+      expect(url.hash).toBe('');
+    }
+  });
+
+  it.each(['', '.', '..'])('rejects identifiers that cannot name a resource: %j', (id) => {
+    expect(() => encodeApiPathSegment(id)).toThrow('Invalid API resource identifier');
+  });
+
+  it('rejects path normalization before transport while preserving query values', async () => {
+    const transport = vi.fn().mockResolvedValue(new Response('[]'));
+    vi.stubGlobal('fetch', transport);
+    try {
+      const api = createApiClient('http://fixture.test', '');
+      await expect(api('/api/projects/..', { method: 'DELETE' })).rejects.toMatchObject({
+        code: 'INVALID_REQUEST',
+      });
+      expect(transport).not.toHaveBeenCalled();
+      expect(await api('/api/tasks?project=..')).toEqual([]);
+      expect(transport).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
