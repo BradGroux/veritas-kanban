@@ -7,6 +7,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText } from '../utils/sanitize.js';
 import type { Observation, ObservationType } from '@veritas-kanban/shared';
+import { expectedRevisionFromRequest, setRevisionHeaders } from '../utils/concurrency.js';
 import { qStr, qStrD, qNum, qNumD, paramStr } from '../lib/query-helpers.js';
 
 const router: RouterType = Router();
@@ -39,11 +40,6 @@ router.post(
       agent = agent.slice(0, 100); // Simple sanitization for agent name
     }
 
-    const task = await taskService.getTask(paramStr(req.params.id));
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-
     const observation: Observation = {
       id: `obs_${randomUUID()}`,
       type,
@@ -53,22 +49,27 @@ router.post(
       agent,
     };
 
-    const observations = [...(task.observations || []), observation];
-    const updatedTask = await taskService.updateTask(paramStr(req.params.id), { observations });
+    const updatedTask = await taskService.mutateTaskChildren(
+      paramStr(req.params.id),
+      (task) => ({ observations: [...(task.observations || []), observation] }),
+      { expectedRevision: expectedRevisionFromRequest(req) }
+    );
+    if (!updatedTask) throw new NotFoundError('Task not found');
 
     // Log activity
     await activityService.logActivity(
       'observation_added',
-      task.id,
-      task.title,
+      updatedTask.id,
+      updatedTask.title,
       {
         type,
         score,
         preview: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
       },
-      task.agent
+      updatedTask.agent
     );
 
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
     res.status(201).json(updatedTask);
   })
 );
@@ -128,31 +129,31 @@ router.get(
 router.delete(
   '/:id/observations/:obsId',
   asyncHandler(async (req, res) => {
-    const task = await taskService.getTask(paramStr(req.params.id));
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-
-    const observations = task.observations || [];
-    const filtered = observations.filter((o) => o.id !== paramStr(req.params.obsId));
-    if (filtered.length === observations.length) {
-      throw new NotFoundError('Observation not found');
-    }
-
-    const updatedTask = await taskService.updateTask(paramStr(req.params.id), {
-      observations: filtered,
-    });
+    const updatedTask = await taskService.mutateTaskChildren(
+      paramStr(req.params.id),
+      (task) => {
+        const observations = task.observations || [];
+        const filtered = observations.filter((o) => o.id !== paramStr(req.params.obsId));
+        if (filtered.length === observations.length) {
+          throw new NotFoundError('Observation not found');
+        }
+        return { observations: filtered };
+      },
+      { expectedRevision: expectedRevisionFromRequest(req) }
+    );
+    if (!updatedTask) throw new NotFoundError('Task not found');
 
     await activityService.logActivity(
       'observation_deleted',
-      task.id,
-      task.title,
+      updatedTask.id,
+      updatedTask.title,
       {
         observationId: paramStr(req.params.obsId),
       },
-      task.agent
+      updatedTask.agent
     );
 
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
     res.json(updatedTask);
   })
 );

@@ -72,6 +72,8 @@ import {
 } from '@veritas-kanban/shared';
 import type {
   Task,
+  AgentStatus,
+  AgentLaunchStatus,
   AgentType,
   AgentConfig,
   AgentRunTraceStepType,
@@ -97,7 +99,6 @@ import type {
   ExecutableAgentProvider,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeControlAction,
-  ProviderRuntimeControlSet,
   ProviderRuntimeManifest,
   TaskCommitPolicy,
   TaskCompletionBlocker,
@@ -348,29 +349,7 @@ const providerDependencyExecutionOptions = {
   },
 } satisfies DependencyCircuitExecutionOptions;
 
-export interface AgentStatus {
-  taskId: string;
-  attemptId: string;
-  agent: AgentType;
-  status: AttemptStatus;
-  startedAt?: string;
-  endedAt?: string;
-  provider?: ExecutableAgentProvider;
-  model?: string;
-  providerRuntimeManifest: ProviderRuntimeManifest;
-  harnessSupport: HarnessSupportStatus;
-  taskEnvelope: TaskEnvelope;
-  runLaunchManifest: RunLaunchManifest;
-  runLaunchParentAttemptId?: string;
-  runLaunchManifestDrift?: RunLaunchManifestDriftResult;
-  runRetry?: RunRecoveryRecord;
-  activePhaseEvidence?: PhaseCapabilityEvidence;
-  conversation: ConversationLifecycleRecord;
-  controls: ProviderRuntimeControlSet;
-  admissionReservationId?: string;
-  executionTree?: ExecutionTreeIdentity;
-  terminals: RunTerminalHandle[];
-}
+export type { AgentStatus, AgentQueueStatus, AgentLaunchStatus } from '@veritas-kanban/shared';
 
 export type RunTerminalExecutionResult =
   | {
@@ -382,22 +361,6 @@ export type RunTerminalExecutionResult =
       approval: RunApprovalRequest;
       handle: RunTerminalHandle;
     };
-
-export interface AgentQueueStatus {
-  taskId: string;
-  attemptId: string;
-  queueId: string;
-  agent: AgentType;
-  status: 'queued';
-  enqueuedAt: string;
-  retryAfterMs: number;
-  limitingScopes: Array<{
-    scope: string;
-    scopeId: string;
-  }>;
-}
-
-export type AgentLaunchStatus = AgentStatus | AgentQueueStatus;
 
 export interface AgentOutput {
   type: 'stdout' | 'stderr' | 'stdin' | 'system';

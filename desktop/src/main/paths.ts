@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { cp, mkdir, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 
 import type { DesktopPaths } from './types.js';
 
@@ -65,14 +66,80 @@ async function exists(targetPath: string): Promise<boolean> {
   try {
     await stat(targetPath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+function migrationRecoveryError(paths: DesktopPaths, cause?: unknown): Error {
+  return new Error(
+    `Desktop legacy migration is incomplete or its manifest cannot be verified. Startup stopped; both copies are preserved. ` +
+      `Quit all desktop instances and back up the legacy home (${paths.legacyAppHome ?? 'none'}) and workspace (${paths.appHome}). ` +
+      `Reconcile the copies explicitly before marking ${paths.migrationManifest} completed. ` +
+      `See https://github.com/BradGroux/veritas-kanban/blob/main/docs/WEB-TO-MAC-DESKTOP-MIGRATION.md#interrupted-legacy-path-migration.`,
+    { cause }
+  );
+}
+
+async function migrationCompleted(paths: DesktopPaths): Promise<boolean> {
+  let content: string;
+  try {
+    content = await readFile(paths.migrationManifest, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw migrationRecoveryError(paths, error);
+  }
+  try {
+    const manifest = JSON.parse(content) as Record<string, unknown>;
+    if (
+      !manifest ||
+      typeof manifest !== 'object' ||
+      manifest.from !== paths.legacyAppHome ||
+      manifest.to !== paths.appHome ||
+      typeof manifest.migrated !== 'boolean' ||
+      !Array.isArray(manifest.copiedEntries) ||
+      !manifest.copiedEntries.every((entry) => MIGRATED_ENTRIES.includes(entry)) ||
+      manifest.migrated !== manifest.copiedEntries.length > 0 ||
+      (manifest.skippedReason !== undefined && typeof manifest.skippedReason !== 'string')
+    ) {
+      throw new Error('Migration manifest identity or result is invalid');
+    }
+    // The former unversioned result was written only after its copy loop completed.
+    if (manifest.schemaVersion === undefined && manifest.state === undefined) return true;
+    if (manifest.schemaVersion === 1 && manifest.state === 'completed') return true;
+    throw new Error('Migration is incomplete or has an unsupported state');
+  } catch (error) {
+    throw migrationRecoveryError(paths, error);
+  }
+}
+
+async function persistMigration(
+  paths: DesktopPaths,
+  state: 'in-progress' | 'completed',
+  result: DesktopPathMigrationResult
+): Promise<void> {
+  // Exclusive creation owns the first migration; completion replaces that marker
+  // atomically. A failed write intentionally retains the incomplete marker.
+  const temporary = state === 'completed' ? `${paths.migrationManifest}.${randomUUID()}.tmp` : null;
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(temporary ?? paths.migrationManifest, 'wx', 0o600);
+    await handle.writeFile(JSON.stringify({ schemaVersion: 1, state, ...result }, null, 2), 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    if (temporary) await rename(temporary, paths.migrationManifest);
+  } finally {
+    await handle?.close();
+    if (temporary) await rm(temporary, { force: true });
   }
 }
 
 export async function ensureDesktopPathLayout(
   paths: DesktopPaths
 ): Promise<DesktopPathMigrationResult> {
+  const completed = await migrationCompleted(paths);
   await Promise.all([
     mkdir(paths.profileDir, { recursive: true }),
     mkdir(paths.workspaceDir, { recursive: true }),
@@ -85,49 +152,36 @@ export async function ensureDesktopPathLayout(
     mkdir(paths.debugBundlesDir, { recursive: true }),
   ]);
 
-  if (!paths.legacyAppHome) {
-    return {
-      migrated: false,
-      from: null,
-      to: paths.appHome,
-      copiedEntries: [],
-      skippedReason: 'no legacy app home',
-    };
-  }
-
-  if (!(await exists(paths.legacyAppHome))) {
-    return {
-      migrated: false,
-      from: paths.legacyAppHome,
-      to: paths.appHome,
-      copiedEntries: [],
-      skippedReason: 'legacy app home does not exist',
-    };
-  }
-
-  const copiedEntries: string[] = [];
-  for (const entry of MIGRATED_ENTRIES) {
-    const source = path.join(paths.legacyAppHome, entry);
-    const target = path.join(paths.appHome, entry);
-    if (await exists(source)) {
-      await cp(source, target, {
-        recursive: true,
-        force: false,
-      });
-      copiedEntries.push(entry);
-    }
-  }
-
   const result: DesktopPathMigrationResult = {
-    migrated: copiedEntries.length > 0,
+    migrated: false,
     from: paths.legacyAppHome,
     to: paths.appHome,
-    copiedEntries,
-    skippedReason: copiedEntries.length > 0 ? undefined : 'workspace app home already initialized',
+    copiedEntries: [],
   };
+  if (completed) return { ...result, skippedReason: 'legacy migration already completed' };
 
-  await writeFile(paths.migrationManifest, JSON.stringify(result, null, 2), 'utf-8');
-  return result;
+  try {
+    await persistMigration(paths, 'in-progress', result);
+    if (!paths.legacyAppHome) {
+      result.skippedReason = 'no legacy app home';
+    } else if (!(await exists(paths.legacyAppHome))) {
+      result.skippedReason = 'legacy app home does not exist';
+    } else {
+      for (const entry of MIGRATED_ENTRIES) {
+        const source = path.join(paths.legacyAppHome, entry);
+        if (await exists(source)) {
+          await cp(source, path.join(paths.appHome, entry), { recursive: true, force: false });
+          result.copiedEntries.push(entry);
+        }
+      }
+      result.migrated = result.copiedEntries.length > 0;
+      if (!result.migrated) result.skippedReason = 'workspace app home already initialized';
+    }
+    await persistMigration(paths, 'completed', result);
+    return result;
+  } catch (error) {
+    throw migrationRecoveryError(paths, error);
+  }
 }
 
 export function resolveRepoRoot(appPath: string, cwd = process.cwd()): string {

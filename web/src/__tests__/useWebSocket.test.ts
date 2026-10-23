@@ -316,3 +316,191 @@ describe('useWebSocket', () => {
     expect(result.current.connectionState).toBe('connecting');
   });
 });
+
+function requiredHandler<T>(handler: T | null): T {
+  if (!handler) throw new Error('Expected an installed socket callback');
+  return handler;
+}
+
+describe('connection ownership', () => {
+  it('leaves one live socket through root StrictMode replay', () => {
+    const { result, unmount } = renderHook(() => useWebSocket({ url: 'ws://test/ws' }), {
+      reactStrictMode: true,
+    });
+    expect(ws.instances).toHaveLength(2);
+    const [old, current] = ws.instances;
+    expect(old.readyState).toBe(WebSocket.CLOSED);
+    expect(old.onclose).toBeNull();
+    act(() => current.simulateOpen());
+    act(() => {
+      old.simulateClose(1006);
+      vi.advanceTimersByTime(1200);
+      result.current.send({ type: 'current-only' });
+    });
+    expect(ws.instances).toHaveLength(2);
+    expect(result.current.connectionState).toBe('connected');
+    expect(current.sent).toEqual([JSON.stringify({ type: 'current-only' })]);
+    unmount();
+    expect(current.readyState).toBe(WebSocket.CLOSED);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('ignores already queued old events after URL replacement', () => {
+    const callbacks = {
+      onConnected: vi.fn(),
+      onDisconnected: vi.fn(),
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    };
+    const { result, rerender } = renderHook(
+      ({ url }) => useWebSocket({ url, ...callbacks, onOpen: { type: 'subscribe' } }),
+      { initialProps: { url: 'ws://first/ws' } }
+    );
+    const old = ws.latest;
+    const queued = {
+      open: requiredHandler(old.onopen),
+      message: requiredHandler(old.onmessage),
+      error: requiredHandler(old.onerror),
+      close: requiredHandler(old.onclose),
+    };
+    rerender({ url: 'ws://second/ws' });
+    const current = ws.latest;
+    act(() => current.simulateOpen());
+    callbacks.onConnected.mockClear();
+    act(() => {
+      queued.open(new Event('open'));
+      queued.message(new MessageEvent('message', { data: '{"type":"stale"}' }));
+      queued.error(new Event('error'));
+      queued.close(new CloseEvent('close'));
+      vi.advanceTimersByTime(1200);
+      result.current.send({ type: 'current' });
+    });
+    expect(ws.instances).toHaveLength(2);
+    expect(current.url).toBe('ws://second/ws');
+    expect(result.current.connectionState).toBe('connected');
+    expect(result.current.lastMessage).toBeNull();
+    for (const callback of Object.values(callbacks)) expect(callback).not.toHaveBeenCalled();
+    expect(old.sent).toEqual([]);
+    expect(current.sent).toEqual([
+      JSON.stringify({ type: 'subscribe' }),
+      JSON.stringify({ type: 'current' }),
+    ]);
+  });
+
+  it('cancels pending reconnect on disabling autoConnect and ignores queued close', () => {
+    const { result, rerender, unmount } = renderHook(
+      ({ autoConnect }) => useWebSocket({ url: 'ws://test/ws', autoConnect }),
+      { initialProps: { autoConnect: true } }
+    );
+    const close = requiredHandler(ws.latest.onclose);
+    act(() => ws.latest.simulateClose(1006));
+    expect(result.current.connectionState).toBe('reconnecting');
+    rerender({ autoConnect: false });
+    act(() => {
+      close(new CloseEvent('close'));
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(ws.instances).toHaveLength(1);
+    expect(result.current.connectionState).toBe('disconnected');
+    expect(vi.getTimerCount()).toBe(0);
+    rerender({ autoConnect: true });
+    expect(ws.instances).toHaveLength(2);
+    unmount();
+    expect(ws.latest.readyState).toBe(WebSocket.CLOSED);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('manual reconnect retires a closing socket and its queued callbacks', () => {
+    const onDisconnected = vi.fn();
+    const { result } = renderHook(() => useWebSocket({ url: 'ws://test/ws', onDisconnected }));
+    const old = ws.latest;
+    const close = requiredHandler(old.onclose);
+    old.readyState = WebSocket.CLOSING;
+    act(() => result.current.connect());
+    const current = ws.latest;
+    act(() => {
+      current.simulateOpen();
+      close(new CloseEvent('close'));
+      vi.advanceTimersByTime(1200);
+    });
+    expect(old.readyState).toBe(WebSocket.CLOSED);
+    expect(onDisconnected).not.toHaveBeenCalled();
+    expect(result.current.connectionState).toBe('connected');
+    expect(ws.instances).toHaveLength(2);
+  });
+
+  it('does not subscribe or restart timers after onConnected disconnects', () => {
+    let disconnect = () => {};
+    const onDisconnected = vi.fn();
+    const { result } = renderHook(() =>
+      useWebSocket({
+        url: 'ws://test/ws',
+        onConnected: () => disconnect(),
+        onDisconnected,
+        onOpen: { type: 'subscribe' },
+      })
+    );
+    disconnect = result.current.disconnect;
+    const old = ws.latest;
+    const close = requiredHandler(old.onclose);
+    act(() => old.simulateOpen());
+    act(() => {
+      close(new CloseEvent('close'));
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(old.sent).toEqual([]);
+    expect(result.current.connectionState).toBe('disconnected');
+    expect(onDisconnected).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(ws.instances).toHaveLength(1);
+  });
+
+  it('does not schedule an old reconnect when onDisconnected creates a replacement', () => {
+    let connect = () => {};
+    const { result } = renderHook(() =>
+      useWebSocket({ url: 'ws://test/ws', onDisconnected: () => connect() })
+    );
+    connect = result.current.connect;
+    act(() => ws.latest.simulateClose(1006));
+    const current = ws.latest;
+    act(() => {
+      current.simulateOpen();
+      vi.advanceTimersByTime(1200);
+    });
+    expect(ws.instances).toHaveLength(2);
+    expect(result.current.connectionState).toBe('connected');
+    expect(vi.getTimerCount()).toBe(1);
+  });
+});
+
+it('ignores queued keepalive and reconnect timers from previous generations', () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  const timers = vi.spyOn(globalThis, 'setTimeout');
+  const { result, rerender, unmount } = renderHook(({ url }) => useWebSocket({ url }), {
+    initialProps: { url: 'ws://first/ws' },
+  });
+  act(() => ws.latest.simulateOpen());
+  const keepalive = timers.mock.calls.find((call) => call[1] === 45_000)?.[0];
+  if (typeof keepalive !== 'function') throw new Error('Expected keepalive timer');
+  act(() => ws.latest.simulateClose(1006));
+  const reconnect = timers.mock.calls.find((call) => call[1] === 1000)?.[0];
+  if (typeof reconnect !== 'function') throw new Error('Expected reconnect timer');
+  rerender({ url: 'ws://second/ws' });
+  const current = ws.latest;
+  act(() => current.simulateOpen());
+  act(() => {
+    keepalive();
+    reconnect();
+  });
+  expect(current.readyState).toBe(WebSocket.OPEN);
+  expect(ws.instances).toHaveLength(2);
+  expect(result.current.connectionState).toBe('connected');
+  expect(vi.getTimerCount()).toBe(1);
+  unmount();
+  act(() => {
+    keepalive();
+    reconnect();
+  });
+  expect(ws.instances).toHaveLength(2);
+  expect(vi.getTimerCount()).toBe(0);
+});

@@ -1,42 +1,19 @@
 import { createLogger } from '../lib/logger.js';
-import * as fs from '../storage/fs-helpers.js';
-import * as path from 'node:path';
-import { getRuntimeDir } from '../utils/paths.js';
 import type {
   SharedResource,
   SharedResourceType,
   CreateSharedResourceInput,
   UpdateSharedResourceInput,
 } from '@veritas-kanban/shared';
+import type { SharedResourceRepository } from '../storage/interfaces.js';
+import { FileSharedResourceRepository } from '../storage/shared-resource-repository.js';
 
 const log = createLogger('shared-resources');
-const DATA_DIR = getRuntimeDir();
 
-class SharedResourcesService {
-  private resources: SharedResource[] = [];
-  private loaded = false;
-
-  private get storagePath(): string {
-    return path.join(DATA_DIR, 'shared-resources.json');
-  }
-
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return;
-
-    try {
-      const data = await fs.readFile(this.storagePath, 'utf-8');
-      this.resources = JSON.parse(data) as SharedResource[];
-    } catch {
-      this.resources = [];
-      await this.save();
-    }
-
-    this.loaded = true;
-  }
-
-  private async save(): Promise<void> {
-    await fs.writeFile(this.storagePath, JSON.stringify(this.resources, null, 2));
-  }
+export class SharedResourcesService {
+  constructor(
+    private readonly repository: SharedResourceRepository = new FileSharedResourceRepository()
+  ) {}
 
   private generateId(): string {
     return `shared_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -48,110 +25,94 @@ class SharedResourcesService {
     tag?: string;
     name?: string;
   }): Promise<SharedResource[]> {
-    await this.ensureLoaded();
-
-    let results = [...this.resources];
-    if (filters?.type) {
-      results = results.filter((r) => r.type === filters.type);
-    }
-    if (filters?.project) {
-      results = results.filter((r) => r.mountedIn.includes(filters.project as string));
-    }
-    if (filters?.tag) {
-      results = results.filter((r) => r.tags.includes(filters.tag as string));
-    }
+    let results = [...(await this.repository.read())];
+    if (filters?.type) results = results.filter((resource) => resource.type === filters.type);
+    if (filters?.project)
+      results = results.filter((resource) =>
+        resource.mountedIn.includes(filters.project as string)
+      );
+    if (filters?.tag)
+      results = results.filter((resource) => resource.tags.includes(filters.tag as string));
     if (filters?.name) {
       const search = filters.name.toLowerCase();
-      results = results.filter((r) => r.name.toLowerCase().includes(search));
+      results = results.filter((resource) => resource.name.toLowerCase().includes(search));
     }
-
-    return results.sort((a, b) => a.name.localeCompare(b.name));
+    return results.sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async getResource(id: string): Promise<SharedResource | null> {
-    await this.ensureLoaded();
-    return this.resources.find((r) => r.id === id) ?? null;
+    return (await this.repository.read()).find((resource) => resource.id === id) ?? null;
   }
 
-  async createResource(input: CreateSharedResourceInput): Promise<SharedResource> {
-    await this.ensureLoaded();
-
-    const now = new Date().toISOString();
-    const resource: SharedResource = {
-      id: this.generateId(),
-      name: input.name,
-      type: input.type,
-      content: input.content,
-      tags: input.tags ?? [],
-      mountedIn: input.mountedIn ?? [],
-      createdAt: now,
-      updatedAt: now,
-      createdBy: input.createdBy,
-      version: 1,
-    };
-
-    this.resources.push(resource);
-    await this.save();
-    return resource;
+  createResource(input: CreateSharedResourceInput): Promise<SharedResource> {
+    return this.repository.mutate<SharedResource>((resources) => {
+      const now = new Date().toISOString();
+      const resource: SharedResource = {
+        id: this.generateId(),
+        name: input.name,
+        type: input.type,
+        content: input.content,
+        tags: [...(input.tags ?? [])],
+        mountedIn: [...(input.mountedIn ?? [])],
+        createdAt: now,
+        updatedAt: now,
+        createdBy: input.createdBy,
+        version: 1,
+      };
+      return { resources: [...resources, resource], result: resource, changed: true };
+    });
   }
 
-  async updateResource(
-    id: string,
-    update: UpdateSharedResourceInput
-  ): Promise<SharedResource | null> {
-    await this.ensureLoaded();
-    const resource = this.resources.find((r) => r.id === id);
-    if (!resource) return null;
-
-    Object.assign(resource, {
+  updateResource(id: string, update: UpdateSharedResourceInput): Promise<SharedResource | null> {
+    return this.changeResource(id, (resource) => ({
+      ...resource,
       name: update.name ?? resource.name,
       type: update.type ?? resource.type,
       content: update.content ?? resource.content,
       tags: update.tags ?? resource.tags,
-      updatedAt: new Date().toISOString(),
-      version: resource.version + 1,
+    }));
+  }
+
+  deleteResource(id: string): Promise<boolean> {
+    return this.repository.mutate<boolean>((resources) => {
+      const next = resources.filter((resource) => resource.id !== id);
+      const changed = next.length !== resources.length;
+      return { resources: next, result: changed, changed };
     });
-
-    await this.save();
-    return resource;
   }
 
-  async deleteResource(id: string): Promise<boolean> {
-    await this.ensureLoaded();
-    const before = this.resources.length;
-    this.resources = this.resources.filter((r) => r.id !== id);
-    if (this.resources.length === before) return false;
-    await this.save();
-    return true;
+  mountResource(id: string, projectIds: string[]): Promise<SharedResource | null> {
+    return this.changeResource(id, (resource) => ({
+      ...resource,
+      mountedIn: Array.from(new Set([...resource.mountedIn, ...projectIds])),
+    }));
   }
 
-  async mountResource(id: string, projectIds: string[]): Promise<SharedResource | null> {
-    await this.ensureLoaded();
-    const resource = this.resources.find((r) => r.id === id);
-    if (!resource) return null;
-
-    const before = new Set(resource.mountedIn);
-    projectIds.forEach((projectId) => before.add(projectId));
-    resource.mountedIn = Array.from(before);
-    resource.updatedAt = new Date().toISOString();
-    resource.version += 1;
-
-    await this.save();
-    return resource;
-  }
-
-  async unmountResource(id: string, projectIds: string[]): Promise<SharedResource | null> {
-    await this.ensureLoaded();
-    const resource = this.resources.find((r) => r.id === id);
-    if (!resource) return null;
-
+  unmountResource(id: string, projectIds: string[]): Promise<SharedResource | null> {
     const remove = new Set(projectIds);
-    resource.mountedIn = resource.mountedIn.filter((projectId) => !remove.has(projectId));
-    resource.updatedAt = new Date().toISOString();
-    resource.version += 1;
+    return this.changeResource(id, (resource) => ({
+      ...resource,
+      mountedIn: resource.mountedIn.filter((projectId) => !remove.has(projectId)),
+    }));
+  }
 
-    await this.save();
-    return resource;
+  private changeResource(
+    id: string,
+    change: (resource: SharedResource) => SharedResource
+  ): Promise<SharedResource | null> {
+    return this.repository.mutate<SharedResource | null>((resources) => {
+      const index = resources.findIndex((resource) => resource.id === id);
+      if (index === -1) return { resources, result: null, changed: false };
+      const current = resources[index];
+      const resource = {
+        ...change(current),
+        updatedAt: new Date().toISOString(),
+        version: current.version + 1,
+      };
+      const next = [...resources];
+      next[index] = resource;
+      return { resources: next, result: resource, changed: true };
+    });
   }
 }
 

@@ -809,6 +809,44 @@ export class TaskService {
     return this.withTaskMutex(id, () => this.updateTaskMutation(id, mutationInput));
   }
 
+  /** Apply child operations to the locked current task, never a route snapshot. */
+  async mutateTaskChildren(
+    id: string,
+    mutate: (
+      task: Readonly<Task>
+    ) => Pick<UpdateTaskInput, 'comments' | 'subtasks' | 'observations' | 'updatedBy'>,
+    options: { expectedRevision?: number; completeOnSubtasks?: boolean } = {}
+  ): Promise<Task | null> {
+    const apply = (task: Task): UpdateTaskInput => {
+      const { comments, subtasks, observations, updatedBy } = mutate(task);
+      return {
+        ...(comments !== undefined ? { comments } : {}),
+        ...(subtasks !== undefined ? { subtasks } : {}),
+        ...(observations !== undefined ? { observations } : {}),
+        ...(updatedBy !== undefined ? { updatedBy } : {}),
+        ...(options.completeOnSubtasks &&
+        task.autoCompleteOnSubtasks &&
+        subtasks?.every((subtask) => subtask.completed)
+          ? { status: 'done' as const }
+          : {}),
+      };
+    };
+    const input = { expectedRevision: options.expectedRevision };
+    if (options.completeOnSubtasks) {
+      return this.withBoardMoveMutex((commitStorage) =>
+        this.withTaskMutex(id, () => this.updateTaskMutation(id, input, true, commitStorage, apply))
+      );
+    }
+    if (this.sqliteTasks) {
+      return this.runSqliteMutation(() =>
+        this.withTaskMutex(id, () => this.updateTaskMutation(id, input, true, undefined, apply))
+      );
+    }
+    return this.withTaskMutex(id, () =>
+      this.updateTaskMutation(id, input, false, undefined, apply)
+    );
+  }
+
   async patchTaskAttempt(
     id: string,
     attemptId: string,
@@ -829,7 +867,8 @@ export class TaskService {
     id: string,
     input: TaskMutationInput,
     boardStorageLocked = false,
-    afterPersistence?: () => void
+    afterPersistence?: () => void,
+    mutateChildren?: (task: Task) => UpdateTaskInput
   ): Promise<Task | null> {
     await this.assertTaskIdentityIntegrity('task.update', id);
 
@@ -839,17 +878,7 @@ export class TaskService {
     const task = await this.getTaskWithoutIdentityCheck(id);
     if (!task) return null;
 
-    // Handle git field separately to merge properly
-    const {
-      git: gitUpdate,
-      github: githubUpdate,
-      blockedReason: blockedReasonUpdate,
-      boardRank: boardRankUpdate,
-      expectedRevision: _expectedRevision,
-      attemptPatch,
-      protectManagedAttempt,
-      ...restInput
-    } = input;
+    const { expectedRevision, attemptPatch, protectManagedAttempt } = input;
 
     let updatedTask!: Task;
     let shouldGenerateCompletionPacket = false;
@@ -899,21 +928,35 @@ export class TaskService {
       // Revision check inside the lock — prevents a TOCTOU race where two
       // concurrent requests with the same valid revision both pass the
       // pre-lock route check, serialize here, and both succeed.
-      if (_expectedRevision !== undefined) {
+      if (expectedRevision !== undefined) {
         const currentRevision = normalizedTaskRevision(freshTask);
-        if (_expectedRevision !== currentRevision) {
+        if (expectedRevision !== currentRevision) {
           throw new ConflictError(
             `task ${id} has changed since it was loaded. Reload and retry with the latest revision.`,
             {
               resourceType: 'task',
               resourceId: id,
-              expectedRevision: _expectedRevision,
+              expectedRevision,
               currentRevision,
               current: freshTask,
             }
           );
         }
       }
+
+      if (mutateChildren) input = { ...input, ...mutateChildren(freshTask) };
+
+      // Handle git field separately to merge properly
+      const {
+        git: gitUpdate,
+        github: githubUpdate,
+        blockedReason: blockedReasonUpdate,
+        boardRank: boardRankUpdate,
+        expectedRevision: _expectedRevision,
+        attemptPatch: _attemptPatch,
+        protectManagedAttempt: _protectManagedAttempt,
+        ...restInput
+      } = input;
 
       const previousStatus = freshTask.status;
       const statusChanged = input.status !== undefined && input.status !== previousStatus;

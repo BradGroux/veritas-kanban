@@ -103,6 +103,7 @@ The Kanban board is the central interface — a drag-and-drop workspace that ref
 - **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; keyboard users press Space to pick up or drop, use spatial arrow-key movement across populated or empty columns, and press Escape to cancel; custom collision detection (pointerWithin + rectIntersection fallback) supports pointer and keyboard moves; tooltips are suppressed during drag; local state provides real-time column updates
 
 - **Task CRUD** — Create, read, update, and delete tasks through the UI or API
+- **Task autosave recovery** — Pending edits stay with their task when switching tasks, closing the workspace, or navigating away. Dismissal flushes pending writes; failed or conflicted drafts remain available when reopening that task during the current app session. Use Retry task save after a failed write, or the existing conflict controls after reviewing a newer server revision. Reloading the app or ending the authenticated session clears unsaved drafts.
 - **Create task dialog** — Quick-create with title, type, priority, project, sprint, and description
 
   ![Task workspace](assets/v6.2.0/task-workspace.png)

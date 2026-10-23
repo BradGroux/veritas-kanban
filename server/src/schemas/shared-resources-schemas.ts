@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SharedResource } from '@veritas-kanban/shared';
 
 export const SharedResourceTypeSchema = z.enum([
   'prompt',
@@ -7,6 +8,24 @@ export const SharedResourceTypeSchema = z.enum([
   'config',
   'template',
 ]);
+
+// Validate the persisted interface without discarding fields from other versions.
+export const SharedResourceRecordSchema: z.ZodType<SharedResource> = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: SharedResourceTypeSchema,
+    content: z.string(),
+    tags: z.array(z.string()),
+    mountedIn: z.array(z.string()),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    createdBy: z.string().optional(),
+    version: z.number(),
+  })
+  .passthrough();
+
+export const SharedResourceRecordsSchema = z.array(SharedResourceRecordSchema);
 
 export const SharedResourceCreateSchema = z.object({
   name: z.string().min(1).max(200),

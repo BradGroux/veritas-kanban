@@ -294,6 +294,15 @@ export const AutomationRunClaimSchema = z
     status: z.enum(['accepted', 'started', 'completed', 'blocked', 'failed']),
     workflowRunId: identifier.optional(),
     reason: z.string().min(1).max(2000).optional(),
+    usageReceipt: z
+      .object({
+        costUsd: z.number().min(0),
+        tokens: z.number().int().min(0),
+        durationMinutes: z.number().min(0),
+        recordedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
     createdAt: z.iso.datetime({ offset: true }),
     updatedAt: z.iso.datetime({ offset: true }),
   })

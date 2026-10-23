@@ -119,6 +119,12 @@ export interface ApiClientOptions {
 }
 export interface ApiRequestOptions extends RequestInit {
   timeoutMs?: number;
+  /** Consume non-JSON bodies before releasing the same request deadline. */
+  responseType?: 'json' | 'text' | 'binary';
+}
+export interface ApiBinaryResponse {
+  body: ArrayBuffer;
+  headers: Headers;
 }
 export const DEFAULT_API_TIMEOUT_MS = 30_000;
 
@@ -174,7 +180,7 @@ export function createApiClient(
     if (pathname.split(/[\\/]/).some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment))) {
       throw new ApiError('Invalid API resource path.', { code: 'INVALID_REQUEST' });
     }
-    const { timeoutMs: override, ...request } = options;
+    const { timeoutMs: override, responseType = 'json', ...request } = options;
     const headers = buildApiHeaders(options.headers, apiKey);
     const secrets = Object.entries(headers)
       .filter(([key]) => key === 'x-api-key' || key === 'authorization')
@@ -193,7 +199,20 @@ export function createApiClient(
           { code: 'NETWORK_ERROR' }
         );
       }
-      if (res.status === 204) return undefined as T;
+      if (res.status === 204 && responseType === 'json') return undefined as T;
+      if (res.ok && responseType !== 'json') {
+        try {
+          if (responseType === 'text') return (await res.text()) as T;
+          const body = await res.arrayBuffer();
+          return { body, headers: res.headers } as T;
+        } catch (error) {
+          if (signal.aborted) throw error;
+          throw new ApiError('API response body could not be read.', {
+            status: res.status,
+            code: 'INVALID_RESPONSE',
+          });
+        }
+      }
       let body: unknown;
       try {
         body = await res.json();
