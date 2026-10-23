@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   buildApiRequestOptions,
+  encodeApiPathSegment,
   createApiClient,
   createGuardedApiClient,
   formatApiError,
@@ -186,5 +187,37 @@ describe('shared API request policy', () => {
   it('preserves the caller policy for requests without authentication', () => {
     expect(buildApiRequestOptions({ redirect: 'manual' }, '').redirect).toBe('manual');
     expect(buildApiRequestOptions({}, '').redirect).toBeUndefined();
+  });
+});
+
+describe('API resource identifiers', () => {
+  it('preserves legacy names and literal percent sequences as one segment', () => {
+    for (const id of ['sprint_2026-10', 'Release / October', 'équipe #1?', '%2e%2e']) {
+      const url = new URL(`http://fixture.test/api/projects/${encodeApiPathSegment(id)}`);
+      expect(url.pathname.split('/')).toHaveLength(4);
+      expect(decodeURIComponent(url.pathname.split('/')[3])).toBe(id);
+      expect(url.search).toBe('');
+      expect(url.hash).toBe('');
+    }
+  });
+
+  it.each(['', '.', '..'])('rejects identifiers that cannot name a resource: %j', (id) => {
+    expect(() => encodeApiPathSegment(id)).toThrow('Invalid API resource identifier');
+  });
+
+  it('rejects path normalization before transport while preserving query values', async () => {
+    const transport = vi.fn().mockResolvedValue(new Response('[]'));
+    vi.stubGlobal('fetch', transport);
+    try {
+      const api = createApiClient('http://fixture.test', '');
+      await expect(api('/api/projects/..', { method: 'DELETE' })).rejects.toMatchObject({
+        code: 'INVALID_REQUEST',
+      });
+      expect(transport).not.toHaveBeenCalled();
+      expect(await api('/api/tasks?project=..')).toEqual([]);
+      expect(transport).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

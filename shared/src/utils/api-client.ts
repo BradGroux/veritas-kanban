@@ -93,6 +93,14 @@ export function buildApiHeaders(headers?: HeadersInit, apiKey = getEnv('VK_API_K
   };
 }
 
+/** Preserve an identifier as one URL path segment without decoding caller input. */
+export function encodeApiPathSegment(id: string): string {
+  if (!id || id === '.' || id === '..') {
+    throw new ApiError('Invalid API resource identifier.', { code: 'INVALID_REQUEST' });
+  }
+  return encodeURIComponent(id);
+}
+
 /** Authenticated API requests must use the configured endpoint directly. */
 export function buildApiRequestOptions(
   options: RequestInit = {},
@@ -161,6 +169,11 @@ export function createApiClient(
 ) {
   const defaultTimeout = requestTimeout(defaults.timeoutMs);
   return async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+    // URL parsers normalize literal and percent-encoded dot segments before dispatch.
+    const pathname = path.split(/[?#]/, 1)[0];
+    if (pathname.split(/[\\/]/).some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment))) {
+      throw new ApiError('Invalid API resource path.', { code: 'INVALID_REQUEST' });
+    }
     const { timeoutMs: override, ...request } = options;
     const headers = buildApiHeaders(options.headers, apiKey);
     const secrets = Object.entries(headers)
