@@ -5,7 +5,15 @@ channels, and rollback limits. The machine-readable harness record at
 `GET /api/config/harness-compatibility` is authoritative for exact capability
 digests, fixture revisions, and the current host's live state.
 
-Documentation freshness: 2026-09-09 for the 6.2.1 candidate. The latest published stable release remains 6.2.0.
+Documentation freshness: 2026-10-23 for the 6.3.0 candidate. The latest published stable release is 6.2.1; candidate preparation is not release acceptance.
+
+## 6.3.0 Compatibility Boundaries
+
+The public REST API remains v1. SQLite migrations 35 and 36 add external-identity uniqueness and encrypted, expiring OAuth transactions. Keep complete stopped-writer backups for upgrade and rollback. Existing password recovery remains an explicit installation authority, while federated access follows current membership.
+
+The opt-in OrcaRouter profile remains an existing CLI adapter at its exact configured version. Its deterministic and real-executable synthetic evidence is separate from unverified live gateway compatibility. ChatGPT identity activation requires an approved client and exact callback; it does not imply ChatGPT subscription inference. See [the release source](releases/v6.3.0.md) and [current harness evidence](HARNESS-COMPATIBILITY.md).
+
+Current maintainer policy prohibits GitHub CI. Use the [local signed capture and promotion path](DESKTOP-RELEASE.md) with exact candidate/native/media evidence and destination readback. Historical workflow evidence below does not authorize new workflow runs or replace current acceptance.
 
 ## Harness Support Tiers
 

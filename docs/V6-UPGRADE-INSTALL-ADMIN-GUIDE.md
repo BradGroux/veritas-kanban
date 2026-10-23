@@ -1,15 +1,15 @@
 # Veritas Kanban v6 Upgrade, Install, Remote, And Admin Guide
 
-This is the release-facing operator guide for Veritas Kanban 6.1.6. The
+This is the release-facing operator guide for Veritas Kanban 6.3.0. The
 detailed provider commands live in [Agent Providers](AGENT-PROVIDERS.md), the
 machine-readable support contract is summarized in
 [Harness Compatibility](HARNESS-COMPATIBILITY.md), and Buzz relay setup lives
 in [Buzz Integration](BUZZ-INTEGRATION.md).
 
-Documentation freshness: 2026-09-03 for the verified Veritas Kanban 6.1.6 stable release.
+Documentation freshness: 2026-10-23 for 6.3.0 release preparation. Publication remains pending in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md); the currently published stable release is 6.2.1.
 
-Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.1.6
-is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
+Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.3.0
+is the target stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
 
 ## Fresh Mac Desktop Install
 
@@ -21,8 +21,8 @@ brew install --cask veritas-kanban
 ```
 
 Manual installation uses
-`Veritas-Kanban-6.1.6-mac-arm64.zip` from the
-[v6.1.6 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.6).
+`Veritas-Kanban-6.3.0-mac-arm64.zip` from the
+[v6.3.0 GitHub release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.3.0).
 Move `Veritas Kanban.app` into `/Applications`, launch it normally, and verify
 Settings -> Maintenance before enabling an agent or external integration.
 
@@ -30,7 +30,7 @@ For a new board:
 
 1. Choose Board Only unless agent execution is required immediately.
 2. Create the local admin password and retain the recovery key securely.
-3. Confirm `/api/health` reports version 6.1.6.
+3. Confirm `/api/health` reports version 6.3.0.
 4. Create a governed backup before adding external credentials or relay
    mappings.
 
@@ -58,14 +58,14 @@ equivalent v5.2.5 self-hosted workspace.
    preferred port are stopped before copying data.
 5. Preserve the complete workspace, not only the SQLite file. Keep the backup
    through release acceptance.
-6. Install v6.1.6 without replacing the workspace.
+6. Install v6.3.0 without replacing the workspace.
 7. Launch with the same profile. If setup appears for a populated database,
    choose **Use Existing Data**. Do not rerun file migration or restore over the
    populated database.
 8. Wait for the exact-version readiness gate:
 
    ```bash
-   EXPECTED_VERSION=6.1.6
+   EXPECTED_VERSION=6.3.0
    pnpm desktop:wait:ready -- --expected-version "$EXPECTED_VERSION"
    ```
 
@@ -82,7 +82,7 @@ The public API remains `v1`. v6 adds provider, approval, lifecycle, tool,
 credential, compatibility, Buzz, and conformance records without requiring a
 new API mount.
 
-Veritas Kanban 6.1.6 adds no database migration. Veritas Kanban 6.1.3 added SQLite migration 34 for governed work-product
+Veritas Kanban 6.3.0 adds SQLite migrations 35 and 36 for unique external-identity bindings and encrypted ten-minute OAuth transactions. Retain the complete pre-upgrade workspace backup for rollback and explicit recovery. Veritas Kanban 6.1.3 added SQLite migration 34 for governed work-product
 artifacts. Upgrading from 6.1.2 creates the artifact table and indexes without
 rewriting existing work-product rows. Runtime-path normalization can still move
 legacy files into the configured canonical data root. Keep the stopped-writer
@@ -102,6 +102,14 @@ backup; do not open migrated data with an older binary.
   and deterministic fixture evidence are updated.
 - The former Claude Code permission-bypass default is removed. Do not restore
   it through custom arguments.
+
+## 6.3.0 Optional Identity And Gateway Setup
+
+ChatGPT sign-in and OrcaRouter remain opt-in. Follow [ChatGPT identity setup](guides/SIGN_IN_WITH_CHATGPT.md) only after the operator has an approved client and exact registered callback. Existing users and current memberships remain authoritative; sign-in does not claim matching email addresses. For a callback spanning processes, share the authoritative SQLite database and compatible signing/decryption keys.
+
+Follow the [OrcaRouter guide](guides/ORCAROUTER.md) for the pinned existing CLI profile, explicit model, server environment credential reference, privacy and removal. Live gateway compatibility is unverified; no real gateway request or task has been accepted. Keep existing default profiles until the operator explicitly chooses otherwise.
+
+Failed task drafts are retained for the current app session, including after dismissal. Interrupted legacy migration stops startup and preserves both copies; use the explicit recovery procedure in [desktop migration](WEB-TO-MAC-DESKTOP-MIGRATION.md), not deletion or repeated automatic copying.
 
 ## Routine Mac Desktop Upgrade
 

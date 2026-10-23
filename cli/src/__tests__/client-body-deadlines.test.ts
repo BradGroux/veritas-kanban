@@ -64,6 +64,14 @@ beforeEach(async () => {
   vi.stubEnv('VK_API_URL', `http://127.0.0.1:${address.port}`);
   vi.stubEnv('VK_API_KEY', fixtureKey);
   vi.stubEnv('VK_API_TIMEOUT_MS', '150');
+  // Establish healthy transport before injecting a response stall. The command
+  // still performs its own preflight, which remains part of the two requests below.
+  const healthy = await fetch(`http://127.0.0.1:${address.port}/api/auth/context`, {
+    signal: AbortSignal.timeout(2_000),
+  });
+  expect(healthy.ok).toBe(true);
+  await healthy.arrayBuffer();
+  requests.length = 0;
   process.exitCode = 0;
 });
 afterEach(async () => {
