@@ -107,8 +107,24 @@ for (const theme of ['dark', 'light']) {
       await expect(dialog).toBeVisible();
       await expect(input).toBeFocused();
     };
-    await select('Category');
-    for (const label of ['Default Type', 'Default Priority', 'Default Agent']) await select(label);
+    for (const [label, clearLabel] of [
+      ['Category', 'Clear category'],
+      ['Default Type', 'Clear default type'],
+      ['Default Priority', 'Clear default priority'],
+      ['Default Agent', 'Clear default agent'],
+    ]) {
+      for (const key of ['Enter', 'Space']) {
+        await select(label);
+        const input = dialog.getByLabel(label, { exact: true });
+        await input.press('Tab');
+        const clear = dialog.getByRole('button', { name: clearLabel, exact: true });
+        await expect(clear).toBeFocused();
+        await clear.press(key);
+        await expect(clear).toBeHidden();
+        await expect(input).toBeFocused();
+        await expect(input).toHaveValue('');
+      }
+    }
     const scroll = dialog.getByTestId('template-editor-scroll-region');
     await dialog
       .getByRole('textbox', { name: 'Description Template' })
