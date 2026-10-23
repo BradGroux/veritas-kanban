@@ -57,6 +57,26 @@ test('plans only verified runners and signals their exact identities', () => {
   assert.deepEqual(io.signals, [42, 43]);
 });
 
+test('recognizes the shared watcher only in its exact checkout and mode', () => {
+  const command = `node ${root}/shared/node_modules/typescript/bin/tsc --watch --preserveWatchOutput`;
+  assert(isDevCommand(command, `${root}/shared`, root));
+  assert(isDevCommand('node /global/pnpm.cjs --filter @veritas-kanban/shared dev', root, root));
+  assert(!isDevCommand(command, `${root}/server`, root));
+  assert(
+    !isDevCommand(
+      command.replace('--watch --preserveWatchOutput', '--noEmit'),
+      `${root}/shared`,
+      root
+    )
+  );
+  assert(!isDevCommand(command.replace(root, '/another-checkout'), `${root}/shared`, root));
+  const entry = processEntry(44, command);
+  const io = { ...fixture([entry]), cwd: () => `${root}/shared`, listeners: () => [] };
+  const plan = planDevCleanup(root, [3000, 3001], io);
+  assert.equal(applyDevCleanup(root, plan, io), 1);
+  assert.deepEqual(io.signals, [44]);
+});
+
 test('foreign listener, another checkout and unknown command abort before every signal', () => {
   for (const change of [
     { listeners: () => [999] },
