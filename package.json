@@ -24,6 +24,8 @@
     "desktop:package:linux:unsigned": "pnpm build && pnpm --filter @veritas-kanban/desktop package:linux:unsigned",
     "desktop:package:windows:unsigned": "pnpm build && pnpm --filter @veritas-kanban/desktop package:win:unsigned",
     "desktop:release:mac": "pnpm build && pnpm --filter @veritas-kanban/desktop release:mac",
+    "desktop:release:mac:local": "node scripts/capture-local-macos-release.mjs",
+    "desktop:test:local-candidate": "node --test scripts/local-macos-candidate.test.mjs",
     "desktop:release:linux": "pnpm build && pnpm --filter @veritas-kanban/desktop release:linux",
     "desktop:release:windows": "pnpm build && pnpm --filter @veritas-kanban/desktop release:win",
     "desktop:test": "pnpm --filter @veritas-kanban/desktop test",
