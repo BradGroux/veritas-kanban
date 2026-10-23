@@ -115,9 +115,20 @@ function normalizeRecord<T>(
 function normalizeClaims(value: unknown): AutomationRunClaim[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new Error('Scheduler automation claims must be an array.');
-  return value
-    .slice(-MAX_AUTOMATION_CLAIMS)
-    .map((claim) => AutomationRunClaimSchema.parse(claim)) as AutomationRunClaim[];
+  return retainAutomationClaims(
+    value.map((claim) => AutomationRunClaimSchema.parse(claim)) as AutomationRunClaim[]
+  );
+}
+
+/** Bounded history must never discard durable ownership or unreconciled usage. */
+export function retainAutomationClaims(claims: AutomationRunClaim[]): AutomationRunClaim[] {
+  const pending = (claim: AutomationRunClaim) =>
+    claim.status === 'queued' ||
+    claim.status === 'accepted' ||
+    claim.status === 'started' ||
+    (claim.status === 'failed' && Boolean(claim.workflowRunId) && !claim.usageReceipt);
+  const history = new Set(claims.filter((claim) => !pending(claim)).slice(-MAX_AUTOMATION_CLAIMS));
+  return claims.filter((claim) => pending(claim) || history.has(claim));
 }
 
 function normalizeDrafts(value: unknown): Record<string, AutomationDraft[]> {

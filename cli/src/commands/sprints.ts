@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { api } from '../utils/api.js';
+import { api, encodeApiPathSegment } from '../utils/api.js';
 import type { Task } from '../utils/types.js';
 
 interface Sprint {
@@ -116,7 +116,7 @@ export function registerSprintCommands(program: Command): void {
           process.exit(1);
         }
 
-        const result = await api<Sprint>(`/api/sprints/${id}`, {
+        const result = await api<Sprint>(`/api/sprints/${encodeApiPathSegment(id)}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
         });
@@ -158,7 +158,7 @@ export function registerSprintCommands(program: Command): void {
         const params = new URLSearchParams();
         if (options.force) params.append('force', 'true');
 
-        const url = `/api/sprints/${id}${params.toString() ? `?${params.toString()}` : ''}`;
+        const url = `/api/sprints/${encodeApiPathSegment(id)}${params.toString() ? `?${params.toString()}` : ''}`;
         await api(url, { method: 'DELETE' });
         console.log(chalk.green('✓ Sprint deleted'));
       } catch (err) {
@@ -220,9 +220,12 @@ export function registerSprintCommands(program: Command): void {
           }
         }
 
-        const result = await api<ArchiveResult>(`/api/tasks/archive/sprint/${id}`, {
-          method: 'POST',
-        });
+        const result = await api<ArchiveResult>(
+          `/api/tasks/archive/sprint/${encodeApiPathSegment(id)}`,
+          {
+            method: 'POST',
+          }
+        );
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));

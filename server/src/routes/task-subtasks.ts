@@ -5,6 +5,7 @@ import { getTaskService } from '../services/task-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import type { Subtask } from '@veritas-kanban/shared';
+import { expectedRevisionFromRequest, setRevisionHeaders } from '../utils/concurrency.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -37,11 +38,6 @@ router.post(
       throw error;
     }
 
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-
     const subtask = {
       id: `subtask_${randomUUID()}`,
       title,
@@ -53,8 +49,13 @@ router.post(
       }),
     };
 
-    const subtasks = [...(task.subtasks || []), subtask];
-    const updatedTask = await taskService.updateTask(req.params.id as string, { subtasks });
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => ({ subtasks: [...(task.subtasks || []), subtask] }),
+      { expectedRevision: expectedRevisionFromRequest(req) }
+    );
+    if (!updatedTask) throw new NotFoundError('Task not found');
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
 
     res.status(201).json(updatedTask);
   })
@@ -74,28 +75,19 @@ router.patch(
       throw error;
     }
 
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-
-    const subtasks = task.subtasks || [];
-    const subtaskIndex = subtasks.findIndex(
-      (s: Subtask) => s.id === (req.params.subtaskId as string)
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => {
+        const subtasks = [...(task.subtasks || [])];
+        const subtaskIndex = subtasks.findIndex((s) => s.id === req.params.subtaskId);
+        if (subtaskIndex === -1) throw new NotFoundError('Subtask not found');
+        subtasks[subtaskIndex] = { ...subtasks[subtaskIndex], ...updates };
+        return { subtasks };
+      },
+      { expectedRevision: expectedRevisionFromRequest(req), completeOnSubtasks: true }
     );
-    if (subtaskIndex === -1) {
-      throw new NotFoundError('Subtask not found');
-    }
-
-    subtasks[subtaskIndex] = { ...subtasks[subtaskIndex], ...updates };
-
-    // Check if we should auto-complete the parent task
-    let taskUpdates: any = { subtasks };
-    if (task.autoCompleteOnSubtasks && subtasks.every((s: Subtask) => s.completed)) {
-      taskUpdates.status = 'done';
-    }
-
-    const updatedTask = await taskService.updateTask(req.params.id as string, taskUpdates);
+    if (!updatedTask) throw new NotFoundError('Task not found');
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
 
     res.json(updatedTask);
   })
@@ -105,15 +97,18 @@ router.patch(
 router.delete(
   '/:id/subtasks/:subtaskId',
   asyncHandler(async (req, res) => {
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-
-    const subtasks = (task.subtasks || []).filter(
-      (s: Subtask) => s.id !== (req.params.subtaskId as string)
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => {
+        const subtasks = (task.subtasks || []).filter(
+          (s: Subtask) => s.id !== (req.params.subtaskId as string)
+        );
+        return { subtasks };
+      },
+      { expectedRevision: expectedRevisionFromRequest(req) }
     );
-    const updatedTask = await taskService.updateTask(req.params.id as string, { subtasks });
+    if (!updatedTask) throw new NotFoundError('Task not found');
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
 
     res.json(updatedTask);
   })
@@ -128,36 +123,38 @@ router.patch(
       throw new ValidationError('Invalid criteria index');
     }
 
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => {
+        const subtasks = [...(task.subtasks || [])];
+        const subtaskIndex = subtasks.findIndex((s) => s.id === (req.params.subtaskId as string));
+        if (subtaskIndex === -1) {
+          throw new NotFoundError('Subtask not found');
+        }
 
-    const subtasks = task.subtasks || [];
-    const subtaskIndex = subtasks.findIndex((s) => s.id === (req.params.subtaskId as string));
-    if (subtaskIndex === -1) {
-      throw new NotFoundError('Subtask not found');
-    }
+        const subtask = subtasks[subtaskIndex];
+        if (!subtask.acceptanceCriteria || !subtask.criteriaChecked) {
+          throw new ValidationError('Subtask has no acceptance criteria');
+        }
 
-    const subtask = subtasks[subtaskIndex];
-    if (!subtask.acceptanceCriteria || !subtask.criteriaChecked) {
-      throw new ValidationError('Subtask has no acceptance criteria');
-    }
+        if (criteriaIndex >= subtask.acceptanceCriteria.length) {
+          throw new ValidationError('Criteria index out of range');
+        }
 
-    if (criteriaIndex >= subtask.acceptanceCriteria.length) {
-      throw new ValidationError('Criteria index out of range');
-    }
+        // Toggle the specific criterion
+        const newCriteriaChecked = [...subtask.criteriaChecked];
+        newCriteriaChecked[criteriaIndex] = !newCriteriaChecked[criteriaIndex];
 
-    // Toggle the specific criterion
-    const newCriteriaChecked = [...subtask.criteriaChecked];
-    newCriteriaChecked[criteriaIndex] = !newCriteriaChecked[criteriaIndex];
-
-    subtasks[subtaskIndex] = {
-      ...subtask,
-      criteriaChecked: newCriteriaChecked,
-    };
-
-    const updatedTask = await taskService.updateTask(req.params.id as string, { subtasks });
+        subtasks[subtaskIndex] = {
+          ...subtask,
+          criteriaChecked: newCriteriaChecked,
+        };
+        return { subtasks };
+      },
+      { expectedRevision: expectedRevisionFromRequest(req) }
+    );
+    if (!updatedTask) throw new NotFoundError('Task not found');
+    setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
 
     res.json(updatedTask);
   })

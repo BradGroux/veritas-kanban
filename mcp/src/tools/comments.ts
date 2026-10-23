@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { api } from '../utils/api.js';
+import { api, encodeApiPathSegment } from '../utils/api.js';
 import { Task } from '../utils/types.js';
 
 // Tool input schemas
@@ -85,7 +85,7 @@ export async function handleCommentTool(name: string, args: any): Promise<any> {
       const { taskId, text, agent } = AddCommentSchema.parse(args);
       const author = agent || 'agent';
 
-      const task = await api<Task>(`/api/tasks/${taskId}/comments`, {
+      const task = await api<Task>(`/api/tasks/${encodeApiPathSegment(taskId)}/comments`, {
         method: 'POST',
         body: JSON.stringify({ author, text }),
       });
@@ -102,7 +102,7 @@ export async function handleCommentTool(name: string, args: any): Promise<any> {
 
     case 'list_comments': {
       const { taskId } = ListCommentsSchema.parse(args);
-      const task = await api<Task>(`/api/tasks/${taskId}`);
+      const task = await api<Task>(`/api/tasks/${encodeApiPathSegment(taskId)}`);
 
       const comments = task.comments || [];
 
@@ -119,9 +119,12 @@ export async function handleCommentTool(name: string, args: any): Promise<any> {
     case 'delete_comment': {
       const { taskId, commentId } = DeleteCommentSchema.parse(args);
 
-      const task = await api<Task>(`/api/tasks/${taskId}/comments/${commentId}`, {
-        method: 'DELETE',
-      });
+      const task = await api<Task>(
+        `/api/tasks/${encodeApiPathSegment(taskId)}/comments/${encodeApiPathSegment(commentId)}`,
+        {
+          method: 'DELETE',
+        }
+      );
 
       return {
         content: [

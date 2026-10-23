@@ -12,6 +12,7 @@ import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import type { RunSupervisorRepository } from './interfaces.js';
+import { writeAll } from './fs-helpers.js';
 
 const MAX_SUPERVISOR_LOG_BYTES = 128 * 1024 * 1024;
 const MAX_SUPERVISOR_SNAPSHOTS = 100_000;
@@ -139,7 +140,7 @@ export class FileRunSupervisorRepository implements RunSupervisorRepository {
       0o600
     );
     try {
-      await handle.write(line, undefined, 'utf8');
+      await writeAll(handle, line);
       await handle.sync();
     } finally {
       await handle.close();

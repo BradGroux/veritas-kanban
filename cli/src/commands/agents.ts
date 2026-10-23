@@ -6,6 +6,7 @@ import path from 'node:path';
 import { api } from '../utils/api.js';
 import { findTask } from '../utils/find.js';
 import type {
+  AgentLaunchStatus,
   AgentProfileExportResult,
   AgentProfilePackageFormat,
   AgentProfilePackageSummary,
@@ -242,7 +243,7 @@ export function registerAgentCommands(program: Command): void {
           process.exit(1);
         }
 
-        const result = await api<{ attemptId: string }>(`/api/agents/${task.id}/start`, {
+        const result = await api<AgentLaunchStatus>(`/api/agents/${task.id}/start`, {
           timeoutMs: 120_000, // Provider preflight and worktree preparation can take longer.
           method: 'POST',
           body: JSON.stringify({
@@ -259,10 +260,28 @@ export function registerAgentCommands(program: Command): void {
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          console.log(chalk.green(`✓ Agent started: ${options.profile || options.agent}`));
-          console.log(chalk.dim(`Attempt ID: ${result.attemptId}`));
-          console.log(chalk.dim(`Working in: ${task.git.worktreePath}`));
+          if (result.status === 'queued') {
+            console.log(chalk.yellow(`Agent queued: ${result.agent}`));
+            console.log(chalk.dim('Status: queued'));
+            console.log(chalk.dim(`Queue ID: ${result.queueId}`));
+            console.log(chalk.dim(`Attempt ID: ${result.attemptId}`));
+            console.log(chalk.dim(`Retry after: ${result.retryAfterMs} ms`));
+            console.log(
+              chalk.dim(
+                `Limiting scopes: ${result.limitingScopes.map(({ scope, scopeId }) => `${scope}:${scopeId}`).join(', ')}`
+              )
+            );
+            console.log('Veritas owns this queued launch. Do not resubmit.');
+          } else {
+            const outcome = result.status === 'running' ? 'started' : result.status;
+            const color = result.status === 'failed' ? chalk.red : chalk.green;
+            console.log(color(`Agent ${outcome}: ${result.agent}`));
+            console.log(chalk.dim(`Status: ${result.status}`));
+            console.log(chalk.dim(`Attempt ID: ${result.attemptId}`));
+            console.log(chalk.dim(`Working in: ${task.git.worktreePath}`));
+          }
         }
+        if (result.status === 'failed') process.exitCode = 1;
       } catch (err) {
         console.error(chalk.red(`Error: ${(err as Error).message}`));
         process.exit(1);

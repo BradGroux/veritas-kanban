@@ -3,8 +3,12 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { Command } from 'commander';
 import chalk from 'chalk';
-import type { WorkProduct, WorkProductArtifactMetadata } from '@veritas-kanban/shared';
-import { API_BASE, api, assertApiPermissionForRequest, buildApiHeaders } from '../utils/api.js';
+import type {
+  ApiBinaryResponse,
+  WorkProduct,
+  WorkProductArtifactMetadata,
+} from '@veritas-kanban/shared';
+import { api } from '../utils/api.js';
 
 interface WorkProductArtifactRegistration {
   product: WorkProduct;
@@ -163,15 +167,11 @@ export function registerWorkProductCommands(program: Command): void {
         if (options.version) query.set('version', options.version);
         const suffix = query.size > 0 ? `?${query.toString()}` : '';
         const requestPath = `/api/work-products/${encodeURIComponent(id)}/artifact/download${suffix}`;
-        await assertApiPermissionForRequest(requestPath);
-        const response = await fetch(`${API_BASE}${requestPath}`, {
-          headers: buildApiHeaders({ accept: 'application/octet-stream' }),
+        const response = await api<ApiBinaryResponse>(requestPath, {
+          responseType: 'binary',
+          headers: { accept: 'application/octet-stream' },
         });
-        if (!response.ok) {
-          const detail = await response.text();
-          throw new Error(detail || `Download failed with HTTP ${response.status}`);
-        }
-        const content = Buffer.from(await response.arrayBuffer());
+        const content = Buffer.from(response.body);
         const sha256 = response.headers.get('x-artifact-sha256');
         await writeVerifiedArtifact(options.output, content, sha256 ?? '', Boolean(options.force));
         const result = {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { api } from '../utils/api.js';
+import { api, encodeApiPathSegment } from '../utils/api.js';
 
 // Local response types
 interface ProjectConfig {
@@ -44,10 +44,9 @@ const CreateProjectSchema = z.object({
   color: z
     .string()
     .optional()
-    .refine(
-      (val) => val === undefined || tailwindColorRegex.test(val),
-      { message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"' }
-    ),
+    .refine((val) => val === undefined || tailwindColorRegex.test(val), {
+      message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"',
+    }),
 });
 
 const UpdateProjectSchema = z.object({
@@ -57,10 +56,9 @@ const UpdateProjectSchema = z.object({
   color: z
     .string()
     .optional()
-    .refine(
-      (val) => val === undefined || tailwindColorRegex.test(val),
-      { message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"' }
-    ),
+    .refine((val) => val === undefined || tailwindColorRegex.test(val), {
+      message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"',
+    }),
   isHidden: z.boolean().optional(),
 });
 
@@ -191,8 +189,7 @@ export const projectTools = [
   },
   {
     name: 'reorder_projects',
-    description:
-      'Reorder projects by providing an array of project IDs in the desired order',
+    description: 'Reorder projects by providing an array of project IDs in the desired order',
     inputSchema: {
       type: 'object',
       properties: {
@@ -221,7 +218,7 @@ export async function handleProjectTool(name: string, args: any): Promise<any> {
 
     case 'get_project': {
       const { id } = ProjectIdSchema.parse(args);
-      const project = await api<ProjectConfig>(`/api/projects/${id}`);
+      const project = await api<ProjectConfig>(`/api/projects/${encodeApiPathSegment(id)}`);
 
       return {
         content: [{ type: 'text', text: JSON.stringify(project, null, 2) }],
@@ -247,7 +244,7 @@ export async function handleProjectTool(name: string, args: any): Promise<any> {
 
     case 'update_project': {
       const { id, ...updates } = UpdateProjectSchema.parse(args);
-      const project = await api<ProjectConfig>(`/api/projects/${id}`, {
+      const project = await api<ProjectConfig>(`/api/projects/${encodeApiPathSegment(id)}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
       });
@@ -265,7 +262,7 @@ export async function handleProjectTool(name: string, args: any): Promise<any> {
     case 'delete_project': {
       const { id, force } = DeleteProjectSchema.parse(args);
       const query = force ? '?force=true' : '';
-      await api(`/api/projects/${id}${query}`, { method: 'DELETE' });
+      await api(`/api/projects/${encodeApiPathSegment(id)}${query}`, { method: 'DELETE' });
 
       return {
         content: [{ type: 'text', text: `Project deleted: ${id}` }],
@@ -275,13 +272,11 @@ export async function handleProjectTool(name: string, args: any): Promise<any> {
     case 'get_project_stats': {
       const { id } = ProjectIdSchema.parse(args);
       const tasks = await api<{ data?: Task[]; success?: boolean } | Task[]>(
-        `/api/tasks?project=${id}`
+        `/api/tasks?${new URLSearchParams({ project: id })}`
       );
 
       // Handle both array response and wrapped {data: [...]} response
-      const taskList: Task[] = Array.isArray(tasks)
-        ? tasks
-        : (tasks as any).data ?? [];
+      const taskList: Task[] = Array.isArray(tasks) ? tasks : ((tasks as any).data ?? []);
 
       const byStatus: Record<string, number> = {};
       for (const task of taskList) {

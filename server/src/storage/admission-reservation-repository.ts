@@ -33,6 +33,7 @@ import {
   reactivateExecutionTreeBudget,
   releaseExecutionTreeBudget,
 } from './execution-tree-budget.js';
+import { writeAll } from './fs-helpers.js';
 import type { AdmissionReservationRepository } from './interfaces.js';
 
 const MAX_LOG_BYTES = 128 * 1024 * 1024;
@@ -609,24 +610,10 @@ export class FileAdmissionReservationRepository implements AdmissionReservationR
       0o600
     );
     try {
-      await this.writeCompleteAppend(handle, line);
+      await writeAll(handle, line);
       await handle.sync();
     } finally {
       await handle.close();
-    }
-  }
-
-  private async writeCompleteAppend(
-    handle: Awaited<ReturnType<typeof open>>,
-    content: Uint8Array
-  ): Promise<void> {
-    let offset = 0;
-    while (offset < content.byteLength) {
-      const result = await handle.write(content, offset, content.byteLength - offset, null);
-      if (result.bytesWritten < 1) {
-        throw new Error('Admission reservation append made no forward progress.');
-      }
-      offset += result.bytesWritten;
     }
   }
 

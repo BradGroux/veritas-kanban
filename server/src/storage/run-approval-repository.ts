@@ -12,6 +12,7 @@ import { RunApprovalRequestSchema } from '../schemas/run-approval-schemas.js';
 import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
+import { writeAll } from './fs-helpers.js';
 
 const MAX_APPROVAL_LOG_BYTES = 64 * 1024 * 1024;
 const MAX_APPROVAL_SNAPSHOTS = 100_000;
@@ -148,7 +149,7 @@ export class FileRunApprovalRepository implements RunApprovalRepository {
       0o600
     );
     try {
-      await handle.write(line, undefined, 'utf8');
+      await writeAll(handle, line);
       await handle.sync();
     } finally {
       await handle.close();

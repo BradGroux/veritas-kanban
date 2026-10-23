@@ -333,6 +333,46 @@ describe('WorkflowStepExecutor Codex integration', () => {
     expect(mockStartThread).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, 'codex-cli', 'codex-sdk'])(
+    'rejects the gateway profile in workflows before probing or dispatch (%s)',
+    async (provider) => {
+      const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
+      const step: WorkflowStep = {
+        id: 'gateway-step',
+        type: 'agent',
+        agent: 'orcarouter-codex',
+        input: 'Gateway fixture',
+      };
+      const run = {
+        id: 'run_gateway_fixture',
+        workflowId: 'wf-gateway',
+        workflowVersion: 1,
+        status: 'running',
+        context: {
+          task: { id: 'task_gateway', title: 'Gateway', git: { worktreePath: tmpDir } },
+          workflow: {
+            agents: [
+              {
+                id: 'orcarouter-codex',
+                name: 'Gateway',
+                role: 'implementer',
+                provider,
+                description: 'Gateway fixture',
+              },
+            ],
+          },
+        },
+        startedAt: new Date().toISOString(),
+        steps: [{ stepId: step.id, status: 'running', retries: 0 }],
+      } as WorkflowRun;
+      await expect(executor.executeStep(step, run)).rejects.toThrow(
+        'has no workflow execution adapter'
+      );
+      expect(runtimeManifestResolver).not.toHaveBeenCalled();
+      expect(mockStartThread).not.toHaveBeenCalled();
+    }
+  );
+
   it('rejects providers that have no workflow execution adapter before probing or launch', async () => {
     const executor = new WorkflowStepExecutor(tmpDir, { runtimeManifestResolver });
     const step: WorkflowStep = {

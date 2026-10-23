@@ -247,7 +247,8 @@ export const AUTOMATION_BINDING_SCHEMA_VERSION = 'automation-binding/v1' as cons
 export const AUTOMATION_RUN_CLAIM_SCHEMA_VERSION = 'automation-run-claim/v1' as const;
 
 export type AutomationBindingStatus = 'active' | 'paused' | 'revoked' | 'expired' | 'blocked';
-export type AutomationRunClaimStatus = 'accepted' | 'started' | 'completed' | 'blocked' | 'failed';
+export type AutomationRunClaimStatus =
+  'queued' | 'accepted' | 'started' | 'completed' | 'blocked' | 'failed' | 'skipped';
 
 export interface AutomationActivationEvidence {
   sourceTarget: {
@@ -378,6 +379,13 @@ export interface AutomationRunClaim {
   status: AutomationRunClaimStatus;
   workflowRunId?: string;
   reason?: string;
+  /** Terminal contribution committed atomically with aggregate usage. */
+  usageReceipt?: {
+    costUsd: number;
+    tokens: number;
+    durationMinutes: number;
+    recordedAt: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

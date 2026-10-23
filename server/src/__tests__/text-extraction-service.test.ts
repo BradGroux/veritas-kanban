@@ -43,19 +43,21 @@ describe('TextExtractionService', () => {
   });
 
   describe('PDF extraction', () => {
-    it('should extract text from PDF', async () => {
-      // Note: This test would need a real PDF file or mocked unpdf library
-      // For now, we'll test that it calls the extraction without error
-      const filepath = path.join(testRoot, 'test.pdf');
-      
-      // Create a minimal PDF-like buffer (not a real PDF, just for testing structure)
-      const buffer = Buffer.from('%PDF-1.4\nminimal pdf');
+    it('extracts the expected text from a valid PDF without changing the file', async () => {
+      const filepath = path.join(testRoot, 'sample.pdf');
+      const buffer = pdfTextFixture('Release compatibility sample');
       await fs.writeFile(filepath, buffer);
 
-      // This will likely return null or error with invalid PDF, but tests the flow
-      const extracted = await service.extractText(filepath, 'application/pdf');
-      // We expect null or string (real PDF would return string)
-      expect(typeof extracted === 'string' || extracted === null).toBe(true);
+      expect(await service.extractText(filepath, 'application/pdf')).toBe(
+        'Release compatibility sample'
+      );
+      expect(await fs.readFile(filepath)).toEqual(buffer);
+    });
+
+    it('returns null for an invalid PDF without throwing', async () => {
+      const filepath = path.join(testRoot, 'invalid.pdf');
+      await fs.writeFile(filepath, '%PDF-1.4\nminimal pdf');
+      await expect(service.extractText(filepath, 'application/pdf')).resolves.toBeNull();
     });
   });
 
@@ -67,7 +69,10 @@ describe('TextExtractionService', () => {
       const buffer = Buffer.from('fake docx content');
       await fs.writeFile(filepath, buffer);
 
-      const extracted = await service.extractText(filepath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      const extracted = await service.extractText(
+        filepath,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
       // Should return null for invalid DOCX
       expect(typeof extracted === 'string' || extracted === null).toBe(true);
     });
@@ -76,21 +81,24 @@ describe('TextExtractionService', () => {
   describe('Excel extraction', () => {
     it('should extract text from XLSX as CSV', async () => {
       const filepath = path.join(testRoot, 'test.xlsx');
-      
+
       // Create a real XLSX file using exceljs
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Sheet1');
-      
+
       // Add data
       worksheet.addRow(['Name', 'Age', 'City']);
       worksheet.addRow(['Alice', 30, 'New York']);
       worksheet.addRow(['Bob', 25, 'London']);
-      
+
       // Write to file
       await workbook.xlsx.writeFile(filepath);
 
-      const extracted = await service.extractText(filepath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      
+      const extracted = await service.extractText(
+        filepath,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+
       expect(extracted).toContain('Name,Age,City');
       expect(extracted).toContain('Alice,30,New York');
       expect(extracted).toContain('Bob,25,London');
@@ -99,23 +107,26 @@ describe('TextExtractionService', () => {
 
     it('should handle multiple sheets in XLSX', async () => {
       const filepath = path.join(testRoot, 'multi-sheet.xlsx');
-      
+
       const workbook = new ExcelJS.Workbook();
-      
+
       // Sheet 1
       const worksheet1 = workbook.addWorksheet('Sheet1');
       worksheet1.addRow(['Column1']);
       worksheet1.addRow(['Value1']);
-      
+
       // Sheet 2
       const worksheet2 = workbook.addWorksheet('Sheet2');
       worksheet2.addRow(['Column2']);
       worksheet2.addRow(['Value2']);
-      
+
       await workbook.xlsx.writeFile(filepath);
 
-      const extracted = await service.extractText(filepath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      
+      const extracted = await service.extractText(
+        filepath,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+
       expect(extracted).toContain('=== Sheet: Sheet1 ===');
       expect(extracted).toContain('=== Sheet: Sheet2 ===');
       expect(extracted).toContain('Column1');
@@ -150,7 +161,7 @@ describe('TextExtractionService', () => {
       await fs.writeFile(filepath, html);
 
       const extracted = await service.extractText(filepath, 'text/html');
-      
+
       expect(extracted).not.toContain('<');
       expect(extracted).not.toContain('>');
       expect(extracted).not.toContain('alert');
@@ -179,7 +190,7 @@ describe('TextExtractionService', () => {
       await fs.writeFile(filepath, JSON.stringify(json));
 
       const extracted = await service.extractText(filepath, 'application/json');
-      
+
       expect(extracted).toContain('"name": "Test"');
       expect(extracted).toContain('"values": [');
       expect(extracted).toContain('"nested": {');
@@ -252,3 +263,25 @@ describe('TextExtractionService', () => {
     });
   });
 });
+
+function pdfTextFixture(text: string): Buffer {
+  const stream = `BT\n/F1 12 Tf\n20 180 Td\n(${text}) Tj\nET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(body));
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(body);
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) body += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body);
+}

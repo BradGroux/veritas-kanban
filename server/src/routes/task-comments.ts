@@ -9,7 +9,11 @@ import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { sanitizeCommentText, sanitizeAuthor } from '../utils/sanitize.js';
 import { broadcastTaskChange } from '../services/broadcast-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
-import { actorFromRequest, assertFreshRevision, setRevisionHeaders } from '../utils/concurrency.js';
+import {
+  actorFromRequest,
+  expectedRevisionFromRequest,
+  setRevisionHeaders,
+} from '../utils/concurrency.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -37,11 +41,6 @@ router.post(
     author = sanitizeAuthor(author);
     text = sanitizeCommentText(text);
 
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-    assertFreshRevision(req, 'task', task.id, task);
     const actor = actorFromRequest(req as AuthenticatedRequest);
 
     const comment = {
@@ -54,11 +53,11 @@ router.post(
       updatedBy: actor,
     };
 
-    const comments = [...(task.comments || []), comment];
-    const updatedTask = await taskService.updateTask(req.params.id as string, {
-      comments,
-      updatedBy: actor,
-    });
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => ({ comments: [...(task.comments || []), comment], updatedBy: actor }),
+      { expectedRevision: expectedRevisionFromRequest(req) }
+    );
     if (!updatedTask) {
       throw new NotFoundError('Task not found');
     }
@@ -66,24 +65,24 @@ router.post(
     // Log activity
     await activityService.logActivity(
       'comment_added',
-      task.id,
-      task.title,
+      updatedTask.id,
+      updatedTask.title,
       {
         author,
         preview: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
         actor,
       },
-      task.agent,
+      updatedTask.agent,
       actor
     );
 
     // Broadcast update to all connected WebSocket clients
-    broadcastTaskChange('updated', task.id);
+    broadcastTaskChange('updated', updatedTask.id);
 
     // Outbound sync: post comment to linked GitHub issue (fire-and-forget)
-    if (task.github) {
+    if (updatedTask.github) {
       getGitHubSyncService()
-        .syncCommentToGitHub(task, `**${author}:** ${text}`)
+        .syncCommentToGitHub(updatedTask, `**${author}:** ${text}`)
         .catch(() => {
           /* intentionally silent — don't fail the API call */
         });
@@ -110,35 +109,32 @@ router.patch(
     // Sanitize user-provided text to prevent stored XSS
     text = sanitizeCommentText(text);
 
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-    assertFreshRevision(req, 'task', task.id, task);
     const actor = actorFromRequest(req as AuthenticatedRequest);
 
-    const comments = [...(task.comments || [])];
-    const commentIndex = comments.findIndex(
-      (c: { id: string; author: string; text: string; timestamp: string }) =>
-        c.id === (req.params.commentId as string)
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => {
+        const comments = [...(task.comments || [])];
+        const commentIndex = comments.findIndex(
+          (c: { id: string; author: string; text: string; timestamp: string }) =>
+            c.id === (req.params.commentId as string)
+        );
+        if (commentIndex === -1) {
+          throw new NotFoundError('Comment not found');
+        }
+
+        comments[commentIndex] = {
+          ...comments[commentIndex],
+          text,
+          timestamp: comments[commentIndex].timestamp, // preserve original timestamp
+          updated: new Date().toISOString(),
+          updatedBy: actor,
+          revision: (comments[commentIndex]?.revision ?? 1) + 1,
+        };
+        return { comments, updatedBy: actor };
+      },
+      { expectedRevision: expectedRevisionFromRequest(req) }
     );
-    if (commentIndex === -1) {
-      throw new NotFoundError('Comment not found');
-    }
-
-    comments[commentIndex] = {
-      ...comments[commentIndex],
-      text,
-      timestamp: comments[commentIndex].timestamp, // preserve original timestamp
-      updated: new Date().toISOString(),
-      updatedBy: actor,
-      revision: (comments[commentIndex]?.revision ?? 1) + 1,
-    };
-
-    const updatedTask = await taskService.updateTask(req.params.id as string, {
-      comments,
-      updatedBy: actor,
-    });
     if (!updatedTask) {
       throw new NotFoundError('Task not found');
     }
@@ -155,44 +151,41 @@ router.patch(
 router.delete(
   '/:id/comments/:commentId',
   asyncHandler(async (req, res) => {
-    const task = await taskService.getTask(req.params.id as string);
-    if (!task) {
-      throw new NotFoundError('Task not found');
-    }
-    assertFreshRevision(req, 'task', task.id, task);
     const actor = actorFromRequest(req as AuthenticatedRequest);
 
-    const comments = task.comments || [];
-    const filtered = comments.filter(
-      (c: { id: string; author: string; text: string; timestamp: string }) =>
-        c.id !== (req.params.commentId as string)
+    const updatedTask = await taskService.mutateTaskChildren(
+      req.params.id as string,
+      (task) => {
+        const comments = task.comments || [];
+        const filtered = comments.filter(
+          (c: { id: string; author: string; text: string; timestamp: string }) =>
+            c.id !== (req.params.commentId as string)
+        );
+        if (filtered.length === comments.length) {
+          throw new NotFoundError('Comment not found');
+        }
+        return { comments: filtered, updatedBy: actor };
+      },
+      { expectedRevision: expectedRevisionFromRequest(req) }
     );
-    if (filtered.length === comments.length) {
-      throw new NotFoundError('Comment not found');
-    }
-
-    const updatedTask = await taskService.updateTask(req.params.id as string, {
-      comments: filtered,
-      updatedBy: actor,
-    });
     if (!updatedTask) {
       throw new NotFoundError('Task not found');
     }
 
     await activityService.logActivity(
       'comment_deleted',
-      task.id,
-      task.title,
+      updatedTask.id,
+      updatedTask.title,
       {
         commentId: req.params.commentId as string,
         actor,
       },
-      task.agent,
+      updatedTask.agent,
       actor
     );
 
     // Broadcast update to all connected WebSocket clients
-    broadcastTaskChange('updated', task.id);
+    broadcastTaskChange('updated', updatedTask.id);
 
     setRevisionHeaders(res, 'task', updatedTask.id, updatedTask);
     res.json(updatedTask);

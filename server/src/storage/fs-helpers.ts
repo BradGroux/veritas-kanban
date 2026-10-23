@@ -96,6 +96,38 @@ export const statfs = statfsAsync;
 export const unlink = unlinkAsync;
 export const writeFile = writeFileAsync;
 
+type WriteHandle = {
+  write(
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number | null
+  ): Promise<{ bytesWritten: number }>;
+};
+
+/**
+ * Write an entire byte sequence before returning.
+ *
+ * FileHandle.write() may complete successfully after writing only part of the
+ * requested buffer. Convert strings once so offsets always count UTF-8 bytes,
+ * then advance by the actual number of bytes written. Callers that provide a
+ * durability acknowledgement must sync only after this helper resolves.
+ * A failure leaves any partial bytes intact; this helper never truncates or
+ * repairs a journal, whose existing readers continue to fail closed.
+ */
+export async function writeAll(handle: WriteHandle, content: string | Uint8Array): Promise<void> {
+  const bytes = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const remaining = bytes.byteLength - offset;
+    const { bytesWritten } = await handle.write(bytes, offset, remaining, null);
+    if (!Number.isInteger(bytesWritten) || bytesWritten < 1 || bytesWritten > remaining) {
+      throw new Error('Durable write made no forward progress with a valid byte count.');
+    }
+    offset += bytesWritten;
+  }
+}
+
 /**
  * Atomic file replacement.
  *
@@ -103,7 +135,7 @@ export const writeFile = writeFileAsync;
  * filesystem as `destPath`, then renames it over `destPath`. On filesystems
  * where same-device replacement rename is atomic, readers either see the old
  * file or the new file — never a partial write. This does not claim crash
- * durability because the file and parent directory are not explicitly synced.
+ * durability because the parent directory is not explicitly synced after rename.
  * The temp file is cleaned up on failure so it does not accumulate.
  *
  * Encoding defaults to `'utf-8'` to match the old `writeFile` call sites.

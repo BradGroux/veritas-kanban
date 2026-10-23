@@ -25,6 +25,56 @@ describe('MCP agent runtime capability controls', () => {
     );
   });
 
+  it('returns durable queue identity and hints in text and structured output', async () => {
+    const queued = {
+      taskId: 'task_1',
+      agent: 'claude-code',
+      status: 'queued',
+      attemptId: 'attempt_1',
+      queueId: 'queue_1',
+      enqueuedAt: '2026-10-23T00:00:00.000Z',
+      retryAfterMs: 1_000,
+      limitingScopes: [{ scope: 'provider', scopeId: 'claude-code' }],
+    };
+    mockApi.mockResolvedValue(queued);
+    const result = await handleAgentTool('start_agent', { id: 'task_1' });
+    expect(result.structuredContent).toEqual(queued);
+    expect(result.content[0].text).toContain('Status: queued');
+    expect(result.content[0].text).toContain('Queue ID: queue_1');
+    expect(result.content[0].text).toContain('Retry after: 1000 ms');
+    expect(result.content[0].text).toContain('provider:claude-code');
+    expect(result.content[0].text).toContain('Do not resubmit');
+    expect(result.content[0].text).not.toMatch(/started|Working in:/i);
+    expect(result.isError).not.toBe(true);
+    expect(mockApi).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['running', 'pending', 'complete', 'failed'])(
+    'reports immediate %s launch outcomes accurately',
+    async (status) => {
+      mockApi.mockResolvedValue({
+        taskId: 'task_1',
+        agent: 'claude-code',
+        attemptId: 'attempt_1',
+        status,
+      });
+      const result = await handleAgentTool('start_agent', { id: 'task_1' });
+      expect(result.content[0].text).toContain(`Status: ${status}`);
+      expect(result.content[0].text).toContain('Attempt ID: attempt_1');
+      expect(result.content[0].text).toContain('Working in: /tmp/task_1');
+      expect(result.isError === true).toBe(status === 'failed');
+      expect(result.content[0].text.includes('Agent started:')).toBe(status === 'running');
+    }
+  );
+
+  it('preserves launch failures without resubmitting', async () => {
+    mockApi.mockRejectedValue(new Error('Admission queue is full.'));
+    await expect(handleAgentTool('start_agent', { id: 'task_1' })).rejects.toThrow(
+      'Admission queue is full.'
+    );
+    expect(mockApi).toHaveBeenCalledTimes(1);
+  });
+
   it('publishes required runtime capabilities in the start tool schema', () => {
     const start = agentTools.find((tool) => tool.name === 'start_agent');
     expect(start?.inputSchema.properties.requiredRuntimeCapabilities).toMatchObject({

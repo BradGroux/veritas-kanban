@@ -58,6 +58,7 @@ export const HARNESS_SUPPORT_TIER_DEFINITIONS: Record<HarnessSupportTier, string
 
 interface ReviewedHarness {
   agent: AgentConfig;
+  reviewedAt?: string;
   sourceAvailability: HarnessSourceAvailability;
   evidence: HarnessCompatibilityEvidence[];
   limitations: string[];
@@ -65,6 +66,57 @@ interface ReviewedHarness {
 }
 
 const REVIEWED_HARNESSES: ReviewedHarness[] = [
+  {
+    ...reviewedHarness(
+      {
+        type: 'orcarouter-codex',
+        name: 'OrcaRouter with Codex CLI',
+        command: 'codex',
+        args: ['exec'],
+        provider: 'codex-cli',
+        enabled: false,
+        model: 'openai/gpt-5',
+      },
+      'open-source',
+      [
+        source(
+          'Pinned Codex configuration schema',
+          'https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/core/config.schema.json',
+          'rust-v0.155.1'
+        ),
+        source(
+          'OrcaRouter Responses protocol',
+          'https://docs.orcarouter.ai/native-formats/openai-compat'
+        ),
+        fixture(
+          'Gateway launch and credential boundaries',
+          'server/src/__tests__/orcarouter-codex.test.ts'
+        ),
+        fixture(
+          'Pinned executable synthetic Responses compatibility',
+          'server/src/__tests__/orcarouter-codex-compatibility.test.ts'
+        ),
+        fixture(
+          'Managed gateway admission and dispatch',
+          'server/src/__tests__/codex-provider-service.test.ts'
+        ),
+      ],
+      [
+        'Only Codex CLI 0.155.1 is pinned for this optional fixed-model gateway profile.',
+        'The CLI source is public; the external gateway and upstream service were not independently audited.',
+        'Synthetic localhost protocol tests are separate from opted-in live gateway acceptance, which remains unverified.',
+        'Actual upstream identity and gateway billing cost are unavailable unless reported through harness events.',
+        'No fallback chain is configured; interrupted streams are not automatically replayed.',
+      ],
+      {
+        authentication:
+          'Configure ORCAROUTER_API_KEY in the server environment. Presence is a local readiness check, not live credential acceptance; OpenAI login is not used.',
+        configuration:
+          'Add the optional orcarouter-codex agent with provider codex-cli, args exec and an explicit provider/model. The endpoint is fixed; existing defaults are preserved.',
+      }
+    ),
+    reviewedAt: '2026-10-23',
+  },
   reviewedHarness(
     {
       type: 'buzz-agent',
@@ -275,7 +327,7 @@ function buildRecord(
     platforms: [...profile.platforms],
     testedVersions: [...profile.compatibility.testedVersions],
     testedBuilds: [...(TESTED_BUILDS[reviewed.agent.type] ?? [])],
-    reviewedAt: REVIEWED_AT,
+    reviewedAt: reviewed.reviewedAt ?? REVIEWED_AT,
     sourceAvailability: reviewed.sourceAvailability,
     evidence: structuredClone(reviewed.evidence),
     capabilities: structuredClone(adapter.capabilities),
@@ -301,7 +353,8 @@ function reviewedHarness(
   agent: AgentConfig,
   sourceAvailability: HarnessSourceAvailability,
   evidence: HarnessCompatibilityEvidence[],
-  limitations: string[]
+  limitations: string[],
+  guide: Partial<ReviewedHarness['guide']> = {}
 ): ReviewedHarness {
   const label = agent.name;
   return {
@@ -321,6 +374,7 @@ function reviewedHarness(
       degradedState:
         'Degraded profiles cannot dispatch until the reported evidence mismatch is fixed.',
       troubleshooting: 'Run `vk doctor --json` and follow the redacted remediation commands.',
+      ...guide,
     },
   };
 }
