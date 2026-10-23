@@ -14,6 +14,8 @@ provider version/build, runtime-manifest digest, and failure class.
 
 ## Reviewed matrix
 
+The optional [OrcaRouter gateway profile](guides/ORCAROUTER.md) pins Codex CLI 0.155.1 and appears as `orcarouter-codex-cli` in the same authoritative API matrix. Its deterministic fixtures include launch/credential boundaries, managed admission and an explicitly opted-in synthetic localhost Responses check with the real executable. Live gateway acceptance remains unverified; the configured model is not evidence of actual upstream routing or billing cost. The existing harness rows below retain their earlier review dates.
+
 | Harness            | Profile                   | Tested build                                                                        | Transport              | Source availability    | Important limitation                                                                               |
 | ------------------ | ------------------------- | ----------------------------------------------------------------------------------- | ---------------------- | ---------------------- | -------------------------------------------------------------------------------------------------- |
 | Buzz               | `buzz-agent`              | Buzz v0.4.24, commit `710ed9fff57878a1d69f809b80a6ee0416c53fc4`; `buzz-agent 0.1.0` | ACP v1 stdio           | Open source            | Task execution uses `buzz-agent`; relay, identity, community, and workflow checks remain separate. |

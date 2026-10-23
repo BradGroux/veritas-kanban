@@ -26,6 +26,7 @@ import type {
   WorkspaceExecutionTrustEvaluation,
 } from '@veritas-kanban/shared';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
+import { ORCAROUTER_CREDENTIAL_ENV_KEY } from '../utils/orcarouter-codex.js';
 import { buildSafeHermesEnv } from '../utils/hermes-env.js';
 import type { WorkspaceFileRepository } from '../storage/interfaces.js';
 import {
@@ -1070,7 +1071,11 @@ export class RunLaunchCompiler {
         ...Object.keys(
           provider === 'codex-app-server'
             ? buildSafeCodexAppServerEnv(process.env, sandboxPolicy.effective.envPassthrough)
-            : buildSafeCodexEnv(process.env, sandboxPolicy.effective.envPassthrough)
+            : buildSafeCodexEnv(
+                process.env,
+                sandboxPolicy.effective.envPassthrough,
+                provider === 'codex-cli' ? agentConfig : undefined
+              )
         ),
         ...egressEnvironmentKeys,
       ];
@@ -1079,7 +1084,12 @@ export class RunLaunchCompiler {
         credentialReferences: [
           ...sandboxPolicy.effective.credentialRefs,
           ...environmentKeys
-            .filter((key) => key === 'CODEX_API_KEY' || key === 'OPENAI_API_KEY')
+            .filter(
+              (key) =>
+                key === 'CODEX_API_KEY' ||
+                key === 'OPENAI_API_KEY' ||
+                key === ORCAROUTER_CREDENTIAL_ENV_KEY
+            )
             .map((key) => `env:${key}`),
         ],
       };

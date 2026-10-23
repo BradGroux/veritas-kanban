@@ -360,6 +360,10 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 ### Codex (OpenAI)
 
 - `codex-cli`: `codex exec --sandbox workspace-write --json`
+- Optional `orcarouter-codex` uses `codex-cli 0.155.1`, a fixed Responses endpoint,
+  an explicit model and the `env:ORCAROUTER_API_KEY` boot credential reference.
+  Other Codex profiles do not receive that key. Synthetic protocol evidence is
+  separate from live gateway acceptance. See `docs/guides/ORCAROUTER.md`.
 - `codex-sdk`: programmatic SDK, requires `@openai/codex-sdk`
 - `codex-app-server`: pinned to `codex-cli 0.145.0`; supervised JSON-RPC v2 over
   strict stdio for one task-bound thread and turn.

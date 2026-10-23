@@ -26,6 +26,28 @@ afterEach(() => {
 });
 
 describe('AgentHealthService provider version evidence', () => {
+  it('requires the gateway environment key without treating OpenAI login as gateway authentication', async () => {
+    const original = process.env.ORCAROUTER_API_KEY;
+    const runCommand = vi
+      .fn<AgentHealthCommandRunner>()
+      .mockResolvedValue({ stdout: 'codex-cli 0.155.1\n', stderr: '' });
+    const gateway: AgentConfig = { ...baseAgent, type: 'orcarouter-codex', provider: 'codex-cli' };
+    try {
+      delete process.env.ORCAROUTER_API_KEY;
+      expect(await new AgentHealthService(runCommand).checkAgent(gateway)).toMatchObject({
+        authenticated: false,
+        healthy: false,
+      });
+      process.env.ORCAROUTER_API_KEY = 'synthetic-gateway-value';
+      const status = await new AgentHealthService(runCommand).checkAgent(gateway);
+      expect(status.authenticated).toBe(true);
+      expect(JSON.stringify(status)).not.toContain('synthetic-gateway-value');
+      expect(runCommand.mock.calls.some(([, args]) => args.includes('login'))).toBe(false);
+    } finally {
+      restoreEnv('ORCAROUTER_API_KEY', original);
+    }
+  });
+
   it('captures version evidence with a bounded no-shell probe', async () => {
     const runCommand = vi.fn<AgentHealthCommandRunner>().mockResolvedValue({
       stdout: 'fixture-provider 1.2.3\n',
