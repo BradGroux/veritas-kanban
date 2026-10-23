@@ -6,10 +6,10 @@
 > Harness-specific supplements (for example `CLAUDE.md`) extend, never duplicate or contradict,
 > these rules. See `docs/AGENTS-TEMPLATE.md` for the managed-run and external-agent protocols.
 >
-> **Version:** 6.1.4
+> **Version:** 6.3.0
 > **Freshness policy:** update within two working days of any toolchain or architecture change.
 > Stale fields (package manager, Node version, provider list, test commands) are caught by
-> `pnpm check:pnpm-settings` and the smoke-test CI job.
+> `pnpm check:pnpm-settings` and local release checks.
 
 ---
 
@@ -92,6 +92,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 
 ## GitHub workflow
 
+- GitHub CI is prohibited by current maintainer policy. Run verification locally. Existing workflow files and CI tier descriptions below are retained metadata; they do not authorize enabling, dispatching, rerunning, or requiring hosted jobs. Only a later explicit maintainer instruction changes this policy.
+
 - Use the authenticated GitHub CLI (`gh`) as the default interface for GitHub issues, pull
   requests, releases, workflow runs, and API calls.
 - Use `git` for local repository operations and `gh` for GitHub-hosted state.
@@ -156,6 +158,8 @@ Do not run `npm install`, `yarn`, or `bun install`. If lockfile conflicts arise,
 
 - All routes go through centralized middleware in `server/src/middleware/`.
 - Auth: JWT + API keys. Dev bypass: `VERITAS_AUTH_LOCALHOST_BYPASS=true`.
+- Optional ChatGPT identity sign-in uses existing local membership authority. Recheck current user and membership for federated HTTP/WebSocket access; external sign-in and ordinary reads must never restore removed or demoted membership. Installation-password recovery is an explicit server-owned authority.
+- SQLite migrations 35 and 36 add unique external identity bindings and encrypted, one-time OAuth transactions. Preserve complete workspace backups for upgrade and recovery.
 - Storage: always go through `storage/interfaces.ts`. Never import `fs` directly in service files.
 - Append-only durable records must complete the entire serialized write before
   sync. Never assume one `FileHandle.write()` call wrote every byte or ignore

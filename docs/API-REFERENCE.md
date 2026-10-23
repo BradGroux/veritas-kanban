@@ -1019,7 +1019,7 @@ Reports when an agent violates delegation rules.
 ## Auth & Diagnostics
 
 ```
-GET  /api/auth/status           # Check auth status & current role
+GET  /api/auth/status           # Authentication/setup state and optional identity availability
 POST /api/auth/setup            # Initial admin setup
 POST /api/auth/login            # Login (returns JWT)
 POST /api/auth/logout           # Logout / invalidate token
@@ -1027,8 +1027,14 @@ POST /api/auth/recover          # Account recovery
 POST /api/auth/change-password  # Change password
 POST /api/auth/rotate-secret    # Rotate JWT secret
 GET  /api/auth/rotation-status  # JWT rotation status
+GET  /api/auth/openai/status    # Optional ChatGPT identity availability
+GET  /api/auth/openai/start     # Begin configured identity sign-in
+GET  /api/auth/openai/link/start # Begin linking from an authenticated user session
+GET  /api/auth/openai/callback  # Complete the browser-bound one-time transaction
 POST /api/auth/device-pairing/exchange # Redeem a one-time pairing payload
 ```
+
+ChatGPT identity endpoints are disabled unless the operator completes approved client/callback configuration. They link an existing issuer/client/subject identity and use current workspace membership; email matching never claims accounts. Status includes openaiSignInEnabled. See [identity setup and transaction storage](guides/SIGN_IN_WITH_CHATGPT.md). Provider tokens are not retained.
 
 ### Login Example
 

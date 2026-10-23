@@ -1,16 +1,33 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet tracks the unpublished 6.2.0 candidate and the completed 6.1.7 macOS UI and interaction release, and
-retains historical evidence for the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
-stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
-merged implementation, deterministic conformance, local runtime proof, signed
-publication, and Homebrew availability.
+This packet records 6.3.0 preparation and retains historical release evidence. The latest published stable release is 6.2.1, verified from GitHub on 2026-10-23. Version 6.3.0 is not yet published; 6.0.0 remains quarantined. Historical candidate checkpoints below retain their original state and do not describe current publication.
 
-Veritas Kanban 6.1.7 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
+Documentation freshness: 2026-10-23. Implementation, focused proof, assembled integration, signed distribution, media and publication remain distinct boundaries.
 
-Documentation freshness: 2026-09-07. Local native and media acceptance passed. Audit fixes are merged; release and distribution acceptance remain separate.
+## 6.3.0 Issue And Pull Request Traceability
 
-## 6.2.0 candidate
+[Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) holds the full necessity/overlap audit, priority plan and individual merge evidence. All 30 original remediation children of #1632 are closed. Optional identity sign-in #1639 and OrcaRouter #1708 are merged; the latter explicitly ships with live gateway compatibility unverified. Source for Electron #1597 and local capture/promotion #1711/#1712 is included in the assembled candidate but remains pending its accepted runtime boundary.
+
+## 6.3.0 Verification Matrix
+
+| Boundary               | Current evidence                                                                                                                                                                                                               | Remaining gate                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Focused implementation | Issue-specific local checks, reviews and destination readback in #1657                                                                                                                                                         | Preserve those results; rerun only affected checks                                                                                  |
+| Compact Workbench      | Both unchanged dark/light Chromium cases passed through mocked draft-send assertions; 13 shell and 14 overlay checks                                                                                                           | Final packaged release matrix                                                                                                       |
+| Mobile browser         | Six width/text filter cases and the exact mobile setup smoke passed                                                                                                                                                            | Final maintained media capture                                                                                                      |
+| Native task links      | Clean build e760432a2954f27818262638d3778af147116140; five packaged cases and four inspected screenshots; package digest 006d66f956746757bc491e091cf4e41dd11a8c6ef4a1924869672c6e6ef9aa2b; exact protocol restoration verified | Final composed 6.3.0 candidate; this proof used unsigned 6.2.1/Electron 44.2                                                        |
+| Electron refresh       | Exact 44.5.0 binary reports bundled Node 24.21.0; refreshed complete dependency audit reports zero advisories                                                                                                                  | Native bridge/navigation/update acceptance on the composed candidate                                                                |
+| Optional integrations  | Identity source/security and local auth/UI checks; five real-executable synthetic gateway checks                                                                                                                               | Live identity needs approved client/callback; live gateway compatibility remains explicitly unverified                              |
+| Assembled integration  | Release branch combines the reviewed changes and aligned source                                                                                                                                                                | Final local unit, type, lint, build, coverage, E2E, Docker and release contracts                                                    |
+| Signed native/media    | Local capture source and retention guards reviewed                                                                                                                                                                             | Sufficient display, secure notarization reference, signed exact package, native matrix/fault probes, large-board and original media |
+
+The current Mac has 1710 by 1107 logical display points; full capture requires at least 1920 by 1080. A temporary existing-mode change and exact restoration require explicit permission. A valid Developer ID identity is installed; no private key was exported. The secure notarization reference is pending. No display change, signed capture, notarization upload or release was performed by this checkpoint.
+
+## 6.3.0 Publication Evidence
+
+No 6.3.0 tag, public asset upload, release publication, updater or Homebrew readback is accepted yet. Publication must use the reviewed source at docs/releases/v6.3.0.md, bind the retained signed/native/media candidate to the clean publication checkout, verify downloaded destination bytes and inspect both the rendered releases index and tag page. Existing installed-app replacement is separate.
+
+## Historical 6.2.0 candidate
 
 The candidate is prepared from the audit backlog delivered through individually reviewed public pull requests. No 6.2.0 release, installation replacement, or distribution update has occurred. The evidence below records the integrated delivery candidate. All 24 implemented audit fixes and the acceptance follow-ups are merged; #1544 is explicitly dispositioned as not reproducible. Tracker #1545 records the delivery readback.
 

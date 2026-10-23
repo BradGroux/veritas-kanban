@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.3.0] - 2026-10-23
+
+Veritas Kanban 6.3.0 completes the repository audit backlog and adds optional identity sign-in and gateway execution. Full behavior, activation and compatibility details are in [the release notes](docs/releases/v6.3.0.md).
+
+### Added
+
+- Optional ChatGPT identity linking and sign-in with verified ID tokens, encrypted ten-minute transactions and current membership authority. Existing users and roles are required; activation needs an approved client and registered callback (#1639).
+- Opt-in OrcaRouter profile for the pinned OpenAI CLI, with isolated server-side credential reference and managed launch controls. Five real-executable synthetic-provider checks passed; live gateway compatibility remains unverified (#1546, #1708).
+- Local signed macOS candidate capture and promotion preserving native/media evidence, source binding, hashes and readback without GitHub CI (#1709–#1712).
+
+### Fixed
+
+- Bound task autosaves to their originating task, finished pending writes on dismissal, retained session-scoped failed drafts, made child mutations revision-atomic, and preserved task navigation history (#1606, #1612, #1613, #1628).
+- Enforced approved automation start and overlap policies and accounted for failed workflow usage without discarding live or unreconciled claim history (#1608, #1609, #1621).
+- Completed durable journal writes, preserved shared resources after load failure, and corrected PDF byte-input extraction (#1605, #1607, #1704).
+- Made desktop legacy migration recoverable and one-time, bounded managed shutdown, delivered exact native task links after readiness/login, and restored owned focus after compact collapse (#1602, #1614, #1619, #1629).
+- Rejected replaced WebSocket callbacks, restored disconnected board refresh, and preserved preview cadence and filtered Squad caches (#1624–#1627).
+- Corrected queued launch output, Critical MCP priority, GitHub JSON output, remaining client deadlines, harness version enforcement, shared development watching, checkout-owned cleanup, disposable browser fixtures, demo seeding and mobile smoke journeys (#1610, #1611, #1615–#1618, #1622, #1623, #1630, #1631, #1706).
+
+### Security and maintenance
+
+- Refreshed production, development and Electron 44.x dependencies and strengthened client, request, permission and persistence boundaries. Advisory-specific details remain private (#1597, #1601, #1620, #1678, #1680).
+- Removed obsolete review workflow guidance while retaining local verification and explicit integration/release milestones (#1638).
+
+### Compatibility
+
+- All seven maintained package versions move together to 6.3.0; REST API v1 remains. SQLite migrations 35 and 36 add external-identity uniqueness and encrypted sign-in transactions. Preserve a complete stopped-writer backup before upgrading.
+- Both optional integrations remain disabled until configured. ChatGPT live approval/login and real OrcaRouter gateway acceptance are not claimed. Failed task drafts are recoverable within the current app session; interrupted legacy migration requires explicit recovery with both copies retained.
+
 ## [6.2.1] - 2026-09-10
 
 ### Fixed

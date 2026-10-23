@@ -1,16 +1,8 @@
 # Veritas Kanban v6 Visual Tour
 
-This tour presents release-safe 6.2.0 views of the board, progressive task
-workspace, grouped Settings, provider support, communication surfaces,
-Maintenance, Command+K, Workbench, and mobile layout. The historical
-[v5 Visual Tour](V5-VISUAL-TOUR.md) retains its own versioned media.
+The maintained views below are retained 6.2.0 captures. Their labels and provenance stay unchanged until the final 6.3.0 signed candidate produces fresh original media; they are not 6.3.0 visual acceptance. The latest published stable release is 6.2.1. See the [6.3.0 release source](releases/v6.3.0.md), [evidence packet](V6-RC-EVIDENCE-PACKET.md), and [media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md).
 
-Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
-Desktop media was captured from the packaged Mac application; mobile media was
-captured in a browser at 390×844. All media uses isolated public-safe data.
-See the [complete before/after comparison](releases/v6.2.0-comparison.md) and
-[capture provenance](assets/v6.2.0/README.md). The signed 6.1.7 release remains
-the current installation target until 6.2.0 is separately approved and released.
+Documentation freshness: 2026-10-23 for release preparation; the maintained media refresh is pending. Historical [6.2.0 comparison](releases/v6.2.0-comparison.md) and [capture provenance](assets/v6.2.0/README.md) remain available.
 
 ## Board And Task Workspace
 
