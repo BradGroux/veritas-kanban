@@ -14,6 +14,7 @@ export {
   formatApiError,
   type ApiRequestOptions,
   buildApiHeaders,
+  buildApiRequestOptions,
   createApiClient,
   createGuardedApiClient,
   getApiPermissionRequirement,
