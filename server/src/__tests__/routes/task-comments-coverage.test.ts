@@ -8,7 +8,7 @@ import express from 'express';
 const { mockTaskService, mockActivityService } = vi.hoisted(() => ({
   mockTaskService: {
     getTask: vi.fn(),
-    updateTask: vi.fn(),
+    mutateTaskChildren: vi.fn(),
   },
   mockActivityService: {
     logActivity: vi.fn().mockResolvedValue(undefined),
@@ -34,6 +34,10 @@ describe('Task Comment Routes (actual module)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTaskService.mutateTaskChildren.mockImplementation(async (_id, mutate) => {
+      const task = await mockTaskService.getTask();
+      return task ? { ...task, ...mutate(task) } : null;
+    });
     app = express();
     app.use(express.json());
     app.use('/api/tasks', taskCommentRoutes);
@@ -44,10 +48,6 @@ describe('Task Comment Routes (actual module)', () => {
     it('should add a comment', async () => {
       const task = { id: 't1', title: 'Task', comments: [] };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({
-        ...task,
-        comments: [{ id: 'c1', author: 'Test', text: 'Hello' }],
-      });
 
       const res = await request(app)
         .post('/api/tasks/t1/comments')
@@ -83,7 +83,6 @@ describe('Task Comment Routes (actual module)', () => {
         comments: [{ id: 'c1', author: 'Test', text: 'Old', timestamp: '2025-01-01' }],
       };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue(task);
 
       const res = await request(app).patch('/api/tasks/t1/comments/c1').send({ text: 'Updated' });
       expect(res.status).toBe(200);
@@ -119,7 +118,6 @@ describe('Task Comment Routes (actual module)', () => {
         comments: [{ id: 'c1', author: 'Test', text: 'Hello' }],
       };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({ ...task, comments: [] });
 
       const res = await request(app).delete('/api/tasks/t1/comments/c1');
       expect(res.status).toBe(200);
