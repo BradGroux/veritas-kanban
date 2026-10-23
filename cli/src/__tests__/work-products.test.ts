@@ -5,13 +5,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => vi.fn());
-const assertApiPermissionForRequest = vi.hoisted(() => vi.fn());
-vi.mock('../utils/api.js', () => ({
-  API_BASE: 'http://localhost:3001',
-  api,
-  assertApiPermissionForRequest,
-  buildApiRequestOptions: vi.fn((options) => ({ ...options, redirect: 'error' })),
-}));
+vi.mock('../utils/api.js', () => ({ api }));
 
 import { registerWorkProductCommands } from '../commands/work-products.js';
 
@@ -111,19 +105,13 @@ describe('vk work-products commands', () => {
     cleanupPaths.push(root);
     const outputPath = path.join(root, 'artifact.bin');
     const sha256 = createHash('sha256').update('artifact bytes').digest('hex');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(Buffer.from('artifact bytes'), {
-            status: 200,
-            headers: {
-              'content-digest': 'sha-256=:q8Ej:',
-              'x-artifact-sha256': sha256,
-            },
-          })
-      )
-    );
+    api.mockResolvedValue({
+      body: new TextEncoder().encode('artifact bytes').buffer,
+      headers: new Headers({
+        'content-digest': 'sha-256=:q8Ej:',
+        'x-artifact-sha256': sha256,
+      }),
+    });
     const output = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     await program().parseAsync([
@@ -140,13 +128,10 @@ describe('vk work-products commands', () => {
     ]);
 
     expect(await fs.readFile(outputPath, 'utf8')).toBe('artifact bytes');
-    expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3001/api/work-products/wp_1/artifact/download?version=2',
-      expect.any(Object)
-    );
-    expect(assertApiPermissionForRequest).toHaveBeenCalledWith(
-      '/api/work-products/wp_1/artifact/download?version=2'
-    );
+    expect(api).toHaveBeenCalledWith('/api/work-products/wp_1/artifact/download?version=2', {
+      responseType: 'binary',
+      headers: { accept: 'application/octet-stream' },
+    });
     expect(JSON.parse(String(output.mock.calls[0]?.[0]))).toMatchObject({
       productId: 'wp_1',
       version: 2,
@@ -162,16 +147,10 @@ describe('vk work-products commands', () => {
     const root = await fs.mkdtemp(path.join(process.cwd(), '.vk-work-product-download-'));
     cleanupPaths.push(root);
     const outputPath = path.join(root, 'artifact.bin');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(Buffer.from('tampered bytes'), {
-            status: 200,
-            headers: { 'x-artifact-sha256': '0'.repeat(64) },
-          })
-      )
-    );
+    api.mockResolvedValue({
+      body: new TextEncoder().encode('tampered bytes').buffer,
+      headers: new Headers({ 'x-artifact-sha256': '0'.repeat(64) }),
+    });
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await program().parseAsync([
