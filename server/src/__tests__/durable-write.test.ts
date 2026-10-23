@@ -50,6 +50,15 @@ describe('writeAll', () => {
     expect(write).toHaveBeenCalledOnce();
   });
 
+  it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 100])(
+    'rejects an invalid native byte count %s without acknowledging the write',
+    async (bytesWritten) => {
+      const write = vi.fn().mockResolvedValue({ bytesWritten });
+      await expect(writeAll({ write }, 'durable')).rejects.toThrow(/valid byte count/i);
+      expect(write).toHaveBeenCalledOnce();
+    }
+  );
+
   it('propagates a later write failure without reaching durability acknowledgement', async () => {
     const writeFailure = new Error('simulated storage failure');
     const write = vi

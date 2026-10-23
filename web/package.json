@@ -26,7 +26,7 @@
     "@veritas-kanban/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.4.14",
+    "dompurify": "^3.4.17",
     "lucide-react": "^1.41.0",
     "nanoid": "^6.0.1",
     "react": "^19.2.8",
@@ -46,7 +46,6 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
-    "@types/dompurify": "^3.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
@@ -58,8 +57,8 @@
     "postcss-simple-vars": "^7.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "vite": "^8.2.4",
+    "vitest": "^4.1.12"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",

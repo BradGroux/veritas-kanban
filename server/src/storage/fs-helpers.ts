@@ -96,7 +96,14 @@ export const statfs = statfsAsync;
 export const unlink = unlinkAsync;
 export const writeFile = writeFileAsync;
 
-type WriteHandle = Pick<Awaited<ReturnType<typeof openAsync>>, 'write'>;
+type WriteHandle = {
+  write(
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number | null
+  ): Promise<{ bytesWritten: number }>;
+};
 
 /**
  * Write an entire byte sequence before returning.
@@ -105,6 +112,8 @@ type WriteHandle = Pick<Awaited<ReturnType<typeof openAsync>>, 'write'>;
  * requested buffer. Convert strings once so offsets always count UTF-8 bytes,
  * then advance by the actual number of bytes written. Callers that provide a
  * durability acknowledgement must sync only after this helper resolves.
+ * A failure leaves any partial bytes intact; this helper never truncates or
+ * repairs a journal, whose existing readers continue to fail closed.
  */
 export async function writeAll(handle: WriteHandle, content: string | Uint8Array): Promise<void> {
   const bytes = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
@@ -112,7 +121,7 @@ export async function writeAll(handle: WriteHandle, content: string | Uint8Array
   while (offset < bytes.byteLength) {
     const remaining = bytes.byteLength - offset;
     const { bytesWritten } = await handle.write(bytes, offset, remaining, null);
-    if (bytesWritten < 1 || bytesWritten > remaining) {
+    if (!Number.isInteger(bytesWritten) || bytesWritten < 1 || bytesWritten > remaining) {
       throw new Error('Durable write made no forward progress with a valid byte count.');
     }
     offset += bytesWritten;
