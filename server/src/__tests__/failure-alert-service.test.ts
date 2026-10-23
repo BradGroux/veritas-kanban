@@ -2,7 +2,7 @@
  * FailureAlertService Tests
  * Tests failure detection, deduplication, formatting, and alert processing.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -21,10 +21,10 @@ describe('FailureAlertService', () => {
     const suffix = Math.random().toString(36).substring(7);
     testDir = path.join(os.tmpdir(), `veritas-test-failure-${suffix}`);
     await fs.mkdir(testDir, { recursive: true });
-    
+
     const configDir = path.join(testDir, '.veritas-kanban');
     await fs.mkdir(configDir, { recursive: true });
-    
+
     // Write a minimal config with notifications enabled
     await fs.writeFile(
       path.join(configDir, 'config.json'),
@@ -65,17 +65,32 @@ describe('FailureAlertService', () => {
 
   describe('isFailureEvent()', () => {
     it('should detect run.error events', () => {
-      const event = { type: 'run.error', taskId: 't1', error: 'fail', agent: 'amp' } as TelemetryEventIngestion;
+      const event = {
+        type: 'run.error',
+        taskId: 't1',
+        error: 'fail',
+        agent: 'amp',
+      } as TelemetryEventIngestion;
       expect(service.isFailureEvent(event)).toBe(true);
     });
 
     it('should detect run.completed with success:false', () => {
-      const event = { type: 'run.completed', taskId: 't1', success: false, agent: 'amp' } as TelemetryEventIngestion;
+      const event = {
+        type: 'run.completed',
+        taskId: 't1',
+        success: false,
+        agent: 'amp',
+      } as TelemetryEventIngestion;
       expect(service.isFailureEvent(event)).toBe(true);
     });
 
     it('should not flag successful completions', () => {
-      const event = { type: 'run.completed', taskId: 't1', success: true, agent: 'amp' } as TelemetryEventIngestion;
+      const event = {
+        type: 'run.completed',
+        taskId: 't1',
+        success: true,
+        agent: 'amp',
+      } as TelemetryEventIngestion;
       expect(service.isFailureEvent(event)).toBe(false);
     });
 
@@ -215,7 +230,7 @@ describe('FailureAlertService', () => {
 
       await service.processEvent(event);
       service.clearDedupCache();
-      
+
       // Should be able to alert again after clearing
       expect(service.isRecentlyAlerted('task_clear')).toBe(false);
     });

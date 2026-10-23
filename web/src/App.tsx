@@ -26,7 +26,13 @@ import { usePendingProductMode } from './hooks/usePendingProductMode';
 import { DesktopShellProvider, useDesktopShell } from './components/layout/DesktopShellContext';
 import { DesktopLeftSidebar } from './components/layout/DesktopLeftSidebar';
 import { DesktopBottomPanel } from './components/layout/DesktopBottomPanel';
-import { RunSessionShareView } from './components/task/RunSessionSharesSection';
+import { RunSessionShareLoading } from './components/task/RunSessionShareLoading';
+
+const RunSessionShareView = lazy(() =>
+  import('./components/task/RunSessionSharesSection').then((mod) => ({
+    default: mod.RunSessionShareView,
+  }))
+);
 
 const NativeSettingsWindow = lazy(() =>
   import('./components/settings/NativeSettingsWindow').then((mod) => ({
@@ -99,7 +105,13 @@ function MainContent() {
   const { view, goBack, navigateToTask, navigateToWorkflow } = useView();
   const runSessionShareId = runSessionShareIdFromLocation();
 
-  if (runSessionShareId) return <RunSessionShareView shareId={runSessionShareId} />;
+  if (runSessionShareId) {
+    return (
+      <Suspense fallback={<RunSessionShareLoading />}>
+        <RunSessionShareView shareId={runSessionShareId} />
+      </Suspense>
+    );
+  }
 
   if (new URLSearchParams(window.location.search).get('ui-gallery') === '1') {
     return (

@@ -6,9 +6,9 @@ docs/API-WORKFLOWS.md:generic-api-key:1460
 
 # Operator documentation uses placeholders in curl authentication examples.
 docs/DEPLOYMENT.md:curl-auth-header:926
-docs/TROUBLESHOOTING.md:curl-auth-header:230
-docs/TROUBLESHOOTING.md:curl-auth-header:258
+docs/TROUBLESHOOTING.md:curl-auth-header:233
 docs/TROUBLESHOOTING.md:curl-auth-header:261
+docs/TROUBLESHOOTING.md:curl-auth-header:264
 docs/features/prd-driven-development.md:curl-auth-header:95
 docs/features/prd-driven-development.md:curl-auth-header:775
 docs/guides/SELF_HOST.md:curl-auth-header:742
