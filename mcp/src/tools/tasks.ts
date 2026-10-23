@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TASK_PRIORITIES } from '@veritas-kanban/shared';
 import { api } from '../utils/api.js';
 import { findTask } from '../utils/find.js';
 import { Task } from '../utils/types.js';
@@ -15,7 +16,7 @@ const CreateTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   type: z.enum(['code', 'research', 'content', 'automation']).default('code'),
-  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  priority: z.enum(TASK_PRIORITIES).default('medium'),
   project: z.string().optional(),
   sprint: z.string().optional(),
   commitPolicy: z.enum(['forbidden', 'allowed', 'required']).optional(),
@@ -27,7 +28,7 @@ const UpdateTaskSchema = z.object({
   description: z.string().optional(),
   status: z.string().min(1).max(50).optional(),
   type: z.enum(['code', 'research', 'content', 'automation']).optional(),
-  priority: z.enum(['low', 'medium', 'high']).optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
   project: z.string().optional(),
   sprint: z.string().optional(),
   commitPolicy: z.enum(['forbidden', 'allowed', 'required']).optional(),
@@ -111,7 +112,7 @@ export const taskTools = [
         },
         priority: {
           type: 'string',
-          enum: ['low', 'medium', 'high'],
+          enum: [...TASK_PRIORITIES],
           description: 'Task priority (default: medium)',
         },
         project: {
@@ -160,7 +161,7 @@ export const taskTools = [
         },
         priority: {
           type: 'string',
-          enum: ['low', 'medium', 'high'],
+          enum: [...TASK_PRIORITIES],
           description: 'New priority',
         },
         project: {
