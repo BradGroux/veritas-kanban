@@ -141,7 +141,8 @@ export class AutomationActivationService {
         required(draft.schedule.expression.value, 'schedule.expression'),
         required(draft.schedule.timezone.value, 'schedule.timezone'),
         this.now(),
-        draft.schedule.expiresAt.value
+        draft.schedule.expiresAt.value,
+        draft.schedule.startAt.value
       ),
     };
     const standingScope = required(draft.standingScope.value, 'standingScope');
@@ -497,13 +498,20 @@ export class AutomationActivationService {
       }
       const dueWindow = trigger === 'due-run' ? binding.nextRunAt : minuteWindow(now);
       if (!dueWindow) throw new ValidationError('Automation has no due run window.');
-      const requestId = `automation:${version.id}:${trigger}:${dueWindow}`;
+      const beforeStart = Boolean(
+        version.schedule.startAt && Date.parse(version.schedule.startAt) > now.getTime()
+      );
+      // An early rejection must not consume a later eligible request in the same minute.
+      const requestId = `automation:${version.id}:${trigger}:${dueWindow}${beforeStart ? ':before-start' : ''}`;
       const existing = state.automationClaims.find((claim) => claim.requestId === requestId);
       if (existing) {
         result = { claim: existing, version, binding, replayed: true };
         return state;
       }
-      const blocker = bindingBlocker(binding, version, now) ?? driftBlocker;
+      const policyBlocker = bindingBlocker(binding, version, now) ?? driftBlocker;
+      const earlyOnly = !policyBlocker && beforeStart;
+      const blocker =
+        policyBlocker ?? (beforeStart ? 'Automation start time has not arrived.' : undefined);
       const claimId = `automation_claim_${hex(digest(requestId)).slice(0, 24)}`;
       const timestamp = now.toISOString();
       const claim: AutomationRunClaim = {
@@ -522,8 +530,23 @@ export class AutomationActivationService {
       if (blocker) {
         binding = {
           ...binding,
-          status: Date.parse(version.schedule.expiresAt) <= now.getTime() ? 'expired' : 'blocked',
-          statusReason: blocker,
+          ...(earlyOnly
+            ? {
+                nextRunAt: nextAutomationRunAt(
+                  version.schedule.expression,
+                  version.schedule.timezone,
+                  now,
+                  version.schedule.expiresAt,
+                  version.schedule.startAt
+                ),
+              }
+            : {
+                status:
+                  Date.parse(version.schedule.expiresAt) <= now.getTime()
+                    ? ('expired' as const)
+                    : ('blocked' as const),
+                statusReason: blocker,
+              }),
           revision: binding.revision + 1,
           updatedAt: timestamp,
         };
@@ -540,7 +563,8 @@ export class AutomationActivationService {
             version.schedule.expression,
             version.schedule.timezone,
             now,
-            version.schedule.expiresAt
+            version.schedule.expiresAt,
+            version.schedule.startAt
           ),
           revision: binding.revision + 1,
           updatedAt: timestamp,
