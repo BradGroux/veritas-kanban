@@ -64,6 +64,8 @@ cp server/.env.example server/.env   # Edit to change VERITAS_ADMIN_KEY
 pnpm dev
 ```
 
+`pnpm dev` builds the shared workspace before starting the API and web development servers, then watches and rebuilds shared code alongside them. A fresh checkout does not need a separate build step, and shared changes do not need a manual rebuild.
+
 Open [http://localhost:3000](http://localhost:3000) for source runs, or install
 the signed/notarized Mac app with
 `brew tap BradGroux/tap && brew install --cask veritas-kanban`. The board

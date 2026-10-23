@@ -37,6 +37,8 @@ cp server/.env.example server/.env
 pnpm dev
 ```
 
+`pnpm dev` builds the shared workspace before starting the API and web development servers, then watches and rebuilds shared code alongside them. A fresh checkout does not need a separate build step, and shared changes do not need a manual rebuild.
+
 Open [http://localhost:3000](http://localhost:3000). The API runs on [http://localhost:3001](http://localhost:3001).
 
 For a low-friction local start, these are the important server values:
