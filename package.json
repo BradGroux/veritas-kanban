@@ -82,7 +82,7 @@
     "@types/node": "^26.4.1",
     "@typescript-eslint/eslint-plugin": "^8.69.0",
     "@typescript-eslint/parser": "^8.69.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "concurrently": "^10.0.6",
     "eslint": "10.10.0",
     "eslint-plugin-react": "^7.37.5",
@@ -91,7 +91,7 @@
     "lint-staged": "^17.4.1",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
