@@ -176,13 +176,16 @@ export function useBoardTasks() {
     queryKey: ['tasks', 'board'],
     retry: false,
     queryFn: ({ signal }) => api.tasks.listBoard(signal),
+    refetchInterval: isConnected ? false : POLL_INTERVAL_WS_DISCONNECTED,
   });
 }
 
 export function useBoardSearch(search: string) {
+  const { isConnected } = useWebSocketStatus();
   return useQuery({
     queryKey: ['tasks', 'search', search],
     queryFn: ({ signal }) => api.tasks.searchIds(search, signal),
+    refetchInterval: isConnected ? false : POLL_INTERVAL_WS_DISCONNECTED,
     enabled: Boolean(search),
   });
 }
