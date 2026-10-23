@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  buildApiRequestOptions,
   createApiClient,
   createGuardedApiClient,
   formatApiError,
@@ -150,5 +151,40 @@ describe('shared API deadlines and errors', () => {
     await expect(api('/error', { signal: controller.signal })).rejects.toBeInstanceOf(ApiError);
     expect(vi.getTimerCount()).toBe(0);
     expect(remove).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('shared API request policy', () => {
+  it.each([
+    { 'X-API-Key': 'fixture-key' },
+    new Headers({ Authorization: 'Bearer fixture-key' }),
+    [['AUTHORIZATION', 'Bearer fixture-key']] as [string, string][],
+  ])('keeps authenticated requests direct for each supported header representation', (headers) => {
+    const controller = new AbortController();
+    const options = buildApiRequestOptions(
+      { method: 'PATCH', body: '{}', headers, signal: controller.signal, redirect: 'follow' },
+      ''
+    );
+    expect(options.redirect).toBe('error');
+    expect(options.method).toBe('PATCH');
+    expect(options.body).toBe('{}');
+    expect(options.signal).toBe(controller.signal);
+  });
+
+  it('applies the same policy when authentication comes from configuration', () => {
+    const options = buildApiRequestOptions(
+      { headers: { accept: 'application/octet-stream' } },
+      'fixture-key'
+    );
+    expect(options.redirect).toBe('error');
+    expect(options.headers).toMatchObject({
+      'x-api-key': 'fixture-key',
+      accept: 'application/octet-stream',
+    });
+  });
+
+  it('preserves the caller policy for requests without authentication', () => {
+    expect(buildApiRequestOptions({ redirect: 'manual' }, '').redirect).toBe('manual');
+    expect(buildApiRequestOptions({}, '').redirect).toBeUndefined();
   });
 });

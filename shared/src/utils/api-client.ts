@@ -93,6 +93,19 @@ export function buildApiHeaders(headers?: HeadersInit, apiKey = getEnv('VK_API_K
   };
 }
 
+/** Authenticated API requests must use the configured endpoint directly. */
+export function buildApiRequestOptions(
+  options: RequestInit = {},
+  apiKey = getEnv('VK_API_KEY')
+): RequestInit {
+  const headers = buildApiHeaders(options.headers, apiKey);
+  return {
+    ...options,
+    headers,
+    ...('authorization' in headers || 'x-api-key' in headers ? { redirect: 'error' as const } : {}),
+  };
+}
+
 export interface ApiClientOptions {
   timeoutMs?: number;
 }
@@ -156,7 +169,10 @@ export function createApiClient(
     return withDeadline(options, requestTimeout(override ?? defaultTimeout), async (signal) => {
       let res: Response;
       try {
-        res = await fetch(`${baseUrl}${path}`, { ...request, signal, headers });
+        res = await fetch(
+          `${baseUrl}${path}`,
+          buildApiRequestOptions({ ...request, signal, headers }, apiKey)
+        );
       } catch (error) {
         if (signal.aborted) throw error;
         throw new ApiError(
