@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from 'react';
 
+import { resolveFocusTarget } from '@/components/ui/UiOverlay';
+
 export type DesktopBottomPanel = 'board-chat' | 'squad-chat';
 
 interface DesktopShellContextValue {
@@ -317,9 +319,26 @@ export function DesktopShellProvider({ children }: { children: ReactNode }) {
       if (bottomPanel) {
         // A layout collapse is not navigation: a task opened above the dock
         // inherits its history marker. Going Back would dismiss that task.
+        const dockOwnedFocus = Boolean(document.activeElement?.closest('#workbench-right-dock'));
+        const trigger = panelTriggerRef.current;
         setBottomPanel(null);
         removeStoredValue(BOTTOM_PANEL_STORAGE_KEY);
         panelTriggerRef.current = null;
+        if (dockOwnedFocus) {
+          requestAnimationFrame(() => {
+            // A reopened dock or a surviving task surface owns any newer focus.
+            const dock = document.getElementById('workbench-right-dock');
+            if (dock && !dock.hidden) return;
+            const active = document.activeElement;
+            if (
+              active instanceof HTMLElement &&
+              active !== document.body &&
+              !active.closest('#workbench-right-dock')
+            )
+              return;
+            resolveFocusTarget(trigger)?.focus({ preventScroll: true });
+          });
+        }
         const { [BOTTOM_PANEL_HISTORY_STATE_KEY]: _panel, ...rest } = window.history.state ?? {};
         window.history.replaceState(rest, '', window.location.href);
       }
