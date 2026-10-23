@@ -7,11 +7,13 @@ import { renderWithProviders } from './test-utils';
 const mocks = vi.hoisted(() => ({
   changePassword: vi.fn(),
   toast: vi.fn(),
+  openaiSignInEnabled: false,
 }));
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     changePassword: mocks.changePassword,
+    status: { openaiSignInEnabled: mocks.openaiSignInEnabled },
   }),
 }));
 
@@ -24,7 +26,16 @@ vi.mock('@/hooks/useToast', () => ({
 describe('Security settings Mantine migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.openaiSignInEnabled = false;
     mocks.changePassword.mockResolvedValue({ success: true });
+  });
+
+  it('offers explicit ChatGPT linking only when the provider is enabled', () => {
+    mocks.openaiSignInEnabled = true;
+    renderWithProviders(<SecurityTab />);
+
+    const link = screen.getByRole('link', { name: 'Link ChatGPT sign-in' });
+    expect(link.getAttribute('href')).toBe('/api/auth/openai/link/start');
   });
 
   afterEach(() => {

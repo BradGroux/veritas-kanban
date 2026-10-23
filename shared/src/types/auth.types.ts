@@ -17,5 +17,6 @@ export interface AuthStatus {
   authenticated: boolean;
   sessionExpiry: string | null;
   authEnabled: boolean;
+  openaiSignInEnabled?: boolean;
   setupContext?: DesktopSetupContext;
 }
