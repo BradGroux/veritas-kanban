@@ -192,83 +192,92 @@ describe('SchedulerService', () => {
     );
   });
 
-  it('claims an immutable automation version before shared workflow admission', async () => {
-    const version = automationVersionFixture();
-    const binding = automationBindingFixture(version);
-    const claim = automationClaimFixture(version, binding);
-    const automationService = {
-      list: vi.fn(async () => ({
-        generatedAt: '2026-06-05T09:00:00.000Z',
-        versions: [version],
-        bindings: [binding],
-        recentClaims: [],
-      })),
-      claimRun: vi.fn(async () => ({ claim, version, binding, replayed: false })),
-      markRunStarted: vi.fn(async (_claimId, workflowRunId) => ({
-        ...claim,
+  it.each(['accepted', 'queued', 'skipped'] as const)(
+    'handles an automation %s claim before shared workflow admission',
+    async (status) => {
+      const version = automationVersionFixture();
+      const binding = automationBindingFixture(version);
+      const claim = { ...automationClaimFixture(version, binding), status };
+      const automationService = {
+        list: vi.fn(async () => ({
+          generatedAt: '2026-06-05T09:00:00.000Z',
+          versions: [version],
+          bindings: [binding],
+          recentClaims: [],
+        })),
+        claimRun: vi.fn(async () => ({ claim, version, binding, replayed: false })),
+        markRunStarted: vi.fn(async (_claimId, workflowRunId) => ({
+          ...claim,
+          status: 'started',
+          workflowRunId,
+        })),
+        listClaimsPendingReconciliation: vi.fn(async () => []),
+        markRunFailed: vi.fn(),
+        markRunCompleted: vi.fn(),
+        updateBinding: vi.fn(),
+      };
+      const workflowRunService = {
+        getRun: vi.fn(async () => null),
+        startRun: vi.fn(async () => ({
+          id: 'run_1780664400000_started',
+          workflowId: version.workflowId,
+          workflowVersion: version.workflowVersion,
+          status: 'running',
+          context: {},
+          startedAt: '2026-06-05T09:00:00.000Z',
+          steps: [],
+        })),
+      };
+      const service = new SchedulerService({
+        stateFile: path.join(testRoot, 'scheduler-state.json'),
+        deliverablesService,
+        workflowService,
+        workflowRunService: workflowRunService as never,
+        queueMonitorService: emptyQueueMonitorService() as never,
+        telemetryService: telemetry as never,
+        automationService: automationService as never,
+      });
+
+      const result = await service.runItem(
+        `automation:${binding.id}`,
+        'manual-run',
+        new Date('2026-06-05T09:00:00.000Z')
+      );
+
+      expect(automationService.claimRun).toHaveBeenCalledWith(
+        binding.id,
+        'manual-run',
+        new Date('2026-06-05T09:00:00.000Z')
+      );
+      if (status !== 'accepted') {
+        expect(workflowRunService.startRun).not.toHaveBeenCalled();
+        expect(automationService.markRunStarted).not.toHaveBeenCalled();
+        expect(result.event).toMatchObject({ type: 'overlap', status: 'skipped' });
+        return;
+      }
+      expect(workflowRunService.startRun).toHaveBeenCalledWith(
+        version.workflowId,
+        version.sourceTaskId,
+        expect.objectContaining({ scheduler: expect.objectContaining({ trigger: 'manual-run' }) }),
+        expect.objectContaining({ scope: 'run' }),
+        expect.objectContaining({
+          automationVersionId: version.id,
+          bindingId: binding.id,
+          claimId: claim.id,
+          requestId: claim.requestId,
+          standingScope: version.standingScope,
+        })
+      );
+      expect(automationService.markRunStarted).toHaveBeenCalledWith(
+        claim.id,
+        'run_1780664400000_started'
+      );
+      expect(result.event).toMatchObject({
         status: 'started',
-        workflowRunId,
-      })),
-      listClaimsPendingReconciliation: vi.fn(async () => []),
-      markRunFailed: vi.fn(),
-      markRunCompleted: vi.fn(),
-      updateBinding: vi.fn(),
-    };
-    const workflowRunService = {
-      getRun: vi.fn(async () => null),
-      startRun: vi.fn(async () => ({
-        id: 'run_1780664400000_started',
-        workflowId: version.workflowId,
-        workflowVersion: version.workflowVersion,
-        status: 'running',
-        context: {},
-        startedAt: '2026-06-05T09:00:00.000Z',
-        steps: [],
-      })),
-    };
-    const service = new SchedulerService({
-      stateFile: path.join(testRoot, 'scheduler-state.json'),
-      deliverablesService,
-      workflowService,
-      workflowRunService: workflowRunService as never,
-      queueMonitorService: emptyQueueMonitorService() as never,
-      telemetryService: telemetry as never,
-      automationService: automationService as never,
-    });
-
-    const result = await service.runItem(
-      `automation:${binding.id}`,
-      'manual-run',
-      new Date('2026-06-05T09:00:00.000Z')
-    );
-
-    expect(automationService.claimRun).toHaveBeenCalledWith(
-      binding.id,
-      'manual-run',
-      new Date('2026-06-05T09:00:00.000Z')
-    );
-    expect(workflowRunService.startRun).toHaveBeenCalledWith(
-      version.workflowId,
-      version.sourceTaskId,
-      expect.objectContaining({ scheduler: expect.objectContaining({ trigger: 'manual-run' }) }),
-      expect.objectContaining({ scope: 'run' }),
-      expect.objectContaining({
-        automationVersionId: version.id,
-        bindingId: binding.id,
-        claimId: claim.id,
-        requestId: claim.requestId,
-        standingScope: version.standingScope,
-      })
-    );
-    expect(automationService.markRunStarted).toHaveBeenCalledWith(
-      claim.id,
-      'run_1780664400000_started'
-    );
-    expect(result.event).toMatchObject({
-      status: 'started',
-      sourceRunId: 'run_1780664400000_started',
-    });
-  });
+        sourceRunId: 'run_1780664400000_started',
+      });
+    }
+  );
 
   function schedulerService(): SchedulerService {
     return new SchedulerService({

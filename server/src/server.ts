@@ -774,9 +774,12 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
     return;
   }
 
+  ws.revalidateAuth = authResult.revalidateAuth;
+
   // Attach auth info to WebSocket for later use
   ws.auth = {
     role: authResult.role,
+    workspaceRole: authResult.workspaceRole,
     keyName: authResult.keyName,
     isLocalhost: authResult.isLocalhost,
     userId: authResult.userId,

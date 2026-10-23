@@ -74,7 +74,17 @@ export function canReceiveWebSocketEvent(
   client: WebSocket,
   options: WebSocketDeliveryOptions = {}
 ): boolean {
-  const auth = (client as AuthenticatedWebSocket).auth;
+  const ws = client as AuthenticatedWebSocket;
+  if (ws.revalidateAuth) {
+    const current = ws.revalidateAuth();
+    if (!current) {
+      ws.auth = undefined;
+      closeWebSocketSafely(client, 4001, 'Session authority revoked');
+      return false;
+    }
+    ws.auth = current;
+  }
+  const auth = ws.auth;
   if (!auth) return false;
   if (!hasChannelSubscription(client, options.channel)) return false;
   if (!hasChatSessionSubscription(client, options.chatSessionId)) return false;

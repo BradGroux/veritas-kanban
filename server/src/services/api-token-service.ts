@@ -246,7 +246,7 @@ export class ApiTokenService {
   }
 
   private assertCanManageTokens(workspaceId: string, actor: IdentityActor): WorkspaceMembership {
-    this.identityRepository.ensureLocalOwner();
+    this.identityRepository.ensureLocalOwner({ restoreOwner: actor.installationOwner === true });
     const membership = this.identityRepository.getMembership(workspaceId, actor.userId);
     if (!membership || membership.status !== 'active' || membership.disabledAt) {
       throw new ForbiddenError('No active membership for workspace');
