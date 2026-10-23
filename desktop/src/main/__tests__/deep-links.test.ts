@@ -44,6 +44,28 @@ describe('desktop deep links', () => {
     expect(() => parseDesktopDeepLink('veritas://shell/rm')).toThrow('not supported');
   });
 
+  it('preserves a task identifier equal to its resource name', () => {
+    expect(parseDesktopDeepLink('veritas://task/task').resourceId).toBe('task');
+  });
+
+  it('decodes the task identifier once while preserving timeline query targets', () => {
+    const link = parseDesktopDeepLink(
+      'veritas://task/task%20%252F?tab=timeline&attempt=attempt-1&event=event-1'
+    );
+    expect(link.resourceId).toBe('task %2F');
+    expect(link.command.payload?.deepLink).toMatchObject({
+      resourceId: 'task %2F',
+      params: { tab: 'timeline', attempt: 'attempt-1', event: 'event-1' },
+    });
+  });
+
+  it.each(['veritas://task', 'veritas://task/id/extra', 'veritas://task/%zz'])(
+    'rejects incomplete or unsupported task destinations: %s',
+    (url) => {
+      expect(() => parseDesktopDeepLink(url)).toThrow();
+    }
+  );
+
   it('extracts veritas links from process argv', () => {
     expect(extractDeepLinkFromArgv(['Electron', '.', 'veritas://task/task-1'])).toBe(
       'veritas://task/task-1'

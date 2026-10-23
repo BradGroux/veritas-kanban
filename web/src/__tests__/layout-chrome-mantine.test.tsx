@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ViewProvider } from '@/contexts/ViewContext';
+import { ViewProvider, useView } from '@/contexts/ViewContext';
 import { KeyboardProvider } from '@/hooks/useKeyboard';
 import { Header } from '@/components/layout/Header';
 import { DesktopBottomPanel } from '@/components/layout/DesktopBottomPanel';
@@ -11,6 +11,7 @@ import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import { WebSocketIndicator } from '@/components/shared/WebSocketIndicator';
+import type { DesktopCommandDispatchRequest } from '@veritas-kanban/shared';
 import { renderWithProviders } from './test-utils';
 
 const mocks = vi.hoisted(() => {
@@ -459,5 +460,102 @@ describe('layout chrome Mantine migration', () => {
     expect(within(dock).queryByRole('radiogroup', { name: 'Dock position' })).toBeNull();
     await user.click(within(dock).getByRole('button', { name: 'Close Board Chat panel' }));
     expect(screen.getByRole('button', { name: 'Open Board Chat' })).toBeDefined();
+  });
+});
+
+type NativeReceipt = { accepted: boolean; message?: string };
+function NativeNavigationProbe() {
+  const navigation = useView();
+  return (
+    <output data-testid="native-task-target">
+      {JSON.stringify({ id: navigation.pendingTaskId, target: navigation.pendingTaskTarget })}
+    </output>
+  );
+}
+function nativeHeader(showHeader = true, onOpenCommandCenter?: () => void) {
+  return (
+    <KeyboardProvider>
+      <ViewProvider>
+        {showHeader && <Header onOpenCommandCenter={onOpenCommandCenter} />}
+        <NativeNavigationProbe />
+      </ViewProvider>
+    </KeyboardProvider>
+  );
+}
+
+describe('authenticated Header native task link consumer', () => {
+  let listener:
+    | ((request: DesktopCommandDispatchRequest) => NativeReceipt | Promise<NativeReceipt>)
+    | undefined;
+  const taskId = 'task-native-link';
+  const request = (tab = 'work-products'): DesktopCommandDispatchRequest => ({
+    command: 'open-command-center',
+    source: 'deep-link',
+    payload: {
+      deepLink: {
+        resource: 'task',
+        resourceId: taskId,
+        params: { tab, attempt: 'attempt-1', event: 'event-1' },
+      },
+    },
+  });
+  beforeEach(() => {
+    mocks.identity.hasPermission.mockReturnValue(true);
+    listener = undefined;
+    window.history.replaceState({}, '', '/');
+    Object.defineProperty(window, 'veritasDesktop', {
+      configurable: true,
+      value: {
+        onMenuCommand: (next: typeof listener) => {
+          listener = next;
+          return () => {
+            if (listener === next) listener = undefined;
+          };
+        },
+      },
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
+  });
+  async function dispatch(value: DesktopCommandDispatchRequest) {
+    if (!listener) throw new Error('Expected the authenticated Header subscription');
+    const current = listener;
+    let receipt: NativeReceipt | undefined;
+    await act(async () => {
+      receipt = await current(value);
+    });
+    return receipt;
+  }
+  it('consumes the task, section, attempt and event through shared task navigation', async () => {
+    renderWithProviders(nativeHeader());
+    expect(await dispatch(request('timeline'))).toEqual({ accepted: true });
+    expect(JSON.parse(screen.getByTestId('native-task-target').textContent ?? '{}')).toEqual({
+      id: taskId,
+      target: { tab: 'timeline', timelineAttemptId: 'attempt-1', timelineEventId: 'event-1' },
+    });
+  });
+  it.each(['forbidden', 'unsupported'] as const)(
+    'refuses %s links without task navigation',
+    async (failure) => {
+      if (failure === 'forbidden') mocks.identity.hasPermission.mockReturnValue(false);
+      renderWithProviders(nativeHeader());
+      expect(
+        await dispatch(request(failure === 'unsupported' ? 'unsupported' : 'work-products'))
+      ).toMatchObject({ accepted: false, message: expect.any(String) });
+      expect(
+        JSON.parse(screen.getByTestId('native-task-target').textContent ?? '{}').id
+      ).toBeNull();
+    }
+  );
+  it('preserves the generic Command Center menu action', async () => {
+    const open = vi.fn();
+    renderWithProviders(nativeHeader(true, open));
+    expect(await dispatch({ command: 'open-command-center', source: 'menu' })).toEqual({
+      accepted: true,
+    });
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });

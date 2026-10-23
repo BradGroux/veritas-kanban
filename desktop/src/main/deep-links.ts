@@ -37,7 +37,10 @@ export function parseDesktopDeepLink(rawUrl: string): DesktopDeepLinkResult {
 
   const resource = url.hostname || url.pathname.split('/').filter(Boolean)[0] || 'command-center';
   const segments = url.pathname.split('/').filter(Boolean);
-  const resourceId = segments[0] && segments[0] !== resource ? segments[0] : (segments[1] ?? null);
+  const encodedResourceId = segments[url.hostname ? 0 : 1] ?? null;
+  if (resource === 'task' && segments.length !== (url.hostname ? 1 : 2))
+    throw new Error('Task deep link destination is not supported');
+  const resourceId = encodedResourceId ? decodeURIComponent(encodedResourceId) : null;
   const command = RESOURCE_COMMANDS[resource];
 
   if (!command || !DESKTOP_COMMAND_NAMES.includes(command)) {

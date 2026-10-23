@@ -21,6 +21,7 @@ import { applyTitlebarAction, resolveTitlebarAction } from './titlebar-action.js
 import { SettingsWindowController, SETTINGS_WINDOW_COMMANDS } from './settings-window.js';
 import { sendAcknowledgedRendererCommand } from './renderer-commands.js';
 import { extractDeepLinkFromArgv, parseDesktopDeepLink } from './deep-links.js';
+import { DesktopDeepLinkDelivery } from './deep-link-delivery.js';
 import { configureDesktopMenu, dispatchDesktopMenuCommand } from './menu.js';
 import {
   hasSameOriginNavigation,
@@ -70,6 +71,19 @@ let windowStatePaths: ReturnType<typeof createDesktopPaths> | null = null;
 let quitting = false;
 let shutdownStarted = false;
 const pendingDeepLinks: string[] = [];
+const deepLinkDelivery = new DesktopDeepLinkDelivery({
+  ipc: ipcMain,
+  target: () => activeMainWindow()?.webContents,
+  origin: () => runtime?.getRendererOrigin(),
+  dispatch: async (request) => {
+    if (!commandDispatcher) throw new Error('Desktop commands are unavailable.');
+    return commandDispatcher.dispatch(request);
+  },
+  report: (message) => {
+    if (quitting) return;
+    void dialog.showMessageBox({ type: 'warning', title: 'Unable to open link', message });
+  },
+});
 
 function activeMainWindow(): BrowserWindow | null {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -157,6 +171,11 @@ function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
     void openValidatedExternalUrl(shell, url);
     return { action: 'deny' };
   });
+  window.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument)
+      deepLinkDelivery.clearReady(window.webContents);
+  });
+  window.webContents.once('destroyed', () => deepLinkDelivery.clearReady(window.webContents));
   window.webContents.on('will-navigate', (event, url) => {
     const current = runtime?.getRendererOrigin();
     if (current && !hasSameOriginNavigation(url, current)) {
@@ -176,6 +195,7 @@ function createMainWindow(savedState: DesktopWindowState): BrowserWindow {
 }
 
 function handleDeepLink(url: string): void {
+  if (quitting) return;
   if (!commandDispatcher) {
     pendingDeepLinks.push(url);
     return;
@@ -183,14 +203,20 @@ function handleDeepLink(url: string): void {
 
   try {
     const deepLink = parseDesktopDeepLink(url);
-    void commandDispatcher.dispatch(deepLink.command);
+    deepLinkDelivery.enqueue(deepLink.command);
+    const window = activeMainWindow();
+    if (window) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+    } else app.emit('activate');
   } catch (error) {
-    activeMainWindow()?.webContents.send(DESKTOP_BRIDGE_EVENTS.communicationCheck.channel, {
-      target: 'external',
-      state: 'failed',
-      detail: error instanceof Error ? error.message : String(error),
-      checkedAt: new Date().toISOString(),
-    });
+    if (!quitting)
+      void dialog.showMessageBox({
+        type: 'warning',
+        title: 'Unable to open link',
+        message: error instanceof Error ? error.message : 'The link is invalid.',
+      });
   }
 }
 
@@ -430,8 +456,8 @@ async function boot(): Promise<void> {
 
   try {
     await runtime.start();
-    flushPendingDeepLinks();
     await mainWindow.loadURL(runtime.getRendererOrigin());
+    flushPendingDeepLinks();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await mainWindow.loadURL(
@@ -488,6 +514,7 @@ app.on('before-quit', (event) => {
         return;
       }
       quitting = true;
+      deepLinkDelivery.dispose();
       shutdownStarted = true;
       try {
         await runtime?.stop();
