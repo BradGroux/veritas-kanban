@@ -959,6 +959,81 @@ describe('ClawdbotAgentService Codex providers', () => {
     }
   );
 
+  it('binds gateway launch configuration and boot credentials through managed admission', async () => {
+    vi.stubEnv('ORCAROUTER_API_KEY', 'synthetic-orca-key');
+    vi.stubEnv('OPENAI_API_KEY', 'synthetic-openai-key');
+    const gateway: AgentConfig = {
+      type: 'orcarouter-codex',
+      name: 'OrcaRouter',
+      command: 'codex',
+      args: ['exec'],
+      provider: 'codex-cli',
+      model: 'openai/gpt-5',
+      enabled: true,
+    };
+    mockGetConfig.mockResolvedValue({ agents: [gateway] });
+    mockCheckAgent.mockResolvedValue({
+      type: gateway.type,
+      name: gateway.name,
+      enabled: true,
+      configured: true,
+      command: 'codex',
+      executableFound: true,
+      executablePath: '/usr/local/bin/codex',
+      providerVersion: 'codex-cli 0.155.1',
+      providerVersionSource: 'codex --version',
+      authenticated: true,
+      healthy: true,
+      checkedAt: '2026-10-23T09:00:00.000Z',
+    });
+    mockSpawn.mockReturnValue(
+      createFakeChild(await fs.readFile(path.join(fixtureDir, 'success.jsonl'), 'utf8'))
+    );
+    const service = testableService(tmpDir);
+    const status = await service.startAgent(task.id, gateway.type);
+    expect(status.status).toBe('running');
+    expect(status.runLaunchManifest.harnessSupport.profileId).toBe('orcarouter-codex-cli');
+    expect(status.runLaunchManifest.runtime.model).toBe('openai/gpt-5');
+    expect(status.runLaunchManifest.runtime.credentialReferences).toContain(
+      'env:ORCAROUTER_API_KEY'
+    );
+    const [, args, options] = mockSpawn.mock.calls[0];
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '--sandbox',
+        'workspace-write',
+        '--json',
+        'model_provider="veritas_orcarouter"',
+        'model_providers.veritas_orcarouter.env_key="ORCAROUTER_API_KEY"',
+      ])
+    );
+    expect(options.env.ORCAROUTER_API_KEY).toBe('synthetic-orca-key');
+    expect(options.env).not.toHaveProperty('OPENAI_API_KEY');
+    expect(JSON.stringify(status.runLaunchManifest)).not.toContain('synthetic-orca-key');
+    expect(status.runLaunchManifest.enforcement.enforceable).toBe(true);
+    await waitFor(async () => expect(await service.getAgentStatus(task.id)).toBeNull());
+  });
+
+  it('rejects gateway runtime drift before creating an attempt or process', async () => {
+    mockGetConfig.mockResolvedValue({
+      agents: [
+        {
+          type: 'orcarouter-codex',
+          name: 'OrcaRouter',
+          command: 'codex',
+          args: ['exec'],
+          provider: 'codex-cli',
+          model: 'openai/gpt-5',
+          enabled: true,
+        },
+      ],
+    });
+    const service = testableService(tmpDir);
+    await expect(service.startAgent(task.id, 'orcarouter-codex')).rejects.toThrow();
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(task.attempt).toBeUndefined();
+  });
+
   it('rejects OpenClaw without completion readiness before creating an active attempt', async () => {
     mockGetConfig.mockResolvedValue({
       agents: [

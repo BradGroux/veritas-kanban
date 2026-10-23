@@ -27,18 +27,14 @@ Codify what works (and what burns us) when running Veritas Kanban with humans + 
 6. **Update SOP files after every lesson**
    - Mistake → update AGENTS.md/CLAUDE.md + Lessons Learned field.
 
-7. **Respect configured review requirements**
-   - Run independent or cross-model review only when the task, governance
-     policy, issue owner, or release owner requires it.
-
-8. **Mirror important artifacts to Brain/knowledge base**
+7. **Mirror important artifacts to Brain/knowledge base**
    - Use `scripts/brain-write.sh` or equivalent so humans can find deliverables later.
 
-9. **Use Agent Status + comments for visibility**
+8. **Use Agent Status + comments for visibility**
    - Set `vk agent working` when you start; leave concise updates in comments instead of DM spam.
 
-10. **Archive aggressively**
-    - Done column should stay lean. Use multi-select + archive (bug tracked separately) at sprint end.
+9. **Archive aggressively**
+   - Done column should stay lean. Use multi-select + archive (bug tracked separately) at sprint end.
 
 ---
 

@@ -60,6 +60,35 @@ const runtime = (environmentKeys: string[]): RunLaunchRuntime => ({
 });
 
 describe('provider launch credential plan', () => {
+  it('classifies the gateway key as boot authentication only for its explicit CLI profile', () => {
+    const input = {
+      provider: 'codex-cli',
+      providerRuntimeManifest: providerRuntimeManifestFixture(),
+      runtime: runtime(['ORCAROUTER_API_KEY']),
+      sandbox: sandbox(),
+    };
+    expect(
+      compileProviderLaunchCredentialPlan({ ...input, harnessProfileId: 'orcarouter-codex-cli' })
+        .references
+    ).toMatchObject([
+      {
+        reference: 'env:ORCAROUTER_API_KEY',
+        classification: 'harness-boot-authentication',
+        delivery: 'provider-native-environment',
+      },
+    ]);
+    expect(compileProviderLaunchCredentialPlan(input).references).toMatchObject([
+      { classification: 'compatibility-passthrough', risk: 'high-risk' },
+    ]);
+    expect(
+      compileProviderLaunchCredentialPlan({
+        ...input,
+        provider: 'codex-sdk',
+        harnessProfileId: 'orcarouter-codex-cli',
+      }).references
+    ).toMatchObject([{ classification: 'compatibility-passthrough', risk: 'high-risk' }]);
+  });
+
   it.each([
     ['openclaw', 'OPENCLAW_GATEWAY_TOKEN'],
     ['codex-cli', 'OPENAI_API_KEY'],

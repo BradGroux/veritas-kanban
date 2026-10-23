@@ -1,6 +1,10 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { AgentConfig } from '@veritas-kanban/shared';
+import {
+  isOrcaRouterCodexAgent,
+  ORCAROUTER_CREDENTIAL_ENV_KEY,
+} from '../utils/orcarouter-codex.js';
 import { hasClaudeCodeBareAuthentication } from './claude-code-adapter.js';
 import {
   OperationalMetadataRepository,
@@ -161,6 +165,18 @@ export class AgentHealthService implements AgentHealthChecker {
       return this.probeClaudeCodeAuthentication(agent.command);
     }
 
+    if (isOrcaRouterCodexAgent(agent)) {
+      const authenticated = Boolean(process.env[ORCAROUTER_CREDENTIAL_ENV_KEY]?.trim());
+      return {
+        authenticated,
+        ...(authenticated
+          ? {}
+          : {
+              error:
+                'Configure ORCAROUTER_API_KEY in the server environment; existing OpenAI login does not authenticate OrcaRouter.',
+            }),
+      };
+    }
     if (provider.startsWith('codex') || command === 'codex') {
       return this.runAuthProbe(agent.command, ['login', 'status'], /logged in/i);
     }

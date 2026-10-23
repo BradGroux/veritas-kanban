@@ -190,9 +190,7 @@ architecture risks that actually apply to the change.
 
 Do not create separate review tasks for inapplicable categories or require
 numeric review scores. If the review finds an unsafe behavior, fix it and
-recheck the affected path before committing. Independent or cross-model review
-is optional unless a configured governance policy, issue owner, or release
-owner explicitly requires it.
+recheck the affected path before committing.
 
 ### Pre-Merge Checklist
 

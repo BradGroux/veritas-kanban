@@ -364,6 +364,43 @@ function brokeredCatalog(): RunToolCatalog {
 }
 
 describe('RunLaunchManifestService', () => {
+  it('blocks an incompatible persisted harness build without blocking advisory degraded states', () => {
+    const service = new RunLaunchManifestService();
+    const manifest = service.compile(
+      input({
+        harnessSupport: {
+          ...harnessSupport,
+          supportTier: 'degraded',
+          failureClass: 'incompatible-build',
+          reason: 'Installed version is outside the exact compatibility policy.',
+        },
+      })
+    );
+    expect(manifest.enforcement.enforceable).toBe(false);
+    expect(manifest.enforcement.blockers).toContainEqual(
+      expect.objectContaining({
+        code: 'harness-runtime-incompatible',
+        field: 'harnessSupport',
+      })
+    );
+    expect(() => service.assertEnforceable(manifest)).toThrow();
+    const advisory = service.compile(
+      input({
+        harnessSupport: {
+          ...harnessSupport,
+          supportTier: 'degraded',
+          failureClass: 'probe-failed',
+          reason: 'An optional readiness probe is inconclusive.',
+        },
+      })
+    );
+    expect(
+      advisory.enforcement.blockers.some(
+        (blocker) => blocker.code === 'harness-runtime-incompatible'
+      )
+    ).toBe(false);
+  });
+
   it('compiles a canonical immutable manifest without prompt or credential values', () => {
     const manifest = new RunLaunchManifestService().compile(input());
 

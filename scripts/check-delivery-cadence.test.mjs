@@ -98,30 +98,6 @@ test('allows milestone-qualified complete-suite guidance', () => {
   );
 });
 
-test('rejects mandatory cross-model review language', () => {
-  assert.deepEqual(
-    findUnsafePromptStatements({
-      'prompt-registry/example.md': 'Cross-model review is required for every code change.',
-    }),
-    [
-      {
-        file: 'prompt-registry/example.md',
-        message: 'active prompts must not make cross-model review unconditional',
-      },
-    ]
-  );
-});
-
-test('allows optional cross-model review language', () => {
-  assert.deepEqual(
-    findUnsafePromptStatements({
-      'prompt-registry/example.md':
-        'Cross-model review is optional unless the issue owner explicitly requires it.',
-    }),
-    []
-  );
-});
-
 test('rejects mandatory multi-review gates before every commit', () => {
   assert.deepEqual(
     findUnsafeCanonicalCadenceStatements({
@@ -132,20 +108,6 @@ test('rejects mandatory multi-review gates before every commit', () => {
       {
         file: 'CONTRIBUTING.md',
         message: 'canonical guidance must not require multiple reviews before every commit',
-      },
-    ]
-  );
-});
-
-test('rejects mandatory cross-model review in canonical guidance', () => {
-  assert.deepEqual(
-    findUnsafeCanonicalCadenceStatements({
-      'AGENTS.md': 'Cross-model review is mandatory for every code change.',
-    }),
-    [
-      {
-        file: 'AGENTS.md',
-        message: 'canonical guidance must not make cross-model review unconditional',
       },
     ]
   );

@@ -47,7 +47,7 @@ workspace/
 ├── shared/                    # Shared across all repos
 │   ├── prompt-registry/       # Universal prompts
 │   │   ├── sprint-planning.md
-│   │   └── cross-model-review.md
+│   │   └── worker-handoff.md
 │   ├── skills/                # Agent skills/capabilities
 │   │   ├── github.md
 │   │   └── research.md
@@ -234,15 +234,6 @@ Fixture contracts live in
 ---
 
 ## Referencing Shared Resources
-
-### In Task Descriptions
-
-```markdown
-## Instructions
-
-Follow the configured independent review process.
-See prompt: `prompt-registry/cross-model-review.md`
-```
 
 ### In Agent Prompts
 

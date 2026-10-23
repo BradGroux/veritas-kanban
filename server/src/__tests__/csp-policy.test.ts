@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { apiDocsCspOverride, buildCspDirectives } from '../config/csp.js';
+import { apiDocsCspOverride, buildCspDirectives, createSecurityHeaders } from '../config/csp.js';
 import { injectCspNonceAttributes } from '../middleware/csp-nonce.js';
 
 function directiveValues(value: unknown): unknown[] {
@@ -13,6 +13,7 @@ describe('CSP policy', () => {
     const directives = buildCspDirectives({
       isDev: false,
       isDesktopRuntime: false,
+      isSecureRequest: true,
       reportUri: 'https://reports.example.test/csp',
     });
 
@@ -31,6 +32,7 @@ describe('CSP policy', () => {
     expect(styleSrcElem).not.toContain("'unsafe-inline'");
     expect(styleSrcElem.some((value) => typeof value === 'function')).toBe(true);
     expect(styleSrcAttr).toEqual(["'unsafe-inline'"]);
+    expect(directives.upgradeInsecureRequests).toEqual([]);
     expect(directiveValues(directives.reportUri)).toEqual(['https://reports.example.test/csp']);
   });
 
@@ -38,11 +40,33 @@ describe('CSP policy', () => {
     const directives = buildCspDirectives({
       isDev: true,
       isDesktopRuntime: false,
+      isSecureRequest: false,
     });
 
     expect(directiveValues(directives.scriptSrc)).toContain("'unsafe-inline'");
     expect(directiveValues(directives.styleSrc)).toContain("'unsafe-inline'");
     expect(directives.upgradeInsecureRequests).toBeNull();
+  });
+
+  it('omits HTTP upgrade policy for plaintext requests and retains it for HTTPS', async () => {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(
+      createSecurityHeaders({
+        isDev: false,
+        isDesktopRuntime: false,
+        reportOnly: false,
+      })
+    );
+    app.get('/', (_req, res) => res.send('ok'));
+
+    const plaintext = await request(app).get('/');
+    const https = await request(app).get('/').set('X-Forwarded-Proto', 'https');
+
+    expect(plaintext.headers['content-security-policy']).not.toContain('upgrade-insecure-requests');
+    expect(https.headers['content-security-policy']).toContain('upgrade-insecure-requests');
+    expect(plaintext.headers['x-content-type-options']).toBe('nosniff');
+    expect(https.headers['x-content-type-options']).toBe('nosniff');
   });
 
   it('injects the same nonce into script and style tags without duplicating existing nonces', () => {

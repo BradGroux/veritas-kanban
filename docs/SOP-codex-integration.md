@@ -259,10 +259,6 @@ If `autoTelemetry` is enabled, avoid double-emitting lifecycle events. Token usa
 Independent review is not a default completion gate. Enable it only when the
 task, configured review gate, issue owner, or release owner requires it.
 
-When required, follow
-[SOP-cross-model-code-review.md](SOP-cross-model-code-review.md) for scoring,
-findings, and final gate handling.
-
 ---
 
 ## Workflow Engine Rules
