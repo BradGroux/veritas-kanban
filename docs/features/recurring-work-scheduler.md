@@ -54,6 +54,8 @@ The first activate call creates a critical Run Approval and returns `202`. After
 
 Each due or manual execution first persists one `automation-run-claim/v1` for the exact version and due window. Duplicate ticks return the existing claim and do not dispatch again. Accepted runs enter the normal workflow admission controller with a stable automation idempotency key and an execution-tree root anchored to the immutable version. The saved tool scope is intersected with current workflow policy, and the normal launch, phase, provider, credential, approval, and admission controls may narrow or block it.
 
+An approved `startAt` bounds both automatic and manual launches. Draft examples, activation previews and saved next-run times use the same strictly-after cron calculation; expiry is exclusive. An early request is recorded as blocked without accepting work or consuming run budget, while the binding stays active for its approved schedule. An old early scheduler timestamp is corrected to the next eligible window. That rejection does not consume an otherwise eligible manual request later in the same minute.
+
 Pause, revoke, expiry, workflow or integration drift, exhausted aggregate runs/cost/tokens/duration, and repeated launch failures stop future acceptance while preserving versions, claims, and scheduler events. A consequential action listed as approval-required still uses a per-run exact-action approval; it never widens the saved standing scope.
 
 ## CLI

@@ -9,7 +9,10 @@ import type {
 } from '@veritas-kanban/shared';
 import { AutomationActivationService } from '../services/automation-activation-service.js';
 import { SchedulerService } from '../services/scheduler-service.js';
-import { AutomationDraftService } from '../services/automation-draft-service.js';
+import {
+  AutomationDraftService,
+  nextAutomationRunAt,
+} from '../services/automation-draft-service.js';
 import { FileSchedulerStateRepository } from '../storage/scheduler-state-repository.js';
 
 describe('AutomationActivationService', () => {
@@ -105,6 +108,149 @@ describe('AutomationActivationService', () => {
     expect(replay.version?.id).toBe(activated.version?.id);
     expect((await service.list()).versions).toHaveLength(1);
   });
+
+  it.each([
+    {
+      name: 'future start',
+      current: '2026-08-30T15:00:00.000Z',
+      startAt: '2026-09-15T00:00:00.000Z',
+      expected: ['2026-09-15T14:00:00.000Z', '2026-09-16T14:00:00.000Z'],
+    },
+    {
+      name: 'exact cron start retains the existing strictly-after calculation',
+      current: '2026-08-30T15:00:00.000Z',
+      startAt: '2026-09-15T14:00:00.000Z',
+      expected: ['2026-09-16T14:00:00.000Z', '2026-09-17T14:00:00.000Z'],
+    },
+    {
+      name: 'no start bound',
+      current: '2026-08-30T15:00:00.000Z',
+      startAt: undefined,
+      expected: ['2026-08-31T14:00:00.000Z', '2026-09-01T14:00:00.000Z'],
+    },
+    {
+      name: 'Chicago daylight saving transition',
+      current: '2026-03-05T15:00:00.000Z',
+      startAt: '2026-03-06T00:00:00.000Z',
+      expected: ['2026-03-06T15:00:00.000Z', '2026-03-09T14:00:00.000Z'],
+    },
+  ])('aligns draft, preview, binding and subsequent run for $name', async (testCase) => {
+    now = new Date(testCase.current);
+    const input = completeInput();
+    input.hints = { ...input.hints, startAt: testCase.startAt };
+    const draft = await drafts.save(input);
+    expect(draft.validation.valid).toBe(true);
+    expect(draft.schedule.nextRunExamples.slice(0, 2)).toEqual(testCase.expected);
+    const service = activationService();
+    const preview = await service.preview(draft.id, 'bounded-start');
+    expect(preview.schedule.nextRunAt).toBe(testCase.expected[0]);
+    approval = {
+      ...approval,
+      status: 'approved',
+      revision: 2,
+      resolution: {
+        decision: 'approved',
+        actor: { id: 'operator-1', workspaceId: 'workspace-1' },
+        decidedAt: now.toISOString(),
+      },
+    };
+    const activated = await service.apply({
+      draftId: draft.id,
+      requestId: preview.requestId,
+      expectedRequestRevision: preview.requestRevision,
+      approvalId: approval.id,
+    });
+    if (!activated.binding) throw new Error('Expected binding');
+    expect(activated.binding.nextRunAt).toBe(testCase.expected[0]);
+    const firstRun = testCase.expected[0];
+    if (!firstRun) throw new Error('Expected first run');
+    const claimed = await service.claimRun(activated.binding.id, 'due-run', new Date(firstRun));
+    expect(claimed.claim.status).toBe('accepted');
+    expect(claimed.binding.nextRunAt).toBe(testCase.expected[1]);
+  });
+
+  it('keeps expiry exclusive in draft examples and next-run calculations', async () => {
+    const input = completeInput();
+    const expiry = '2026-09-02T14:00:00.000Z';
+    input.hints = { ...input.hints, expiresAt: expiry };
+    const draft = await drafts.save(input);
+    expect(draft.schedule.nextRunExamples).toEqual([
+      '2026-08-31T14:00:00.000Z',
+      '2026-09-01T14:00:00.000Z',
+    ]);
+    expect(draft.validation.valid).toBe(false);
+    expect(
+      nextAutomationRunAt('0 9 * * 1-5', 'America/Chicago', new Date(expiry), expiry)
+    ).toBeUndefined();
+    expect(
+      nextAutomationRunAt(
+        '0 9 * * 1-5',
+        'America/Chicago',
+        new Date('2026-09-01T14:00:00.000Z'),
+        expiry
+      )
+    ).toBeUndefined();
+    await expect(activationService().preview(draft.id, 'expired-window')).rejects.toThrow();
+  });
+
+  it.each(['manual-run', 'due-run'] as const)(
+    'rejects an early %s without disabling or consuming approved work',
+    async (trigger) => {
+      const input = completeInput();
+      const startAt = '2026-09-15T14:00:30.000Z';
+      input.hints = { ...input.hints, startAt };
+      const draft = await drafts.save(input);
+      const service = activationService();
+      const preview = await service.preview(draft.id, 'early-start');
+      approval = {
+        ...approval,
+        status: 'approved',
+        revision: 2,
+        resolution: {
+          decision: 'approved',
+          actor: { id: 'operator-1', workspaceId: 'workspace-1' },
+          decidedAt: now.toISOString(),
+        },
+      };
+      const activated = await service.apply({
+        draftId: draft.id,
+        requestId: preview.requestId,
+        expectedRequestRevision: preview.requestRevision,
+        approvalId: approval.id,
+      });
+      if (!activated.binding) throw new Error('Expected binding');
+      const id = activated.binding.id;
+      const earlyTime = new Date('2026-09-15T14:00:10.000Z');
+      if (trigger === 'due-run')
+        await repository.update((state) => {
+          state.automationBindings[id].nextRunAt = earlyTime.toISOString();
+          return state;
+        });
+      const early = await service.claimRun(id, trigger, earlyTime);
+      expect(early.claim).toMatchObject({
+        status: 'blocked',
+        reason: 'Automation start time has not arrived.',
+      });
+      expect(early.binding).toMatchObject({
+        status: 'active',
+        acceptedRuns: 0,
+        aggregateUsage: { runs: 0 },
+        nextRunAt: '2026-09-16T14:00:00.000Z',
+      });
+      expect(early.binding.statusReason).toBe(activated.binding.statusReason);
+      const restarted = activationService();
+      const accepted = await restarted.claimRun(
+        id,
+        trigger,
+        new Date(trigger === 'manual-run' ? startAt : '2026-09-16T14:00:00.000Z')
+      );
+      expect(accepted).toMatchObject({
+        replayed: false,
+        claim: { status: 'accepted' },
+        binding: { status: 'active', acceptedRuns: 1, aggregateUsage: { runs: 1 } },
+      });
+    }
+  );
 
   it('invalidates stale previews when workflow evidence changes', async () => {
     const draft = await drafts.save(completeInput());
