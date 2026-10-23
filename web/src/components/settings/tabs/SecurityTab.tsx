@@ -7,6 +7,7 @@ import { PasswordInput, Stack, Text } from '@mantine/core';
 import { Eye, EyeOff, Check } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { authApi } from '@/lib/api/auth';
+import { API_BASE } from '@/lib/config';
 import { SettingsPage, SettingsSection } from '../shared';
 
 // Password strength calculation (same as SetupScreen)
@@ -26,7 +27,7 @@ function getPasswordStrength(password: string): { score: number; label: string; 
 }
 
 export function SecurityTab() {
-  const { changePassword } = useAuth();
+  const { changePassword, status } = useAuth();
   const { toast } = useToast();
 
   // Change password form state
@@ -152,6 +153,17 @@ export function SecurityTab() {
           </UiAction>
         </div>
       </SettingsSection>
+
+      {status?.openaiSignInEnabled && (
+        <SettingsSection
+          title="ChatGPT sign-in"
+          description="Link your signed-in Veritas account before using Continue with ChatGPT."
+        >
+          <UiAction component="a" href={`${API_BASE}/auth/openai/link/start`} variant="secondary">
+            Link ChatGPT sign-in
+          </UiAction>
+        </SettingsSection>
+      )}
 
       <SettingsSection
         title="Reset Security Settings"

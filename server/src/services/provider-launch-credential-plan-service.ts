@@ -6,6 +6,10 @@ import type {
   RunLaunchRuntime,
   SandboxPolicyDryRunResult,
 } from '@veritas-kanban/shared';
+import {
+  ORCAROUTER_CODEX_PROFILE_ID,
+  ORCAROUTER_CREDENTIAL_ENV_KEY,
+} from '../utils/orcarouter-codex.js';
 import { RUN_LAUNCH_CREDENTIAL_PLAN_SCHEMA_VERSION } from '@veritas-kanban/shared';
 import { digestRunLaunchValue } from '../utils/run-launch-manifest-digest.js';
 import {
@@ -44,6 +48,9 @@ export function compileProviderLaunchCredentialPlan(input: {
   brokeredCredentialReferences?: string[];
 }): RunLaunchCredentialPlan {
   const providerBootAuthKeys = new Set([
+    ...(input.harnessProfileId === ORCAROUTER_CODEX_PROFILE_ID && input.provider === 'codex-cli'
+      ? [ORCAROUTER_CREDENTIAL_ENV_KEY]
+      : []),
     ...(PROVIDER_BOOT_AUTH_KEYS[input.provider as ExecutableAgentProvider] ?? []),
     ...(input.harnessProfileId === BUZZ_AGENT_RUNTIME_PROFILE_ID
       ? BUZZ_AGENT_CREDENTIAL_ENV_KEYS

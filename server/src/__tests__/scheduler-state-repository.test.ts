@@ -214,6 +214,10 @@ describe('FileSchedulerStateRepository', () => {
       automationBindings: { [binding.id]: binding },
       automationClaims: expect.arrayContaining([claim]),
     });
+    expect((await repository.read()).automationClaims).toHaveLength(1_001);
+    await persistAutomation({
+      automationClaims: Array(1_001).fill({ ...claim, status: 'completed' }),
+    });
     expect((await repository.read()).automationClaims).toHaveLength(1_000);
 
     await persistAutomation({ automationVersions: null });

@@ -28,6 +28,80 @@ function createService() {
 }
 
 describe('IdentityService', () => {
+  it('links a verified external identity to an existing user without changing membership roles', async () => {
+    const { fixture, service, repository, ownerActor } = createService();
+
+    try {
+      const invitation = await service.createInvitation(
+        { workspaceId: 'local', email: 'member@example.com', role: 'reviewer' },
+        ownerActor
+      );
+      const accepted = await service.acceptInvitation({ token: invitation.token });
+
+      const resolved = service.resolveExternalIdentity(
+        {
+          issuer: 'https://auth.openai.com',
+          clientId: 'oaiapp_test',
+          subject: 'acct_123',
+          email: 'member@example.com',
+          emailVerified: true,
+          displayName: 'OpenAI Member',
+          avatarUrl: null,
+        },
+        { userId: accepted.user.id, workspaceId: 'local' }
+      );
+
+      expect(resolved.user.id).toBe(accepted.user.id);
+      expect(resolved.membership.role).toBe('reviewer');
+      expect(repository.getMembership('local', accepted.user.id)?.role).toBe('reviewer');
+      expect(resolved.user.authSubject).toBe(
+        JSON.stringify(['https://auth.openai.com', 'oaiapp_test', 'acct_123'])
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('does not create or link an account from an unverified external email', () => {
+    const { fixture, service } = createService();
+
+    try {
+      expect(() =>
+        service.resolveExternalIdentity({
+          issuer: 'https://auth.openai.com',
+          clientId: 'oaiapp_test',
+          subject: 'acct_unverified',
+          email: 'owner@example.com',
+          emailVerified: false,
+          displayName: 'Unverified User',
+          avatarUrl: null,
+        })
+      ).toThrow(ForbiddenError);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('does not treat a verified matching email as proof of account ownership', () => {
+    const { fixture, service } = createService();
+
+    try {
+      expect(() =>
+        service.resolveExternalIdentity({
+          issuer: 'https://auth.openai.com',
+          clientId: 'oaiapp_test',
+          subject: 'acct_unlinked',
+          email: 'owner@example.com',
+          emailVerified: true,
+          displayName: 'Unlinked User',
+          avatarUrl: null,
+        })
+      ).toThrow(ForbiddenError);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   it('lets owner/admin create invitations and records audit and activity entries', async () => {
     const { fixture, service, audit, activity, ownerActor } = createService();
 
