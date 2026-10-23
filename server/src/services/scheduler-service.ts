@@ -427,6 +427,19 @@ export class SchedulerService {
       return { item: await this.getItem(item.id, now), event };
     }
 
+    if (claimed.claim.status === 'queued' || claimed.claim.status === 'skipped') {
+      const event = await this.recordEvent({
+        item,
+        type: 'overlap',
+        status: 'skipped',
+        summary: claimed.claim.reason ?? `Automation window ${claimed.claim.status}.`,
+        durationMs: Date.now() - startedAt,
+        now,
+        nextRunAt: claimed.binding.nextRunAt,
+      });
+      return { item: await this.getItem(item.id, now), event };
+    }
+
     try {
       const run = await this.workflowRunService.startRun(
         claimed.version.workflowId,
@@ -708,7 +721,7 @@ export class SchedulerService {
       actions: {
         canRun: enabled,
         canPause: binding.status === 'active',
-        canResume: binding.status === 'paused',
+        canResume: binding.status === 'paused' || binding.status === 'blocked',
         canValidate: true,
       },
     });

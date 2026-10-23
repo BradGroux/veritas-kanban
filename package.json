@@ -12,7 +12,7 @@
   },
   "packageManager": "pnpm@11.1.1",
   "scripts": {
-    "dev": "concurrently -n server,web -c blue,green \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
+    "dev": "pnpm --filter @veritas-kanban/shared build && concurrently -n shared,server,web -c yellow,blue,green \"pnpm --filter @veritas-kanban/shared dev\" \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "desktop:dev": "pnpm --filter @veritas-kanban/desktop dev",
     "desktop:dev:fresh": "pnpm --filter @veritas-kanban/desktop dev:fresh",
     "desktop:build": "pnpm --filter @veritas-kanban/desktop build",

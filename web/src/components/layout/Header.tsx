@@ -1,3 +1,4 @@
+import { desktopTaskLink } from '@/lib/desktop-task-links';
 import { desktopSettingsBridge } from '@/lib/desktop-settings';
 import { toast } from '@/hooks/useToast';
 import { parseSettingsSupportHash } from '@/components/settings/settings-search-index';
@@ -394,16 +395,26 @@ export function Header({
 
   // The only native command subscriber lives in the authenticated, mounted shell.
   useEffect(() => {
-    const desktop = (
-      window as Window & {
-        veritasDesktop?: {
-          onMenuCommand?: (
-            listener: (request: { command: string }) => { accepted: boolean; message?: string }
-          ) => () => void;
+    const desktop = desktopSettingsBridge();
+    return desktop?.onMenuCommand?.((request) => {
+      const { command } = request;
+      try {
+        const link = desktopTaskLink(request);
+        if (link) {
+          if (!hasPermission('task:read'))
+            return {
+              accepted: false,
+              message: 'Task read permission is required to open this link.',
+            };
+          flushSync(() => navigateToTask(link.taskId, link.target));
+          return { accepted: true };
+        }
+      } catch (error) {
+        return {
+          accepted: false,
+          message: error instanceof Error ? error.message : 'The linked task is unavailable.',
         };
       }
-    ).veritasDesktop;
-    return desktop?.onMenuCommand?.(({ command }) => {
       let action: (() => void) | undefined;
       let message = 'This command is not available in this workspace.';
       switch (command) {
@@ -447,6 +458,7 @@ export function Header({
       return { accepted: true };
     });
   }, [
+    navigateToTask,
     canCreateTask,
     canOpenSettings,
     hasPermission,
@@ -652,6 +664,7 @@ export function Header({
                   size={32}
                   onClick={toggleChatPanel}
                   aria-label={boardChatAction}
+                  data-overlay-focus-key="header-board-chat"
                   aria-pressed={boardChatActive}
                   aria-controls={boardChatActive ? 'workbench-right-dock' : undefined}
                   title={boardChatAction}
@@ -664,6 +677,7 @@ export function Header({
                   size={32}
                   onClick={toggleSquadChatPanel}
                   aria-label={squadChatAction}
+                  data-overlay-focus-key="header-squad-chat"
                   aria-pressed={squadChatActive}
                   aria-controls={squadChatActive ? 'workbench-right-dock' : undefined}
                   title={squadChatAction}

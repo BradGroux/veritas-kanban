@@ -7,6 +7,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import {
   getSecurityConfig,
   getJwtSecret,
+  getValidJwtSecrets,
   getSessionVersion,
   nextSessionVersion,
   saveSecurityConfig,
@@ -33,6 +34,13 @@ import {
   type ExchangeDevicePairingInput,
 } from '../services/device-session-service.js';
 import { getDesktopSetupContext } from '../services/desktop-setup-context-service.js';
+import {
+  consumeOpenAiOidcTransaction,
+  getOpenAiOidcService,
+  isOpenAiOidcConfigured,
+  storeOpenAiOidcTransaction,
+} from '../services/openai-oidc-service.js';
+import type { WorkspaceRole } from '../storage/sqlite/identity-repository.js';
 
 const router: IRouter = Router();
 
@@ -114,6 +122,8 @@ function requiredPairingField(value: string | undefined, field: string): string 
 const SALT_ROUNDS = process.env.NODE_ENV === 'test' ? 4 : 12;
 const JWT_EXPIRY_DEFAULT = '24h';
 const JWT_EXPIRY_REMEMBER = '30d';
+const OPENAI_TRANSACTION_COOKIE = 'veritas_openai_oidc_txn';
+const OPENAI_TRANSACTION_MAX_AGE_MS = 10 * 60 * 1000;
 
 // Rate limiting for login attempts (in-memory, resets on restart)
 const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
@@ -152,6 +162,43 @@ function recordFailedAttempt(ip: string): void {
 
 function clearAttempts(ip: string): void {
   loginAttempts.delete(ip);
+}
+
+function stringQueryValue(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function timingSafeStringEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return (
+    leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+function authRoleForWorkspaceRole(role: WorkspaceRole): 'admin' | 'agent' | 'read-only' {
+  if (role === 'owner' || role === 'admin') return 'admin';
+  if (role === 'agent') return 'agent';
+  return 'read-only';
+}
+
+function transactionIdFromCookie(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  for (const secret of getValidJwtSecrets()) {
+    try {
+      const payload = jwt.verify(value, secret, { algorithms: ['HS256'] });
+      if (
+        typeof payload !== 'string' &&
+        payload.type === 'openai-oidc-browser' &&
+        typeof payload.transactionId === 'string'
+      ) {
+        return payload.transactionId;
+      }
+    } catch {
+      // Try the next still-valid signing secret during key rotation.
+    }
+  }
+  return null;
 }
 
 // ============ Routes ============
@@ -206,8 +253,14 @@ router.get(
     if (token && !needsSetup) {
       const verified = verifySessionJwtToken(token);
       if (verified.valid && verified.payload) {
-        authenticated = true;
-        if (verified.payload.exp) {
+        const payload = verified.payload;
+        authenticated =
+          payload.sessionKind !== 'openai-oidc' ||
+          (typeof payload.userId === 'string' &&
+            typeof payload.workspaceId === 'string' &&
+            getIdentityService().resolveFederatedSession(payload.userId, payload.workspaceId) !==
+              null);
+        if (authenticated && verified.payload.exp) {
           sessionExpiry = new Date(verified.payload.exp * 1000).toISOString();
         }
       }
@@ -218,8 +271,151 @@ router.get(
       authenticated,
       sessionExpiry,
       authEnabled: config.authEnabled !== false,
+      openaiSignInEnabled: isOpenAiOidcConfigured(),
       ...(needsSetup ? { setupContext: getDesktopSetupContext() } : {}),
     });
+  })
+);
+
+router.get('/openai/status', (_req: Request, res: Response) => {
+  res.json({ enabled: isOpenAiOidcConfigured(), capability: 'identity' });
+});
+
+router.get(
+  '/openai/start',
+  asyncHandler(async (_req: Request, res: Response) => {
+    if (!isOpenAiOidcConfigured()) {
+      res.status(404).json({ code: 'OPENAI_SIGN_IN_DISABLED', message: 'Sign in is not enabled' });
+      return;
+    }
+    const { authorizationUrl, transaction } = await getOpenAiOidcService().begin();
+    const transactionId = storeOpenAiOidcTransaction(transaction);
+    const transactionCookie = jwt.sign(
+      { type: 'openai-oidc-browser', transactionId },
+      getJwtSecret(),
+      { algorithm: 'HS256', expiresIn: '10m' }
+    );
+    res.cookie(OPENAI_TRANSACTION_COOKIE, transactionCookie, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || transaction.redirectUri.startsWith('https:'),
+      sameSite: 'lax',
+      maxAge: OPENAI_TRANSACTION_MAX_AGE_MS,
+      path: '/api/auth/openai/callback',
+    });
+    res.redirect(302, authorizationUrl);
+  })
+);
+
+router.get(
+  '/openai/link/start',
+  authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    if (!isOpenAiOidcConfigured()) {
+      res.status(404).json({ code: 'OPENAI_SIGN_IN_DISABLED', message: 'Sign in is not enabled' });
+      return;
+    }
+    if (
+      req.auth?.authMethod !== 'session' ||
+      req.auth.actorType !== 'user' ||
+      !req.auth.userId ||
+      !req.auth.workspaceId
+    ) {
+      res.status(403).json({
+        code: 'USER_SESSION_REQUIRED',
+        message: 'Sign in with an existing Veritas user session before linking ChatGPT',
+      });
+      return;
+    }
+    const { authorizationUrl, transaction } = await getOpenAiOidcService().begin();
+    const transactionId = storeOpenAiOidcTransaction({
+      ...transaction,
+      linkUserId: req.auth.userId,
+      linkWorkspaceId: req.auth.workspaceId,
+    });
+    const transactionCookie = jwt.sign(
+      { type: 'openai-oidc-browser', transactionId },
+      getJwtSecret(),
+      { algorithm: 'HS256', expiresIn: '10m' }
+    );
+    res.cookie(OPENAI_TRANSACTION_COOKIE, transactionCookie, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || transaction.redirectUri.startsWith('https:'),
+      sameSite: 'lax',
+      maxAge: OPENAI_TRANSACTION_MAX_AGE_MS,
+      path: '/api/auth/openai/callback',
+    });
+    res.redirect(302, authorizationUrl);
+  })
+);
+
+router.get(
+  '/openai/callback',
+  asyncHandler(async (req: Request, res: Response) => {
+    const transactionId = transactionIdFromCookie(req.cookies?.[OPENAI_TRANSACTION_COOKIE]);
+    const transaction = transactionId ? consumeOpenAiOidcTransaction(transactionId) : null;
+    res.clearCookie(OPENAI_TRANSACTION_COOKIE, {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV === 'production' ||
+        transaction?.redirectUri.startsWith('https:') ||
+        req.secure,
+      sameSite: 'lax',
+      path: '/api/auth/openai/callback',
+    });
+
+    const state = stringQueryValue(req.query.state);
+    if (!transaction || !state || !timingSafeStringEqual(transaction.state, state)) {
+      res.status(400).json({ code: 'INVALID_OAUTH_STATE', message: 'Sign-in state was invalid' });
+      return;
+    }
+    const oauthError = stringQueryValue(req.query.error);
+    if (oauthError) {
+      res.status(400).json({ code: 'OPENAI_SIGN_IN_DENIED', message: 'Sign in was not completed' });
+      return;
+    }
+    const code = stringQueryValue(req.query.code);
+    if (!code) {
+      res
+        .status(400)
+        .json({ code: 'MISSING_AUTHORIZATION_CODE', message: 'Sign in was incomplete' });
+      return;
+    }
+
+    const identity = await getOpenAiOidcService().complete(code, transaction);
+    const linked = getIdentityService().resolveExternalIdentity(
+      identity,
+      transaction.linkUserId && transaction.linkWorkspaceId
+        ? { userId: transaction.linkUserId, workspaceId: transaction.linkWorkspaceId }
+        : undefined
+    );
+    const role = authRoleForWorkspaceRole(linked.membership.role);
+    const config = getSecurityConfig();
+    const token = jwt.sign(
+      {
+        type: 'session',
+        sessionKind: 'openai-oidc',
+        userId: linked.user.id,
+        workspaceId: linked.workspace.id,
+        role,
+        sessionVersion: getSessionVersion(config),
+      },
+      getJwtSecret(),
+      { algorithm: 'HS256', expiresIn: JWT_EXPIRY_DEFAULT }
+    );
+    res.cookie('veritas_session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+    await auditLog({
+      action: 'auth.openai.login',
+      actor: linked.user.id,
+      resource: linked.workspace.id,
+      details: { identityProvider: 'openai', role },
+    });
+    res.redirect(302, '/');
   })
 );
 

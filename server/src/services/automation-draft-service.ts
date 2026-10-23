@@ -592,11 +592,11 @@ function validateSchedule(
     );
     return [];
   }
-  const parsedStart = startAt ? Date.parse(startAt) : Number.NaN;
-  const parsedExpiry = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-  const scheduleStart =
-    Number.isFinite(parsedStart) && parsedStart > now.getTime() ? new Date(parsedStart) : now;
-  const scheduleEnd = Number.isFinite(parsedExpiry) ? new Date(parsedExpiry) : undefined;
+  const { after: scheduleStart, expiresAt: scheduleEnd } = automationScheduleBounds(
+    now,
+    startAt,
+    expiresAt
+  );
   const nextRuns = nextCronRuns(
     cron,
     timezone.value,
@@ -651,18 +651,24 @@ export function nextAutomationRunAt(
   expression: string,
   timezone: string,
   after: Date,
-  expiresAt?: string
+  expiresAt?: string,
+  startAt?: string
 ): string | undefined {
   const cron = parseCron(expression);
   if (!cron || !isValidTimezone(timezone)) return undefined;
+  const bounds = automationScheduleBounds(after, startAt, expiresAt);
+  return nextCronRuns(cron, timezone, bounds.after, 1, bounds.expiresAt)[0];
+}
+
+/** Keep activation and draft examples on the same existing strictly-after cron boundary. */
+function automationScheduleBounds(after: Date, startAt?: string, expiresAt?: string) {
+  const parsedStart = startAt ? Date.parse(startAt) : Number.NaN;
   const parsedExpiry = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-  return nextCronRuns(
-    cron,
-    timezone,
-    after,
-    1,
-    Number.isFinite(parsedExpiry) ? new Date(parsedExpiry) : undefined
-  )[0];
+  return {
+    after:
+      Number.isFinite(parsedStart) && parsedStart > after.getTime() ? new Date(parsedStart) : after,
+    expiresAt: Number.isFinite(parsedExpiry) ? new Date(parsedExpiry) : undefined,
+  };
 }
 
 function parseCronField(value: string, min: number, max: number): CronMatcher | null {
@@ -712,7 +718,11 @@ function nextCronRuns(
     minute: '2-digit',
     weekday: 'short',
   });
-  while (cursor.getTime() <= limit && runs.length < count) {
+  while (
+    cursor.getTime() <= limit &&
+    (!expiresAt || cursor.getTime() < expiresAt.getTime()) &&
+    runs.length < count
+  ) {
     const parts = zonedParts(cursor, formatter);
     if (
       cron.minute(parts.minute) &&

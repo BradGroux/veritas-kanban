@@ -78,6 +78,18 @@ export const envSchema = z.object({
   /** Comma-separated additional API keys (format: name:key:role,name:key:role) */
   VERITAS_API_KEYS: z.string().optional().default(''),
 
+  /** Enable the optional Sign in with ChatGPT identity provider. */
+  VERITAS_OPENAI_OIDC_ENABLED: booleanString.default(false),
+
+  /** OpenAI-issued OAuth client ID for identity sign-in. */
+  VERITAS_OPENAI_OIDC_CLIENT_ID: z.string().min(1).optional(),
+
+  /** Optional secret for a confidential OAuth client. Never expose this to the web app. */
+  VERITAS_OPENAI_OIDC_CLIENT_SECRET: z.string().min(1).optional(),
+
+  /** Exact callback URI registered for this deployment. */
+  VERITAS_OPENAI_OIDC_REDIRECT_URI: z.string().url().optional(),
+
   // ── Data ────────────────────────────────────────────────────────────
   /** Root directory for data storage */
   VERITAS_DATA_DIR: z.string().optional(),

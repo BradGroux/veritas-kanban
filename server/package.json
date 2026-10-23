@@ -30,6 +30,7 @@
     "express-rate-limit": "^8.7.1",
     "file-type": "^22.2.0",
     "helmet": "^8.3.0",
+    "jose": "^6.2.9",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.13.0",
     "multer": "^2.4.0",

@@ -490,6 +490,26 @@ describe('ConfigService', () => {
   });
 
   describe('updateAgents', () => {
+    it('rejects raw gateway credentials and leaves the retained configuration unchanged', async () => {
+      const existing = await service.getConfig();
+      await service.saveConfig(existing);
+      const before = await fs.readFile(configFile, 'utf8');
+      await expect(
+        service.updateAgents([
+          {
+            type: 'orcarouter-codex',
+            name: 'OrcaRouter',
+            provider: 'codex-cli',
+            command: 'codex',
+            model: 'openai/gpt-5',
+            args: ['exec', '--api-key', 'synthetic-raw-value'],
+            enabled: true,
+          },
+        ])
+      ).rejects.toThrow('OrcaRouter owns its Codex arguments');
+      expect(await fs.readFile(configFile, 'utf8')).toBe(before);
+    });
+
     it('should update agent configuration', async () => {
       await service.getConfig();
       const newAgents = [

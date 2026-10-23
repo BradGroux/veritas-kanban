@@ -151,7 +151,9 @@ interface CountRow {
 export class SqliteIdentityRepository {
   constructor(private readonly database: SqliteDatabase) {}
 
-  ensureLocalOwner(input: { displayName?: string; email?: string | null } = {}): {
+  ensureLocalOwner(
+    input: { displayName?: string; email?: string | null; restoreOwner?: boolean } = {}
+  ): {
     user: IdentityUser;
     workspace: WorkspaceIdentity;
     membership: WorkspaceMembership;
@@ -196,15 +198,13 @@ export class SqliteIdentityRepository {
         )
         VALUES ('local', 'local-user', 'owner', 'active', ?, ?, ?)
         ON CONFLICT(workspace_id, user_id) DO UPDATE SET
-          role = CASE
-            WHEN workspace_memberships.role = 'owner' THEN workspace_memberships.role
-            ELSE excluded.role
-          END,
+          role = 'owner',
           status = 'active',
           disabled_at = NULL,
           updated_at = excluded.updated_at
+        WHERE ? = 1
       `
-    ).run(now, now, now);
+    ).run(now, now, now, input.restoreOwner === true ? 1 : 0);
 
     return {
       user: requireValue(this.getUser('local-user'), 'Local user was not created'),
@@ -267,6 +267,35 @@ export class SqliteIdentityRepository {
       .get(email) as UserRow | undefined;
 
     return row ? mapUser(row) : null;
+  }
+
+  getUserByAuthSubject(authSubject: string): IdentityUser | null {
+    const row = this.database
+      .getConnection()
+      .prepare('SELECT * FROM users WHERE auth_subject = ?')
+      .get(authSubject) as UserRow | undefined;
+
+    return row ? mapUser(row) : null;
+  }
+
+  bindExternalIdentity(input: { userId: string; authSubject: string }): IdentityUser | null {
+    const now = new Date().toISOString();
+    const result = this.database
+      .getConnection()
+      .prepare(
+        `
+          UPDATE users
+          SET auth_subject = ?,
+              last_seen_at = ?,
+              updated_at = ?
+          WHERE id = ?
+            AND disabled_at IS NULL
+            AND (auth_subject IS NULL OR auth_subject = ?)
+        `
+      )
+      .run(input.authSubject, now, now, input.userId, input.authSubject);
+
+    return result.changes > 0 ? this.getUser(input.userId) : null;
   }
 
   getWorkspace(id: string): WorkspaceIdentity | null {
