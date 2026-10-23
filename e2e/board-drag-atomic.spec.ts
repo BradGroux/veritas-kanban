@@ -443,6 +443,32 @@ test.describe('Atomic board drag', () => {
   test('handles cancel, an empty column, and same-column ordering through real sensors', async ({
     page,
   }) => {
+    // KeyboardSensor attaches its document listener after activation. Overlay
+    // visibility alone does not establish that the next key can be received.
+    await page.addInitScript(() => {
+      const listeners = new Set<EventListenerOrEventListenerObject>();
+      const add = document.addEventListener.bind(document);
+      const remove = document.removeEventListener.bind(document);
+      document.addEventListener = (
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions
+      ) => {
+        if (type === 'keydown') listeners.add(listener);
+        add(type, listener, options);
+      };
+      document.removeEventListener = (
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | EventListenerOptions
+      ) => {
+        if (type === 'keydown') listeners.delete(listener);
+        remove(type, listener, options);
+      };
+      Object.defineProperty(window, '__documentKeydownListenerCount', {
+        get: () => listeners.size,
+      });
+    });
     const moving = await seedTestTask(page, {
       title: 'Atomic matrix moving',
       status: 'todo',
@@ -538,10 +564,18 @@ test.describe('Atomic board drag', () => {
     const secondCard = page.locator(`[data-task-id="${sourceWithinId}"]`);
     await expect(secondCard).toHaveAttribute('aria-roledescription', 'sortable');
     await secondCard.focus();
+    const keydownListenerCount = () =>
+      page.evaluate(
+        () =>
+          (window as Window & { __documentKeydownListenerCount?: number })
+            .__documentKeydownListenerCount ?? 0
+      );
+    const listenersBeforePickup = await keydownListenerCount();
     await page.keyboard.press('Space');
     await expect(
       page.locator(`[data-board-drag-overlay] [data-task-id="${sourceWithinId}"]`)
     ).toBeVisible();
+    await expect.poll(keydownListenerCount).toBeGreaterThan(listenersBeforePickup);
     await page.keyboard.press('ArrowUp');
     await expect
       .poll(() =>
