@@ -209,6 +209,7 @@ describe('SchedulerService', () => {
         status: 'started',
         workflowRunId,
       })),
+      listClaimsPendingReconciliation: vi.fn(async () => []),
       markRunFailed: vi.fn(),
       markRunCompleted: vi.fn(),
       updateBinding: vi.fn(),

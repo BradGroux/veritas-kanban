@@ -612,51 +612,111 @@ export class AutomationActivationService {
     return this.updateClaim(claimId, 'started', { workflowRunId });
   }
 
-  async markRunFailed(claimId: string, reason: string): Promise<AutomationRunClaim> {
-    return this.updateClaim(claimId, 'failed', { reason });
+  /** Includes retained older failures, independently of the UI's recent-claim limit. */
+  async listClaimsPendingReconciliation(): Promise<AutomationRunClaim[]> {
+    return (await this.stateRepository.read()).automationClaims.filter(
+      (claim) =>
+        claim.workflowRunId &&
+        (claim.status === 'started' || (claim.status === 'failed' && !claim.usageReceipt))
+    );
+  }
+
+  async markRunFailed(
+    claimId: string,
+    reason: string,
+    usage?: { costUsd: number; tokens: number; durationMinutes: number }
+  ): Promise<AutomationRunClaim> {
+    return this.finishRunClaim(claimId, 'failed', usage, reason);
   }
 
   async markRunCompleted(
     claimId: string,
     usage: { costUsd: number; tokens: number; durationMinutes: number }
   ): Promise<AutomationRunClaim> {
+    return this.finishRunClaim(claimId, 'completed', usage);
+  }
+
+  private async finishRunClaim(
+    claimId: string,
+    status: 'completed' | 'failed',
+    usage?: { costUsd: number; tokens: number; durationMinutes: number },
+    reason?: string
+  ): Promise<AutomationRunClaim> {
     let result: AutomationRunClaim | undefined;
     await this.stateRepository.update((state) => {
       const index = state.automationClaims.findIndex((claim) => claim.id === claimId);
       if (index < 0) throw new NotFoundError(`Automation run claim ${claimId} not found.`);
       const current = state.automationClaims[index];
-      if (current.status === 'completed') {
+      const alreadyTerminal = current.status === status;
+      // Historical completions already contributed usage before receipts existed.
+      // Historical failures did not, and can be backfilled from retained workflow evidence.
+      if (alreadyTerminal && (status === 'completed' || current.usageReceipt || !usage)) {
         result = current;
         return state;
       }
-      if (current.status !== 'started') {
-        throw new ConflictError('Only a started automation claim can complete.', {
+      if (
+        current.status !== 'started' &&
+        !(status === 'failed' && (current.status === 'accepted' || alreadyTerminal))
+      ) {
+        throw new ConflictError('Automation run claim cannot enter this terminal state.', {
           claimId,
           status: current.status,
         });
       }
-      result = { ...current, status: 'completed', updatedAt: this.now().toISOString() };
-      state.automationClaims[index] = result;
       const binding = state.automationBindings[current.bindingId];
       const version = binding ? state.automationVersions[binding.automationVersionId] : undefined;
-      if (binding && version) {
-        const aggregateUsage = {
-          runs: binding.aggregateUsage.runs,
-          costUsd: binding.aggregateUsage.costUsd + Math.max(0, usage.costUsd),
-          tokens: binding.aggregateUsage.tokens + Math.max(0, Math.trunc(usage.tokens)),
-          durationMinutes:
-            binding.aggregateUsage.durationMinutes + Math.max(0, usage.durationMinutes),
-        };
-        const exhaustion = aggregateBudgetBlocker(version, aggregateUsage);
-        state.automationBindings[binding.id] = {
-          ...binding,
-          aggregateUsage,
-          failedRuns: 0,
-          ...(exhaustion ? { status: 'blocked' as const, statusReason: exhaustion } : {}),
-          revision: binding.revision + 1,
-          updatedAt: this.now().toISOString(),
-        };
-      }
+      if (!binding || !version)
+        throw new NotFoundError('Automation claim accounting target not found.');
+      const timestamp = this.now().toISOString();
+      // A launch failure with no workflow has no measured workflow contribution.
+      const measured =
+        usage ??
+        (!current.workflowRunId ? { costUsd: 0, tokens: 0, durationMinutes: 0 } : undefined);
+      const receipt = measured
+        ? {
+            costUsd: Math.max(0, measured.costUsd),
+            tokens: Math.max(0, Math.trunc(measured.tokens)),
+            durationMinutes: Math.max(0, measured.durationMinutes),
+            recordedAt: timestamp,
+          }
+        : undefined;
+      result = {
+        ...current,
+        status,
+        ...(!alreadyTerminal && reason ? { reason } : {}),
+        ...(receipt ? { usageReceipt: receipt } : {}),
+        updatedAt: timestamp,
+      };
+      state.automationClaims[index] = result;
+      const aggregateUsage = {
+        runs: binding.aggregateUsage.runs,
+        costUsd: binding.aggregateUsage.costUsd + (receipt?.costUsd ?? 0),
+        tokens: binding.aggregateUsage.tokens + (receipt?.tokens ?? 0),
+        durationMinutes: binding.aggregateUsage.durationMinutes + (receipt?.durationMinutes ?? 0),
+      };
+      const failedRuns = alreadyTerminal
+        ? binding.failedRuns
+        : status === 'failed'
+          ? binding.failedRuns + 1
+          : 0;
+      const exhaustion = aggregateBudgetBlocker(version, aggregateUsage);
+      const retryBlocked =
+        status === 'failed' && !alreadyTerminal && failedRuns >= version.schedule.retry.maxAttempts;
+      state.automationBindings[binding.id] = {
+        ...binding,
+        aggregateUsage,
+        failedRuns,
+        ...(exhaustion
+          ? { status: 'blocked' as const, statusReason: exhaustion }
+          : retryBlocked
+            ? {
+                status: 'blocked' as const,
+                statusReason: `Retry limit reached: ${reason ?? 'launch failed'}`,
+              }
+            : {}),
+        revision: binding.revision + 1,
+        updatedAt: timestamp,
+      };
       return state;
     });
     return required(result, 'claim');
@@ -664,7 +724,7 @@ export class AutomationActivationService {
 
   private async updateClaim(
     claimId: string,
-    status: Extract<AutomationRunClaim['status'], 'started' | 'failed'>,
+    status: Extract<AutomationRunClaim['status'], 'started'>,
     update: Pick<AutomationRunClaim, 'workflowRunId' | 'reason'>
   ): Promise<AutomationRunClaim> {
     let result: AutomationRunClaim | undefined;
@@ -676,11 +736,7 @@ export class AutomationActivationService {
         result = current;
         return state;
       }
-      if (
-        current.status !== 'accepted' &&
-        !(status === 'failed' && current.status === 'started') &&
-        current.status !== status
-      ) {
+      if (current.status !== 'accepted') {
         throw new ConflictError('Automation run claim is already terminal.', {
           claimId,
           status: current.status,
@@ -694,26 +750,7 @@ export class AutomationActivationService {
         updatedAt: this.now().toISOString(),
       };
       state.automationClaims[index] = result;
-      if (status === 'failed') {
-        const binding = state.automationBindings[current.bindingId];
-        if (binding) {
-          const version = state.automationVersions[binding.automationVersionId];
-          const failedRuns = binding.failedRuns + 1;
-          const retryLimit = version?.schedule.retry.maxAttempts ?? 0;
-          state.automationBindings[current.bindingId] = {
-            ...binding,
-            failedRuns,
-            ...(failedRuns >= retryLimit
-              ? {
-                  status: 'blocked' as const,
-                  statusReason: `Retry limit reached: ${update.reason ?? 'launch failed'}`,
-                }
-              : {}),
-            revision: binding.revision + 1,
-            updatedAt: this.now().toISOString(),
-          };
-        }
-      }
+
       return state;
     });
     return required(result, 'claim');
