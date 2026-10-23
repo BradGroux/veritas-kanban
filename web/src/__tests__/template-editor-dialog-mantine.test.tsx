@@ -232,18 +232,29 @@ describe('TemplateEditorDialog', () => {
     });
   });
 
-  it.each(['{Enter}', ' '])('clears a default with %s and restores input focus', async (key) => {
+  it.each(
+    [
+      ['Category', 'Clear category'],
+      ['Default Type', 'Clear default type'],
+      ['Default Priority', 'Clear default priority'],
+      ['Default Agent', 'Clear default agent'],
+    ].flatMap(([label, clearLabel]) => ['{Enter}', ' '].map((key) => ({ label, clearLabel, key })))
+  )('clears $label with $key and restores input focus', async ({ label, clearLabel, key }) => {
     const user = userEvent.setup();
     renderWithProviders(<TemplateEditorDialog template={template} open onOpenChange={vi.fn()} />);
-    const category = screen.getByRole('combobox', { name: 'Category' });
+    const input = screen.getByRole('combobox', { name: label });
     await user.click(screen.getByRole('textbox', { name: /Template Name/ }));
+    for (let index = 0; index < 20 && document.activeElement !== input; index += 1) {
+      await user.tab();
+    }
+    expect(document.activeElement).toBe(input);
     await user.tab();
-    expect(document.activeElement).toBe(category);
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Clear category' }));
+    const clear = screen.getByRole('button', { name: clearLabel });
+    expect(clear.getAttribute('aria-hidden')).toBeNull();
+    expect(document.activeElement).toBe(clear);
     await user.keyboard(key);
-    expect(screen.queryByRole('button', { name: 'Clear category' })).toBeNull();
-    expect(document.activeElement).toBe(category);
+    expect(screen.queryByRole('button', { name: clearLabel })).toBeNull();
+    expect(document.activeElement).toBe(input);
   });
 
   it('offers Critical and preserves its shared priority value on save', async () => {

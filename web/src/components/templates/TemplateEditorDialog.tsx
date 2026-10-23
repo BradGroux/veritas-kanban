@@ -287,7 +287,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                   clearable
                   clearButtonProps={{
                     'aria-label': 'Clear category',
-                    'aria-hidden': false,
+                    'aria-hidden': undefined,
                     tabIndex: 0,
                   }}
                   disabled={isLoading}
@@ -322,7 +322,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                     clearable
                     clearButtonProps={{
                       'aria-label': 'Clear default type',
-                      'aria-hidden': false,
+                      'aria-hidden': undefined,
                       tabIndex: 0,
                     }}
                     disabled={isLoading}
@@ -352,7 +352,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                     clearable
                     clearButtonProps={{
                       'aria-label': 'Clear default priority',
-                      'aria-hidden': false,
+                      'aria-hidden': undefined,
                       tabIndex: 0,
                     }}
                     disabled={isLoading}
@@ -381,7 +381,7 @@ export function TemplateEditorDialog({ template, open, onOpenChange }: TemplateE
                     clearable
                     clearButtonProps={{
                       'aria-label': 'Clear default agent',
-                      'aria-hidden': false,
+                      'aria-hidden': undefined,
                       tabIndex: 0,
                     }}
                     disabled={isLoading}
