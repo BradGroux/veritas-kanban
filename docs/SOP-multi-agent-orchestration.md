@@ -25,10 +25,8 @@ When you ask “Hey Veritas, can you be the PM for this sprint and assign sub-ag
    - Update Agent Status panel using `vk agent sub-agent <count>`.
    - Managed workers rely on VK-owned attempt timing. Only human or external
      self-reporting workers use `vk begin`/`vk done`.
-5. **Review**:
-   - Run independent or cross-model review only when required by the task or
-     configured governance policy.
-   - Request fixes via subtasks or comments.
+5. **Verify**:
+   - Request fixes via subtasks or comments when verification finds a defect.
 6. **Report**:
    - Post updates in task comments and daily standups (`vk summary standup --text`).
    - Ping human lead when blockers persist > 30 minutes.

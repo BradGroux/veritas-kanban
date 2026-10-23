@@ -8,7 +8,7 @@ import express from 'express';
 const { mockTaskService } = vi.hoisted(() => ({
   mockTaskService: {
     getTask: vi.fn(),
-    updateTask: vi.fn(),
+    mutateTaskChildren: vi.fn(),
   },
 }));
 
@@ -27,6 +27,10 @@ describe('Task Subtask Routes (actual module)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTaskService.mutateTaskChildren.mockImplementation(async (_id, mutate) => {
+      const task = await mockTaskService.getTask();
+      return task ? { ...task, ...mutate(task) } : null;
+    });
     app = express();
     app.use(express.json());
     app.use('/api/tasks', taskSubtaskRoutes);
@@ -37,10 +41,6 @@ describe('Task Subtask Routes (actual module)', () => {
     it('should add a subtask', async () => {
       const task = { id: 't1', title: 'Task', subtasks: [] };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({
-        ...task,
-        subtasks: [{ id: 's1', title: 'Sub', completed: false }],
-      });
 
       const res = await request(app).post('/api/tasks/t1/subtasks').send({ title: 'Sub' });
       expect(res.status).toBe(201);
@@ -70,7 +70,6 @@ describe('Task Subtask Routes (actual module)', () => {
         subtasks: [{ id: 's1', title: 'Sub', completed: false, created: '2025-01-01' }],
       };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue(task);
 
       const res = await request(app).patch('/api/tasks/t1/subtasks/s1').send({ completed: true });
       expect(res.status).toBe(200);
@@ -92,7 +91,7 @@ describe('Task Subtask Routes (actual module)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('should auto-complete task when all subtasks done', async () => {
+    it('delegates parent auto-completion to the atomic mutation', async () => {
       const task = {
         id: 't1',
         autoCompleteOnSubtasks: true,
@@ -102,13 +101,15 @@ describe('Task Subtask Routes (actual module)', () => {
         ],
       };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({ ...task, status: 'done' });
 
       const res = await request(app).patch('/api/tasks/t1/subtasks/s2').send({ completed: true });
       expect(res.status).toBe(200);
-      expect(mockTaskService.updateTask).toHaveBeenCalledWith(
-        't1',
-        expect.objectContaining({ status: 'done' })
+      expect(mockTaskService.mutateTaskChildren).toHaveBeenCalledWith('t1', expect.any(Function), {
+        expectedRevision: undefined,
+        completeOnSubtasks: true,
+      });
+      expect(res.body.subtasks.every((subtask: { completed: boolean }) => subtask.completed)).toBe(
+        true
       );
     });
 
@@ -122,7 +123,6 @@ describe('Task Subtask Routes (actual module)', () => {
     it('should delete a subtask', async () => {
       const task = { id: 't1', subtasks: [{ id: 's1', title: 'Sub', completed: false }] };
       mockTaskService.getTask.mockResolvedValue(task);
-      mockTaskService.updateTask.mockResolvedValue({ ...task, subtasks: [] });
 
       const res = await request(app).delete('/api/tasks/t1/subtasks/s1');
       expect(res.status).toBe(200);

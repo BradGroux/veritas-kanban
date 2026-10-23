@@ -4,14 +4,15 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, cleanup, waitFor } from '@testing-library/react';
+import { screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient } from '@tanstack/react-query';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { createMockTask, renderWithProviders } from './test-utils';
 import { DEFAULT_FEATURE_SETTINGS, type FeatureSettings, type Task } from '@veritas-kanban/shared';
+import type { FilterState } from '@/components/board/FilterBar';
 import { DesktopShellProvider } from '@/components/layout/DesktopShellContext';
-import { ViewProvider } from '@/contexts/ViewContext';
+import { ViewProvider, useView } from '@/contexts/ViewContext';
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ const mockTasks: Task[] = [
 ];
 
 let mockUseTasks: () => { data: Task[] | undefined; isLoading: boolean; error: Error | null };
+let mockHistoryFilterControls = false;
 let mockDragDropActiveTask: Task | null = null;
 let mockDragDropMovePending = false;
 let mockFeatureSettingsResult: { isPlaceholderData: boolean; settings: FeatureSettings } = {
@@ -193,7 +195,21 @@ vi.mock('@/components/board/FilterBar', async () => {
     '@/components/board/FilterBar'
   );
   return {
-    FilterBar: () => null,
+    FilterBar: ({
+      filters,
+      onFiltersChange,
+    }: {
+      filters: FilterState;
+      onFiltersChange: (filters: FilterState) => void;
+    }) =>
+      mockHistoryFilterControls ? (
+        <button
+          type="button"
+          onClick={() => onFiltersChange({ ...filters, project: 'fixture-project' })}
+        >
+          Change history fixture filter
+        </button>
+      ) : null,
     filterTasks: actual.filterTasks,
     filtersToSearchParams: actual.filtersToSearchParams,
     searchParamsToFilters: actual.searchParamsToFilters,
@@ -294,6 +310,8 @@ function setOnline(value: boolean) {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  mockHistoryFilterControls = false;
   setOnline(true);
   delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
   delete document.documentElement.dataset.client;
@@ -546,4 +564,83 @@ describe('KanbanBoard', () => {
       expect(window.location.search).toBe('?q=existing');
     });
   });
+});
+
+function BoardSourceRouteHarness() {
+  const { view, navigateToTask } = useView();
+  return (
+    <>
+      <output data-testid="source-route-view">{view}</output>
+      <button type="button" onClick={() => navigateToTask('k1')}>
+        Open source task
+      </button>
+      {view === 'board' && <KanbanBoard />}
+    </>
+  );
+}
+
+for (const source of ['activity', 'evidence', 'workflows'])
+  it(`preserves ${source} origin and scroll through the actual Board filter effect`, async () => {
+    mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+    mockHistoryFilterControls = true;
+    window.history.replaceState({}, '', `/${source}`);
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <div id="main-content">
+        <ViewProvider>
+          <BoardSourceRouteHarness />
+        </ViewProvider>
+      </div>,
+      { queryClient }
+    );
+    const main = document.getElementById('main-content');
+    if (!main) throw new Error('Missing scroll container');
+    main.scrollTop = 420;
+    fireEvent.scroll(main);
+    await waitFor(() => expect(window.history.state.veritasKanbanNavigation.scrollTop).toBe(420));
+    const originState = window.history.state;
+    const push = vi.spyOn(window.history, 'pushState');
+    await user.click(screen.getByRole('button', { name: 'Open source task' }));
+    await screen.findByRole('dialog', { name: 'Task details: Todo Task' });
+    expect(window.history.state.veritasTaskDetail).toBe('k1');
+    expect(window.history.state.veritasKanbanNavigation.originView).toBe(source);
+    const navigation = window.history.state.veritasKanbanNavigation;
+    await user.click(screen.getByRole('button', { name: 'Change history fixture filter' }));
+    expect(window.location.search).toBe('?project=fixture-project');
+    expect(window.history.state.veritasTaskDetail).toBe('k1');
+    expect(window.history.state.veritasKanbanNavigation).toEqual(navigation);
+    expect(push).toHaveBeenCalledOnce();
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {
+      window.history.replaceState(originState, '', `/${source}`);
+      window.dispatchEvent(new PopStateEvent('popstate', { state: originState }));
+    });
+    await user.click(screen.getByRole('button', { name: 'Close task details' }));
+    expect(back).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(screen.getByTestId('source-route-view').textContent).toBe(source);
+      expect(main.scrollTop).toBe(420);
+    });
+    expect(window.location.pathname).toBe(`/${source}`);
+    expect(push).toHaveBeenCalledOnce();
+  });
+
+it('preserves unrelated and workflow history metadata for direct Board filters without pushing', async () => {
+  mockUseTasks = () => ({ data: mockTasks, isLoading: false, error: null });
+  mockHistoryFilterControls = true;
+  const state = {
+    veritasTaskDetail: 'k1',
+    veritasTaskWorkflow: { id: 'workflow-fixture' },
+    veritasWorkflowNavigation: { from: '/activity' },
+    externalState: { retained: ['value'] },
+  };
+  window.history.replaceState(state, '', '/?q=existing');
+  const push = vi.spyOn(window.history, 'pushState');
+  renderBoard();
+  expect(window.history.state).toEqual(state);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Change history fixture filter' }));
+  expect(window.location.search).toContain('project=fixture-project');
+  expect(window.history.state).toEqual(state);
+  expect(push).not.toHaveBeenCalled();
 });

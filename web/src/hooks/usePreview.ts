@@ -14,7 +14,8 @@ export function usePreviewStatus(taskId: string | undefined) {
       return api.preview.getStatus(taskId);
     },
     enabled: !!taskId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
+      const data = query.state.data;
       // Poll more frequently when starting
       if (data && 'status' in data && data.status === 'starting') {
         return 1000;

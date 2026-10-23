@@ -1245,6 +1245,8 @@ _Part of [Veritas Kanban](../README.md) · Built by [Digital Meld](https://digit
 
 ### API deadlines and errors
 
+Standup and memory text output and artifact downloads use the same deadline as JSON requests. Artifact downloads verify the complete body against the server SHA-256 digest before opening the destination file.
+
 Shared API requests have a 30-second deadline, including response-body reads. Set `VK_API_TIMEOUT_MS` to a positive integer of milliseconds for a different default. Agent launch requests explicitly allow 120 seconds for provider preflight and worktree preparation. Client integrations can set `timeoutMs` per request and supply an `AbortSignal`; cancellation also covers uncached permission preflight. Writes are never retried automatically. A timeout does not prove that the server rejected or rolled back a write: inspect the task or operation before trying it again.
 
 API errors retain HTTP status and server error code. MCP tool errors and CLI task commands using `--json` include structured metadata. Forwarded details use an allowlist for validation, revision, permission, and retry fields; complete task snapshots and credential fields are omitted. A rejected preflight does not remain cached as a permanent transport failure.

@@ -12,6 +12,7 @@ import { withFileLock } from '../services/file-lock.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { ensureWithinBase } from '../utils/sanitize.js';
 import type { DurableGoalRepository } from './interfaces.js';
+import { writeAll } from './fs-helpers.js';
 
 const MAX_GOAL_LOG_BYTES = 64 * 1024 * 1024;
 const MAX_GOAL_SNAPSHOTS = 50_000;
@@ -149,7 +150,7 @@ export class FileDurableGoalRepository implements DurableGoalRepository {
       0o600
     );
     try {
-      await handle.write(line, undefined, 'utf8');
+      await writeAll(handle, line);
       await handle.sync();
     } finally {
       await handle.close();

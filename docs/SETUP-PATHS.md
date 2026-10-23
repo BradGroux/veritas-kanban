@@ -188,7 +188,7 @@ These are separate surfaces:
 
 ### Workflows And Governance
 
-Workflow engine, gates, policies, cross-model review, and approval rules are production guardrails. They are useful, but they are not part of first-run setup.
+Workflow engine, gates, policies, and approval rules are production guardrails. They are useful, but they are not part of first-run setup.
 
 ## Assistant-Safe Setup Prompt
 

@@ -20,6 +20,7 @@ import {
   normalizeExpiredExtractionJob,
   selectExtractionJob,
 } from './reflection-extraction-job-state.js';
+import { writeAll } from './fs-helpers.js';
 
 const MAX_JOB_LOG_BYTES = 64 * 1024 * 1024;
 const MAX_JOB_SNAPSHOTS = 50_000;
@@ -174,7 +175,7 @@ export class FileReflectionExtractionJobRepository implements ReflectionExtracti
       0o600
     );
     try {
-      await handle.write(content, undefined, 'utf8');
+      await writeAll(handle, content);
       await handle.sync();
     } finally {
       await handle.close();

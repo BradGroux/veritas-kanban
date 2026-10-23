@@ -378,6 +378,13 @@ export interface AutomationRunClaim {
   status: AutomationRunClaimStatus;
   workflowRunId?: string;
   reason?: string;
+  /** Terminal contribution committed atomically with aggregate usage. */
+  usageReceipt?: {
+    costUsd: number;
+    tokens: number;
+    durationMinutes: number;
+    recordedAt: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
