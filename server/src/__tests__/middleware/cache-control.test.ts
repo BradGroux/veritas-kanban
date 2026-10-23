@@ -3,13 +3,8 @@
  * Tests cache-control header management for API and static responses.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
-import {
-  cacheControl,
-  apiCacheHeaders,
-  setLastModified,
-  type CacheProfile,
-} from '../../middleware/cache-control.js';
+import type { Request, Response } from 'express';
+import { cacheControl, apiCacheHeaders, setLastModified } from '../../middleware/cache-control.js';
 
 function mockRequest(overrides: Partial<Request> = {}): Request {
   return {
