@@ -2,7 +2,7 @@
 
 The optional `orcarouter-codex` agent profile uses Codex CLI **0.155.1** with OrcaRouter's [OpenAI-compatible Responses endpoint](https://docs.orcarouter.ai/native-formats/openai-compat), `https://api.orcarouter.ai/v1`. Existing agents and defaults are unchanged. Other harnesses are unverified for this gateway.
 
-This integration is under local acceptance. Credential-free launch and configuration tests do not establish a successful live OrcaRouter task. Do not treat a detected executable or configured environment key as proof that the gateway accepted a request.
+Version 6.3.0 includes this opt-in integration with **live OrcaRouter compatibility unverified**. The pinned CLI passed synthetic-provider checks, but no real gateway task has been accepted or tested. Do not treat a detected executable, a configured environment key, or those synthetic checks as proof that the live gateway accepted a request.
 
 ## Configure the profile
 
