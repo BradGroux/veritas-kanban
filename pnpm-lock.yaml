@@ -350,7 +350,7 @@ importers:
         specifier: ^3.4.17
         version: 3.4.17
       lucide-react:
-        specifier: ^1.59.0
+        specifier: ^1.60.0
         version: 1.61.0(@types/react@19.3.0)(react@19.3.1)
       nanoid:
         specifier: ^6.0.2
