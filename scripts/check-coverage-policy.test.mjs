@@ -30,7 +30,7 @@ const valid = {
     devDependencies: { '@vitest/coverage-v8': '^4.1.11' },
   },
   workflow:
-    'jobs:\n  critical-path-coverage:\n    fetch-depth: 0\n    needs.select-tests.outputs.coverage_packages\n    needs.select-tests.outputs.base_sha\n    pnpm test:coverage --packages\n    COVERAGE_BASE_REF:\n    if: always() && needs.select-tests.outputs.coverage_packages\n    actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n  build:\n    runs-on: ubuntu-latest',
+    'jobs:\n  critical-path-coverage:\n    fetch-depth: 0\n    needs.select-tests.outputs.coverage_packages\n    needs.select-tests.outputs.base_sha\n    pnpm test:coverage --packages\n    COVERAGE_BASE_REF:\n    if: always() && needs.select-tests.outputs.coverage_packages\n    actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9\n  build:\n    runs-on: ubuntu-latest',
   configs: Object.fromEntries(
     ['server', 'web', 'cli', 'mcp', 'desktop'].map((id) => [
       id,
@@ -55,6 +55,19 @@ test('accepts a complete measured policy and rejects zero floors', () => {
   const invalid = globalThis.structuredClone(valid);
   invalid.policy.packages[0].boundaries[0].thresholds.lines = 0;
   assert.match(validateCoveragePolicy(invalid).join('\n'), /lines threshold/);
+});
+
+test('rejects stale and mutable coverage artifact action references', () => {
+  for (const revision of ['043fb46d1a93c77aae656e7c1c64a875d1fc6a0a', 'v7']) {
+    const workflow = valid.workflow.replace(
+      'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
+      `actions/upload-artifact@${revision}`
+    );
+    assert.match(
+      validateCoveragePolicy({ ...valid, workflow }).join('\n'),
+      /immutable approved action/
+    );
+  }
 });
 
 test('requires the command, CI artifact, and all workspace configs', () => {

@@ -43,7 +43,9 @@ export function compareCoveragePolicy(current, baseline) {
     for (const field of ['testFiles', 'triggerPatterns']) {
       for (const input of baselinePackage.runner?.[field] ?? []) {
         if (!currentPackage.runner?.[field]?.includes(input)) {
-          errors.push(`${baselinePackage.id} cannot remove governed runner ${field} input ${input}`);
+          errors.push(
+            `${baselinePackage.id} cannot remove governed runner ${field} input ${input}`
+          );
         }
       }
     }
@@ -146,7 +148,7 @@ export function validateCoveragePolicy({
   if (!workflow.includes('if: always() && needs.select-tests.outputs.coverage_packages')) {
     errors.push('CI must preserve coverage artifacts after a failed ratchet');
   }
-  if (!workflow.includes('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a')) {
+  if (!workflow.includes('actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9')) {
     errors.push('CI must upload coverage with the immutable approved action');
   }
 
