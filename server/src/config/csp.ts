@@ -1,5 +1,6 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import type { IncomingMessage, ServerResponse } from 'http';
+import helmet from 'helmet';
 import { cspNonceDirective } from '../middleware/csp-nonce.js';
 
 type CspDirectiveValue = string | ((_req: IncomingMessage, res: ServerResponse) => string);
@@ -9,6 +10,14 @@ export type CspDirectives = Record<string, null | Iterable<CspDirectiveValue>>;
 export interface CspDirectiveOptions {
   isDev: boolean;
   isDesktopRuntime: boolean;
+  isSecureRequest: boolean;
+  reportUri?: string | null;
+}
+
+export interface SecurityHeadersOptions {
+  isDev: boolean;
+  isDesktopRuntime: boolean;
+  reportOnly: boolean;
   reportUri?: string | null;
 }
 
@@ -46,7 +55,8 @@ export function buildCspDirectives(options: CspDirectiveOptions): CspDirectives 
     frameSrc: [NONE],
     baseUri: [SELF],
     formAction: [SELF],
-    upgradeInsecureRequests: options.isDev || options.isDesktopRuntime ? null : [],
+    upgradeInsecureRequests:
+      options.isDev || options.isDesktopRuntime || !options.isSecureRequest ? null : [],
   };
 
   if (options.reportUri) {
@@ -54,6 +64,36 @@ export function buildCspDirectives(options: CspDirectiveOptions): CspDirectives 
   }
 
   return directives;
+}
+
+/**
+ * Applies the production upgrade policy only to requests that Express identifies
+ * as HTTPS. With TRUST_PROXY configured, req.secure also reflects a trusted
+ * X-Forwarded-Proto header from the deployment's reverse proxy.
+ */
+export function createSecurityHeaders(options: SecurityHeadersOptions): RequestHandler {
+  const createHeaders = (isSecureRequest: boolean) =>
+    helmet({
+      contentSecurityPolicy: {
+        reportOnly: options.reportOnly,
+        directives: {
+          ...buildCspDirectives({
+            isDev: options.isDev,
+            isDesktopRuntime: options.isDesktopRuntime,
+            isSecureRequest,
+            reportUri: options.reportUri,
+          }),
+        },
+      },
+      // Cross-Origin-Embedder-Policy can break loading of cross-origin resources;
+      // disable it for now since we serve an API, not embedded content.
+      crossOriginEmbedderPolicy: false,
+    });
+
+  const plaintextHeaders = createHeaders(false);
+  const secureHeaders = createHeaders(true);
+
+  return (req, res, next) => (req.secure ? secureHeaders : plaintextHeaders)(req, res, next);
 }
 
 export function apiDocsCspOverride(_req: Request, res: Response, next: NextFunction): void {

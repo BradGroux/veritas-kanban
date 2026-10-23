@@ -8,15 +8,16 @@ import {
 const NOW = new Date('2026-07-24T12:00:00.000Z');
 
 describe('HarnessCompatibilityMatrixService', () => {
-  it('publishes the five reviewed harnesses from one versioned contract', () => {
+  it('publishes the reviewed harnesses from one versioned contract', () => {
     const matrix = new HarnessCompatibilityMatrixService(() => NOW).build();
 
     expect(matrix).toMatchObject({
       schemaVersion: 'harness-compatibility-matrix/v1',
       generatedAt: NOW.toISOString(),
-      probeRevision: 17,
+      probeRevision: 18,
     });
     expect(matrix.records.map((record) => record.agentType)).toEqual([
+      'orcarouter-codex',
       'buzz-agent',
       'grok-build',
       'codex-app-server',
@@ -24,12 +25,23 @@ describe('HarnessCompatibilityMatrixService', () => {
       'copilot',
     ]);
     expect(matrix.records.map((record) => record.testedVersions[0])).toEqual([
+      'codex-cli 0.155.1',
       'buzz-agent 0.1.0',
       'Grok Build 0.2.111',
       'codex-cli 0.145.0',
       '2.1.218 (Claude Code)',
       'Copilot 1.0.74',
     ]);
+    expect(matrix.records.find((record) => record.agentType === 'orcarouter-codex')).toMatchObject({
+      profileId: 'orcarouter-codex-cli',
+      adapterId: 'codex-cli',
+      reviewedAt: '2026-10-23',
+      testedVersions: ['codex-cli 0.155.1'],
+      testedBuilds: [],
+      certification: { status: 'not-run', fixtureRevision: 1 },
+      guide: { authentication: expect.stringContaining('ORCAROUTER_API_KEY') },
+      limitations: expect.arrayContaining([expect.stringContaining('live gateway acceptance')]),
+    });
     expect(matrix.records.find((record) => record.agentType === 'grok-build')).toMatchObject({
       sourceAvailability: 'partial-source',
       protocolVersion: 'acp/v1',

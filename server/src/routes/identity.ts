@@ -331,9 +331,12 @@ function actorFromRequest(req: AuthenticatedRequest): IdentityActor {
   const userId = req.auth?.userId ?? 'local-user';
   return {
     userId,
-    role: role === 'agent' ? 'agent' : role === 'read-only' ? 'read-only' : 'owner',
+    role:
+      req.auth?.workspaceRole ??
+      (role === 'agent' ? 'agent' : role === 'read-only' ? 'read-only' : 'owner'),
     displayName: req.auth?.tokenName ?? req.auth?.keyName ?? userId,
     permissions: req.auth?.permissions,
+    installationOwner: req.auth?.installationOwner === true,
   };
 }
 

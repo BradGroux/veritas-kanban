@@ -113,17 +113,17 @@ describe('vk prompts import', () => {
 
   it('creates templates with stable frontmatter IDs when not dry-running', async () => {
     await writeFile(
-      path.join(tmpDir, 'review.md'),
+      path.join(tmpDir, 'implementation.md'),
       [
         '---',
-        'id: cross-model-review',
-        'name: Cross Model Review',
-        'category: evaluation',
-        'description: Opposite-model review checklist',
+        'id: implementation-checklist',
+        'name: Implementation Checklist',
+        'category: agent',
+        'description: Focused implementation checklist',
         '---',
         '# Ignored Heading',
         '',
-        'Review {{task_id}}.',
+        'Implement and verify {{task_id}}.',
       ].join('\n'),
       'utf-8'
     );
@@ -143,11 +143,11 @@ describe('vk prompts import', () => {
       'POST /api/prompt-registry',
     ]);
     expect(api.calls[1]?.body).toMatchObject({
-      id: 'cross-model-review',
-      name: 'Cross Model Review',
-      category: 'evaluation',
-      description: 'Opposite-model review checklist',
-      content: '# Ignored Heading\n\nReview {{task_id}}.',
+      id: 'implementation-checklist',
+      name: 'Implementation Checklist',
+      category: 'agent',
+      description: 'Focused implementation checklist',
+      content: '# Ignored Heading\n\nImplement and verify {{task_id}}.',
     });
   });
 

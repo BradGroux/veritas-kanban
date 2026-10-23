@@ -253,7 +253,6 @@ BoardKit Orchestrator inspired us here: keep prompts, skills, and guidelines in 
 prompt-registry/
 ├── sprint-planning.md      # Break epics into sprints
 ├── worker-handoff.md       # PM → Worker assignment
-├── cross-model-review.md   # Optional independent review
 ├── feature-development.md  # E2E feature implementation
 ├── bug-triage.md           # Investigation and fix
 ├── research-report.md      # Deep research deliverable
@@ -265,7 +264,7 @@ prompt-registry/
 
 **Usage:**
 
-1. Reference in task descriptions: `See prompt: prompt-registry/cross-model-review.md`
+1. Reference a prompt file in task descriptions when appropriate
 2. Copy and customize for your team's conventions
 3. Preview runtime registry changes: `vk prompts import prompt-registry --dry-run`
 4. Apply new templates: `vk prompts import prompt-registry`
@@ -332,7 +331,6 @@ Skip this for board-only use, REST/CLI/MCP task management, or agents that do no
    - [Agent Task Workflow](SOP-agent-task-workflow.md)
    - [Sprint Planning with AI Agents](SOP-sprint-planning.md)
    - [Multi-Agent Orchestration](SOP-multi-agent-orchestration.md)
-   - [Cross-Model Code Review](SOP-cross-model-code-review.md)
    - [Documentation Freshness](SOP-documentation-freshness.md)
    - [Shared Resources](SOP-shared-resources.md)
    - [Lifecycle Hooks](SOP-lifecycle-hooks.md)

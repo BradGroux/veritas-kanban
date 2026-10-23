@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto';
 import {
+  buildOrcaRouterCodexArgs,
+  isOrcaRouterCodexAgent,
+  ORCAROUTER_CODEX_PROFILE_ID,
+  ORCAROUTER_CODEX_VERSION,
+  ORCAROUTER_CREDENTIAL_ENV_KEY,
+} from '../utils/orcarouter-codex.js';
+import {
   HARNESS_SUPPORT_PROFILE_SCHEMA_VERSION,
   type AgentConfig,
   type HarnessSupportProfile,
@@ -96,6 +103,20 @@ interface RedactedCommand {
 }
 
 const DEFINITIONS: Record<string, ProfileDefinition> = {
+  'orcarouter-codex': {
+    id: ORCAROUTER_CODEX_PROFILE_ID,
+    displayName: 'OrcaRouter with Codex CLI',
+    adapterId: 'codex-cli',
+    transport: 'process-jsonl',
+    auth: { kind: 'environment', environmentKeys: [ORCAROUTER_CREDENTIAL_ENV_KEY] },
+    credentialAllowlist: [ORCAROUTER_CREDENTIAL_ENV_KEY],
+    environmentAllowlist: ['CODEX_HOME'],
+    testedVersions: [ORCAROUTER_CODEX_VERSION],
+    documentationUrl: 'https://docs.orcarouter.ai/native-formats/openai-compat',
+    remediation: [
+      'Install Codex CLI 0.155.1, select an explicit provider/model and configure ORCAROUTER_API_KEY in the server environment. Gateway live acceptance is required separately.',
+    ],
+  },
   'buzz-agent': {
     id: 'buzz-agent',
     displayName: 'Buzz Agent',
@@ -295,6 +316,14 @@ export function normalizeHarnessSupportProfile(agent: AgentConfig): HarnessSuppo
     redactedCommand.containsCredentialMaterial || redactedLaunchArgs.containsCredentialMaterial;
   let providerLaunchError: string | undefined;
   let normalizedProviderArgs = redactedLaunchArgs.args;
+  if (isOrcaRouterCodexAgent(agent) && !unsafeLaunchConfiguration) {
+    try {
+      normalizedProviderArgs = buildOrcaRouterCodexArgs(agent);
+    } catch (error) {
+      providerLaunchError =
+        error instanceof Error ? error.message : 'OrcaRouter configuration is invalid.';
+    }
+  }
   if (definition.adapterId === 'claude-code' && !unsafeLaunchConfiguration) {
     try {
       normalizedProviderArgs = buildClaudeCodeArgs({

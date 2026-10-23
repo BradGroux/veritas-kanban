@@ -23,14 +23,13 @@ summaries, and telemetry.
 
 ## Lifecycle Overview
 
-| Stage       | Action                                                                                            | Required?   |
-| ----------- | ------------------------------------------------------------------------------------------------- | ----------- |
-| 0. Intake   | Task created with clear title, description, acceptance criteria, type, project, sprint.           | ✅          |
-| 1. Claim    | Agent sets status `in-progress`, starts timer, sets Agent Status → working.                       | ✅          |
-| 2. Work     | Agent executes subtasks; marks subtasks complete as it goes.                                      | ✅          |
-| 3. Update   | Post intermediate comment(s) or blockers; set status `blocked` if waiting on human.               | As needed   |
-| 4. Complete | Stop timer, set status `done`, provide completion summary + attachments, capture lessons learned. | ✅          |
-| 5. Review   | Run an independent or cross-model review when the task or governance policy requires it.          | Conditional |
+| Stage       | Action                                                                                            | Required? |
+| ----------- | ------------------------------------------------------------------------------------------------- | --------- |
+| 0. Intake   | Task created with clear title, description, acceptance criteria, type, project, sprint.           | ✅        |
+| 1. Claim    | Agent sets status `in-progress`, starts timer, sets Agent Status → working.                       | ✅        |
+| 2. Work     | Agent executes subtasks; marks subtasks complete as it goes.                                      | ✅        |
+| 3. Update   | Post intermediate comment(s) or blockers; set status `blocked` if waiting on human.               | As needed |
+| 4. Complete | Stop timer, set status `done`, provide completion summary + attachments, capture lessons learned. | ✅        |
 
 ---
 
