@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
@@ -8,7 +8,7 @@ import {
   useDesktopShell,
 } from '@/components/layout/DesktopShellContext';
 
-function ShellProbe() {
+function ShellProbe({ triggerKey = 'original' }: { triggerKey?: string }) {
   const shell = useDesktopShell();
 
   return (
@@ -17,8 +17,18 @@ function ShellProbe() {
       <output aria-label="left rail">{String(shell.leftRailOpen)}</output>
       <output aria-label="right rail">{String(shell.rightRailOpen)}</output>
       <output aria-label="bottom panel">{shell.bottomPanel ?? 'closed'}</output>
+      {shell.bottomPanel && (
+        <section id="workbench-right-dock">
+          <button type="button">Focused dock control</button>
+        </section>
+      )}
       <output aria-label="right panel width">{shell.rightPanelWidth}</output>
-      <button type="button" onClick={() => shell.openBottomPanel('board-chat')}>
+      <button
+        key={triggerKey}
+        data-overlay-focus-key="fixture-board-chat"
+        type="button"
+        onClick={() => shell.openBottomPanel('board-chat')}
+      >
         Open board chat
       </button>
       <button type="button" onClick={() => shell.setLeftRailOpen(false)}>
@@ -67,6 +77,7 @@ describe('desktop shell recovery', () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     delete (window as Window & { veritasDesktop?: unknown }).veritasDesktop;
     delete document.documentElement.dataset.client;
   });
@@ -178,6 +189,129 @@ describe('desktop shell recovery', () => {
     } finally {
       back.mockRestore();
     }
+  });
+
+  it('returns focused dock content to its visible opener over repeated resize/fullscreen collapses', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return (this.hidden ? [] : [new DOMRect(0, 0, 32, 32)]) as unknown as DOMRectList;
+    });
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'Open board chat' });
+    for (const event of ['resize', 'fullscreenchange']) {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1360 });
+      act(() => window.dispatchEvent(new Event('resize')));
+      await user.click(trigger);
+      screen.getByRole('button', { name: 'Focused dock control' }).focus();
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+      act(() => (event === 'resize' ? window : document).dispatchEvent(new Event(event)));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      expect(document.activeElement).toBe(trigger);
+      expect(screen.getByLabelText('bottom panel').textContent).toBe('closed');
+      expect(window.history.state.veritasBottomPanel).toBeUndefined();
+      expect(back).not.toHaveBeenCalled();
+    }
+  });
+
+  it('waits for dock removal even if the next frame runs before the resize render commits', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 32, 32),
+    ] as unknown as DOMRectList);
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'Open board chat' });
+    await user.click(trigger);
+    screen.getByRole('button', { name: 'Focused dock control' }).focus();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    act(() => window.dispatchEvent(new Event('resize')));
+    expect(screen.queryByRole('button', { name: 'Focused dock control' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('resolves the current visible opener if the responsive header remounts before restoration', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return (this.hidden ? [] : [new DOMRect(0, 0, 32, 32)]) as unknown as DOMRectList;
+    });
+    const user = userEvent.setup();
+    const view = render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    const oldTrigger = screen.getByRole('button', { name: 'Open board chat' });
+    await user.click(oldTrigger);
+    screen.getByRole('button', { name: 'Focused dock control' }).focus();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    act(() => window.dispatchEvent(new Event('resize')));
+    view.rerender(
+      <DesktopShellProvider>
+        <ShellProbe triggerKey="replacement" />
+      </DesktopShellProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'Open board chat' });
+    expect(trigger).not.toBe(oldTrigger);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('does not steal newer focus from a surviving task before the restoration frame', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 32, 32),
+    ] as unknown as DOMRectList);
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    await user.click(screen.getByRole('button', { name: 'Open board chat' }));
+    screen.getByRole('button', { name: 'Focused dock control' }).focus();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    act(() => window.dispatchEvent(new Event('resize')));
+    const taskControl = screen.getByRole('button', { name: 'Reset layout' });
+    taskControl.focus();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(document.activeElement).toBe(taskControl);
+  });
+
+  it('leaves focus in a dock reopened before the previous collapse restoration frame', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([
+      new DOMRect(0, 0, 32, 32),
+    ] as unknown as DOMRectList);
+    const user = userEvent.setup();
+    render(
+      <DesktopShellProvider>
+        <ShellProbe />
+      </DesktopShellProvider>
+    );
+    const trigger = screen.getByRole('button', { name: 'Open board chat' });
+    await user.click(trigger);
+    screen.getByRole('button', { name: 'Focused dock control' }).focus();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
+    act(() => window.dispatchEvent(new Event('resize')));
+    fireEvent.click(trigger);
+    const current = screen.getByRole('button', { name: 'Focused dock control' });
+    current.focus();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(document.activeElement).toBe(current);
+    expect(screen.getByLabelText('bottom panel').textContent).toBe('board-chat');
   });
 
   it('minimizes both sidebars before opening Workbench at compact width', async () => {
