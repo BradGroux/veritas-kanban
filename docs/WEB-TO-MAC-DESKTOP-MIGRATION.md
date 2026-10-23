@@ -105,6 +105,14 @@ After cutover, the process tree should resolve through:
 
 Only one VK server should accept active writes during the cutover.
 
+## Task Links
+
+A `veritas://task/<encoded-task-id>` link opens the referenced task through the same navigation used by search. Existing `tab`, `attempt` and `event` targets select the requested section and timeline context. For example, `?tab=work-products` opens Results and `?tab=timeline&attempt=<encoded-attempt-id>` opens History for that attempt.
+
+Links received during startup, setup, login or a locked workspace wait for the authenticated main window. The app restores or reopens its main window when a link arrives. Missing tasks, unavailable permissions, unsupported sections and failed delivery produce a visible message; an uncertain delivery is not automatically repeated. The ordinary Command Center menu action is unchanged.
+
+The focused native check is `node scripts/native-ui/task-deep-links.mjs --app /absolute/path/Veritas\ Kanban.app --commit <reviewed-commit> --version <candidate-version> --output /absolute/path/new-evidence-directory`. It creates a disposable profile and synthetic login. Record the current `veritas://` application handler before launching a candidate and restore it after testing, because Electron registers that handler at startup. This targeted check does not replace final native release acceptance.
+
 ## Wait For The Desktop Server
 
 `open -a` asks LaunchServices to open the app and returns before Electron and

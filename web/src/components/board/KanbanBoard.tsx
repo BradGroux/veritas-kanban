@@ -47,6 +47,7 @@ import FeatureErrorBoundary from '@/components/shared/FeatureErrorBoundary';
 import { LazyOnVisible } from '@/components/shared/LazyOnVisible';
 import { useLiveAnnouncer } from '@/components/shared/LiveAnnouncer';
 import { useView } from '@/contexts/ViewContext';
+import { usePendingTaskNavigation } from '@/hooks/usePendingTaskNavigation';
 import { useIdentity } from '@/hooks/useIdentity';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import type { TaskDetailNavigationTarget } from '@/components/task/TaskDetailPanel';
@@ -154,7 +155,7 @@ export function KanbanBoard() {
 
   const { selectedTaskId, setTasks, setOnOpenTask, setOnMoveTask } = useKeyboard();
   const { isSelecting, toggleSelecting } = useBulkActions();
-  const { pendingTaskId, pendingTaskTarget, clearPendingTask, returnFromTask } = useView();
+  const { returnFromTask } = useView();
 
   const matchingSavedView = useMemo(
     () => findBoardSavedViewByFilters(savedViews, filters),
@@ -260,45 +261,14 @@ export function KanbanBoard() {
     }
   }, [savedViews, selectedSavedViewId]);
 
-  // Handle navigation from other views (e.g., Activity page clicking on a task)
-  useEffect(() => {
-    if (!pendingTaskId) return;
-
-    const openPendingTask = async () => {
-      // Try local task list first
-      const localTask = tasks?.find((t) => t.id === pendingTaskId);
-      if (localTask) {
-        markTaskInHistory(localTask.id, currentViewHasOrigin());
-        setDetailPanelMounted(true);
-        setDetailNavigationTarget(pendingTaskTarget);
-        setSelectedTask(localTask);
-        setDetailOpen(true);
-        clearPendingTask();
-        return;
-      }
-
-      // Fallback: fetch from API (task may be archived or filtered out)
-      try {
-        const { api } = await import('@/lib/api');
-        const fetchedTask = await api.tasks.get(pendingTaskId);
-        if (fetchedTask) {
-          markTaskInHistory(fetchedTask.id, currentViewHasOrigin());
-          setDetailPanelMounted(true);
-          setDetailNavigationTarget(pendingTaskTarget);
-          setSelectedTask(fetchedTask);
-          setDetailOpen(true);
-          clearPendingTask();
-          return;
-        }
-      } catch {
-        // Return to the originating view when the task no longer exists.
-      }
-      clearPendingTask();
-      returnFromTask();
-    };
-
-    openPendingTask();
-  }, [pendingTaskId, pendingTaskTarget, tasks, clearPendingTask, returnFromTask]);
+  const openNavigatedTask = useCallback((task: Task, target: TaskDetailNavigationTarget | null) => {
+    markTaskInHistory(task.id, currentViewHasOrigin());
+    setDetailPanelMounted(true);
+    setDetailNavigationTarget(target);
+    setSelectedTask(task);
+    setDetailOpen(true);
+  }, []);
+  usePendingTaskNavigation(tasks, openNavigatedTask);
 
   useEffect(() => {
     const handlePopState = () => {
