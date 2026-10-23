@@ -7,6 +7,8 @@ import { getSecurityConfig, getSessionVersion, getValidJwtSecrets } from '../con
 import { createLogger } from '../lib/logger.js';
 import { validateScopedApiToken } from '../services/api-token-service.js';
 import { validateDeviceSessionSecret } from '../services/device-session-service.js';
+import { getIdentityService } from '../services/identity-service.js';
+import type { WorkspaceRole } from '../storage/sqlite/identity-repository.js';
 
 const log = createLogger('auth');
 
@@ -71,7 +73,10 @@ const DEFAULT_WORKSPACE_ID = 'local';
 const DEFAULT_USER_ID = 'local-user';
 
 export interface AuthContext {
+  /** Verified installation-password authority, never federated membership. */
+  installationOwner?: boolean;
   role: AuthRole;
+  workspaceRole?: WorkspaceRole;
   keyName?: string;
   isLocalhost: boolean;
   userId?: string;
@@ -166,6 +171,7 @@ function buildLocalOwnerPasswordSessionContext(
     // passwordless bypass. A verified local-owner password session still needs
     // the narrow capability required by the packaged desktop agent controls.
     capabilities: ['local-agent:run'],
+    installationOwner: true,
   };
 }
 
@@ -533,9 +539,19 @@ function buildFederatedSessionContext(
   ) {
     return null;
   }
+  let identity;
+  try {
+    identity = getIdentityService().resolveFederatedSession(payload.userId, payload.workspaceId);
+  } catch (error) {
+    log.warn({ err: error }, 'Federated session authority lookup failed');
+    return null;
+  }
+  if (!identity) return null;
+  const role = identity.membership.role;
   return {
     ...buildAuthContext({
-      role: payload.role,
+      role:
+        role === 'owner' || role === 'admin' ? 'admin' : role === 'agent' ? 'agent' : 'read-only',
       keyName: 'openai-oidc',
       isLocalhost,
       authMethod: 'session',
@@ -543,6 +559,7 @@ function buildFederatedSessionContext(
     }),
     userId: payload.userId,
     workspaceId: payload.workspaceId,
+    workspaceRole: role,
     actorType: 'user',
   };
 }
@@ -591,7 +608,10 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
         req.auth = federated;
         return next();
       }
-      if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
+      if (
+        jwtResult.payload?.sessionKind === 'openai-oidc' ||
+        !isLocalOwnerPasswordSessionRequest(req, isLocalhost)
+      ) {
         blockedPasswordSession = true;
       } else {
         req.auth = buildLocalOwnerPasswordSessionContext(
@@ -828,6 +848,8 @@ export function authorizeWrite(req: AuthenticatedRequest, res: Response, next: N
 // === WebSocket Authentication ===
 
 export interface WebSocketAuthResult {
+  workspaceRole?: WorkspaceRole;
+  revalidateAuth?: () => AuthContext | null;
   authenticated: boolean;
   role?: AuthRole;
   keyName?: string;
@@ -894,9 +916,21 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
       if (result.valid) {
         const federated = buildFederatedSessionContext(result.payload, isLocalhost);
         if (federated) {
-          return { authenticated: true, ...federated };
+          return {
+            authenticated: true,
+            ...federated,
+            revalidateAuth: () => {
+              const current = verifySessionJwtToken(token);
+              return current.valid
+                ? buildFederatedSessionContext(current.payload, isLocalhost)
+                : null;
+            },
+          };
         }
-        if (!isLocalOwnerPasswordSessionRequest(req, isLocalhost)) {
+        if (
+          result.payload?.sessionKind === 'openai-oidc' ||
+          !isLocalOwnerPasswordSessionRequest(req, isLocalhost)
+        ) {
           blockedPasswordSession = true;
         } else {
           return {
@@ -980,6 +1014,7 @@ export function authenticateWebSocket(req: IncomingMessage): WebSocketAuthResult
  * Attach auth info to WebSocket for later use
  */
 export interface AuthenticatedWebSocket extends WebSocket {
+  revalidateAuth?: () => AuthContext | null;
   auth?: AuthContext;
 }
 

@@ -22,6 +22,8 @@ export interface IdentityActor {
   role: WorkspaceRole;
   displayName?: string;
   permissions?: AuthPermission[];
+  /** Set only from a verified installation-password context. */
+  installationOwner?: boolean;
 }
 
 export interface CreateInvitationResult {
@@ -70,12 +72,32 @@ export class IdentityService {
       });
   }
 
-  ensureOwnerSetup(input: { displayName?: string; email?: string | null } = {}): {
+  ensureOwnerSetup(
+    input: { displayName?: string; email?: string | null; restoreOwner?: boolean } = {}
+  ): {
     user: IdentityUser;
     workspace: WorkspaceIdentity;
     membership: WorkspaceMembership;
   } {
     return this.repository.ensureLocalOwner(input);
+  }
+
+  resolveFederatedSession(userId: string, workspaceId: string): ExternalIdentitySession | null {
+    const user = this.repository.getUser(userId);
+    const workspace = this.repository.getWorkspace(workspaceId);
+    const membership = this.repository.getMembership(workspaceId, userId);
+    if (
+      !user ||
+      user.disabledAt ||
+      !user.authSubject ||
+      !workspace ||
+      workspace.archivedAt ||
+      !membership ||
+      membership.status !== 'active' ||
+      membership.disabledAt
+    )
+      return null;
+    return { user, workspace, membership };
   }
 
   resolveExternalIdentity(
@@ -90,7 +112,6 @@ export class IdentityService {
     },
     link?: { userId: string; workspaceId: string }
   ): ExternalIdentitySession {
-    this.ensureOwnerSetup();
     const authSubject = JSON.stringify([input.issuer, input.clientId, input.subject]);
     let user = this.repository.getUserByAuthSubject(authSubject);
 
@@ -107,7 +128,13 @@ export class IdentityService {
     if (!user && link) {
       const linkUser = this.repository.getUser(link.userId);
       const membership = this.repository.getMembership(link.workspaceId, link.userId);
-      if (!linkUser || linkUser.disabledAt || !membership || membership.status !== 'active') {
+      if (
+        !linkUser ||
+        linkUser.disabledAt ||
+        !membership ||
+        membership.status !== 'active' ||
+        membership.disabledAt
+      ) {
         throw new ForbiddenError('The authenticated Veritas account cannot be linked');
       }
       if (linkUser.authSubject && linkUser.authSubject !== authSubject) {
@@ -130,7 +157,7 @@ export class IdentityService {
       memberships.find(({ workspace }) => workspace.id === link?.workspaceId) ??
       memberships.find(({ workspace }) => workspace.id === 'local') ??
       memberships[0];
-    if (!selected || selected.membership.status !== 'active') {
+    if (!selected || selected.membership.status !== 'active' || selected.membership.disabledAt) {
       throw new ForbiddenError('No active Veritas workspace membership');
     }
     return { user, workspace: selected.workspace, membership: selected.membership };
@@ -140,7 +167,7 @@ export class IdentityService {
     user: IdentityUser;
     workspaces: Array<{ workspace: WorkspaceIdentity; membership: WorkspaceMembership }>;
   } {
-    this.ensureOwnerSetup();
+    this.ensureOwnerSetup({ restoreOwner: actor.installationOwner === true });
     const user = this.repository.getUser(actor.userId) ?? this.repository.getUser('local-user');
     if (!user) throw new NotFoundError('User not found');
 
@@ -154,7 +181,7 @@ export class IdentityService {
     workspace: WorkspaceIdentity;
     membership: WorkspaceMembership;
   }> {
-    this.ensureOwnerSetup();
+    this.ensureOwnerSetup({ restoreOwner: actor.installationOwner === true });
     return this.repository.listWorkspacesForUser(actor.userId);
   }
 
@@ -162,7 +189,7 @@ export class IdentityService {
     workspaceId: string,
     actor: IdentityActor
   ): { workspace: WorkspaceIdentity; membership: WorkspaceMembership } {
-    this.ensureOwnerSetup();
+    this.ensureOwnerSetup({ restoreOwner: actor.installationOwner === true });
     const membership = this.repository.getMembership(workspaceId, actor.userId);
     if (!membership || membership.status !== 'active') {
       throw new ForbiddenError('No active membership for workspace');
@@ -333,7 +360,7 @@ export class IdentityService {
   }
 
   private assertWorkspaceAccess(workspaceId: string, actor: IdentityActor): void {
-    this.ensureOwnerSetup();
+    this.ensureOwnerSetup({ restoreOwner: actor.installationOwner === true });
     const membership = this.repository.getMembership(workspaceId, actor.userId);
     if (!membership || membership.status !== 'active') {
       throw new ForbiddenError('No active membership for workspace');

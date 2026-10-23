@@ -50,7 +50,7 @@ endpoints.
 
 Pending authorization transactions are encrypted at rest, expire after ten minutes, and are consumed
 atomically from the authoritative Veritas SQLite database. Start and callback requests may reach
-different server processes only when those processes share that database. Deployments with independent
+different server processes only when those processes share that database and the same valid Veritas signing/decryption keys. An ephemeral per-process key does not support routing across processes. Deployments with independent
 database files must not route one transaction across nodes.
 
 The repository does not define a canonical public Veritas deployment origin. `CORS_ORIGINS` is an
@@ -64,7 +64,7 @@ method, opens **Settings → Security**, and chooses **Link ChatGPT sign-in**. T
 binds the verified OpenAI issuer, client ID, and subject to the current Veritas user. A subject already
 linked to another user and a user already linked to another subject are both rejected. The flow never
 creates a user, membership, or role. Later sign-ins use the subject link, and existing workspace roles
-remain authoritative.
+remain authoritative. HTTP requests and WebSocket subscriptions/delivery recheck current user and membership state; removal, disablement and role changes apply to existing federated sessions. External sign-in and profile reads never restore a removed or demoted local owner. The installation password retains its explicit local-owner recovery authority.
 
 Operators should create or invite the Veritas user first and assign the intended workspace role.
 Password sign-in and recovery remain available after activation.

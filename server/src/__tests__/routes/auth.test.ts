@@ -339,7 +339,9 @@ describe('Auth Routes', () => {
 
         expect(callback.status).toBe(302);
         expect(callback.headers.location).toBe('/');
-        const sessionCookie = callback.headers['set-cookie']?.find((value: string) =>
+        const rawCookies = callback.headers['set-cookie'];
+        const sessionCookies = typeof rawCookies === 'string' ? [rawCookies] : rawCookies;
+        const sessionCookie = sessionCookies?.find((value: string) =>
           value.startsWith('veritas_session=')
         );
         expect(sessionCookie).toContain('HttpOnly');
@@ -353,6 +355,16 @@ describe('Auth Routes', () => {
           workspaceId: 'local',
           role: 'admin',
         });
+        const activeStatus = await request(app)
+          .get('/api/auth/status')
+          .set('Cookie', `veritas_session=${sessionToken}`);
+        expect(activeStatus.body.authenticated).toBe(true);
+        identities.removeMembership('local', 'local-user');
+        const removedStatus = await request(app)
+          .get('/api/auth/status')
+          .set('Cookie', `veritas_session=${sessionToken}`);
+        expect(removedStatus.status).toBe(200);
+        expect(removedStatus.body).toMatchObject({ authenticated: false, sessionExpiry: null });
       } finally {
         resetIdentityServiceForTests();
         fixture.cleanup();
@@ -654,6 +666,7 @@ describe('Auth Routes', () => {
       const [a, b] = spy.mock.calls[0];
       expect(Buffer.isBuffer(a)).toBe(true);
       expect(Buffer.isBuffer(b)).toBe(true);
+      if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) throw new Error('Expected Buffer inputs');
       expect(a.length).toBe(32);
       expect(b.length).toBe(32);
 

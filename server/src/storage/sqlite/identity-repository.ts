@@ -151,7 +151,9 @@ interface CountRow {
 export class SqliteIdentityRepository {
   constructor(private readonly database: SqliteDatabase) {}
 
-  ensureLocalOwner(input: { displayName?: string; email?: string | null } = {}): {
+  ensureLocalOwner(
+    input: { displayName?: string; email?: string | null; restoreOwner?: boolean } = {}
+  ): {
     user: IdentityUser;
     workspace: WorkspaceIdentity;
     membership: WorkspaceMembership;
@@ -196,15 +198,13 @@ export class SqliteIdentityRepository {
         )
         VALUES ('local', 'local-user', 'owner', 'active', ?, ?, ?)
         ON CONFLICT(workspace_id, user_id) DO UPDATE SET
-          role = CASE
-            WHEN workspace_memberships.role = 'owner' THEN workspace_memberships.role
-            ELSE excluded.role
-          END,
+          role = 'owner',
           status = 'active',
           disabled_at = NULL,
           updated_at = excluded.updated_at
+        WHERE ? = 1
       `
-    ).run(now, now, now);
+    ).run(now, now, now, input.restoreOwner === true ? 1 : 0);
 
     return {
       user: requireValue(this.getUser('local-user'), 'Local user was not created'),

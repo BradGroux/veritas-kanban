@@ -253,8 +253,14 @@ router.get(
     if (token && !needsSetup) {
       const verified = verifySessionJwtToken(token);
       if (verified.valid && verified.payload) {
-        authenticated = true;
-        if (verified.payload.exp) {
+        const payload = verified.payload;
+        authenticated =
+          payload.sessionKind !== 'openai-oidc' ||
+          (typeof payload.userId === 'string' &&
+            typeof payload.workspaceId === 'string' &&
+            getIdentityService().resolveFederatedSession(payload.userId, payload.workspaceId) !==
+              null);
+        if (authenticated && verified.payload.exp) {
           sessionExpiry = new Date(verified.payload.exp * 1000).toISOString();
         }
       }
