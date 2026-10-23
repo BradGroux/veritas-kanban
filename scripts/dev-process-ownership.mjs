@@ -48,7 +48,7 @@ export function isDevCommand(command, cwd, repoRoot) {
   if (['pnpm', 'pnpm.cjs', 'pnpm.mjs'].includes(path.basename(executable))) {
     return (
       /^(?:run )?dev$/.test(tokens.join(' ')) ||
-      /^--filter (?:server|web|@veritas-kanban\/(?:server|web)) (?:run )?dev$/.test(
+      /^--filter (?:server|web|@veritas-kanban\/(?:server|web|shared)) (?:run )?dev$/.test(
         tokens.join(' ')
       )
     );
@@ -59,6 +59,11 @@ export function isDevCommand(command, cwd, repoRoot) {
   if (relative.startsWith('..') || path.isAbsolute(relative) || !relative.includes('node_modules/'))
     return false;
   if (/(?:\/vite\/bin\/vite\.js|\/\.bin\/vite)$/.test(entry)) return true;
+  if (/(?:\/typescript\/bin\/tsc|\/\.bin\/tsc)$/.test(entry)) {
+    return (
+      cwd === path.join(repoRoot, 'shared') && tokens.join(' ') === '--watch --preserveWatchOutput'
+    );
+  }
   if (/(?:\/tsx\/dist\/cli\.mjs|\/\.bin\/tsx)$/.test(entry)) {
     if (tokens[0] === 'watch') tokens.shift();
     return (
