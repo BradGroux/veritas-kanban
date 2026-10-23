@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { api } from '../utils/api.js';
+import { api, encodeApiPathSegment } from '../utils/api.js';
 import { formatTask, formatTaskJson, formatTasksJson } from '../utils/format.js';
 import type { Task } from '../utils/types.js';
 
@@ -81,7 +81,7 @@ export function registerBacklogCommands(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
-        const task = await api<Task>(`/api/backlog/${id}/promote`, {
+        const task = await api<Task>(`/api/backlog/${encodeApiPathSegment(id)}/promote`, {
           method: 'POST',
         });
 
@@ -104,7 +104,7 @@ export function registerBacklogCommands(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
-        const task = await api<Task>(`/api/tasks/${id}/demote`, {
+        const task = await api<Task>(`/api/tasks/${encodeApiPathSegment(id)}/demote`, {
           method: 'POST',
         });
 
@@ -142,7 +142,7 @@ export function registerBacklogCommands(program: Command): void {
           }
         }
 
-        await api(`/api/backlog/${id}`, { method: 'DELETE' });
+        await api(`/api/backlog/${encodeApiPathSegment(id)}`, { method: 'DELETE' });
         console.log(chalk.green('✓ Task deleted from backlog'));
       } catch (err) {
         console.error(chalk.red(`Error: ${(err as Error).message}`));

@@ -8,7 +8,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { projectTools, handleProjectTool } from '../tools/projects.js';
 
 // Mock the API module
-vi.mock('../utils/api.js', () => ({
+vi.mock('../utils/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/api.js')>()),
   api: vi.fn(),
 }));
 
