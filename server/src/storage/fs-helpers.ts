@@ -135,7 +135,7 @@ export async function writeAll(handle: WriteHandle, content: string | Uint8Array
  * filesystem as `destPath`, then renames it over `destPath`. On filesystems
  * where same-device replacement rename is atomic, readers either see the old
  * file or the new file — never a partial write. This does not claim crash
- * durability because the file and parent directory are not explicitly synced.
+ * durability because the parent directory is not explicitly synced after rename.
  * The temp file is cleaned up on failure so it does not accumulate.
  *
  * Encoding defaults to `'utf-8'` to match the old `writeFile` call sites.
