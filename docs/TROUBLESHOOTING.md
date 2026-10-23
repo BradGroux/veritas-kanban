@@ -94,9 +94,12 @@ pnpm dev:clean
 
 This:
 
-- frees ports **3001** (server) and **3000** (web)
-- kills stale dev watchers for this repo (`tsx watch`, `vite`, `concurrently`)
-- restarts `pnpm dev`
+- checks the configured API/web listeners before sending any signal; defaults are **3001** and **3000**
+- sends SIGTERM only to recognized development runners whose working directory belongs to this exact Git checkout
+- rechecks each PID's start identity, command, and working directory immediately before signaling; replaced or unverifiable processes stop cleanup
+- restarts `pnpm dev` after the verified cleanup
+
+An unrelated listener, another worktree, an unknown command, or an unverifiable owner causes an actionable error without a kill-by-port fallback. Stop that listener yourself or choose different `PORT`/`WEB_PORT` values. The watchdog calls the same guarded cleanup, so an unhealthy foreign service cannot authorize its termination. This command does not force-kill an unresponsive process.
 
 ### Check server health
 

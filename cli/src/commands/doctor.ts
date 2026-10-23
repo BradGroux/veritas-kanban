@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { API_BASE, buildApiHeaders } from '../utils/api.js';
+import { API_BASE, buildApiRequestOptions } from '../utils/api.js';
 import type {
   CommunicationAdapterHealth,
   HarnessCompatibilityMatrix,
@@ -271,10 +271,10 @@ async function requestJson<T>(
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
 
   try {
-    const response = await deps.fetch(`${options.apiBase}${pathName}`, {
-      headers: buildApiHeaders(undefined, deps.env.VK_API_KEY),
-      signal: controller.signal,
-    });
+    const response = await deps.fetch(
+      `${options.apiBase}${pathName}`,
+      buildApiRequestOptions({ signal: controller.signal }, deps.env.VK_API_KEY)
+    );
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     const data = response.ok ? unwrapData<T>(body) : null;

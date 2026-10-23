@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { api } from '../utils/api.js';
+import { api, encodeApiPathSegment } from '../utils/api.js';
 import type { SprintConfig, Task } from '../utils/types.js';
 
 // Local response types
@@ -206,7 +206,7 @@ export async function handleSprintTool(name: string, args: any): Promise<any> {
 
     case 'get_sprint': {
       const { id } = SprintIdSchema.parse(args);
-      const sprint = await api<SprintConfig>(`/api/sprints/${id}`);
+      const sprint = await api<SprintConfig>(`/api/sprints/${encodeApiPathSegment(id)}`);
 
       return {
         content: [{ type: 'text', text: JSON.stringify(sprint, null, 2) }],
@@ -232,7 +232,7 @@ export async function handleSprintTool(name: string, args: any): Promise<any> {
 
     case 'update_sprint': {
       const { id, ...updates } = UpdateSprintSchema.parse(args);
-      const sprint = await api<SprintConfig>(`/api/sprints/${id}`, {
+      const sprint = await api<SprintConfig>(`/api/sprints/${encodeApiPathSegment(id)}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
       });
@@ -250,7 +250,7 @@ export async function handleSprintTool(name: string, args: any): Promise<any> {
     case 'delete_sprint': {
       const { id, force } = DeleteSprintSchema.parse(args);
       const query = force ? '?force=true' : '';
-      await api(`/api/sprints/${id}${query}`, { method: 'DELETE' });
+      await api(`/api/sprints/${encodeApiPathSegment(id)}${query}`, { method: 'DELETE' });
 
       return {
         content: [{ type: 'text', text: `Sprint deleted: ${id}` }],
@@ -259,7 +259,9 @@ export async function handleSprintTool(name: string, args: any): Promise<any> {
 
     case 'can_delete_sprint': {
       const { id } = SprintIdSchema.parse(args);
-      const result = await api<CanDeleteResult>(`/api/sprints/${id}/can-delete`);
+      const result = await api<CanDeleteResult>(
+        `/api/sprints/${encodeApiPathSegment(id)}/can-delete`
+      );
 
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -299,9 +301,12 @@ export async function handleSprintTool(name: string, args: any): Promise<any> {
 
     case 'close_sprint': {
       const { id } = SprintIdSchema.parse(args);
-      const result = await api<ArchiveResult>(`/api/tasks/archive/sprint/${id}`, {
-        method: 'POST',
-      });
+      const result = await api<ArchiveResult>(
+        `/api/tasks/archive/sprint/${encodeApiPathSegment(id)}`,
+        {
+          method: 'POST',
+        }
+      );
 
       return {
         content: [
