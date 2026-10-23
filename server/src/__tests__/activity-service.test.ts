@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 
 // Set to use SQLite for tests (avoids mocking fs/promises)
 process.env.VERITAS_STORAGE = 'sqlite';
@@ -31,7 +30,7 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-import { ActivityService, type ActivityType } from '../services/activity-service.js';
+import { ActivityService } from '../services/activity-service.js';
 
 describe('ActivityService', () => {
   let service: ActivityService;

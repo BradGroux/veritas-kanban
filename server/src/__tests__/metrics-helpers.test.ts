@@ -2,7 +2,7 @@
  * Metrics Helpers Tests
  * Tests pure utility functions used across metrics modules.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getPeriodStart,
   getPreviousPeriodRange,
