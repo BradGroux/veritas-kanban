@@ -27,6 +27,7 @@ Veritas Kanban 6.3.0 completes the repository audit backlog and adds optional id
 - Corrected queued launch output, Critical MCP priority, GitHub JSON output, remaining client deadlines, harness version enforcement, shared development watching, checkout-owned cleanup, disposable browser fixtures, demo seeding and mobile smoke journeys (#1610, #1611, #1615–#1618, #1622, #1623, #1630, #1631, #1706).
 
 - Kept template clear controls reachable by keyboard, including Enter/Space activation and input focus restoration (#1721, #1723).
+- Preserved keyboard task ordering after pointer moves by isolating disabled drag-overlay registrations (#1731, #1732).
 - Reduced initial JavaScript by deferring shared-run controls and splitting optional UI modules across existing lazy boundaries, preserving loading states and bundle limits (#1726, #1728).
 
 ### Security and maintenance
