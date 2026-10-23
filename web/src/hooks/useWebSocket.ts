@@ -79,6 +79,13 @@ export function resolveDefaultWsUrl(
   return `${protocol}//${location.host}${normalizedBasePath}/ws`;
 }
 
+function detachSocket(ws: WebSocket): void {
+  ws.onopen = null;
+  ws.onmessage = null;
+  ws.onclose = null;
+  ws.onerror = null;
+}
+
 function getDefaultWsUrl(): string {
   return resolveDefaultWsUrl();
 }
@@ -111,6 +118,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const generationRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keepaliveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -136,14 +144,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   // ---- Timers ----
 
   const clearReconnectTimeout = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
+    if (reconnectTimeoutRef.current !== null) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
   }, []);
 
   const clearKeepaliveTimeout = useCallback(() => {
-    if (keepaliveTimeoutRef.current) {
+    if (keepaliveTimeoutRef.current !== null) {
       clearTimeout(keepaliveTimeoutRef.current);
       keepaliveTimeoutRef.current = null;
     }
@@ -153,15 +161,20 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
    * Reset the keepalive timer. Called on every incoming message (or open).
    * If no message arrives within KEEPALIVE_TIMEOUT_MS, force-close to trigger reconnect.
    */
-  const resetKeepaliveTimeout = useCallback(() => {
-    clearKeepaliveTimeout();
-    keepaliveTimeoutRef.current = setTimeout(() => {
-      if (!mountedRef.current) return;
-      // No data received for 45s — assume dead, force reconnect
-      console.warn('[WebSocket] Keepalive timeout — no data in 45s, reconnecting');
-      wsRef.current?.close(4000, 'Keepalive timeout');
-    }, KEEPALIVE_TIMEOUT_MS);
-  }, [clearKeepaliveTimeout]);
+  const resetKeepaliveTimeout = useCallback(
+    (ws: WebSocket, generation: number) => {
+      clearKeepaliveTimeout();
+      keepaliveTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current || generationRef.current !== generation || wsRef.current !== ws)
+          return;
+        keepaliveTimeoutRef.current = null;
+        // No data received for 45s — assume dead, force reconnect
+        console.warn('[WebSocket] Keepalive timeout — no data in 45s, reconnecting');
+        ws.close(4000, 'Keepalive timeout');
+      }, KEEPALIVE_TIMEOUT_MS);
+    },
+    [clearKeepaliveTimeout]
+  );
 
   // ---- Connect / Reconnect ----
 
@@ -174,6 +187,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       return;
 
     clearReconnectTimeout();
+    clearKeepaliveTimeout();
+    if (wsRef.current) {
+      detachSocket(wsRef.current);
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    const generation = ++generationRef.current;
     intentionalDisconnectRef.current = false;
 
     const isReconnect = reconnectAttemptsRef.current > 0;
@@ -182,14 +202,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     const wsUrl = url || getDefaultWsUrl();
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+    const isCurrent = () =>
+      mountedRef.current && generationRef.current === generation && wsRef.current === ws;
 
     ws.onopen = () => {
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
       setConnectionState('connected');
       reconnectAttemptsRef.current = 0;
       setReconnectAttempt(0);
       onConnectedRef.current?.();
-      resetKeepaliveTimeout();
+      if (!isCurrent()) return;
+      resetKeepaliveTimeout(ws, generation);
 
       // Send subscription message if provided
       if (onOpenRef.current) {
@@ -198,9 +221,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     };
 
     ws.onmessage = (event) => {
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
       // Reset keepalive on every received message
-      resetKeepaliveTimeout();
+      resetKeepaliveTimeout(ws, generation);
       try {
         const message = JSON.parse(event.data) as WebSocketMessage;
         setLastMessage(message);
@@ -211,10 +234,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     };
 
     ws.onclose = () => {
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
+      detachSocket(ws);
       clearKeepaliveTimeout();
       wsRef.current = null;
       onDisconnectedRef.current?.();
+      if (!mountedRef.current || generationRef.current !== generation || wsRef.current !== null)
+        return;
 
       // Don't reconnect if disabled or the user explicitly disconnected
       if (!autoReconnect || intentionalDisconnectRef.current) {
@@ -241,10 +267,21 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       console.info(
         `[WebSocket] Reconnecting in ${delay}ms (attempt ${attempt + 1}/${maxReconnectAttempts || '∞'})`
       );
-      reconnectTimeoutRef.current = setTimeout(connect, delay);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (
+          !mountedRef.current ||
+          generationRef.current !== generation ||
+          wsRef.current !== null ||
+          intentionalDisconnectRef.current
+        )
+          return;
+        reconnectTimeoutRef.current = null;
+        connect();
+      }, delay);
     };
 
     ws.onerror = (error) => {
+      if (!isCurrent()) return;
       onErrorRef.current?.(error);
       // onclose will fire after onerror — reconnect logic lives there
     };
@@ -259,13 +296,19 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
   const disconnect = useCallback(() => {
     intentionalDisconnectRef.current = true;
+    generationRef.current += 1;
     clearReconnectTimeout();
     clearKeepaliveTimeout();
     reconnectAttemptsRef.current = 0;
     setReconnectAttempt(0);
-    wsRef.current?.close(1000, 'Client disconnect');
+    const ws = wsRef.current;
     wsRef.current = null;
+    if (ws) {
+      detachSocket(ws);
+      ws.close(1000, 'Client disconnect');
+    }
     setConnectionState('disconnected');
+    if (ws) onDisconnectedRef.current?.();
   }, [clearReconnectTimeout, clearKeepaliveTimeout]);
 
   const send = useCallback((message: WebSocketMessage) => {
@@ -301,14 +344,21 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
     if (autoConnect) {
       connect();
+    } else {
+      setConnectionState('disconnected');
     }
 
     return () => {
       mountedRef.current = false;
+      generationRef.current += 1;
       clearReconnectTimeout();
       clearKeepaliveTimeout();
-      wsRef.current?.close();
+      const ws = wsRef.current;
       wsRef.current = null;
+      if (ws) {
+        detachSocket(ws);
+        ws.close();
+      }
     };
   }, [autoConnect, connect, clearReconnectTimeout, clearKeepaliveTimeout]);
 
