@@ -93,7 +93,7 @@ export function TaskDetailPanel({
   const agentSettings = featureSettings.agents;
   const canUseLocalAgentControls = clientAllowsLocalAgentControls(authContext);
   const { localTask, updateField, isDirty, isSaving, conflict, retryConflict, discardConflict } =
-    useDebouncedSave(task);
+    useDebouncedSave(task, open);
   const [activeTab, setActiveTab] = useState<TaskDetailTabId>('details');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);

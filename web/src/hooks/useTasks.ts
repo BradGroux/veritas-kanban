@@ -261,15 +261,27 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateTaskInput }) =>
-      api.tasks.update(id, input, cachedTaskRevision(queryClient, id)),
+    mutationFn: ({
+      id,
+      input,
+      isCurrent,
+    }: {
+      id: string;
+      input: UpdateTaskInput;
+      /** Bind the editing session to this request, independent of observer reuse. */
+      isCurrent?: () => boolean;
+    }) => {
+      if (isCurrent && !isCurrent()) throw new Error('The task editing session has ended');
+      return api.tasks.update(id, input, cachedTaskRevision(queryClient, id));
+    },
     // On success, merge the server response with the current cache.
     // Preserve timeTracking from the cache if it wasn't part of this update,
     // since concurrent timer mutations (start/stop) may have already patched
     // the cache with newer time tracking state. Without this, the debounced
     // save response (which doesn't include timeTracking changes) would
     // overwrite the timer stop/start that happened in between.
-    onSuccess: (serverTask, { input }) => {
+    onSuccess: (serverTask, { input, isCurrent }) => {
+      if (isCurrent && !isCurrent()) return;
       resolveTaskConflict(serverTask.id, 'task update');
       const mergeWithCachedTimeTracking = (cached: Task | undefined): Task => {
         if (!cached || input.timeTracking !== undefined) {
@@ -302,7 +314,8 @@ export function useUpdateTask() {
       }
     },
     // Handle validation errors with detailed toast messages
-    onError: (error: Error & { code?: string; details?: unknown }, { id }) => {
+    onError: (error: Error & { code?: string; details?: unknown }, { id, isCurrent }) => {
+      if (isCurrent && !isCurrent()) return;
       if (handleRevisionConflict(queryClient, error, id)) {
         return;
       }
