@@ -15,6 +15,8 @@ import { SqliteDatabase, type SqliteConnectionOptions } from '../storage/sqlite/
 import { SqliteSettingsRepository } from '../storage/sqlite/settings-repository.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { normalizeHarnessSupportProfile } from './harness-support-profile-registry.js';
+import { buildOrcaRouterCodexArgs, isOrcaRouterCodexAgent } from '../utils/orcarouter-codex.js';
+import { BadRequestError } from '../middleware/error-handler.js';
 import { AgentBudgetPolicySchema } from '../schemas/agent-budget-schemas.js';
 
 /** How long cached config stays valid before re-reading from disk */
@@ -620,6 +622,16 @@ export class ConfigService {
   }
 
   async updateAgents(agents: AgentConfig[]): Promise<AppConfig> {
+    for (const agent of agents) {
+      if (!isOrcaRouterCodexAgent(agent)) continue;
+      try {
+        buildOrcaRouterCodexArgs(agent);
+      } catch (error) {
+        throw new BadRequestError(
+          error instanceof Error ? error.message : 'Invalid OrcaRouter configuration.'
+        );
+      }
+    }
     const config = await this.getConfig();
     // Harness support profiles are system-owned evidence. Always rebuild them
     // after parsing API input so clients cannot spoof adapter or certification

@@ -31,10 +31,6 @@ export const CADENCE_CONTRACTS = {
       pattern:
         /complete workspace suite once at an explicit integration, critical-security, or release milestone/i,
     },
-    {
-      description: 'optional independent and cross-model review',
-      pattern: /Independent or cross-model review is optional/i,
-    },
   ],
   'CONTRIBUTING.md': [
     {
@@ -91,10 +87,7 @@ export const CADENCE_CONTRACTS = {
   ],
 };
 
-const PROMPT_REGISTRY_EXCLUSIONS = new Set([
-  'prompt-registry/README.md',
-  'prompt-registry/cross-model-review.md',
-]);
+const PROMPT_REGISTRY_EXCLUSIONS = new Set(['prompt-registry/README.md']);
 
 function normalizeWhitespace(content) {
   return content.replace(/\s+/g, ' ').trim();
@@ -119,15 +112,6 @@ function isNarrowlyQualified(sentence) {
     /\bdo not\b/i.test(sentence) ||
     /\b(?:only|unless)\b/i.test(sentence) ||
     /\b(?:deterministic CI|integration|critical-security|release) milestone\b/i.test(sentence)
-  );
-}
-
-function hasUnconditionalCrossModelReview(content) {
-  return (
-    /\bcross-model review\s+(?:is\s+)?(?:required|mandatory)\b/i.test(content) ||
-    /\b(?:must|required to|shall)\s+(?:run|complete|obtain|perform)[^.]{0,120}\bcross-model review\b/i.test(
-      content
-    )
   );
 }
 
@@ -193,13 +177,6 @@ export function findUnsafePromptStatements(files) {
       }
     }
 
-    if (hasUnconditionalCrossModelReview(normalized)) {
-      violations.push({
-        file,
-        message: 'active prompts must not make cross-model review unconditional',
-      });
-    }
-
     violations.push(...findUnqualifiedFullSuiteStatements(file, content));
   }
 
@@ -222,13 +199,6 @@ export function findUnsafeCanonicalCadenceStatements(files) {
       violations.push({
         file,
         message: 'canonical guidance must not require multiple reviews before every commit',
-      });
-    }
-
-    if (hasUnconditionalCrossModelReview(normalized)) {
-      violations.push({
-        file,
-        message: 'canonical guidance must not make cross-model review unconditional',
       });
     }
 

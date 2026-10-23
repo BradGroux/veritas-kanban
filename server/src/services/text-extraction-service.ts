@@ -97,7 +97,7 @@ export class TextExtractionService {
   private async extractPDF(filepath: string): Promise<string | null> {
     try {
       const buffer = await fs.readFile(filepath);
-      const { text } = await unpdfExtract(buffer, { mergePages: true });
+      const { text } = await unpdfExtract(new Uint8Array(buffer), { mergePages: true });
       return text || null;
     } catch (error) {
       log.error({ err: error }, 'PDF extraction error');

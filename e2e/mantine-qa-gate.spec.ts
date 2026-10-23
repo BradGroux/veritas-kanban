@@ -639,21 +639,27 @@ test.describe('v5 Mantine migration QA gate', () => {
       })
     );
 
-    await page.goto('/', { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: 'Choose setup path' })).toBeVisible({
-      timeout: 15_000,
+    let setupRequested = false;
+    await page.route('**/api/auth/setup', (route) => {
+      setupRequested = true;
+      return route.fulfill({ status: 400, body: 'Setup mutation is outside this smoke test' });
     });
-    await assertNoHorizontalOverflow(page);
-    await assertMobileTouchTargets(page);
-    await assertNoLegacyPrimitiveSlots(page);
-    await page.getByRole('button', { name: 'Continue to Password' }).click();
+    await page.goto('/', { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Secure Your Board' })).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page.getByText(/Veritas Kanban server you are connected to/)).toBeVisible();
+    await expect(page.getByText(/Your board data stays on that server/)).toBeVisible();
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Confirm Password', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create Password', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Choose setup path' })).toHaveCount(0);
+    await expect(page.getByText('Desktop Setup', { exact: true })).toHaveCount(0);
     await assertNoHorizontalOverflow(page);
     await assertMobileTouchTargets(page);
     await assertNoLegacyPrimitiveSlots(page);
     await attachViewportScreenshot(page, testInfo, 'mobile-auth-setup', 'dark');
+    expect(setupRequested).toBe(false);
 
     expect(browserErrors).toEqual([]);
   });

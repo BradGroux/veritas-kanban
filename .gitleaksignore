@@ -41,9 +41,9 @@ server/src/__tests__/routes/agents-local-capability.test.ts:generic-api-key:606
 server/src/__tests__/routes/agents-local-capability.test.ts:generic-api-key:619
 
 # Authentication route tests require a synthetic JWT signing value.
-server/src/__tests__/routes/auth.test.ts:generic-api-key:29
-server/src/__tests__/routes/auth.test.ts:generic-api-key:31
-server/src/__tests__/routes/auth.test.ts:generic-api-key:80
+server/src/__tests__/routes/auth.test.ts:generic-api-key:33
+server/src/__tests__/routes/auth.test.ts:generic-api-key:35
+server/src/__tests__/routes/auth.test.ts:generic-api-key:105
 
 # Skill capability test verifies Stripe-shaped token redaction.
 server/src/__tests__/skill-capability-service.test.ts:stripe-access-token:63

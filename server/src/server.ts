@@ -10,7 +10,6 @@ import { validateEnv } from './config/env.js';
 validateEnv();
 
 import express from 'express';
-import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -70,7 +69,7 @@ import { apiCacheHeaders } from './middleware/cache-control.js';
 import type { RunEventEnvelope } from '@veritas-kanban/shared';
 import { webhookN8nRouter } from './routes/webhook-n8n.js';
 import { cspNonceMiddleware, injectCspNonceAttributes } from './middleware/csp-nonce.js';
-import { apiDocsCspOverride, buildCspDirectives } from './config/csp.js';
+import { apiDocsCspOverride, createSecurityHeaders } from './config/csp.js';
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
 import { prometheusMetricsRouter } from './routes/prometheus.js';
@@ -242,21 +241,12 @@ const cspReportUri = process.env.CSP_REPORT_URI || null;
 app.use(cspNonceMiddleware);
 
 app.use(
-  helmet({
-    contentSecurityPolicy: {
-      // Report-Only mode: log violations without enforcing (for safe rollout)
-      reportOnly: cspReportOnly,
-      directives: {
-        ...buildCspDirectives({
-          isDev,
-          isDesktopRuntime,
-          reportUri: cspReportUri,
-        }),
-      },
-    },
-    // Cross-Origin-Embedder-Policy can break loading of cross-origin resources;
-    // disable it for now since we serve an API, not embedded content.
-    crossOriginEmbedderPolicy: false,
+  createSecurityHeaders({
+    isDev,
+    isDesktopRuntime,
+    // Report-Only mode: log violations without enforcing (for safe rollout)
+    reportOnly: cspReportOnly,
+    reportUri: cspReportUri,
   })
 );
 
@@ -784,9 +774,12 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
     return;
   }
 
+  ws.revalidateAuth = authResult.revalidateAuth;
+
   // Attach auth info to WebSocket for later use
   ws.auth = {
     role: authResult.role,
+    workspaceRole: authResult.workspaceRole,
     keyName: authResult.keyName,
     isLocalhost: authResult.isLocalhost,
     userId: authResult.userId,

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Button, Checkbox, PasswordInput, Stack, TextInput } from '@mantine/core';
+import { Button, Checkbox, Divider, PasswordInput, Stack, TextInput } from '@mantine/core';
 import { useAuth } from '@/hooks/useAuth';
+import { API_BASE } from '@/lib/config';
 import { Lock, Key, Check, Copy, Download } from 'lucide-react';
 
 export function LoginScreen() {
-  const { login, recover } = useAuth();
+  const { login, recover, status } = useAuth();
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -306,6 +307,22 @@ export function LoginScreen() {
             </Button>
           </Stack>
         </Stack>
+
+        {status?.openaiSignInEnabled && (
+          <Stack gap="md">
+            <Divider label="or" labelPosition="center" />
+            <Button
+              component="a"
+              href={`${API_BASE}/auth/openai/start`}
+              variant="outline"
+              color="gray"
+              fullWidth
+              size="md"
+            >
+              Continue with ChatGPT
+            </Button>
+          </Stack>
+        )}
       </div>
     </div>
   );

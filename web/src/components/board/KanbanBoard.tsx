@@ -327,7 +327,7 @@ export function KanbanBoard() {
     const newUrl = params.toString()
       ? `${window.location.pathname}?${params.toString()}`
       : window.location.pathname;
-    window.history.replaceState({}, '', newUrl);
+    window.history.replaceState(window.history.state, '', newUrl);
   }, [filters]);
 
   // Filter tasks

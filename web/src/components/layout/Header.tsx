@@ -664,6 +664,7 @@ export function Header({
                   size={32}
                   onClick={toggleChatPanel}
                   aria-label={boardChatAction}
+                  data-overlay-focus-key="header-board-chat"
                   aria-pressed={boardChatActive}
                   aria-controls={boardChatActive ? 'workbench-right-dock' : undefined}
                   title={boardChatAction}
@@ -676,6 +677,7 @@ export function Header({
                   size={32}
                   onClick={toggleSquadChatPanel}
                   aria-label={squadChatAction}
+                  data-overlay-focus-key="header-squad-chat"
                   aria-pressed={squadChatActive}
                   aria-controls={squadChatActive ? 'workbench-right-dock' : undefined}
                   title={squadChatAction}

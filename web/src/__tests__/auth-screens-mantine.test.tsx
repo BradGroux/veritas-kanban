@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   setup: vi.fn(),
   login: vi.fn(),
   recover: vi.fn(),
+  status: { openaiSignInEnabled: false },
 }));
 
 vi.mock('@/hooks/useAuth', () => ({
@@ -19,6 +20,7 @@ vi.mock('@/hooks/useAuth', () => ({
     setup: mocks.setup,
     login: mocks.login,
     recover: mocks.recover,
+    status: mocks.status,
   }),
 }));
 
@@ -49,6 +51,7 @@ describe('auth screens Mantine migration', () => {
     mocks.setup.mockResolvedValue({ success: true, recoveryKey: 'AAAA-BBBB-CCCC-DDDD' });
     mocks.login.mockResolvedValue({ success: true });
     mocks.recover.mockResolvedValue({ success: true, recoveryKey: 'EEEE-FFFF-GGGG-HHHH' });
+    mocks.status.openaiSignInEnabled = false;
   });
 
   afterEach(() => {
@@ -124,6 +127,14 @@ describe('auth screens Mantine migration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
     await waitFor(() => expect(mocks.login).toHaveBeenCalledWith('StrongPass1!', true));
+  });
+
+  it('shows Continue with ChatGPT only when the server enables identity sign-in', () => {
+    mocks.status.openaiSignInEnabled = true;
+    renderWithProviders(<LoginScreen />);
+
+    const link = screen.getByRole('link', { name: 'Continue with ChatGPT' });
+    expect(link.getAttribute('href')).toBe('/api/auth/openai/start');
   });
 
   it('renders recovery controls through direct Mantine primitives and submits uppercase key', async () => {
