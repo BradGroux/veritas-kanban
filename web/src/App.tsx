@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { resetFeatureSettingsWrites } from './lib/feature-settings-writes';
+import { resetTaskSaveWrites } from './lib/task-save-writes';
 import { isNativeSettingsWindow } from './lib/desktop-settings';
 import { useSettingsWindowSync } from './hooks/useSettingsWindowSync';
 import { Box } from '@mantine/core';
@@ -208,10 +209,13 @@ function AppContent() {
     settingsSessionMounted.current = true;
     return () => {
       settingsSessionMounted.current = false;
-      // Strict Mode may remount effects synchronously. End the writer only when
-      // the authenticated application really leaves, never on a Settings tab change.
+      // Strict Mode may remount effects synchronously. End the cache-owned writers
+      // when the authenticated application leaves.
       queueMicrotask(() => {
-        if (!settingsSessionMounted.current) resetFeatureSettingsWrites(queryClient);
+        if (!settingsSessionMounted.current) {
+          resetFeatureSettingsWrites(queryClient);
+          resetTaskSaveWrites(queryClient);
+        }
       });
     };
   }, [queryClient]);

@@ -112,7 +112,7 @@ export function registerGitHubCommands(program: Command): void {
             body: JSON.stringify(patch),
             headers: { 'Content-Type': 'application/json' },
           });
-          console.log(chalk.green('✓ Configuration updated'));
+          if (!options.json) console.log(chalk.green('✓ Configuration updated'));
         } else {
           config = await api<SyncConfig>('/api/github/sync/config');
         }

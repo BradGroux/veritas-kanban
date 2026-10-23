@@ -26,6 +26,7 @@ import type {
 } from '../types/workflow.js';
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
+import { ORCAROUTER_CODEX_AGENT_TYPE } from '../utils/orcarouter-codex.js';
 import {
   assertAllowedCodexCommandOverride,
   isCodexWorkflowAgent,
@@ -807,6 +808,14 @@ export class WorkflowStepExecutor {
     step: WorkflowStep,
     agentDef: WorkflowAgent | null
   ): WorkflowExecutableProvider {
+    if (
+      agentDef?.id === ORCAROUTER_CODEX_AGENT_TYPE ||
+      step.agent === ORCAROUTER_CODEX_AGENT_TYPE
+    ) {
+      throw new Error(
+        'The OrcaRouter Codex CLI profile has no workflow execution adapter. Select it for a managed task instead.'
+      );
+    }
     const provider = agentDef?.provider;
     if (provider === 'openclaw' || provider === 'codex-sdk') {
       return provider;

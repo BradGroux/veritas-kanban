@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import { createDesktopPaths, ensureDesktopPathLayout, resolveRepoRoot } from '../paths.js';
+
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 describe('desktop paths', () => {
   it('uses profile and workspace isolated dev homes in the repo', () => {
@@ -59,6 +64,7 @@ describe('desktop paths', () => {
 
   it('copies legacy desktop data into the workspace app home without deleting the source', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'veritas-desktop-paths-'));
+    roots.push(root);
     const legacyData = path.join(root, '.veritas-desktop-dev', 'fresh', 'data');
     const paths = createDesktopPaths({
       userDataPath: path.join(root, 'userData'),

@@ -1,161 +1,116 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { createElement, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { isRevisionConflict, useUpdateTask } from './useTasks';
 import { useToast } from '@/hooks/useToast';
 import { useFeatureSetting } from '@/hooks/useFeatureSettings';
+import { getTaskSaveWrites } from '@/lib/task-save-writes';
 import {
+  getTaskConflict,
   markTaskConflictEditsPreserved,
   resolveTaskConflict,
   useTaskConflict,
 } from '@/hooks/useTaskConflicts';
 import type { Task } from '@veritas-kanban/shared';
 
-export function useDebouncedSave(task: Task | null) {
+export function useDebouncedSave(task: Task | null, open = true) {
+  const queryClient = useQueryClient();
+  const writer = getTaskSaveWrites(queryClient);
   const updateTask = useUpdateTask();
   const { toast } = useToast();
   const autoSaveDelayMs = useFeatureSetting('tasks', 'autoSaveDelayMs');
-  const [localTask, setLocalTask] = useState<Task | null>(task);
-  const [changedFields, setChangedFields] = useState<Set<keyof Task>>(new Set());
-  const [isSaving, setIsSaving] = useState(false);
-  const conflict = useTaskConflict(task?.id);
-  const changedFieldsRef = useRef(changedFields);
-  const localTaskRef = useRef(localTask);
-  const fieldVersionsRef = useRef(new Map<keyof Task, number>());
-  const saveInFlightRef = useRef(false);
-  const mutateRef = useRef(updateTask.mutate);
+  const taskId = task?.id;
+  const taskRef = useRef(task);
+  const delayRef = useRef(autoSaveDelayMs);
+  taskRef.current = task;
+  delayRef.current = autoSaveDelayMs;
+  const conflict = useTaskConflict(taskId);
+  const mutateRef = useRef(updateTask.mutateAsync);
   const toastRef = useRef(toast);
-
-  // Keep refs current without triggering effects
-  changedFieldsRef.current = changedFields;
-  localTaskRef.current = localTask;
-  mutateRef.current = updateTask.mutate;
+  mutateRef.current = updateTask.mutateAsync;
   toastRef.current = toast;
+  const getSnapshot = useCallback(() => writer.getSnapshot(taskId), [writer, taskId]);
+  const snapshot = useSyncExternalStore(writer.subscribe, getSnapshot, getSnapshot);
 
-  // Sync from server — preserve locally dirty fields so refetches
-  // don't overwrite what the user is actively typing
   useEffect(() => {
-    if (!task) {
-      setLocalTask(null);
-      setChangedFields(new Set());
-      fieldVersionsRef.current.clear();
-      return;
-    }
-
-    const dirty = changedFieldsRef.current;
-    if (dirty.size === 0) {
-      // No pending edits — take server value wholesale
-      setLocalTask(task);
-    } else {
-      // Merge: server values for clean fields, keep local values for dirty ones
-      setLocalTask((prev) => {
-        if (!prev) return task;
-        const merged = { ...task };
-        dirty.forEach((field) => {
-          (merged as Record<string, unknown>)[field as string] = prev[field];
-        });
-        return merged;
-      });
-    }
-  }, [task]);
-
-  const savePendingChanges = useCallback(() => {
-    const taskToSave = localTaskRef.current;
-    const fieldsToSave = new Set(changedFieldsRef.current);
-    if (!taskToSave || fieldsToSave.size === 0 || saveInFlightRef.current) return;
-
-    const input: Record<string, unknown> = {};
-    const savedVersions = new Map<keyof Task, number>();
-    fieldsToSave.forEach((field) => {
-      input[field] = taskToSave[field];
-      savedVersions.set(field, fieldVersionsRef.current.get(field) ?? 0);
-    });
-
-    saveInFlightRef.current = true;
-    setIsSaving(true);
-    mutateRef.current(
+    const attachedTask = taskRef.current;
+    if (!attachedTask || !open) return;
+    const id = attachedTask.id;
+    return writer.attach(
+      attachedTask,
       {
-        id: taskToSave.id,
-        input,
-      },
-      {
-        onSuccess: () => {
-          saveInFlightRef.current = false;
-          setIsSaving(false);
-          resolveTaskConflict(taskToSave.id, 'task update');
-          setChangedFields((previous) => {
-            const remaining = new Set(previous);
-            fieldsToSave.forEach((field) => {
-              if (fieldVersionsRef.current.get(field) === savedVersions.get(field)) {
-                remaining.delete(field);
-              }
-            });
-            return remaining;
+        save: async (targetId, input) => {
+          const saved = await mutateRef.current({
+            id: targetId,
+            input,
+            isCurrent: writer.isActive,
           });
+          if (!writer.isActive()) return saved;
+          // Reuse useUpdateTask's cache merge, including concurrent timer state.
+          return queryClient.getQueryData<Task>(['tasks', targetId]) ?? saved;
         },
-        onError: (error) => {
-          saveInFlightRef.current = false;
-          setIsSaving(false);
+        canSave: () => !getTaskConflict(id),
+        onSaved: () => resolveTaskConflict(id, 'task update'),
+        onDispose: () => resolveTaskConflict(id, 'task update'),
+        onFailure: (draft, error, fields, retry) => {
           if (isRevisionConflict(error)) {
-            markTaskConflictEditsPreserved(
-              taskToSave.id,
-              Array.from(fieldsToSave, (field) => String(field))
-            );
+            markTaskConflictEditsPreserved(id, fields);
             return;
           }
-          toastRef.current({
+          return toastRef.current({
             variant: 'destructive',
             title: 'Failed to save changes',
-            description:
-              typeof (error as { message?: unknown }).message === 'string'
-                ? (error as { message: string }).message
-                : 'Please try again',
-          });
+            description: `Changes to ${draft.title} are kept for retry. ${error instanceof Error ? error.message : 'Please try again'}`,
+            action: createElement(
+              'button',
+              {
+                type: 'button',
+                onClick: retry,
+                className:
+                  'text-sm underline rounded focus-visible:outline focus-visible:outline-2',
+              },
+              'Retry task save'
+            ),
+          }).dismiss;
         },
-      }
+      },
+      delayRef.current
     );
-  }, []);
+    // Identity and open state own attachment; server refreshes merge separately.
+  }, [writer, queryClient, taskId, open]);
 
-  // Debounced save — only send fields that were actually changed
   useEffect(() => {
-    if (changedFields.size === 0 || !localTask || conflict || saveInFlightRef.current) {
-      return;
-    }
+    if (task) writer.sync(task);
+  }, [writer, task]);
+  useEffect(() => {
+    if (taskId) writer.setDelay(taskId, autoSaveDelayMs);
+  }, [writer, taskId, autoSaveDelayMs]);
+  useEffect(() => {
+    if (taskId && !conflict) writer.resume(taskId);
+  }, [writer, taskId, conflict]);
 
-    const timeout = setTimeout(() => {
-      savePendingChanges();
-    }, autoSaveDelayMs);
-
-    return () => clearTimeout(timeout);
-  }, [localTask, changedFields, autoSaveDelayMs, conflict, savePendingChanges]);
-
-  const updateField = useCallback(<K extends keyof Task>(field: K, value: Task[K]) => {
-    fieldVersionsRef.current.set(field, (fieldVersionsRef.current.get(field) ?? 0) + 1);
-    setLocalTask((prev) => (prev ? { ...prev, [field]: value } : null));
-    setChangedFields((prev) => new Set(prev).add(field));
-  }, []);
-
+  const updateField = useCallback(
+    <K extends keyof Task>(field: K, value: Task[K]) => {
+      if (taskId) writer.update(taskId, field, value);
+    },
+    [writer, taskId]
+  );
   const retryConflict = useCallback(() => {
-    const taskId = localTaskRef.current?.id;
     if (!taskId) return;
     resolveTaskConflict(taskId, 'task update');
-    savePendingChanges();
-  }, [savePendingChanges]);
-
+    writer.retry(taskId);
+  }, [writer, taskId]);
   const discardConflict = useCallback(() => {
-    const taskId = localTaskRef.current?.id;
     if (!taskId) return;
-    fieldVersionsRef.current.clear();
-    setChangedFields(new Set());
-    setLocalTask(conflict?.currentTask ?? task);
+    const current = conflict?.currentTask ?? task;
+    if (current) writer.discard(taskId, current);
     resolveTaskConflict(taskId, 'task update');
-  }, [conflict?.currentTask, task]);
-
-  const isDirty = changedFields.size > 0;
+  }, [writer, taskId, conflict?.currentTask, task]);
 
   return {
-    localTask,
+    localTask: snapshot?.localTask ?? task,
     updateField,
-    isDirty,
-    isSaving,
+    isDirty: snapshot?.isDirty ?? false,
+    isSaving: snapshot?.isSaving ?? false,
     conflict,
     retryConflict,
     discardConflict,

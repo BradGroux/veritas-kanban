@@ -9,6 +9,7 @@
 
 import type {
   Task,
+  SharedResource,
   FeatureSettings,
   TaskTemplate,
   CreateTemplateInput,
@@ -627,4 +628,15 @@ export interface NotificationRepository {
   getStats(): NotificationStats | Promise<NotificationStats>;
   subscribe(subscription: ThreadSubscription): void | Promise<void>;
   getSubscriptions(taskId: string): ThreadSubscription[] | Promise<ThreadSubscription[]>;
+}
+
+export interface SharedResourceRepository {
+  read(): Promise<SharedResource[]>;
+  mutate<T>(
+    change: (resources: SharedResource[]) => {
+      resources: SharedResource[];
+      result: T;
+      changed: boolean;
+    }
+  ): Promise<T>;
 }

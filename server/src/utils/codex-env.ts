@@ -1,3 +1,6 @@
+import type { AgentConfig } from '@veritas-kanban/shared';
+import { isOrcaRouterCodexAgent, ORCAROUTER_CREDENTIAL_ENV_KEY } from './orcarouter-codex.js';
+
 const CODEX_ENV_ALLOWLIST = new Set([
   'CI',
   'CODEX_API_KEY',
@@ -37,17 +40,35 @@ export function isSensitiveCodexEnvKey(key: string): boolean {
 
 export function buildSafeCodexEnv(
   source: NodeJS.ProcessEnv = process.env,
-  passthroughKeys?: Iterable<string>
+  passthroughKeys?: Iterable<string>,
+  agent?: AgentConfig
 ): Record<string, string> {
   const env: Record<string, string> = {};
   const allowlist = new Set(CODEX_ENV_ALLOWLIST);
   if (passthroughKeys) {
     for (const key of passthroughKeys) allowlist.add(key.toUpperCase());
   }
+  const orcaRouter = isOrcaRouterCodexAgent(agent);
+  if (orcaRouter) {
+    allowlist.add(ORCAROUTER_CREDENTIAL_ENV_KEY);
+    for (const key of [
+      'CODEX_API_KEY',
+      'OPENAI_API_KEY',
+      'OPENAI_BASE_URL',
+      'OPENAI_ORG_ID',
+      'OPENAI_ORGANIZATION',
+      'OPENAI_PROJECT',
+    ]) {
+      allowlist.delete(key);
+    }
+  }
 
   for (const key of allowlist) {
     const value = source[key];
-    if (typeof value === 'string' && !isSensitiveCodexEnvKey(key)) {
+    if (
+      typeof value === 'string' &&
+      (!isSensitiveCodexEnvKey(key) || (orcaRouter && key === ORCAROUTER_CREDENTIAL_ENV_KEY))
+    ) {
       env[key] = value;
     }
   }

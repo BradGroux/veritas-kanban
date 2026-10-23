@@ -35,21 +35,27 @@ services:
       - demo-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/health']
+      test:
+        ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/api/health']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
 
   vk-demo-seed:
-    image: alpine:3.19
+    build:
+      context: ..
+      dockerfile: Dockerfile
     container_name: vk-demo-seed
+    working_dir: /app/data
     depends_on:
       vk-demo:
         condition: service_healthy
     volumes:
-      - ./seed.sh:/seed/seed.sh:ro
-    entrypoint: ['sh', '/seed/seed.sh']
+      - ./seed.mjs:/app/server/seed.mjs:ro
+      - ./seed-fixtures.json:/app/server/seed-fixtures.json:ro
+      - demo-data:/app/data
+    entrypoint: ['node', '/app/server/seed.mjs']
     environment:
       - API_URL=http://vk-demo:3001
       - ADMIN_KEY=${VERITAS_ADMIN_KEY:-demo-admin-key-2026}

@@ -427,6 +427,19 @@ export class SchedulerService {
       return { item: await this.getItem(item.id, now), event };
     }
 
+    if (claimed.claim.status === 'queued' || claimed.claim.status === 'skipped') {
+      const event = await this.recordEvent({
+        item,
+        type: 'overlap',
+        status: 'skipped',
+        summary: claimed.claim.reason ?? `Automation window ${claimed.claim.status}.`,
+        durationMs: Date.now() - startedAt,
+        now,
+        nextRunAt: claimed.binding.nextRunAt,
+      });
+      return { item: await this.getItem(item.id, now), event };
+    }
+
     try {
       const run = await this.workflowRunService.startRun(
         claimed.version.workflowId,
@@ -541,29 +554,25 @@ export class SchedulerService {
   }
 
   private async reconcileAutomationRuns(): Promise<void> {
-    const automations = await this.automationService.list();
-    for (const claim of automations.recentClaims.filter(
-      (candidate) => candidate.status === 'started' && candidate.workflowRunId
-    )) {
+    const claims = await this.automationService.listClaimsPendingReconciliation();
+    for (const claim of claims) {
       const run = await this.workflowRunService.getRun(claim.workflowRunId as string);
       if (!run || (run.status !== 'completed' && run.status !== 'failed')) continue;
-      if (run.status === 'failed') {
-        await this.automationService.markRunFailed(
-          claim.id,
-          run.error ?? 'Automation workflow run failed.'
-        );
-        continue;
-      }
-      await this.automationService.markRunCompleted(claim.id, {
+      const elapsed = run.completedAt ? Date.parse(run.completedAt) - Date.parse(run.startedAt) : 0;
+      const usage = {
         costUsd: run.budget?.usage.costUsd ?? 0,
         tokens: run.budget?.usage.totalTokens ?? 0,
-        durationMinutes: Math.max(
-          0,
-          ((run.completedAt ? Date.parse(run.completedAt) : Date.now()) -
-            Date.parse(run.startedAt)) /
-            60_000
-        ),
-      });
+        durationMinutes: Number.isFinite(elapsed) ? Math.max(0, elapsed / 60_000) : 0,
+      };
+      if (claim.status === 'failed' || run.status === 'failed') {
+        await this.automationService.markRunFailed(
+          claim.id,
+          claim.reason ?? run.error ?? 'Automation workflow run failed.',
+          usage
+        );
+      } else {
+        await this.automationService.markRunCompleted(claim.id, usage);
+      }
     }
   }
 
@@ -712,7 +721,7 @@ export class SchedulerService {
       actions: {
         canRun: enabled,
         canPause: binding.status === 'active',
-        canResume: binding.status === 'paused',
+        canResume: binding.status === 'paused' || binding.status === 'blocked',
         canValidate: true,
       },
     });

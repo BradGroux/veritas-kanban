@@ -21,6 +21,7 @@ import {
 import { ConflictError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import {
   FileSchedulerStateRepository,
+  retainAutomationClaims,
   type SchedulerStateRepository,
 } from '../storage/scheduler-state-repository.js';
 import { getCommunicationAdapterService } from './communication-adapter-service.js';
@@ -39,7 +40,6 @@ import { getToolPolicyService } from './tool-policy-service.js';
 import { getStorage } from '../storage/index.js';
 
 const DEFAULT_APPROVAL_TTL_MS = 15 * 60_000;
-const MAX_CLAIMS = 1_000;
 const MAX_EVENTS = 200;
 const AUTOMATION_VERSION_ID_PATTERN = /^automation_version_[a-f0-9]{24}$/;
 const AUTOMATION_BINDING_ID_PATTERN = /^automation_binding_[a-f0-9]{24}$/;
@@ -141,7 +141,8 @@ export class AutomationActivationService {
         required(draft.schedule.expression.value, 'schedule.expression'),
         required(draft.schedule.timezone.value, 'schedule.timezone'),
         this.now(),
-        draft.schedule.expiresAt.value
+        draft.schedule.expiresAt.value,
+        draft.schedule.startAt.value
       ),
     };
     const standingScope = required(draft.standingScope.value, 'standingScope');
@@ -440,14 +441,27 @@ export class AutomationActivationService {
       if (current.status === 'revoked') {
         throw new ConflictError('Revoked automation bindings cannot be resumed.');
       }
+      const waitingWindow =
+        status === 'active'
+          ? waitingAutomationWindow(state.automationClaims, bindingId)
+          : undefined;
       result = {
         ...current,
         status,
+        ...(waitingWindow ? { nextRunAt: waitingWindow } : {}),
         statusReason: reason,
         revision: current.revision + 1,
         updatedAt: this.now().toISOString(),
       };
       state.automationBindings[current.id] = result;
+      if (status === 'revoked') {
+        const updatedAt = result.updatedAt;
+        state.automationClaims = state.automationClaims.map((claim): AutomationRunClaim =>
+          claim.bindingId === bindingId && claim.status === 'queued'
+            ? { ...claim, status: 'blocked', reason: 'Automation binding revoked.', updatedAt }
+            : claim
+        );
+      }
       state.events = [
         ...state.events,
         automationEvent(
@@ -495,16 +509,67 @@ export class AutomationActivationService {
           currentBindingRevision: binding.revision,
         });
       }
-      const dueWindow = trigger === 'due-run' ? binding.nextRunAt : minuteWindow(now);
+      let dueWindow = trigger === 'due-run' ? binding.nextRunAt : minuteWindow(now);
       if (!dueWindow) throw new ValidationError('Automation has no due run window.');
-      const requestId = `automation:${version.id}:${trigger}:${dueWindow}`;
+      const beforeStart = Boolean(
+        version.schedule.startAt && Date.parse(version.schedule.startAt) > now.getTime()
+      );
+      const owned = state.automationClaims.filter((claim) => claim.bindingId === bindingId);
+      const running = owned.some(
+        (claim) => claim.status === 'accepted' || claim.status === 'started'
+      );
+      const waiting = owned.find((claim) => claim.status === 'queued');
+      const promoting =
+        trigger === 'due-run' &&
+        binding.status === 'active' &&
+        !beforeStart &&
+        !running &&
+        waiting &&
+        Date.parse(waiting.dueWindow) <= now.getTime()
+          ? waiting
+          : undefined;
+      // An early rejection must not consume a later eligible request in the same minute.
+      let requestId = `automation:${version.id}:${trigger}:${dueWindow}${beforeStart ? ':before-start' : ''}`;
+      if (promoting) {
+        dueWindow = promoting.dueWindow;
+        requestId = promoting.requestId;
+      }
+      const beforeWindow = trigger === 'due-run' && Date.parse(dueWindow) > now.getTime();
+      if (beforeWindow && !beforeStart) requestId += ':before-window';
       const existing = state.automationClaims.find((claim) => claim.requestId === requestId);
-      if (existing) {
+      if (existing && !promoting) {
         result = { claim: existing, version, binding, replayed: true };
         return state;
       }
-      const blocker = bindingBlocker(binding, version, now) ?? driftBlocker;
-      const claimId = `automation_claim_${hex(digest(requestId)).slice(0, 24)}`;
+      const policyBlocker = bindingBlocker(binding, version, now) ?? driftBlocker;
+      const earlyOnly = !policyBlocker && (beforeStart || beforeWindow);
+      const blocker =
+        policyBlocker ??
+        (beforeStart
+          ? 'Automation start time has not arrived.'
+          : beforeWindow
+            ? 'Automation next run time has not arrived.'
+            : undefined);
+      const overlapping = !blocker && (running || (waiting && !promoting));
+      const forbidden = overlapping && version.schedule.overlapPolicy === 'forbid';
+      const status: AutomationRunClaim['status'] =
+        blocker || forbidden
+          ? 'blocked'
+          : overlapping
+            ? version.schedule.overlapPolicy === 'queue-one' && !waiting
+              ? 'queued'
+              : 'skipped'
+            : 'accepted';
+      const reason =
+        blocker ??
+        (forbidden
+          ? 'Automation overlap is forbidden; operator resume is required.'
+          : status === 'queued'
+            ? 'Automation overlap retained one waiting window.'
+            : status === 'skipped'
+              ? 'Automation overlap skipped this window.'
+              : undefined);
+      const claimId = promoting?.id ?? `automation_claim_${hex(digest(requestId)).slice(0, 24)}`;
       const timestamp = now.toISOString();
       const claim: AutomationRunClaim = {
         schemaVersion: AUTOMATION_RUN_CLAIM_SCHEMA_VERSION,
@@ -513,17 +578,61 @@ export class AutomationActivationService {
         automationVersionId: version.id,
         bindingId,
         dueWindow,
-        trigger,
-        status: blocker ? 'blocked' : 'accepted',
-        ...(blocker ? { reason: blocker } : {}),
-        createdAt: timestamp,
+        trigger: promoting?.trigger ?? trigger,
+        status,
+        ...(reason ? { reason } : {}),
+        createdAt: promoting?.createdAt ?? timestamp,
         updatedAt: timestamp,
       };
-      if (blocker) {
+      if (blocker || forbidden) {
         binding = {
           ...binding,
-          status: Date.parse(version.schedule.expiresAt) <= now.getTime() ? 'expired' : 'blocked',
-          statusReason: blocker,
+          ...(forbidden || promoting
+            ? {
+                nextRunAt: nextAutomationRunAt(
+                  version.schedule.expression,
+                  version.schedule.timezone,
+                  now,
+                  version.schedule.expiresAt,
+                  version.schedule.startAt
+                ),
+              }
+            : {}),
+          ...(earlyOnly
+            ? {
+                nextRunAt: nextAutomationRunAt(
+                  version.schedule.expression,
+                  version.schedule.timezone,
+                  now,
+                  version.schedule.expiresAt,
+                  version.schedule.startAt
+                ),
+              }
+            : {
+                status:
+                  binding.status === 'revoked' || binding.status === 'expired'
+                    ? binding.status
+                    : Date.parse(version.schedule.expiresAt) <= now.getTime()
+                      ? ('expired' as const)
+                      : ('blocked' as const),
+                statusReason: reason ?? 'Automation run was blocked.',
+              }),
+          revision: binding.revision + 1,
+          updatedAt: timestamp,
+        };
+      } else if (status === 'queued' || status === 'skipped') {
+        binding = {
+          ...binding,
+          nextRunAt:
+            waiting && !running
+              ? waiting.dueWindow
+              : nextAutomationRunAt(
+                  version.schedule.expression,
+                  version.schedule.timezone,
+                  now,
+                  version.schedule.expiresAt,
+                  version.schedule.startAt
+                ),
           revision: binding.revision + 1,
           updatedAt: timestamp,
         };
@@ -540,14 +649,21 @@ export class AutomationActivationService {
             version.schedule.expression,
             version.schedule.timezone,
             now,
-            version.schedule.expiresAt
+            version.schedule.expiresAt,
+            version.schedule.startAt
           ),
           revision: binding.revision + 1,
           updatedAt: timestamp,
         };
       }
       state.automationBindings[binding.id] = binding;
-      state.automationClaims = [...state.automationClaims, claim].slice(-MAX_CLAIMS);
+      state.automationClaims = retainAutomationClaims(
+        promoting
+          ? state.automationClaims.map((candidate) =>
+              candidate.id === claim.id ? claim : candidate
+            )
+          : [...state.automationClaims, claim]
+      );
       result = { claim, version, binding, replayed: false };
       return state;
     });
@@ -612,51 +728,117 @@ export class AutomationActivationService {
     return this.updateClaim(claimId, 'started', { workflowRunId });
   }
 
-  async markRunFailed(claimId: string, reason: string): Promise<AutomationRunClaim> {
-    return this.updateClaim(claimId, 'failed', { reason });
+  /** Includes retained older failures, independently of the UI's recent-claim limit. */
+  async listClaimsPendingReconciliation(): Promise<AutomationRunClaim[]> {
+    return (await this.stateRepository.read()).automationClaims.filter(
+      (claim) =>
+        claim.workflowRunId &&
+        (claim.status === 'started' || (claim.status === 'failed' && !claim.usageReceipt))
+    );
+  }
+
+  async markRunFailed(
+    claimId: string,
+    reason: string,
+    usage?: { costUsd: number; tokens: number; durationMinutes: number }
+  ): Promise<AutomationRunClaim> {
+    return this.finishRunClaim(claimId, 'failed', usage, reason);
   }
 
   async markRunCompleted(
     claimId: string,
     usage: { costUsd: number; tokens: number; durationMinutes: number }
   ): Promise<AutomationRunClaim> {
+    return this.finishRunClaim(claimId, 'completed', usage);
+  }
+
+  private async finishRunClaim(
+    claimId: string,
+    status: 'completed' | 'failed',
+    usage?: { costUsd: number; tokens: number; durationMinutes: number },
+    reason?: string
+  ): Promise<AutomationRunClaim> {
     let result: AutomationRunClaim | undefined;
     await this.stateRepository.update((state) => {
       const index = state.automationClaims.findIndex((claim) => claim.id === claimId);
       if (index < 0) throw new NotFoundError(`Automation run claim ${claimId} not found.`);
       const current = state.automationClaims[index];
-      if (current.status === 'completed') {
+      const alreadyTerminal = current.status === status;
+      // Historical completions already contributed usage before receipts existed.
+      // Historical failures did not, and can be backfilled from retained workflow evidence.
+      if (alreadyTerminal && (status === 'completed' || current.usageReceipt || !usage)) {
         result = current;
         return state;
       }
-      if (current.status !== 'started') {
-        throw new ConflictError('Only a started automation claim can complete.', {
+      if (
+        current.status !== 'started' &&
+        !(status === 'failed' && (current.status === 'accepted' || alreadyTerminal))
+      ) {
+        throw new ConflictError('Automation run claim cannot enter this terminal state.', {
           claimId,
           status: current.status,
         });
       }
-      result = { ...current, status: 'completed', updatedAt: this.now().toISOString() };
-      state.automationClaims[index] = result;
       const binding = state.automationBindings[current.bindingId];
       const version = binding ? state.automationVersions[binding.automationVersionId] : undefined;
-      if (binding && version) {
-        const aggregateUsage = {
-          runs: binding.aggregateUsage.runs,
-          costUsd: binding.aggregateUsage.costUsd + Math.max(0, usage.costUsd),
-          tokens: binding.aggregateUsage.tokens + Math.max(0, Math.trunc(usage.tokens)),
-          durationMinutes:
-            binding.aggregateUsage.durationMinutes + Math.max(0, usage.durationMinutes),
-        };
-        const exhaustion = aggregateBudgetBlocker(version, aggregateUsage);
-        state.automationBindings[binding.id] = {
-          ...binding,
-          aggregateUsage,
-          failedRuns: 0,
-          ...(exhaustion ? { status: 'blocked' as const, statusReason: exhaustion } : {}),
-          revision: binding.revision + 1,
-          updatedAt: this.now().toISOString(),
-        };
-      }
+      if (!binding || !version)
+        throw new NotFoundError('Automation claim accounting target not found.');
+      const timestamp = this.now().toISOString();
+      // A launch failure with no workflow has no measured workflow contribution.
+      const measured =
+        usage ??
+        (!current.workflowRunId ? { costUsd: 0, tokens: 0, durationMinutes: 0 } : undefined);
+      const receipt = measured
+        ? {
+            costUsd: Math.max(0, measured.costUsd),
+            tokens: Math.max(0, Math.trunc(measured.tokens)),
+            durationMinutes: Math.max(0, measured.durationMinutes),
+            recordedAt: timestamp,
+          }
+        : undefined;
+      result = {
+        ...current,
+        status,
+        ...(!alreadyTerminal && reason ? { reason } : {}),
+        ...(receipt ? { usageReceipt: receipt } : {}),
+        updatedAt: timestamp,
+      };
+      state.automationClaims[index] = result;
+      const aggregateUsage = {
+        runs: binding.aggregateUsage.runs,
+        costUsd: binding.aggregateUsage.costUsd + (receipt?.costUsd ?? 0),
+        tokens: binding.aggregateUsage.tokens + (receipt?.tokens ?? 0),
+        durationMinutes: binding.aggregateUsage.durationMinutes + (receipt?.durationMinutes ?? 0),
+      };
+      const failedRuns = alreadyTerminal
+        ? binding.failedRuns
+        : status === 'failed'
+          ? binding.failedRuns + 1
+          : 0;
+      const exhaustion = aggregateBudgetBlocker(version, aggregateUsage);
+      const retryBlocked =
+        status === 'failed' && !alreadyTerminal && failedRuns >= version.schedule.retry.maxAttempts;
+      state.automationBindings[binding.id] = {
+        ...binding,
+        aggregateUsage,
+        failedRuns,
+        ...(binding.status === 'revoked' || binding.status === 'expired'
+          ? {}
+          : exhaustion
+            ? { status: 'blocked' as const, statusReason: exhaustion }
+            : retryBlocked
+              ? {
+                  status: 'blocked' as const,
+                  statusReason: `Retry limit reached: ${reason ?? 'launch failed'}`,
+                }
+              : {}),
+        revision: binding.revision + 1,
+        updatedAt: timestamp,
+      };
+      const updatedBinding = state.automationBindings[binding.id];
+      const waitingWindow = waitingAutomationWindow(state.automationClaims, binding.id);
+      if (updatedBinding.status === 'active' && waitingWindow)
+        updatedBinding.nextRunAt = waitingWindow;
       return state;
     });
     return required(result, 'claim');
@@ -664,7 +846,7 @@ export class AutomationActivationService {
 
   private async updateClaim(
     claimId: string,
-    status: Extract<AutomationRunClaim['status'], 'started' | 'failed'>,
+    status: Extract<AutomationRunClaim['status'], 'started'>,
     update: Pick<AutomationRunClaim, 'workflowRunId' | 'reason'>
   ): Promise<AutomationRunClaim> {
     let result: AutomationRunClaim | undefined;
@@ -676,11 +858,7 @@ export class AutomationActivationService {
         result = current;
         return state;
       }
-      if (
-        current.status !== 'accepted' &&
-        !(status === 'failed' && current.status === 'started') &&
-        current.status !== status
-      ) {
+      if (current.status !== 'accepted') {
         throw new ConflictError('Automation run claim is already terminal.', {
           claimId,
           status: current.status,
@@ -694,26 +872,7 @@ export class AutomationActivationService {
         updatedAt: this.now().toISOString(),
       };
       state.automationClaims[index] = result;
-      if (status === 'failed') {
-        const binding = state.automationBindings[current.bindingId];
-        if (binding) {
-          const version = state.automationVersions[binding.automationVersionId];
-          const failedRuns = binding.failedRuns + 1;
-          const retryLimit = version?.schedule.retry.maxAttempts ?? 0;
-          state.automationBindings[current.bindingId] = {
-            ...binding,
-            failedRuns,
-            ...(failedRuns >= retryLimit
-              ? {
-                  status: 'blocked' as const,
-                  statusReason: `Retry limit reached: ${update.reason ?? 'launch failed'}`,
-                }
-              : {}),
-            revision: binding.revision + 1,
-            updatedAt: this.now().toISOString(),
-          };
-        }
-      }
+
       return state;
     });
     return required(result, 'claim');
@@ -808,6 +967,16 @@ function taskTemplateWorkflow(
     createdBy: 'automation-activation',
     updatedBy: 'automation-activation',
   };
+}
+
+function waitingAutomationWindow(
+  claims: AutomationRunClaim[],
+  bindingId: string
+): string | undefined {
+  const owned = claims.filter((claim) => claim.bindingId === bindingId);
+  if (owned.some((claim) => claim.status === 'accepted' || claim.status === 'started'))
+    return undefined;
+  return owned.find((claim) => claim.status === 'queued')?.dueWindow;
 }
 
 function bindingBlocker(

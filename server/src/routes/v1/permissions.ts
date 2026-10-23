@@ -1,5 +1,9 @@
+import type { NextFunction, Response } from 'express';
+import { getApiPermissionRequirement } from '@veritas-kanban/shared';
 import {
+  authorizePermission,
   authorizePermissionByMethod,
+  type AuthenticatedRequest,
   type AuthPermission,
   type MethodPermissionOverride,
 } from '../../middleware/auth.js';
@@ -13,6 +17,19 @@ function routeAccess(
 ) {
   return authorizePermissionByMethod({ read, write, overrides });
 }
+
+// These namespaces have several routers sharing a prefix. Authorize the
+// canonical endpoint once, before routing, so an unmatched earlier router
+// cannot impose another endpoint's permissions.
+function endpointAccess(prefix: '/api/tasks' | '/api/agents') {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    const requirement = getApiPermissionRequirement(`${prefix}${req.path}`, { method: req.method });
+    authorizePermission(...requirement.permissions)(req, res, next);
+  };
+}
+
+export const taskEndpointAccess = endpointAccess('/api/tasks');
+export const agentEndpointAccess = endpointAccess('/api/agents');
 
 export const taskAccess = routeAccess('task:read', 'task:write');
 export const taskReadAccess = routeAccess('task:read', 'task:read');
