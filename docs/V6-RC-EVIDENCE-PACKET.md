@@ -6,7 +6,7 @@ Documentation freshness: 2026-10-25. Implementation, focused proof, assembled in
 
 ## 6.3.0 Issue And Pull Request Traceability
 
-[Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) holds the full necessity/overlap audit, priority plan and individual merge evidence. All 30 original remediation children of #1632 are closed. Optional identity sign-in #1639 and OrcaRouter #1708 are merged; the latter explicitly ships with live gateway compatibility unverified. Electron #1597 and local capture/promotion tooling #1711/#1712 are merged. Tooling implementation, focused verification and fresh signed/native/media capture are complete. Stable GitHub publication and public-download app acceptance are complete; the Homebrew channel decision remains separate.
+[Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) holds the full necessity/overlap audit, priority plan and individual merge evidence. All 30 original remediation children of #1632 are closed. Optional identity sign-in #1639 and OrcaRouter #1708 are merged; the latter explicitly ships with live gateway compatibility unverified. Electron #1597 and local capture/promotion tooling #1711/#1712 are merged. Tooling implementation, focused verification and fresh signed/native/media capture are complete. Stable GitHub publication, public-download app acceptance and Homebrew channel verification are complete.
 
 ## 6.3.0 Signed Distribution Candidate
 
@@ -49,7 +49,7 @@ The authorized temporary display change was restored exactly to 1710×1107 logic
 
 An additional unauthenticated public ZIP download matched SHA-256 `c636faf8c3d9dfa53424027842173e06d245f510a8778689d6955e2126971874`. Its extracted app passed strict signature, Gatekeeper and stapled-ticket validation, followed by actual first-run setup/login in a disposable profile. The app reported version 6.3.0 and exact build c83e72c3; its packaged server health reported 6.3.0. The app was closed, exact original protocol handler restored and display unchanged. No installed-app replacement or live-workspace mutation occurred.
 
-The Homebrew cask update is prepared and locally style-checked. The maintainer approved disabling only the tap's active Copilot workflow, but GitHub rejected the managed dynamic workflow's disable endpoint with HTTP 422. No control changed. Publishing awaits the separate decision on disabling Actions for this tap under the no-CI policy. This separate channel decision does not prevent downloading or using the published GitHub release. Hosted dependency, code-scanning and secret-scanning open-alert counts are zero; private remediation metadata was reconciled to 6.3.0 without public disclosure.
+Homebrew [PR #66](https://github.com/BradGroux/homebrew-tap/pull/66) merged as `41d90b27e81fed664ca1305cbe6f18260618674a`. Strict online audit, fetch and livecheck passed; livecheck reports 6.3.0 as current and latest. The cached 305,664,663-byte ZIP matches the published SHA-256. The registered tap was fast-forwarded to the exact published tree; no install or upgrade command was run. The maintainer separately authorized disabling Actions for the tap after GitHub rejected the workflow-only request. Original controls were backed up; Actions is verified disabled and no new workflow ran. Hosted dependency, code-scanning and secret-scanning open-alert counts are zero; private remediation metadata was reconciled to 6.3.0 without public disclosure.
 
 ## Historical 6.2.0 candidate
 

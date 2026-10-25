@@ -13,7 +13,7 @@ is the supported stable v6 release and requires macOS 13 Ventura or later on App
 
 ## Fresh Mac Desktop Install
 
-The Homebrew 6.3.0 update is pending its separate publication decision. Until the cask reports 6.3.0, use the verified manual download below. The standard Homebrew install commands are:
+The [Homebrew 6.3.0 cask](https://github.com/BradGroux/homebrew-tap/pull/66) is published and verified against the signed release ZIP. Install with:
 
 ```bash
 brew tap BradGroux/tap

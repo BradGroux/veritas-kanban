@@ -16,7 +16,7 @@ Documentation freshness: 2026-10-25. See [the current evidence packet](V6-RC-EVI
 - [x] Pass full release validation with actual native app/report and media publication manifest; source-only preflight is separate.
 - [x] Publish the exact reviewed notes, tag and retained artifacts; verify destination bytes and updater metadata.
 - [x] Inspect both rendered GitHub release pages and verify a fresh public download through first-run login and exact app/server version.
-- [ ] Complete the Homebrew channel update after the separate tap CI-control decision, then close the delivery tracker.
+- [x] Complete Homebrew [#66](https://github.com/BradGroux/homebrew-tap/pull/66): strict online audit, fetch, livecheck, exact ZIP hash and published cask readback passed. Tap Actions is disabled under separate authorization, with original settings backed up. All delivery gates are verified for final tracker closure.
 
 Publication commit: `d0ec5b2d87045ba4512871b38ec4bb75a9607512`. Signed build: `c83e72c355bdcc559997f9d9308bdbe3932c29bc`. Existing installed app and workspace were preserved; original protocol handler and display were restored and verified.
 
