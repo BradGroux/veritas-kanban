@@ -5,7 +5,7 @@ cli/src/__tests__/snapshot.test.ts:generic-api-key:220
 docs/API-WORKFLOWS.md:generic-api-key:1460
 
 # Operator documentation uses placeholders in curl authentication examples.
-docs/DEPLOYMENT.md:curl-auth-header:926
+docs/DEPLOYMENT.md:curl-auth-header:928
 docs/TROUBLESHOOTING.md:curl-auth-header:233
 docs/TROUBLESHOOTING.md:curl-auth-header:261
 docs/TROUBLESHOOTING.md:curl-auth-header:264
