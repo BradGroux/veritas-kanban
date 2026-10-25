@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 const image = process.env.VERITAS_DOCKER_IMAGE || process.argv[2] || 'veritas-kanban:contract';
 const configuredMaxBytes = process.env.VERITAS_DOCKER_MAX_BYTES;
 const defaultMaxBytesByArchitecture = {
-  arm64: 200_000_000,
+  arm64: 250_000_000,
   amd64: 600_000_000,
 };
 const containerName = `veritas-kanban-contract-${process.pid}`;

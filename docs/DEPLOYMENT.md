@@ -71,11 +71,13 @@ The multi-stage Dockerfile enforces architecture-specific production image budge
 
 | Architecture | Maximum compressed image size | 6.1.2 implementation baseline |
 | ------------ | ----------------------------- | ----------------------------- |
-| `arm64`      | 200,000,000 bytes             | 195,910,880 bytes             |
+| `arm64`      | 250,000,000 bytes             | 195,910,880 bytes             |
 | `amd64`      | 600,000,000 bytes             | 571,590,173 bytes             |
 
 The final release candidate is remeasured at the release milestone; these
 implementation baselines are not substituted for final artifact evidence.
+The ARM64 budget preserves the complete pinned provider runtime for 6.3.0; its
+238,235,533-byte candidate exceeded the previous 200,000,000-byte budget.
 
 | Stage          | Purpose                                                                  |
 | -------------- | ------------------------------------------------------------------------ |
