@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -346,5 +347,48 @@ localTest(
     const text = await readFile(file, 'utf8');
     await writeFile(file, text + text.split('\n')[0] + '\n');
     await assert.rejects(seal(directory), /duplicated distribution checksum/);
+  }
+);
+
+test(
+  'capture preflight invokes the selected existing identity before reporting unrelated blockers',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'vk-signing-preflight-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const executable = path.join(directory, 'security');
+    const marker = path.join(directory, 'identity-queried');
+    const fingerprint = 'A'.repeat(40);
+    await writeFile(
+      executable,
+      `#!${process.execPath}
+import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(marker)}, 'queried');
+console.log('  1) ${fingerprint} "Developer ID Application: Example (TEAM)"');
+`
+    );
+    await chmod(executable, 0o700);
+    const module = new URL('./capture-local-macos-release.mjs', import.meta.url).href;
+    const script = `import { preflightCapture } from ${JSON.stringify(module)}; console.log(JSON.stringify(await preflightCapture({version: '0.0.0', channel: 'stable', output: ${JSON.stringify(path.join(directory, 'candidate'))}})));`;
+    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+      env: {
+        PATH: directory + path.delimiter + process.env.PATH,
+        HOME: process.env.HOME,
+        TMPDIR: os.tmpdir(),
+        CSC_NAME: fingerprint,
+        APPLE_KEYCHAIN_PROFILE: 'synthetic-unresolved-profile',
+      },
+    });
+    assert.equal(child.status, 0, child.stderr);
+    const report = JSON.parse(child.stdout);
+    assert.equal(await readFile(marker, 'utf8'), 'queried');
+    assert(
+      !report.blockers.includes('Existing Developer ID signing identity is missing or ambiguous')
+    );
+    assert.equal(report.ready, false);
+    assert(
+      report.blockers.some((blocker) => blocker.includes('does not match the target version'))
+    );
   }
 );
