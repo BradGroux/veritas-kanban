@@ -6,14 +6,14 @@ machine-readable support contract is summarized in
 [Harness Compatibility](HARNESS-COMPATIBILITY.md), and Buzz relay setup lives
 in [Buzz Integration](BUZZ-INTEGRATION.md).
 
-Documentation freshness: 2026-10-25 for 6.3.0 release preparation. Publication remains pending in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md); the currently published stable release is 6.2.1.
+Documentation freshness: 2026-10-25 for the published stable 6.3.0 release. Signed distribution, public-download launch and restoration evidence are in the [evidence packet](V6-RC-EVIDENCE-PACKET.md).
 
 Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.3.0
-is the target stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
+is the supported stable v6 release and requires macOS 13 Ventura or later on Apple silicon.
 
 ## Fresh Mac Desktop Install
 
-Install the signed/notarized stable app:
+The Homebrew 6.3.0 update is pending its separate publication decision. Until the cask reports 6.3.0, use the verified manual download below. The standard Homebrew install commands are:
 
 ```bash
 brew tap BradGroux/tap

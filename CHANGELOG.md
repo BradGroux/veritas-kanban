@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [6.3.0] - 2026-10-23
+## [6.3.0] - 2026-10-25
 
 Veritas Kanban 6.3.0 completes the repository audit backlog and adds optional identity sign-in and gateway execution. Full behavior, activation and compatibility details are in [the release notes](docs/releases/v6.3.0.md).
 
