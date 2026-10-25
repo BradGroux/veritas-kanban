@@ -2,7 +2,7 @@
 
 The maintained views below are retained 6.2.0 captures. Their labels and provenance stay unchanged until the final 6.3.0 signed candidate produces fresh original media; they are not 6.3.0 visual acceptance. The latest published stable release is 6.2.1. See the [6.3.0 release source](releases/v6.3.0.md), [evidence packet](V6-RC-EVIDENCE-PACKET.md), and [media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md).
 
-Documentation freshness: 2026-10-23 for release preparation; the maintained media refresh is pending. Historical [6.2.0 comparison](releases/v6.2.0-comparison.md) and [capture provenance](assets/v6.2.0/README.md) remain available.
+Documentation freshness: 2026-10-25 for release preparation; the maintained media refresh is pending. Historical [6.2.0 comparison](releases/v6.2.0-comparison.md) and [capture provenance](assets/v6.2.0/README.md) remain available.
 
 ## Board And Task Workspace
 

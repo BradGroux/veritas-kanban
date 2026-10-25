@@ -9,7 +9,7 @@ individual contract documents for
 [tool control](TOOL-CONTROL-PLANE-V1.md), and
 [runtime hooks](RUNTIME-HOOK-V1.md).
 
-Documentation freshness: 2026-10-23 for the Veritas Kanban 6.3.0 release candidate.
+Documentation freshness: 2026-10-25 for the Veritas Kanban 6.3.0 release candidate.
 
 Optional ChatGPT identity sign-in resolves an existing principal and current workspace membership before granting authority; it does not create users from email matches or restore removed membership. The OrcaRouter profile uses the existing pinned CLI adapter and managed launch controls; synthetic conformance is not live gateway certification. See [identity setup](../guides/SIGN_IN_WITH_CHATGPT.md), [gateway setup](../guides/ORCAROUTER.md) and the [compatibility matrix](../HARNESS-COMPATIBILITY.md).
 

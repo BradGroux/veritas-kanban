@@ -2,14 +2,15 @@
 
 This checklist governs 6.3.0 preparation. The latest published stable release is 6.2.1; 6.3.0 remains unpublished. Historical sections preserve earlier evidence, including previous workflow use, and do not authorize GitHub CI for this release.
 
-Documentation freshness: 2026-10-23. See [the current evidence packet](V6-RC-EVIDENCE-PACKET.md).
+Documentation freshness: 2026-10-25. See [the current evidence packet](V6-RC-EVIDENCE-PACKET.md).
 
 ## 6.3.0 Candidate Gate
 
 - [x] Complete and verify all 30 original audit remediation children and both optional integrations; retain necessity and overlap dispositions in #1657.
 - [x] Align all seven source package versions and prepare full source-controlled 6.3.0 notes.
 - [x] Complete the exact compact/mobile browser and focused packaged task-link checks with isolated data and protocol restoration.
-- [ ] Complete composed Electron native acceptance and the final local integration milestone.
+- [x] Complete assembled local units, types, build, lint, critical coverage, browser matrix, dependency audit and ARM64 container contract.
+- [ ] Complete composed Electron native acceptance.
 - [ ] Complete signed/notarized exact candidate, 144 native states, six fault probes, large-board checks and original media capture.
 - [ ] Inspect all maintained media and bind the unchanged captured bytes to the clean publication checkout.
 - [ ] Pass full release validation with actual native app/report and media publication manifest; source-only preflight is separate.

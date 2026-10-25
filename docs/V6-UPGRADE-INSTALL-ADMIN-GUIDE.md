@@ -6,7 +6,7 @@ machine-readable support contract is summarized in
 [Harness Compatibility](HARNESS-COMPATIBILITY.md), and Buzz relay setup lives
 in [Buzz Integration](BUZZ-INTEGRATION.md).
 
-Documentation freshness: 2026-10-23 for 6.3.0 release preparation. Publication remains pending in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md); the currently published stable release is 6.2.1.
+Documentation freshness: 2026-10-25 for 6.3.0 release preparation. Publication remains pending in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md); the currently published stable release is 6.2.1.
 
 Do not install 6.0.0. It is retained as a quarantined prerelease. Version 6.3.0
 is the target stable v6 release and requires macOS 13 Ventura or later on Apple silicon.

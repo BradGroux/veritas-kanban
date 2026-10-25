@@ -8,7 +8,6 @@ _Veritas in actis — Truth in action._
 
 Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, workflows, or governance only when you need that layer.
 
-[![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-6.3.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)

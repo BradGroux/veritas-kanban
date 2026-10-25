@@ -2,7 +2,7 @@
 
 The 6.3.0 candidate completes all 30 original audit remediation items and adds optional ChatGPT identity sign-in and the OrcaRouter profile. Read the [complete release source](releases/v6.3.0.md) for changes, activation requirements and compatibility. [Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) records implementation and acceptance details.
 
-The latest published stable release is [6.2.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.2.1), verified on 2026-10-23. Version 6.3.0 is not yet published. Final native, signing, media and destination acceptance remain in the [evidence packet](V6-RC-EVIDENCE-PACKET.md). Version 6.0.0 remains quarantined.
+The latest published stable release is [6.2.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.2.1), verified on 2026-10-25. Version 6.3.0 is not yet published. Final native, signing, media and destination acceptance remain in the [evidence packet](V6-RC-EVIDENCE-PACKET.md). Version 6.0.0 remains quarantined.
 
 ## Breaking Changes And Migration Warnings
 
@@ -18,7 +18,7 @@ The macOS Apple silicon release will retain the DMG, ZIP, blockmaps, checksum si
 
 ## Verification
 
-The [current evidence packet](V6-RC-EVIDENCE-PACKET.md) distinguishes the completed focused checks from pending assembled integration, Electron native acceptance, signed native/media capture and publication. No older package, synthetic gateway or source-only preflight substitutes for those boundaries.
+The [current evidence packet](V6-RC-EVIDENCE-PACKET.md) distinguishes completed focused and assembled source integration checks from pending Electron native acceptance, signed native/media capture and publication. No older package, synthetic gateway or source-only preflight substitutes for those boundaries.
 
 ## Install Or Upgrade
 
