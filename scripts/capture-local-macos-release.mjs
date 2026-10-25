@@ -28,6 +28,7 @@ import { fileDigest, packageDigest } from './native-ui/contract.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const baselineKeys = [
   'PATH',
+  'PLAYWRIGHT_BROWSERS_PATH',
   'HOME',
   'TMPDIR',
   'TMP',
