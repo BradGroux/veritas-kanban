@@ -392,3 +392,32 @@ console.log('  1) ${fingerprint} "Developer ID Application: Example (TEAM)"');
     );
   }
 );
+
+test('documentation-media subprocess resolves Chromium from the configured browser cache', () => {
+  const browserCache = path.join(os.tmpdir(), 'vk-synthetic-browser-cache');
+  const env = releaseEnvironment(
+    { PATH: process.env.PATH, HOME: process.env.HOME, PLAYWRIGHT_BROWSERS_PATH: browserCache },
+    commit,
+    channel
+  );
+  const child = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      "import { chromium } from '@playwright/test'; console.log(chromium.executablePath());",
+    ],
+    { env, encoding: 'utf8' }
+  );
+  assert.equal(child.status, 0, child.stderr);
+  const relative = path.relative(browserCache, child.stdout.trim());
+  assert(
+    relative &&
+      !path.isAbsolute(relative) &&
+      relative !== '..' &&
+      !relative.startsWith('..' + path.sep),
+    'Chromium resolved outside the configured cache'
+  );
+  assert.equal(env.OPENAI_API_KEY, undefined);
+  assert.equal(env.CSC_KEY_PASSWORD, undefined);
+});
