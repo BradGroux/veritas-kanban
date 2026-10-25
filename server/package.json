@@ -33,7 +33,7 @@
     "jose": "^6.2.9",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.13.0",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "nanoid": "^6.0.2",
     "nostr-tools": "2.25.2",
     "pino": "^10.4.0",
