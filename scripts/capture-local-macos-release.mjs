@@ -195,6 +195,7 @@ export async function preflightCapture({ version, channel, output }) {
   });
   const commit = await check('Cannot read build commit', () => git('rev-parse', 'HEAD'));
   const tree = await check('Cannot read source tree', () => git('rev-parse', 'HEAD^{tree}'));
+  const env = releaseEnvironment(process.env, commit, channel);
   await check('Capture requires a clean checkout', () =>
     assert.equal(git('status', '--porcelain'), '')
   );
@@ -248,7 +249,6 @@ export async function preflightCapture({ version, channel, output }) {
       }
     );
   }
-  const env = releaseEnvironment(process.env, commit, channel);
   await check('Capture requires macOS 14 or later', () =>
     assert(Number(result('sw_vers', ['-productVersion'], env).split('.')[0]) >= 14)
   );

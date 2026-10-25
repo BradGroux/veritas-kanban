@@ -21,8 +21,16 @@ for (const theme of ['light', 'dark']) {
     const dialog = page.getByRole('dialog', { name: 'Create New Task', exact: true });
     const title = dialog.getByRole('textbox', { name: 'Title', exact: true });
     await expect(title).toBeFocused();
+    const duplicateSearch = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/search' &&
+        response.request().method() === 'POST' &&
+        response.request().postDataJSON().query === 'Synthetic popout draft A retained description'
+    );
     await title.fill('Synthetic popout draft');
     await dialog.getByLabel('Description', { exact: true }).fill('A retained description');
+    await duplicateSearch;
+    await expect(dialog.getByLabel('Checking duplicates')).toBeHidden();
     const scroll = dialog.getByTestId('create-task-scroll-region');
     const footer = dialog.locator('.vk-overlay-footer');
     await expect(footer.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
