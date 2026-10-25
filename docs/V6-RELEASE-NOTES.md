@@ -1,8 +1,30 @@
-# Veritas Kanban 6.2.1 Candidate Release Notes
+# Veritas Kanban 6.3.0 Candidate Release Notes
 
-The 6.2.1 candidate restores Docker builds by moving browser/desktop command contracts into the shared package. Read the [6.2.1 release source](releases/v6.2.1.md) for changes and compatibility notes. Verification and publication remain separate stages in the [candidate evidence packet](V6-RC-EVIDENCE-PACKET.md).
+The 6.3.0 candidate completes all 30 original audit remediation items and adds optional ChatGPT identity sign-in and the OrcaRouter profile. Read the [complete release source](releases/v6.3.0.md) for changes, activation requirements and compatibility. [Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) records implementation and acceptance details.
 
-The latest published stable release remains 6.1.7. Veritas Kanban 6.0.0 remains quarantined.
+The latest published stable release is [6.2.1](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.2.1), verified on 2026-10-25. Version 6.3.0 is not yet published. Final native, signing, media and destination acceptance remain in the [evidence packet](V6-RC-EVIDENCE-PACKET.md). Version 6.0.0 remains quarantined.
+
+## Breaking Changes And Migration Warnings
+
+REST API v1 remains supported. SQLite migrations 35 and 36 add unique external-identity bindings and encrypted, expiring OAuth transactions. Preserve a complete stopped-writer workspace backup before upgrade. Interrupted legacy desktop migration stops startup with recovery instructions and retains both copies; follow [the migration guide](WEB-TO-MAC-DESKTOP-MIGRATION.md).
+
+## Known Limitations
+
+Both optional integrations are disabled by default. ChatGPT identity sign-in requires an approved OAuth client and registered callback; no live provider login is verified. OrcaRouter requires the pinned CLI and explicit model/credential configuration; its five real-executable synthetic checks do not establish live gateway compatibility. Failed task drafts survive within the current app session. Browser fixture proof, focused packaged task-link proof and final signed release acceptance are distinct.
+
+## Release Artifacts
+
+The macOS Apple silicon release will retain the DMG, ZIP, blockmaps, checksum sidecars and updater metadata from the exact accepted candidate. Source preflight and a successful build are not publication evidence. Linux and Windows distribution remain separate. Existing installed-app replacement requires its own explicit authorization.
+
+## Verification
+
+The [current evidence packet](V6-RC-EVIDENCE-PACKET.md) distinguishes completed focused and assembled source integration checks from pending Electron native acceptance, signed native/media capture and publication. No older package, synthetic gateway or source-only preflight substitutes for those boundaries.
+
+## Install Or Upgrade
+
+The published stable release is currently 6.2.1. Use the [upgrade and recovery guide](V6-UPGRADE-INSTALL-ADMIN-GUIDE.md) when the 6.3.0 distribution is accepted and published. Preserve a complete stopped-writer backup; existing installed-app replacement is a separate operator action.
+
+The following sections preserve historical release records and are not acceptance evidence for 6.3.0.
 
 ## Historical 6.1.6 release
 
@@ -104,11 +126,11 @@ Packaged macOS acceptance also found and corrected Electron's mnemonic handling 
 
 The release audit found no open Dependabot or secret-scanning alerts. One high-severity CodeQL password-hashing alert was dispositioned as a false positive after source review confirmed the SHA-256 input contains only workspace, task, attempt, event-kind, and event-identity metadata. Default-branch CodeQL remains at zero open alerts.
 
-## Verification
+## Historical v6 Verification
 
 The complete release matrix is recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md). Normal changes used focused tests. Full workspace units, critical-path coverage, lint, typecheck, builds, security gates, Playwright, load smoke, Docker contract, and macOS/Linux/Windows unsigned artifacts ran at the integration and release milestones.
 
-## Install Or Upgrade
+## Historical v6 Install Or Upgrade
 
 Install or upgrade with Homebrew:
 
@@ -125,16 +147,16 @@ brew install --cask bradgroux/tap/veritas-kanban
 
 Manual installation uses the signed and notarized macOS arm64 DMG or ZIP from the [v6.1.6 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.1.6). Version 6.1.6 requires macOS 13 Ventura or later. Back up the complete stopped-writer workspace before upgrading and keep the backup until the new runtime is accepted.
 
-## Breaking Changes And Migration Warnings
+## Historical v6 Breaking Changes And Migration Warnings
 
 The public REST API remains `v1`, and 6.1.6 adds no database migration. Version 6.1.3 introduced SQLite migration 34 for governed work-product artifact storage and indexes. Upgrading directly from 6.1.2 does not rewrite existing Work Product rows, but an older binary must not open the migrated workspace.
 
 Rollback from 6.1.6 to the complete 6.1.5 application bundle does not require a schema rollback. For rollback to 6.1.2 or earlier, stop every writer and restore the matching complete stopped-writer backup. Never copy an older database over a running instance.
 
-## Known Limitations
+## Historical v6 Known Limitations
 
 Linux and Windows desktop artifacts remain unsigned verification previews. Signed and notarized macOS arm64 is the supported stable desktop distribution. Credential-gated provider smoke remains supplemental and cannot be inferred from deterministic fixtures. HTML previews remain passive, opaque-origin documents with restrictive content security policy and no bridge or run authority. Unsupported indirect file execution and uncertified tool execution remain blocked.
 
-## Release Artifacts
+## Historical v6 Release Artifacts
 
 Exact release merge, annotated tag, GitHub release body, signed artifact names, sizes, checksums, updater metadata, signing, notarization, stapling, Gatekeeper, launch/reopen, and Homebrew evidence are recorded in [v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).

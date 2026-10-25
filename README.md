@@ -8,11 +8,12 @@ _Veritas in actis — Truth in action._
 
 Start with a visual Kanban board. Add CLI, MCP, OpenClaw, Squad Chat webhooks, workflows, or governance only when you need that layer.
 
-[![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-6.2.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.3.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+The [6.3.0 release notes](docs/releases/v6.3.0.md) cover the audit fixes and optional [ChatGPT identity sign-in](docs/guides/SIGN_IN_WITH_CHATGPT.md) and [OrcaRouter profile](docs/guides/ORCAROUTER.md). Both integrations require explicit configuration; live OrcaRouter compatibility remains unverified.
 
 ![Veritas Kanban 6.2.0 candidate board-to-task interaction](docs/assets/v6.2.0/board-to-workspace.gif)
 

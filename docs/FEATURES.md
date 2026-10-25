@@ -9,6 +9,10 @@ For candidate screenshots and GIFs captured from 6.2.0, see the
 
 ---
 
+## 6.3.0 Optional Integrations
+
+[ChatGPT identity sign-in](guides/SIGN_IN_WITH_CHATGPT.md) links an existing user and follows current workspace membership. [OrcaRouter](guides/ORCAROUTER.md) is an opt-in profile for the pinned existing CLI, with managed launch controls and a server-side credential reference. Both are disabled by default; real gateway compatibility remains unverified. Full audit, upgrade and activation details are in [the 6.3.0 notes](releases/v6.3.0.md).
+
 ## Table of Contents
 
 ### Core

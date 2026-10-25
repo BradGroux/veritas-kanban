@@ -1,16 +1,37 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet tracks the unpublished 6.2.0 candidate and the completed 6.1.7 macOS UI and interaction release, and
-retains historical evidence for the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
-stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
-merged implementation, deterministic conformance, local runtime proof, signed
-publication, and Homebrew availability.
+This packet records 6.3.0 preparation and retains historical release evidence. The latest published stable release is 6.2.1, verified from GitHub on 2026-10-25. Version 6.3.0 is not yet published; 6.0.0 remains quarantined. Historical candidate checkpoints below retain their original state and do not describe current publication.
 
-Veritas Kanban 6.1.7 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
+Documentation freshness: 2026-10-25. Implementation, focused proof, assembled integration, signed distribution, media and publication remain distinct boundaries.
 
-Documentation freshness: 2026-09-07. Local native and media acceptance passed. Audit fixes are merged; release and distribution acceptance remain separate.
+## 6.3.0 Issue And Pull Request Traceability
 
-## 6.2.0 candidate
+[Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) holds the full necessity/overlap audit, priority plan and individual merge evidence. All 30 original remediation children of #1632 are closed. Optional identity sign-in #1639 and OrcaRouter #1708 are merged; the latter explicitly ships with live gateway compatibility unverified. Electron #1597 and local capture/promotion tooling #1711/#1712 are merged. Tooling implementation and focused verification are complete; actual signed/native/media capture and publication remain the separate release milestone.
+
+## 6.3.0 Verification Matrix
+
+| Boundary                      | Current evidence                                                                                                                                                                                           | Remaining gate                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Focused implementation        | All 30 original children and both optional implementations merged; individual review/readback in #1657                                                                                                     | Preserve verified results; rerun only affected checks                                                                     |
+| Electron refresh              | Electron 44.9.3, Node 24.22.0 and Chromium 152.0.7977.167 reported by the actual Apple Silicon binary in Node mode; 139 desktop tests, types and build pass                                                | Composed packaged native bridge/navigation/update acceptance                                                              |
+| Canonical integration         | Source f263b410: 5,351 units pass, 32 expected gated skips, types, complete build and zero-error lint budget; source 53ee7cd0: all seven critical coverage ratchets pass                                   | Final exact native candidate; these are source checks                                                                     |
+| Browser matrix                | Source 53ee7cd0: all 234 desktop/mobile Chromium and mobile WebKit cases pass in 13.4 minutes, original 30-second budgets, zero retries                                                                    | Final packaged release matrix and maintained media                                                                        |
+| Dependencies                  | Refreshed complete graph including merged Electron reports zero findings at every severity; 503 production names, none added or removed                                                                    | Hosted alert reconciliation is distinct from this audit                                                                   |
+| ARM64 container               | Exact f263b410 production archive: 238,236,315 bytes under approved 250,000,000-byte budget; non-root, version, storage, SQLite, backup, auth, web assets, health, bcrypt and clean shutdown pass          | AMD64 budget stays 600,000,000 bytes; no fresh AMD64 measurement claimed                                                  |
+| Capture and promotion tooling | Eighteen capture/retention checks and thirteen promotion/release-boundary checks pass, including regression failures on original code; annotated tags verified only against a disposable local bare remote | Actual retained signed/native/media candidate and real promotion                                                          |
+| Native task links             | Build e760432a: five packaged cases, four inspected screenshots, package digest 006d66f956746757bc491e091cf4e41dd11a8c6ef4a1924869672c6e6ef9aa2b; exact protocol restoration verified                      | This historical proof used unsigned 6.2.1/Electron 44.2; fresh 6.3.0 candidate required                                   |
+| Optional integrations         | Identity source/security and local auth/UI checks; five real-executable synthetic gateway checks                                                                                                           | Live identity needs approved client/callback; live gateway compatibility explicitly unverified                            |
+| Signed native/media           | Installed Developer ID passes corrected read-only preflight; notarization credentials remain unidentified                                                                                                  | Deferred native acceptance, sufficient display, signed exact package, matrix/fault probes, large-board and original media |
+
+The application and dependency inputs are unchanged from the successful source integration. Later changes update documentation and correct capture environment initialization, Chromium-cache handoff and promotion annotated-tag handling; targeted checks and current secret/new-secret, public-doc and source-preflight checks pass. Exact source boundaries and review evidence remain in #1657. No build, source check or local provenance seal establishes actual release acceptance.
+
+The last measured Mac display has 1710 by 1107 logical display points; full capture requires at least 1920 by 1080. A temporary existing-mode change and exact restoration require explicit permission. A valid Developer ID identity is installed; no private key was exported. The secure notarization reference is pending. No display change, signed capture, notarization upload or release was performed by this checkpoint.
+
+## 6.3.0 Publication Evidence
+
+No 6.3.0 tag, public asset upload, release publication, updater or Homebrew readback is accepted yet. Publication must use the reviewed source at docs/releases/v6.3.0.md, bind the retained signed/native/media candidate to the clean publication checkout, verify downloaded destination bytes and inspect both the rendered releases index and tag page. Existing installed-app replacement is separate.
+
+## Historical 6.2.0 candidate
 
 The candidate is prepared from the audit backlog delivered through individually reviewed public pull requests. No 6.2.0 release, installation replacement, or distribution update has occurred. The evidence below records the integrated delivery candidate. All 24 implemented audit fixes and the acceptance follow-ups are merged; #1544 is explicitly dispositioned as not reproducible. Tracker #1545 records the delivery readback.
 
