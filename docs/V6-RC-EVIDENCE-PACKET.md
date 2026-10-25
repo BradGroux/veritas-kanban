@@ -49,7 +49,7 @@ The authorized temporary display change was restored exactly to 1710×1107 logic
 
 An additional unauthenticated public ZIP download matched SHA-256 `c636faf8c3d9dfa53424027842173e06d245f510a8778689d6955e2126971874`. Its extracted app passed strict signature, Gatekeeper and stapled-ticket validation, followed by actual first-run setup/login in a disposable profile. The app reported version 6.3.0 and exact build c83e72c3; its packaged server health reported 6.3.0. The app was closed, exact original protocol handler restored and display unchanged. No installed-app replacement or live-workspace mutation occurred.
 
-The Homebrew cask update is prepared and locally style-checked. Publishing it awaits explicit permission to disable the tap's active Copilot Actions workflow under the no-CI policy. This separate channel decision does not prevent downloading or using the published GitHub release. Hosted dependency, code-scanning and secret-scanning open-alert counts are zero; private remediation metadata was reconciled to 6.3.0 without public disclosure.
+The Homebrew cask update is prepared and locally style-checked. The maintainer approved disabling only the tap's active Copilot workflow, but GitHub rejected the managed dynamic workflow's disable endpoint with HTTP 422. No control changed. Publishing awaits the separate decision on disabling Actions for this tap under the no-CI policy. This separate channel decision does not prevent downloading or using the published GitHub release. Hosted dependency, code-scanning and secret-scanning open-alert counts are zero; private remediation metadata was reconciled to 6.3.0 without public disclosure.
 
 ## Historical 6.2.0 candidate
 
