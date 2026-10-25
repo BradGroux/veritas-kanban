@@ -1,10 +1,6 @@
 # Veritas Kanban Desktop Release
 
-> For the 6.2.0 candidate, retain local verification and exact package/media provenance.
-> The owner authorized existing GitHub CI capacity without purchases or spending changes.
-> Release and advisory publication are approved. Signing and publication still require verification.
-> Installed-app replacement and public writing remain separate owner decisions.
-> Follow the [current candidate gate](V6-GA-CHECKLIST.md#final-release-validation-commands).
+> The 6.3.0 release uses local verification, signing, and retained package/media evidence. GitHub Actions and third-party CI must remain disabled. Publishing the release follows the reviewed local promotion path; installed-app replacement remains a separate decision.
 
 This guide covers desktop packaging paths for macOS GA artifacts and
 Linux/Windows preview artifact scaffolding: unsigned PR artifacts, signed
@@ -35,7 +31,7 @@ metadata for PR validation. `desktop:package:linux:unsigned` creates preview
 x64 AppImage, deb, and rpm artifacts. `desktop:package:windows:unsigned`
 creates preview x64 NSIS installer and ZIP artifacts.
 
-`desktop:release:mac` expects Apple signing and notarization credentials and stages artifacts with publishing disabled. It does not upload a release; the `Desktop Release` workflow owns the verified upload path. `desktop:release:linux` is
+`desktop:release:mac` expects Apple signing and notarization credentials and stages artifacts with publishing disabled. It does not upload a release or collect the full native/media evidence. Use the local capture command below for a retained release candidate. `desktop:release:linux` is
 reserved for post-GA Linux preview validation until checksum, provenance,
 install, and update policy requirements are promoted. `desktop:release:windows`
 expects a Windows code-signing certificate available to electron-builder before
@@ -53,32 +49,59 @@ that touch production staging or pnpm deploy behavior. The staging deploy runs
 from an isolated temporary workspace so `pnpm deploy --prod` cannot rewrite the
 live repository install into a production-only dependency state.
 
-## GitHub Workflows
+## Local signed capture and retention
 
-`Desktop Artifacts` runs only for a pull request carrying `ci:full` or through
-manual dispatch. Ordinary pull requests and `main` pushes do not package
-desktop applications. A release candidate keeps `ci:full` applied through its
-final synchronization so the artifacts correspond to the reviewed head. The
-workflow builds unsigned artifacts on:
+Use a clean, reviewed checkout of the final build commit. All seven workspace package versions must match the requested version. The output must be a new directory outside that checkout, with an existing parent. Earlier generated files in `desktop/release` or `desktop/.desktop-release` stop preflight; preserve those files and use a fresh checkout instead of overwriting a retained build.
 
-- `macos-15`: DMG, ZIP, blockmap, and update YAML.
-- `ubuntu-24.04`: x64 AppImage, deb, rpm, blockmap, and update YAML.
-- `windows-2025`: x64 NSIS installer, ZIP, blockmap, and update YAML.
+The capture host requires macOS 14 or later on Apple Silicon, the pinned pnpm version, Node 22.22.1 or later, Xcode command-line tools, ffmpeg, and the repository's installed Playwright Chromium binary. The existing native display contract requires a logical display of at least 1920×1080. Provision these prerequisites explicitly; capture does not install system tools, change display settings, or download browser binaries.
 
-Unsigned artifact jobs do not require platform signing credentials.
+Supply exactly one signing mode through the launching environment: `CSC_NAME` for an existing valid Developer ID Application identity in the login Keychain, or `CSC_LINK` and `CSC_KEY_PASSWORD` for the existing certificate-import path. For `CSC_NAME`, use its certificate fingerprint or matching name without the `Developer ID Application:` prefix; preflight requires exactly one valid match. Supply exactly one notarization group: an existing `APPLE_KEYCHAIN_PROFILE`, or `APPLE_API_KEY` (an existing absolute `.p8` file), `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`, or `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Existing Keychain identities and profiles are reused without exporting a private key or creating new credential storage. Do not put credentials in command arguments, source, retained evidence, or release notes. Signing credentials are passed only to the packaging and notarization subprocesses. The local path does not decode or store a new private key.
 
-For v6 GA, the Linux and Windows jobs are preview signals only. They keep
-packaging paths and artifact names exercised, but they are not supported release
-deliverables and must not be linked from stable release notes as install
-targets.
+```bash
+pnpm desktop:release:mac:local preflight --version 6.3.0 --channel stable --output /absolute/path/new-candidate
+pnpm desktop:release:mac:local capture --version 6.3.0 --channel stable --output /absolute/path/new-candidate
+```
 
-`Desktop Release` uses two explicit manual dispatches. Leave `promote_run_id` empty to build, sign, notarize, and capture the release candidate. That run also checks the 100/1,000/5,000-task boards and captures the focused large-board comparison from the signed app. It retains the signed distribution, native and large-board evidence, and original documentation captures in `signed-macos-release-candidate`; it does not upload release assets. Download and inspect the captures, commit the exact reviewed media and guide references in a documentation-only commit, and create the release tag/body at that publication commit. Then dispatch from that commit with `promote_run_id` set to the successful capture run ID. Promotion verifies and uploads the retained distribution without rebuilding or recapturing. Publishing a GitHub release alone no longer starts a second build.
+Preflight reports missing requirements without launching the app. Capture installs the frozen lockfile, runs source preflight, builds, signs and notarizes the existing DMG/ZIP distribution, and extracts the retained ZIP for signature and Gatekeeper checks. It then runs the existing 144-state native matrix and six fault probes, verifies native evidence, checks the large-board performance scenarios, and captures original documentation media from that exact app. It never publishes a release or invokes GitHub workflows.
 
-### Native gate before macOS upload
+Before any app launch, capture durably saves the exact existing `veritas` protocol handler in `protocol-before.json`. A missing or unavailable original handler stops capture. After success or a handled failure, it restores and reads back that exact application path before removing its own extracted app. A handler changed to a third application is preserved and stops restoration for explicit operator recovery.
 
-The signed workflow uses `--publish never`, finalizes the distribution assets, then extracts the actual release ZIP into a temporary directory. Signature and Gatekeeper checks precede the packaged macOS matrix. The runner records the exact app digest, commit, version, native window dimensions, 144 states, and six injected fault probes. Native screenshots and distribution checksums are retained as workflow artifacts even when a check fails.
+Successful output includes the five signed distribution/update files, their checksum list, native screenshots and evidence, large-board evidence, original documentation captures, protocol backup/readback, and `local-release-candidate.json`. Save the printed manifest SHA-256 independently for promotion. The local provenance schema records the source commit/tree, version, channel, Node version, original package digest, and exact retained-file inventory; it does not claim a hosted workflow run. A seal verifies retained bytes, not independent acceptance of the app or media.
 
-Promotion accepts only a successful explicitly dispatched capture from this repository's Desktop Release workflow. It binds the capture/native reports to that run's commit, rejects unsafe archives, rechecks the signed distribution checksums, and verifies signatures on the extracted app. Immediately before `gh release upload`, full release validation verifies the native report against the original build and the media publication record against the clean publication checkout. Only permitted documentation-only changes may separate those commits. Missing, stale, failed, incomplete, wrong-commit, changed-package, or modified-screenshot evidence stops upload. The destination release tag must resolve to publication HEAD, including annotated-tag peeling, and its body must match the reviewed release source exactly. Retaining diagnostic artifacts does not turn a failed matrix into a passing release.
+Failures preserve the output directory and `capture-state.json`, including the last phase and extracted app path when one exists. No successful candidate seal is issued for a failed capture. Do not reuse or delete failed output until it has been inspected. If the process is forcibly interrupted or protocol restoration fails, compare the current handler with the backup and the recorded candidate path before recovery:
+
+```bash
+swift scripts/native-ui/protocol-handler.swift inspect
+# After checking protocol-before.json, explicitly restore its exact applicationPath:
+swift scripts/native-ui/protocol-handler.swift restore /absolute/path/original.app
+swift scripts/native-ui/protocol-handler.swift inspect
+```
+
+If a third application now owns the scheme, preserve that choice and resolve it explicitly. After verifying recovery, remove only the extracted temporary directory recorded for this capture if it is no longer needed. Keep the distribution and evidence packet for diagnosis.
+
+## Local promotion of retained bytes
+
+Complete the release integration gate and inspect original media visually, including actual video/GIF playback. Commit the exact reviewed media and guide references in the permitted documentation-only publication history. Source, dependency, packaging, or executable changes require a fresh build and capture; do not use promotion to adopt them.
+
+Run from the clean publication checkout, using the capture packet and independently saved manifest digest. Use a new external output directory for each promotion attempt. Verification extracts the original ZIP into that output directory, checks app and DMG signatures/Gatekeeper, revalidates native evidence, binds original media to the publication commit, and runs full local release validation. It never rebuilds, recaptures, launches the app, or changes protocol ownership.
+
+```bash
+pnpm desktop:release:mac:promote verify --candidate /absolute/path/candidate --digest REVIEWED_MANIFEST_SHA256 --output /absolute/path/new-verification
+# After the release acceptance gates pass, explicitly select prerelease/latest policy:
+pnpm desktop:release:mac:promote publish --candidate /absolute/path/candidate --digest REVIEWED_MANIFEST_SHA256 --output /absolute/path/new-publication --prerelease false --latest true
+```
+
+The publish command uses the authenticated `BradGroux` GitHub account through `gh`, verifies Actions remain disabled before mutations, and checks the configured repository and existing tags. Inspect applicable repository automation before running publication; do not proceed if any push, tag, or release event would trigger prohibited CI. It refuses a differing local or remote tag, public existing release, wrong author, differing source notes/channel, unexpected assets, incomplete uploads, or differing uploaded bytes. It never rewrites tags, overwrites assets, deletes releases, or changes repository controls.
+
+The release body comes only from `docs/releases/vX.Y.Z.md` through `--notes-file`. A missing tag is created as an annotated tag at the reviewed publication commit using the approved private email identity, then pushed without force. Stable promotion rejects existing lightweight tags without rewriting them; preserve such a tag for explicit recovery. A draft release stages the seven existing distribution/update/checksum assets. Matching partial draft assets may be reused, and missing assets may be added; all uploaded files are downloaded and hashed before publication. Fresh source, retained-candidate, destination and full local validation checks precede making the draft public. Published validation rechecks the remote tag and exact source notes with `--github`.
+
+Each output directory retains `promotion.json`, extracted app, staged assets and downloaded readback bytes. A failure preserves the tag, draft or public release at the reached state; inspect the recorded phase and destination before retrying from a new output directory. A public release stops automatic retry for explicit inspection. If post-publication validation fails, the release may already be public; report that state and repair only through the reviewed source workflow. Do not delete or recreate it to hide a failed attempt.
+
+After publication, inspect both the [rendered releases index](https://github.com/BradGroux/veritas-kanban/releases) and the exact tag page. The command reports `published-awaiting-rendered-review` until that separate inspection is recorded. Workspace integration, installed-app acceptance, and media visual/playback review remain separate requirements. Capture or promotion source checks alone establish none of those results.
+
+## Retained GitHub workflow definitions
+
+The repository retains historical `Desktop Artifacts` and `Desktop Release` definitions. They are not the execution path for this release. Do not enable, dispatch, label for execution, rerun, or require them; all required verification runs locally. The historical hosted candidate schema remains separate from local provenance.
 
 Full local release validation now requires explicit candidate paths:
 
@@ -113,7 +136,7 @@ brew livecheck bradgroux/tap/veritas-kanban
 
 ## Required Release Secrets
 
-Configure Developer ID signing secrets before running `Desktop Release`:
+The historical hosted mapping below documents existing secret names. Local capture instead uses the environment names described above; do not enable a workflow to supply them.
 
 - `MACOS_CSC_LINK`: base64 encoded `.p12` Developer ID Application certificate
   or a secure URL accepted by electron-builder `CSC_LINK`.
