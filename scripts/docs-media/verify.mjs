@@ -179,6 +179,15 @@ export function staleMediaReferences(contents, report, version) {
   );
   for (const [file, content] of contents) {
     if (file.startsWith('docs/releases/')) continue;
+    // Archived capture provenance keeps its original links and hashes. Only a
+    // strictly older version's root README is historical; current guides stay strict.
+    const provenance = /^docs\/assets\/v(\d+)\.(\d+)\.(\d+)\/README\.md$/.exec(file);
+    if (provenance) {
+      const archived = provenance.slice(1).map(Number);
+      const current = version.split(/[.-]/, 3).map(Number);
+      const differing = archived.findIndex((part, index) => part !== current[index]);
+      if (differing >= 0 && archived[differing] < current[differing]) continue;
+    }
     if (file !== 'README.md' && !file.startsWith('docs/')) continue;
     // Tokenize destinations in Markdown, HTML, CSS, and JSON metadata. URL
     // resolution must precede version checks: dot segments and encoded names
