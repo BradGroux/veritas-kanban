@@ -1,6 +1,6 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist governs 6.3.0 preparation. The latest published stable release is 6.2.1; 6.3.0 remains unpublished. Historical sections preserve earlier evidence, including previous workflow use, and do not authorize GitHub CI for this release.
+This checklist records the [published stable 6.3.0 release](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.3.0). Historical sections preserve earlier evidence, including previous workflow use, and do not authorize GitHub CI for this release.
 
 Documentation freshness: 2026-10-25. See [the current evidence packet](V6-RC-EVIDENCE-PACKET.md).
 
@@ -12,10 +12,13 @@ Documentation freshness: 2026-10-25. See [the current evidence packet](V6-RC-EVI
 - [x] Complete assembled local units, types, build, lint, critical coverage, browser matrix, dependency audit and ARM64 container contract.
 - [x] Complete composed Electron native acceptance.
 - [x] Complete signed/notarized exact candidate, 144 native states, six fault probes, large-board checks and original media capture.
-- [ ] Inspect all maintained media and bind the unchanged captured bytes to the clean publication checkout.
-- [ ] Pass full release validation with actual native app/report and media publication manifest; source-only preflight is separate.
-- [ ] Publish the exact reviewed notes, tag and retained artifacts; verify destination bytes and updater metadata.
-- [ ] Inspect the rendered releases index and tag page and verify applicable distribution-channel readback before closing the delivery tracker.
+- [x] Inspect all maintained media and bind the unchanged captured bytes to the clean publication checkout.
+- [x] Pass full release validation with actual native app/report and media publication manifest; source-only preflight is separate.
+- [x] Publish the exact reviewed notes, tag and retained artifacts; verify destination bytes and updater metadata.
+- [x] Inspect both rendered GitHub release pages and verify a fresh public download through first-run login and exact app/server version.
+- [x] Complete Homebrew [#66](https://github.com/BradGroux/homebrew-tap/pull/66): strict online audit, fetch, livecheck, exact ZIP hash and published cask readback passed. Tap Actions is disabled under separate authorization, with original settings backed up. All delivery gates are verified for final tracker closure.
+
+Publication commit: `d0ec5b2d87045ba4512871b38ec4bb75a9607512`. Signed build: `c83e72c355bdcc559997f9d9308bdbe3932c29bc`. Existing installed app and workspace were preserved; original protocol handler and display were restored and verified.
 
 ## Historical 6.2.0 Candidate Gate
 

@@ -1,6 +1,6 @@
 # Veritas Kanban v6 Visual Tour
 
-The maintained views below come from the signed and notarized 6.3.0 candidate at source c83e72c3. Its 144 native states, six seeded fault probes and three large-board checks passed. All stills and complete GIF/video playback were inspected; the published files retain the exact original captured bytes. The latest published stable release is 6.2.1. See the [6.3.0 release source](releases/v6.3.0.md), [evidence packet](V6-RC-EVIDENCE-PACKET.md), and [media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md).
+The maintained views below come from the signed and notarized 6.3.0 candidate at source c83e72c3. Its 144 native states, six seeded fault probes and three large-board checks passed. All stills and complete GIF/video playback were inspected; the published files retain the exact original captured bytes. [Version 6.3.0](https://github.com/BradGroux/veritas-kanban/releases/tag/v6.3.0) is the latest published stable release. See the [6.3.0 release source](releases/v6.3.0.md), [evidence packet](V6-RC-EVIDENCE-PACKET.md), and [media contract](design/DOCUMENTATION-MEDIA-CONTRACT.md).
 
 Documentation freshness: 2026-10-25. See the [6.3.0 capture provenance](assets/v6.3.0/README.md). Historical [6.2.0 comparison](releases/v6.2.0-comparison.md) and [capture provenance](assets/v6.2.0/README.md) remain available.
 
