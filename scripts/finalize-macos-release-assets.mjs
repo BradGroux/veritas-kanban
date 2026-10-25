@@ -27,13 +27,14 @@ function run(command, args) {
   }
 }
 
-function getNotarytoolCredentials() {
-  const apiKey = process.env.APPLE_API_KEY;
-  const apiKeyId = process.env.APPLE_API_KEY_ID;
-  const apiIssuer = process.env.APPLE_API_ISSUER;
-  const appleId = process.env.APPLE_ID;
-  const applePassword = process.env.APPLE_APP_SPECIFIC_PASSWORD;
-  const appleTeamId = process.env.APPLE_TEAM_ID;
+export function getNotarytoolCredentials(env = process.env) {
+  const apiKey = env.APPLE_API_KEY;
+  const apiKeyId = env.APPLE_API_KEY_ID;
+  const apiIssuer = env.APPLE_API_ISSUER;
+  const appleId = env.APPLE_ID;
+  const applePassword = env.APPLE_APP_SPECIFIC_PASSWORD;
+  const appleTeamId = env.APPLE_TEAM_ID;
+  const keychainProfile = env.APPLE_KEYCHAIN_PROFILE;
 
   const apiKeyValues = [apiKey, apiKeyId, apiIssuer].filter(Boolean).length;
   const appleIdValues = [appleId, applePassword, appleTeamId].filter(Boolean).length;
@@ -50,10 +51,18 @@ function getNotarytoolCredentials() {
     );
   }
 
-  if (apiKeyValues === 3 && appleIdValues === 3) {
+  if (
+    Number(apiKeyValues === 3) + Number(appleIdValues === 3) + Number(Boolean(keychainProfile)) >
+    1
+  ) {
     throw new Error(
-      'Provide exactly one notarization credential set, not both API-key and Apple ID credentials'
+      'Provide exactly one notarization credential set: API-key, Apple ID, or existing Keychain profile'
     );
+  }
+
+  if (keychainProfile) {
+    if (!keychainProfile.trim()) throw new Error('Keychain profile name must not be blank');
+    return ['--keychain-profile', keychainProfile];
   }
 
   if (apiKeyValues === 3) {
@@ -65,7 +74,7 @@ function getNotarytoolCredentials() {
   }
 
   throw new Error(
-    'Notarization credentials are required: provide App Store Connect API-key credentials or Apple ID credentials'
+    'Notarization credentials are required: provide App Store Connect API-key credentials, Apple ID credentials, or an existing Keychain profile'
   );
 }
 
@@ -185,7 +194,9 @@ async function main() {
   await writeLatestMacYml(version, zip, dmg);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : 'Unknown release finalization error');
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : 'Unknown release finalization error');
+    process.exit(1);
+  });
+}
