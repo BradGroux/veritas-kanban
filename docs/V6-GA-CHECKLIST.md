@@ -10,8 +10,8 @@ Documentation freshness: 2026-10-25. See [the current evidence packet](V6-RC-EVI
 - [x] Align all seven source package versions and prepare full source-controlled 6.3.0 notes.
 - [x] Complete the exact compact/mobile browser and focused packaged task-link checks with isolated data and protocol restoration.
 - [x] Complete assembled local units, types, build, lint, critical coverage, browser matrix, dependency audit and ARM64 container contract.
-- [ ] Complete composed Electron native acceptance.
-- [ ] Complete signed/notarized exact candidate, 144 native states, six fault probes, large-board checks and original media capture.
+- [x] Complete composed Electron native acceptance.
+- [x] Complete signed/notarized exact candidate, 144 native states, six fault probes, large-board checks and original media capture.
 - [ ] Inspect all maintained media and bind the unchanged captured bytes to the clean publication checkout.
 - [ ] Pass full release validation with actual native app/report and media publication manifest; source-only preflight is separate.
 - [ ] Publish the exact reviewed notes, tag and retained artifacts; verify destination bytes and updater metadata.

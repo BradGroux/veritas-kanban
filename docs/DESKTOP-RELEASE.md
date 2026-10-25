@@ -178,7 +178,7 @@ and update policy requirements are promoted into the supported release path.
 
 | Platform | v6 GA stance                  | Validation matrix                               | Artifact formats             | Update stance                                      |
 | -------- | ----------------------------- | ----------------------------------------------- | ---------------------------- | -------------------------------------------------- |
-| macOS    | Supported desktop GA target   | macOS 14+ Apple Silicon                         | signed DMG, ZIP              | Supported through signed electron-updater metadata |
+| macOS    | Supported desktop GA target   | macOS 13+ Apple Silicon                         | signed DMG, ZIP              | Supported through signed electron-updater metadata |
 | Linux    | Preview only; not a GA target | Ubuntu 24.04 x64 and Fedora 40+ x64 smoke hosts | unsigned AppImage, deb, rpm  | Deferred until Linux release policy is promoted    |
 | Windows  | Preview only; not a GA target | Windows 11 23H2+ x64 smoke host                 | unsigned NSIS installer, ZIP | Blocked until Windows code signing and smoke pass  |
 
@@ -228,8 +228,9 @@ policy is tracked in
 - Run `pnpm desktop:package:windows:unsigned` on Windows or the
   `Desktop Artifacts` Windows job and inspect preview artifact names. This is
   not a v6 GA release gate.
-- Apply `ci:full` to the release-candidate pull request, then download the
-  uploaded DMG/ZIP/update metadata from its `Desktop Artifacts` run.
+- Use the local signed capture and retention procedure above for the release
+  candidate. Retain its exact DMG/ZIP, update metadata, native evidence, and
+  documentation media. GitHub Actions and third-party CI remain disabled.
 - Edit `docs/releases/vX.Y.Z.md`, run
   `pnpm validate:release -- --version X.Y.Z --native-evidence /absolute/path/evidence.json --native-app /absolute/path/veritas-kanban.app --media-evidence /absolute/path/capture/publication.json`, and publish that exact file with
   `gh release create --notes-file` or `gh release edit --notes-file`. Do not
@@ -241,8 +242,9 @@ policy is tracked in
   indentation; the format gate caps list items at 160 source characters. Never
   stack bold-led paragraphs or long labeled list items that look like accidental
   carriage returns.
-- Run `Desktop Release` only after Developer ID signing secrets and exactly one
-  complete notarization credential set are configured.
+- Use the local promotion procedure only after Developer ID signing and exactly
+  one complete notarization credential set are configured and the retained
+  candidate passes the required local acceptance checks.
 - Inspect the rendered release on both the releases index and tag page. Confirm
   prose uses natural page-width wrapping, lists remain compact, and no ragged
   hanging-indent block, unmarked paragraph stack, or sentence-sized fragment was
