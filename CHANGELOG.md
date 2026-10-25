@@ -31,7 +31,7 @@ Veritas Kanban 6.3.0 completes the repository audit backlog and adds optional id
 
 ### Security and maintenance
 
-- Refreshed production, development and Electron 44.x dependencies and strengthened client, request, permission and persistence boundaries. Advisory-specific details remain private (#1597, #1601, #1620, #1678, #1680).
+- Refreshed production, development and Electron 44.x dependencies and strengthened client, request, permission and persistence boundaries. Advisory-specific details remain private (#1597, #1601, #1620, #1678, #1680, #1736, #1737).
 - Removed obsolete review workflow guidance while retaining local verification and explicit integration/release milestones (#1638).
 
 ### Compatibility
