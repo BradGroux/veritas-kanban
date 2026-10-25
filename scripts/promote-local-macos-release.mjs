@@ -43,14 +43,38 @@ export function planReleaseAssets(assets, expected) {
   return expected.filter((file) => !seen.has(file.name));
 }
 
-export function assertTagDestination(listing, tag, commit) {
+export function assertTagDestination(listing, tag, commit, { requireAnnotated = false } = {}) {
   if (!listing.trim()) return false;
   assert.equal(
     remoteTagCommit(listing, tag),
     commit,
     'Existing remote tag differs; never rewrite it'
   );
+  if (requireAnnotated)
+    assert(
+      listing.split('\n').some((line) => line.trim().split(/\s+/)[1] === `refs/tags/${tag}^{}`),
+      'Stable release requires an annotated remote tag; never rewrite an existing tag'
+    );
   return true;
+}
+
+export function ensureLocalPublicationTag(git, tag, commit, { requireAnnotated = false } = {}) {
+  const ref = `refs/tags/${tag}`;
+  if (!git('tag', '--list', tag)) {
+    assert(
+      git('var', 'GIT_COMMITTER_IDENT').includes('<3053586+BradGroux@users.noreply.github.com>'),
+      'Tagger must use the approved private email identity'
+    );
+    git('tag', '--annotate', tag, commit, '--message', tag);
+  }
+  assert.equal(git('rev-parse', `${ref}^{commit}`), commit, 'Existing local tag differs');
+  if (requireAnnotated)
+    assert.equal(
+      git('cat-file', '-t', ref),
+      'tag',
+      'Stable release requires an annotated local tag'
+    );
+  return ref;
 }
 
 function run(command, args, env, { inherit = false, stdout } = {}) {
@@ -158,6 +182,7 @@ export async function promoteLocalRelease({ mode, candidate, digest, output, pre
     );
   };
   const tag = `v${manifest.version}`;
+  const tagPolicy = { requireAnnotated: manifest.channel === 'stable' };
   const notesFile = path.join(root, `docs/releases/${tag}.md`);
   const publication = path.join(directory, 'documentation-media/publication.json');
   const app = path.join(destination, 'extracted/veritas-kanban.app');
@@ -261,19 +286,17 @@ export async function promoteLocalRelease({ mode, candidate, digest, output, pre
     });
     let release = readRelease();
     if (release) assertReleaseDestination(release, { tag, notes, prerelease });
-    const hasTag = assertTagDestination(tagListing(), tag, publicationCommit);
+    const hasTag = assertTagDestination(tagListing(), tag, publicationCommit, tagPolicy);
     const localTag = git('tag', '--list', tag);
-    if (localTag)
-      assert.equal(
-        git('rev-parse', `${tag}^{commit}`),
-        publicationCommit,
-        'Existing local tag differs'
-      );
+    if (localTag) ensureLocalPublicationTag(git, tag, publicationCommit, tagPolicy);
     await phase('publication-tag', () => {
       githubGuard();
-      if (!hasTag) git('push', 'origin', `${publicationCommit}:refs/tags/${tag}`);
+      if (!hasTag) {
+        const ref = ensureLocalPublicationTag(git, tag, publicationCommit, tagPolicy);
+        git('push', 'origin', `${ref}:${ref}`);
+      }
       assert(
-        assertTagDestination(tagListing(), tag, publicationCommit),
+        assertTagDestination(tagListing(), tag, publicationCommit, tagPolicy),
         'Publication tag is missing'
       );
       if (!localTag) git('fetch', 'origin', 'tag', tag);
@@ -347,7 +370,7 @@ export async function promoteLocalRelease({ mode, candidate, digest, output, pre
         'Release notes changed during staging'
       );
       assert(
-        assertTagDestination(tagListing(), tag, publicationCommit),
+        assertTagDestination(tagListing(), tag, publicationCommit, tagPolicy),
         'Publication tag is missing'
       );
       verifyPublicationHistory({
