@@ -79,7 +79,25 @@ swift scripts/native-ui/protocol-handler.swift inspect
 
 If a third application now owns the scheme, preserve that choice and resolve it explicitly. After verifying recovery, remove only the extracted temporary directory recorded for this capture if it is no longer needed. Keep the distribution and evidence packet for diagnosis.
 
-Local promotion is tracked in [#1710](https://github.com/BradGroux/veritas-kanban/issues/1710). It must reuse the retained distribution and original captures, verify the independently saved seal, recheck native/signing/media evidence, and allow only the existing documentation/media changes between build and publication commits. Capture success alone does not authorize skipping those checks or publishing assets manually.
+## Local promotion of retained bytes
+
+Complete the release integration gate and inspect original media visually, including actual video/GIF playback. Commit the exact reviewed media and guide references in the permitted documentation-only publication history. Source, dependency, packaging, or executable changes require a fresh build and capture; do not use promotion to adopt them.
+
+Run from the clean publication checkout, using the capture packet and independently saved manifest digest. Use a new external output directory for each promotion attempt. Verification extracts the original ZIP into that output directory, checks app and DMG signatures/Gatekeeper, revalidates native evidence, binds original media to the publication commit, and runs full local release validation. It never rebuilds, recaptures, launches the app, or changes protocol ownership.
+
+```bash
+pnpm desktop:release:mac:promote verify --candidate /absolute/path/candidate --digest REVIEWED_MANIFEST_SHA256 --output /absolute/path/new-verification
+# After the release acceptance gates pass, explicitly select prerelease/latest policy:
+pnpm desktop:release:mac:promote publish --candidate /absolute/path/candidate --digest REVIEWED_MANIFEST_SHA256 --output /absolute/path/new-publication --prerelease false --latest true
+```
+
+The publish command uses the authenticated `BradGroux` GitHub account through `gh`, verifies Actions remain disabled before mutations, and checks the configured repository and existing tags. Inspect applicable repository automation before running publication; do not proceed if any push, tag, or release event would trigger prohibited CI. It refuses a differing local or remote tag, public existing release, wrong author, differing source notes/channel, unexpected assets, incomplete uploads, or differing uploaded bytes. It never rewrites tags, overwrites assets, deletes releases, or changes repository controls.
+
+The release body comes only from `docs/releases/vX.Y.Z.md` through `--notes-file`. A missing tag is created as an annotated tag at the reviewed publication commit using the approved private email identity, then pushed without force. Stable promotion rejects existing lightweight tags without rewriting them; preserve such a tag for explicit recovery. A draft release stages the seven existing distribution/update/checksum assets. Matching partial draft assets may be reused, and missing assets may be added; all uploaded files are downloaded and hashed before publication. Fresh source, retained-candidate, destination and full local validation checks precede making the draft public. Published validation rechecks the remote tag and exact source notes with `--github`.
+
+Each output directory retains `promotion.json`, extracted app, staged assets and downloaded readback bytes. A failure preserves the tag, draft or public release at the reached state; inspect the recorded phase and destination before retrying from a new output directory. A public release stops automatic retry for explicit inspection. If post-publication validation fails, the release may already be public; report that state and repair only through the reviewed source workflow. Do not delete or recreate it to hide a failed attempt.
+
+After publication, inspect both the [rendered releases index](https://github.com/BradGroux/veritas-kanban/releases) and the exact tag page. The command reports `published-awaiting-rendered-review` until that separate inspection is recorded. Workspace integration, installed-app acceptance, and media visual/playback review remain separate requirements. Capture or promotion source checks alone establish none of those results.
 
 ## Retained GitHub workflow definitions
 
