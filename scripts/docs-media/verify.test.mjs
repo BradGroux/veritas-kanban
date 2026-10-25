@@ -280,3 +280,25 @@ test('focused large-board capture requires the exact native viewport and build',
     assert(mediaEvidenceFailures(changed, expected).length);
   }
 });
+
+test('older capture provenance stays historical while current and ordinary guides stay strict', () => {
+  const report = fixture();
+  const target = '6.3.0';
+  assert.deepEqual(
+    staleMediaReferences(
+      [['docs/assets/v6.2.0/README.md', '[Original board](board-overview.png)']],
+      report,
+      target
+    ),
+    []
+  );
+  const maintained = [
+    ['README.md', 'docs/assets/v6.2.0/board-overview.png'],
+    ['docs/index.html', 'assets/v6.2.0/board-overview.png'],
+    ['docs/assets/v6.3.0/README.md', '../v6.2.0/board-overview.png'],
+    ['docs/assets/v6.4.0/README.md', 'board-overview.png'],
+    ['docs/assets/v6.2.0/guide.md', 'board-overview.png'],
+    ['docs/assets/v6.2.0/nested/README.md', '../board-overview.png'],
+  ];
+  assert.equal(staleMediaReferences(maintained, report, target).length, maintained.length);
+});
