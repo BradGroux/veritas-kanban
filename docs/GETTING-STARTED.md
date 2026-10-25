@@ -106,7 +106,7 @@ pnpm dev
 
 Web boots on **3000**, API on **3001**. First boot seeds demo tasks so you have something to look at.
 
-![Packaged 6.2.0 candidate showing the shared board UI with public-safe tasks](assets/v6.2.0/board-overview.png)
+![Packaged 6.3.0 candidate showing the shared board UI with public-safe tasks](assets/v6.3.0/board-overview.png)
 
 ### 4. Run the in-app setup
 
@@ -128,7 +128,7 @@ Visit [http://localhost:3000](http://localhost:3000) → follow the onboarding f
 4. Hit **Create** and watch it appear in **Todo**.
 5. Drag it to **In Progress** to feel the flow.
 
-![Reviewing a task in the 6.2.0 progressive task workspace](assets/v6.2.0/task-workspace.png)
+![Reviewing a task in the 6.3.0 progressive task workspace](assets/v6.3.0/task-workspace.png)
 
 > Need a clean slate? Remove the example tasks: `rm tasks/active/task_example_*.md`
 
@@ -164,7 +164,7 @@ vk list --status todo
 
 CLI commands fully mirror the API and are the fastest way to script agent workflows. Write commands need `VK_API_KEY` unless localhost bypass grants an `agent` or `admin` role.
 
-![Board to task-workspace tour with dummy 6.2.0 tasks](assets/v6.2.0/board-to-workspace.gif)
+![Board to task-workspace tour with dummy 6.3.0 tasks](assets/v6.3.0/board-to-workspace.gif)
 
 ---
 
@@ -201,7 +201,7 @@ This section is optional. Agents interact through HTTP + WebSocket; nothing is h
    - Check `.veritas-kanban/logs/agents.log` for run details
    - Confirm UI Agent Status indicator flips back to **Idle**
 
-![Agent-ready task workspace](assets/v6.2.0/task-workspace.png)
+![Agent-ready task workspace](assets/v6.3.0/task-workspace.png)
 
 > **Automation tip:** Keep a `prompts/` folder (see below) so agents get consistent instructions for sprint planning, reviews, research, etc.
 
@@ -253,7 +253,6 @@ BoardKit Orchestrator inspired us here: keep prompts, skills, and guidelines in 
 prompt-registry/
 ├── sprint-planning.md      # Break epics into sprints
 ├── worker-handoff.md       # PM → Worker assignment
-├── cross-model-review.md   # Optional independent review
 ├── feature-development.md  # E2E feature implementation
 ├── bug-triage.md           # Investigation and fix
 ├── research-report.md      # Deep research deliverable
@@ -265,7 +264,7 @@ prompt-registry/
 
 **Usage:**
 
-1. Reference in task descriptions: `See prompt: prompt-registry/cross-model-review.md`
+1. Reference a prompt file in task descriptions when appropriate
 2. Copy and customize for your team's conventions
 3. Preview runtime registry changes: `vk prompts import prompt-registry --dry-run`
 4. Apply new templates: `vk prompts import prompt-registry`
@@ -332,7 +331,6 @@ Skip this for board-only use, REST/CLI/MCP task management, or agents that do no
    - [Agent Task Workflow](SOP-agent-task-workflow.md)
    - [Sprint Planning with AI Agents](SOP-sprint-planning.md)
    - [Multi-Agent Orchestration](SOP-multi-agent-orchestration.md)
-   - [Cross-Model Code Review](SOP-cross-model-code-review.md)
    - [Documentation Freshness](SOP-documentation-freshness.md)
    - [Shared Resources](SOP-shared-resources.md)
    - [Lifecycle Hooks](SOP-lifecycle-hooks.md)

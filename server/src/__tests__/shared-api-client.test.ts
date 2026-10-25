@@ -2,6 +2,8 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  buildApiRequestOptions,
+  encodeApiPathSegment,
   createApiClient,
   createGuardedApiClient,
   formatApiError,
@@ -79,6 +81,78 @@ describe('shared API deadlines and errors', () => {
     }
   );
 
+  it.each(['text', 'binary'] as const)(
+    'cancels %s body consumption and releases the caller listener',
+    async (responseType) => {
+      const controller = new AbortController();
+      const remove = vi.spyOn(controller.signal, 'removeEventListener');
+      const pending = createApiClient(origin, undefined, { timeoutMs: 1_000 })('/body-stall', {
+        responseType,
+        signal: controller.signal,
+      });
+      const failure = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(requests).toEqual(['/body-stall']));
+      controller.abort();
+      await failure;
+      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    }
+  );
+
+  it.each(['text', 'binary'] as const)(
+    'clears %s request timers on success, HTTP failure and body failure',
+    async (responseType) => {
+      vi.useFakeTimers();
+      const controller = new AbortController();
+      const remove = vi.spyOn(controller.signal, 'removeEventListener');
+      const broken = new ReadableStream({
+        start(stream) {
+          stream.error(new Error('fixture-api-key'));
+        },
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(new Response('content'))
+          .mockResolvedValueOnce(new Response('{}', { status: 409 }))
+          .mockResolvedValueOnce(new Response(broken))
+      );
+      const api = createApiClient(origin, 'fixture-api-key');
+      await api('/success', { responseType, signal: controller.signal });
+      expect(vi.getTimerCount()).toBe(0);
+      await expect(
+        api('/error', { responseType, signal: controller.signal })
+      ).rejects.toMatchObject({ status: 409 });
+      expect(vi.getTimerCount()).toBe(0);
+      const error = await api('/broken', { responseType, signal: controller.signal }).catch(
+        (value) => value
+      );
+      expect(error).toMatchObject({ status: 200, code: 'INVALID_RESPONSE' });
+      expect(String(error)).not.toContain('fixture-api-key');
+      expect(vi.getTimerCount()).toBe(0);
+      expect(remove).toHaveBeenCalledTimes(3);
+    }
+  );
+
+  it.each(['text', 'binary'] as const)('preserves an empty 204 %s body', async (responseType) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 204,
+          headers: { 'x-artifact-sha256': 'empty-digest-fixture' },
+        })
+      )
+    );
+    const api = createApiClient(origin);
+    if (responseType === 'text') expect(await api('/empty', { responseType })).toBe('');
+    else {
+      const result = await api<{ body: ArrayBuffer; headers: Headers }>('/empty', { responseType });
+      expect(result.body.byteLength).toBe(0);
+      expect(result.headers.get('x-artifact-sha256')).toBe('empty-digest-fixture');
+    }
+  });
+
   it('honors a longer explicit deadline', async () => {
     const api = createApiClient(origin, undefined, { timeoutMs: 20 });
     expect(await api('/slow', { timeoutMs: 500 })).toEqual({ ok: true });
@@ -109,14 +183,13 @@ describe('shared API deadlines and errors', () => {
     const api = createApiClient(origin, 'fixture-api-key');
     const error = await api(`/${status}`).catch((value) => value);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error.status).toBe(status);
-    expect(error.details.currentRevision).toBe(3);
+    expect(error).toMatchObject({ status, details: { currentRevision: 3 } });
     const output = formatApiError(error, true);
     expect(JSON.parse(output).error.status).toBe(status);
     expect(output).not.toContain('fixture-api-key');
     expect(output).not.toContain('do-not-forward');
     expect(output).not.toContain('private task body');
-    if (status === 429) expect(error.details.retryAfter).toBe('12');
+    if (status === 429) expect(error).toMatchObject({ details: { retryAfter: '12' } });
   });
 
   it('does not cache a failed preflight or retry it automatically', async () => {
@@ -150,5 +223,72 @@ describe('shared API deadlines and errors', () => {
     await expect(api('/error', { signal: controller.signal })).rejects.toBeInstanceOf(ApiError);
     expect(vi.getTimerCount()).toBe(0);
     expect(remove).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('shared API request policy', () => {
+  it.each([
+    { 'X-API-Key': 'fixture-key' },
+    new Headers({ Authorization: 'Bearer fixture-key' }),
+    [['AUTHORIZATION', 'Bearer fixture-key']] as [string, string][],
+  ])('keeps authenticated requests direct for each supported header representation', (headers) => {
+    const controller = new AbortController();
+    const options = buildApiRequestOptions(
+      { method: 'PATCH', body: '{}', headers, signal: controller.signal, redirect: 'follow' },
+      ''
+    );
+    expect(options.redirect).toBe('error');
+    expect(options.method).toBe('PATCH');
+    expect(options.body).toBe('{}');
+    expect(options.signal).toBe(controller.signal);
+  });
+
+  it('applies the same policy when authentication comes from configuration', () => {
+    const options = buildApiRequestOptions(
+      { headers: { accept: 'application/octet-stream' } },
+      'fixture-key'
+    );
+    expect(options.redirect).toBe('error');
+    expect(options.headers).toMatchObject({
+      'x-api-key': 'fixture-key',
+      accept: 'application/octet-stream',
+    });
+  });
+
+  it('preserves the caller policy for requests without authentication', () => {
+    expect(buildApiRequestOptions({ redirect: 'manual' }, '').redirect).toBe('manual');
+    expect(buildApiRequestOptions({}, '').redirect).toBeUndefined();
+  });
+});
+
+describe('API resource identifiers', () => {
+  it('preserves legacy names and literal percent sequences as one segment', () => {
+    for (const id of ['sprint_2026-10', 'Release / October', 'équipe #1?', '%2e%2e']) {
+      const url = new URL(`http://fixture.test/api/projects/${encodeApiPathSegment(id)}`);
+      expect(url.pathname.split('/')).toHaveLength(4);
+      expect(decodeURIComponent(url.pathname.split('/')[3])).toBe(id);
+      expect(url.search).toBe('');
+      expect(url.hash).toBe('');
+    }
+  });
+
+  it.each(['', '.', '..'])('rejects identifiers that cannot name a resource: %j', (id) => {
+    expect(() => encodeApiPathSegment(id)).toThrow('Invalid API resource identifier');
+  });
+
+  it('rejects path normalization before transport while preserving query values', async () => {
+    const transport = vi.fn().mockResolvedValue(new Response('[]'));
+    vi.stubGlobal('fetch', transport);
+    try {
+      const api = createApiClient('http://fixture.test', '');
+      await expect(api('/api/projects/..', { method: 'DELETE' })).rejects.toMatchObject({
+        code: 'INVALID_REQUEST',
+      });
+      expect(transport).not.toHaveBeenCalled();
+      expect(await api('/api/tasks?project=..')).toEqual([]);
+      expect(transport).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

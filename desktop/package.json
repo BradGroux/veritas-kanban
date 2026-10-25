@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/desktop",
-  "version": "6.2.1",
+  "version": "6.3.0",
   "private": true,
   "homepage": "https://github.com/BradGroux/veritas-kanban",
   "description": "Veritas Kanban native desktop shell",
@@ -33,13 +33,13 @@
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
-    "electron": "^44.2.0",
+    "@types/node": "^26.6.5",
+    "electron": "^44.9.1",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12"
   },
   "build": {
     "appId": "io.digitalmeld.veritas-kanban",

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { resetFeatureSettingsWrites } from './lib/feature-settings-writes';
+import { resetTaskSaveWrites } from './lib/task-save-writes';
 import { isNativeSettingsWindow } from './lib/desktop-settings';
 import { useSettingsWindowSync } from './hooks/useSettingsWindowSync';
 import { Box } from '@mantine/core';
@@ -25,7 +26,13 @@ import { usePendingProductMode } from './hooks/usePendingProductMode';
 import { DesktopShellProvider, useDesktopShell } from './components/layout/DesktopShellContext';
 import { DesktopLeftSidebar } from './components/layout/DesktopLeftSidebar';
 import { DesktopBottomPanel } from './components/layout/DesktopBottomPanel';
-import { RunSessionShareView } from './components/task/RunSessionSharesSection';
+import { RunSessionShareLoading } from './components/task/RunSessionShareLoading';
+
+const RunSessionShareView = lazy(() =>
+  import('./components/task/RunSessionSharesSection').then((mod) => ({
+    default: mod.RunSessionShareView,
+  }))
+);
 
 const NativeSettingsWindow = lazy(() =>
   import('./components/settings/NativeSettingsWindow').then((mod) => ({
@@ -98,7 +105,13 @@ function MainContent() {
   const { view, goBack, navigateToTask, navigateToWorkflow } = useView();
   const runSessionShareId = runSessionShareIdFromLocation();
 
-  if (runSessionShareId) return <RunSessionShareView shareId={runSessionShareId} />;
+  if (runSessionShareId) {
+    return (
+      <Suspense fallback={<RunSessionShareLoading />}>
+        <RunSessionShareView shareId={runSessionShareId} />
+      </Suspense>
+    );
+  }
 
   if (new URLSearchParams(window.location.search).get('ui-gallery') === '1') {
     return (
@@ -208,10 +221,13 @@ function AppContent() {
     settingsSessionMounted.current = true;
     return () => {
       settingsSessionMounted.current = false;
-      // Strict Mode may remount effects synchronously. End the writer only when
-      // the authenticated application really leaves, never on a Settings tab change.
+      // Strict Mode may remount effects synchronously. End the cache-owned writers
+      // when the authenticated application leaves.
       queueMicrotask(() => {
-        if (!settingsSessionMounted.current) resetFeatureSettingsWrites(queryClient);
+        if (!settingsSessionMounted.current) {
+          resetFeatureSettingsWrites(queryClient);
+          resetTaskSaveWrites(queryClient);
+        }
       });
     };
   }, [queryClient]);

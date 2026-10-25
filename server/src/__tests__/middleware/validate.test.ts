@@ -3,7 +3,7 @@
  * Tests Zod schema validation for request params, query, and body.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { validate } from '../../middleware/validate.js';
 import { ValidationError } from '../../middleware/error-handler.js';
@@ -129,7 +129,9 @@ describe('validate middleware', () => {
   it('should re-throw non-Zod errors', () => {
     // Create a schema that throws a non-Zod error
     const badSchema = {
-      parse: () => { throw new Error('Something unexpected'); },
+      parse: () => {
+        throw new Error('Something unexpected');
+      },
     } as any;
     const middleware = validate({ body: badSchema });
     const req = mockRequest({ body: {} });

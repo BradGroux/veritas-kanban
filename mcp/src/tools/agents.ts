@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AgentLaunchStatus } from '@veritas-kanban/shared';
 import { api } from '../utils/api.js';
 import { findTask } from '../utils/find.js';
 
@@ -221,7 +222,7 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
         };
       }
 
-      const result = await api<{ attemptId: string }>(`/api/agents/${task.id}/start`, {
+      const result = await api<AgentLaunchStatus>(`/api/agents/${task.id}/start`, {
         timeoutMs: 120_000, // Provider preflight and worktree preparation can take longer.
         method: 'POST',
         body: JSON.stringify({
@@ -232,13 +233,43 @@ export async function handleAgentTool(name: string, args: any): Promise<any> {
         }),
       });
 
+      if (result.status === 'queued') {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: [
+                `Agent queued: ${result.agent}`,
+                'Status: queued',
+                `Queue ID: ${result.queueId}`,
+                `Attempt ID: ${result.attemptId}`,
+                `Retry after: ${result.retryAfterMs} ms`,
+                `Limiting scopes: ${result.limitingScopes.map(({ scope, scopeId }) => `${scope}:${scopeId}`).join(', ')}`,
+                'Veritas owns this queued launch. Do not resubmit.',
+              ].join('\n'),
+            },
+          ],
+          structuredContent: {
+            taskId: result.taskId,
+            agent: result.agent,
+            status: result.status,
+            attemptId: result.attemptId,
+            queueId: result.queueId,
+            enqueuedAt: result.enqueuedAt,
+            retryAfterMs: result.retryAfterMs,
+            limitingScopes: result.limitingScopes,
+          },
+        };
+      }
+      const outcome = result.status === 'running' ? 'started' : result.status;
       return {
         content: [
           {
             type: 'text',
-            text: `Agent started: ${agent}\nAttempt ID: ${result.attemptId}\nWorking in: ${task.git.worktreePath}`,
+            text: `Agent ${outcome}: ${result.agent}\nStatus: ${result.status}\nAttempt ID: ${result.attemptId}\nWorking in: ${task.git.worktreePath}`,
           },
         ],
+        ...(result.status === 'failed' ? { isError: true } : {}),
       };
     }
 

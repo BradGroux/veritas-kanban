@@ -115,8 +115,16 @@ for (const width of [320, 390, 430]) {
         await page.getByRole('button', { name: 'Mobile home', exact: true }).click();
         await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
 
+        const filtersDisclosure = page.getByRole('button', {
+          name: 'Filters and views',
+          exact: true,
+        });
+        await filtersDisclosure.click();
+        await expect(filtersDisclosure).toHaveAttribute('aria-expanded', 'true');
         await page.getByRole('combobox', { name: 'Filter by type', exact: true }).click();
         await page.getByRole('option', { name: 'All Types', exact: true }).click();
+        await filtersDisclosure.click();
+        await expect(filtersDisclosure).toHaveAttribute('aria-expanded', 'false');
         await page.getByRole('heading', { name: taskTitle, exact: true }).click();
         const detail = page.getByTestId('task-detail-panel');
         await expect(detail).toBeVisible();

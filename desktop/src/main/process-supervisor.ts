@@ -54,6 +54,11 @@ export class ProcessSupervisor extends EventEmitter {
     child.stderr?.on('data', (chunk: Buffer) => this.log(chunk));
 
     child.once('error', (error) => {
+      if (!child.pid && this.child === child) {
+        this.child = null;
+        this.closeLogStream();
+        this.exitedAt = new Date().toISOString();
+      }
       this.lastError = error.message;
       this.setState('failed');
       this.emit('error', error);
@@ -89,24 +94,54 @@ export class ProcessSupervisor extends EventEmitter {
       return;
     }
 
+    const child = this.child;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      this.setState('stopped');
+      return;
+    }
     this.stopping = true;
     this.setState('stopping');
-    const child = this.child;
     const timeoutMs = this.config.shutdownTimeoutMs ?? 5000;
 
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        if (!child.killed) {
-          child.kill('SIGKILL');
+    await new Promise<void>((resolve, reject) => {
+      const hasExited = () => child.exitCode !== null || child.signalCode !== null;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        child.off('exit', onExit);
+        child.off('close', onExit);
+        child.off('error', onError);
+      };
+      const onExit = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        // A failed spawn has no process to reap. Signal failures must remain visible.
+        if (!child.pid || hasExited()) {
+          this.setState('stopped');
+          resolve();
+        } else reject(error);
+      };
+      const sendSignal = (signal: NodeJS.Signals) => {
+        try {
+          child.kill(signal);
+        } catch (error) {
+          cleanup();
+          reject(error);
         }
+      };
+      const timeout = setTimeout(() => {
+        if (this.child === child && child.pid && !hasExited()) sendSignal('SIGKILL');
       }, timeoutMs);
 
-      child.once('exit', () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-
-      child.kill('SIGTERM');
+      child.once('exit', onExit);
+      child.once('close', onExit);
+      child.once('error', onError);
+      // killed records signal delivery, not exit; only observed lifecycle state
+      // can suppress escalation for this exact owned ChildProcess.
+      if (hasExited()) onExit();
+      else if (child.pid) sendSignal('SIGTERM');
     });
   }
 

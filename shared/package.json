@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/shared",
-  "version": "6.2.1",
+  "version": "6.3.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -25,6 +25,7 @@
     "./schemas/run-event-envelope.v1.json": "./schemas/run-event-envelope.v1.schema.json"
   },
   "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

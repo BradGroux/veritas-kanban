@@ -10,9 +10,16 @@ import { IdentityService } from '../../services/identity-service.js';
 import { createTestSqliteDatabase } from '../../storage/sqlite/test-helpers.js';
 import { SqliteApiTokenRepository } from '../../storage/sqlite/api-token-repository.js';
 import { SqliteDeviceSessionRepository } from '../../storage/sqlite/device-session-repository.js';
-import { SqliteIdentityRepository } from '../../storage/sqlite/identity-repository.js';
+import {
+  SqliteIdentityRepository,
+  type WorkspaceRole,
+} from '../../storage/sqlite/identity-repository.js';
 
-function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
+function createApp(
+  role: 'admin' | 'agent' | 'read-only' = 'admin',
+  workspaceRole?: WorkspaceRole,
+  installationOwner = false
+) {
   const fixture = createTestSqliteDatabase();
   fixture.database.open();
   const repository = new SqliteIdentityRepository(fixture.database);
@@ -42,6 +49,8 @@ function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
   app.use((req, _res, next) => {
     (req as AuthenticatedRequest).auth = {
       role,
+      workspaceRole,
+      installationOwner,
       keyName: role,
       isLocalhost: false,
       userId: 'local-user',
@@ -57,6 +66,44 @@ function createApp(role: 'admin' | 'agent' | 'read-only' = 'admin') {
 }
 
 describe('identity routes', () => {
+  it('restores installation-owner membership only from its verified password context', async () => {
+    const { app, fixture } = createApp('admin', undefined, true);
+    try {
+      const repository = new SqliteIdentityRepository(fixture.database);
+      repository.removeMembership('local', 'local-user');
+      const result = await request(app).get('/identity/profile').expect(200);
+      expect(result.body.workspaces[0].membership).toMatchObject({
+        role: 'owner',
+        status: 'active',
+      });
+      repository.removeMembership('local', 'local-user');
+      await request(app).get('/identity/workspaces/local/api-tokens').expect(200);
+      expect(repository.getMembership('local', 'local-user')?.role).toBe('owner');
+      repository.removeMembership('local', 'local-user');
+      await request(app).get('/identity/workspaces/local/device-sessions').expect(200);
+      expect(repository.getMembership('local', 'local-user')?.role).toBe('owner');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('preserves the current federated admin role when checking owner grants', async () => {
+    const { app, fixture } = createApp('admin', 'admin');
+    try {
+      new SqliteIdentityRepository(fixture.database).updateMembershipRole(
+        'local',
+        'local-user',
+        'admin'
+      );
+      await request(app)
+        .post('/identity/workspaces/local/invitations')
+        .send({ role: 'owner' })
+        .expect(403);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   it('returns profile and workspace memberships for the current user', async () => {
     const { app, fixture } = createApp();
 

@@ -291,9 +291,18 @@ export const AutomationRunClaimSchema = z
     bindingId: z.string().regex(/^automation_binding_[a-f0-9]{24}$/),
     dueWindow: z.iso.datetime({ offset: true }),
     trigger: z.enum(['due-run', 'manual-run']),
-    status: z.enum(['accepted', 'started', 'completed', 'blocked', 'failed']),
+    status: z.enum(['queued', 'accepted', 'started', 'completed', 'blocked', 'failed', 'skipped']),
     workflowRunId: identifier.optional(),
     reason: z.string().min(1).max(2000).optional(),
+    usageReceipt: z
+      .object({
+        costUsd: z.number().min(0),
+        tokens: z.number().int().min(0),
+        durationMinutes: z.number().min(0),
+        recordedAt: z.iso.datetime({ offset: true }),
+      })
+      .strict()
+      .optional(),
     createdAt: z.iso.datetime({ offset: true }),
     updatedAt: z.iso.datetime({ offset: true }),
   })

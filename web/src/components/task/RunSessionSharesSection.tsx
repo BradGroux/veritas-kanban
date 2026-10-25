@@ -1,3 +1,4 @@
+import { RunSessionShareLoading } from './RunSessionShareLoading';
 import { useMemo, useState } from 'react';
 import {
   Alert,
@@ -235,11 +236,7 @@ export function RunSessionShareView({ shareId }: { shareId: string }) {
   const mobileClient = authContext?.clientMode === 'mobile-pwa';
 
   if (isLoading) {
-    return (
-      <Stack gap="md">
-        <Text c="dimmed">Loading shared run session...</Text>
-      </Stack>
-    );
+    return <RunSessionShareLoading />;
   }
 
   if (!share || error) {

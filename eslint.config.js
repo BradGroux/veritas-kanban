@@ -79,7 +79,7 @@ export default [
 
   // Node release/maintenance scripts and dependency-free runtime assets
   {
-    files: ['scripts/**/*.mjs', 'server/runtime/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'server/runtime/**/*.mjs', 'demo/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

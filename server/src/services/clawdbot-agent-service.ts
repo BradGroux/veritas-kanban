@@ -51,6 +51,7 @@ import { activityService } from './activity-service.js';
 import { getTraceService } from './trace-service.js';
 import { validatePathSegment, ensureWithinBase } from '../utils/sanitize.js';
 import { buildSafeCodexEnv } from '../utils/codex-env.js';
+import { buildOrcaRouterCodexArgs, isOrcaRouterCodexAgent } from '../utils/orcarouter-codex.js';
 import { getRuntimeDir, getLogsDir } from '../utils/paths.js';
 import { buildSafeHermesEnv } from '../utils/hermes-env.js';
 import { HttpOpenClawTaskAdapter } from './openclaw-workflow-adapter.js';
@@ -72,6 +73,8 @@ import {
 } from '@veritas-kanban/shared';
 import type {
   Task,
+  AgentStatus,
+  AgentLaunchStatus,
   AgentType,
   AgentConfig,
   AgentRunTraceStepType,
@@ -97,7 +100,6 @@ import type {
   ExecutableAgentProvider,
   ProviderRuntimeCapabilityId,
   ProviderRuntimeControlAction,
-  ProviderRuntimeControlSet,
   ProviderRuntimeManifest,
   TaskCommitPolicy,
   TaskCompletionBlocker,
@@ -348,29 +350,7 @@ const providerDependencyExecutionOptions = {
   },
 } satisfies DependencyCircuitExecutionOptions;
 
-export interface AgentStatus {
-  taskId: string;
-  attemptId: string;
-  agent: AgentType;
-  status: AttemptStatus;
-  startedAt?: string;
-  endedAt?: string;
-  provider?: ExecutableAgentProvider;
-  model?: string;
-  providerRuntimeManifest: ProviderRuntimeManifest;
-  harnessSupport: HarnessSupportStatus;
-  taskEnvelope: TaskEnvelope;
-  runLaunchManifest: RunLaunchManifest;
-  runLaunchParentAttemptId?: string;
-  runLaunchManifestDrift?: RunLaunchManifestDriftResult;
-  runRetry?: RunRecoveryRecord;
-  activePhaseEvidence?: PhaseCapabilityEvidence;
-  conversation: ConversationLifecycleRecord;
-  controls: ProviderRuntimeControlSet;
-  admissionReservationId?: string;
-  executionTree?: ExecutionTreeIdentity;
-  terminals: RunTerminalHandle[];
-}
+export type { AgentStatus, AgentQueueStatus, AgentLaunchStatus } from '@veritas-kanban/shared';
 
 export type RunTerminalExecutionResult =
   | {
@@ -382,22 +362,6 @@ export type RunTerminalExecutionResult =
       approval: RunApprovalRequest;
       handle: RunTerminalHandle;
     };
-
-export interface AgentQueueStatus {
-  taskId: string;
-  attemptId: string;
-  queueId: string;
-  agent: AgentType;
-  status: 'queued';
-  enqueuedAt: string;
-  retryAfterMs: number;
-  limitingScopes: Array<{
-    scope: string;
-    scopeId: string;
-  }>;
-}
-
-export type AgentLaunchStatus = AgentStatus | AgentQueueStatus;
 
 export interface AgentOutput {
   type: 'stdout' | 'stderr' | 'stdin' | 'system';
@@ -7239,7 +7203,7 @@ export class ClawdbotAgentService {
     );
     const launch = this.filesystemSandboxLaunch(pending, command, args, worktreePath);
     const launchEnvironment = this.runToolBridge.launchEnvironment(
-      buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough),
+      buildSafeCodexEnv(process.env, sandboxPolicy?.effective.envPassthrough, agentConfig),
       pending.runToolBridge
     );
     const child = spawn(launch.command, launch.args, {
@@ -7446,7 +7410,12 @@ export class ClawdbotAgentService {
     conversation?: ConversationLifecycleRecord,
     runToolBridgeOverride?: string
   ): string[] {
-    const configured = agentConfig?.args?.length ? [...agentConfig.args] : ['exec'];
+    const configured =
+      isOrcaRouterCodexAgent(agentConfig) && agentConfig
+        ? buildOrcaRouterCodexArgs(agentConfig)
+        : agentConfig?.args?.length
+          ? [...agentConfig.args]
+          : ['exec'];
     const args = configured.includes('exec') ? configured : ['exec', ...configured];
     const sandboxMode = sandboxPolicy?.effective.sandboxMode ?? 'workspace-write';
     const sandboxIndex = args.indexOf('--sandbox');

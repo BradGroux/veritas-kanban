@@ -37,7 +37,9 @@ interface Entry {
 }
 
 /** Toolbar actions may be replaced (or hidden) by a responsive layout. */
-function resolveFocusTarget(trigger: HTMLElement | null | undefined): HTMLElement | undefined {
+export function resolveFocusTarget(
+  trigger: HTMLElement | null | undefined
+): HTMLElement | undefined {
   if (!trigger) return undefined;
   const available = (element: HTMLElement | null | undefined) =>
     element?.isConnected &&

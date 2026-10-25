@@ -41,50 +41,7 @@ Use these recipes as starting points for v4.3 OpenAI Codex workflows in Veritas 
    - test command output
    - task comment or deliverable listing changed files
 
-6. Optional review:
-   - If the task or governance policy requires independent review, create a
-     review task and assign it to the requested reviewer.
-
----
-
-## 2. Optional Independent Review With Codex
-
-**Goal:** Use Codex as an independent reviewer when a task or governance policy
-explicitly requires one. This is not a default delivery step.
-
-1. Keep the original implementation task `in-progress`.
-2. Trigger a Codex review action:
-
-   ```bash
-   curl -X POST http://localhost:3001/api/diff/<task-id>/codex-review \
-     -H "Content-Type: application/json" \
-     -d '{"instructions":"Apply docs/SOP-cross-model-code-review.md. Focus on regressions and missing tests."}'
-   ```
-
-3. Codex reviews the task branch diff in read-only mode:
-
-   ```text
-   Review branch <branch> against main.
-
-   Apply docs/SOP-cross-model-code-review.md.
-   Focus on:
-   - provider abstraction correctness
-   - process execution safety
-   - cancellation and timeout handling
-   - test coverage gaps
-   - backwards compatibility with OpenClaw
-
-   Return findings grouped by severity with file/line references where possible.
-   ```
-
-4. Expected outputs:
-   - review findings as Veritas review comments
-   - verdict: approve or changes required
-   - follow-up subtasks for confirmed issues
-
----
-
-## 3. Codex SDK Follow-up Session
+## 2. Codex SDK Follow-up Session
 
 **Goal:** Continue a Codex task after human feedback without losing context.
 
@@ -113,7 +70,7 @@ explicitly requires one. This is not a default delivery step.
 
 ---
 
-## 4. Workflow Engine: Plan -> Codex Implement -> Review
+## 3. Workflow Engine: Plan -> Codex Implement
 
 **Goal:** Use Codex as one step in a repeatable workflow pipeline.
 
@@ -129,10 +86,6 @@ agents:
     role: developer
     provider: codex-sdk
     model: gpt-5.5
-  - id: reviewer
-    name: Reviewer
-    role: reviewer
-
 steps:
   - id: plan
     type: agent
@@ -147,25 +100,17 @@ steps:
     input: |
       Implement the approved plan for {{ task.title }}.
       Use the task worktree and run relevant tests.
-
-  - id: review
-    type: agent
-    agent: reviewer
-    depends_on: [implement]
-    input: |
-      Run the configured independent review using docs/SOP-cross-model-code-review.md.
 ```
 
 Expected behavior:
 
 - `plan` writes a step output.
 - `implement` runs through the Codex provider.
-- `review` runs through the configured reviewer provider.
 - The workflow run stores real outputs, not placeholder text.
 
 ---
 
-## 5. Codex Cloud Delegation Through GitHub
+## 4. Codex Cloud Delegation Through GitHub
 
 **Goal:** Send a Veritas task to Codex Cloud when the desired output is a GitHub PR.
 
@@ -196,7 +141,7 @@ Expected behavior:
 
 ---
 
-## 6. Codex MCP-first Board Maintenance
+## 5. Codex MCP-first Board Maintenance
 
 **Goal:** Give Codex structured access to Veritas rather than raw HTTP commands.
 
@@ -226,7 +171,7 @@ Expected behavior:
 
 ---
 
-## 7. Release QA Smoke Test
+## 6. Release QA Smoke Test
 
 **Goal:** Prove the Codex integration is ready for v4.3.
 

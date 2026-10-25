@@ -2,16 +2,16 @@ import { type Page, type Route } from '@playwright/test';
 
 /**
  * Admin API key for E2E tests.
- * Read from VERITAS_ADMIN_KEY env var (set by playwright.config.ts via dotenv).
- * Falls back to 'dev-admin-key' only for backwards compatibility.
+ * Synthetic credential supplied by the owned browser-test runner.
  */
-const ADMIN_KEY = process.env.VERITAS_ADMIN_KEY || 'dev-admin-key';
+const ADMIN_KEY = process.env.VERITAS_ADMIN_KEY;
+if (!ADMIN_KEY) throw new Error('Run browser tests through pnpm test:e2e.');
 
 /**
- * Backend API base URL. Direct to Express on port 3001 to avoid
- * Vite proxy issues (IPv4/IPv6 binding differences on macOS).
+ * Authoritative owned API endpoint supplied by the browser-test runner.
  */
-const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
+const API_BASE = process.env.API_BASE_URL;
+if (!API_BASE) throw new Error('Run browser tests through pnpm test:e2e.');
 const API_REQUEST_URL = /^https?:\/\/[^/]+\/api(?:\/|$)/;
 const AUTH_STATUS_URL = /^https?:\/\/[^/]+\/api\/auth\/status(?:\?.*)?$/;
 const AGENT_STATUS_URL = /^https?:\/\/[^/]+\/api\/agent\/status(?:\?.*)?$/;

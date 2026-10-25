@@ -701,6 +701,14 @@ function collectBlockers({
       'Configure a supported executable harness before launch.'
     );
   }
+  if (input.harnessSupport.failureClass === 'incompatible-build') {
+    add(
+      'harness-runtime-incompatible',
+      'harnessSupport',
+      sanitizeProviderRuntimeDiagnostic(input.harnessSupport.reason),
+      'Install the exact harness version required by the selected support profile and probe again.'
+    );
+  }
   if (input.providerRuntimeManifest.probe.state === 'failed') {
     add(
       'provider-probe-failed',

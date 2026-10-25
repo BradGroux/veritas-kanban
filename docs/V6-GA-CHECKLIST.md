@@ -1,13 +1,23 @@
 # Veritas Kanban v6 GA Checklist
 
-This checklist contains the active candidate gate for Veritas Kanban
-6.2.0 and retains the completed 6.1.7, 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, 6.1.0, and 6.0.2 evidence below.
-Command results, platform details, workflow links, limitations, and artifact hashes belong in
-[v6 Release Candidate Evidence Packet](V6-RC-EVIDENCE-PACKET.md).
+This checklist governs 6.3.0 preparation. The latest published stable release is 6.2.1; 6.3.0 remains unpublished. Historical sections preserve earlier evidence, including previous workflow use, and do not authorize GitHub CI for this release.
 
-Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
+Documentation freshness: 2026-10-25. See [the current evidence packet](V6-RC-EVIDENCE-PACKET.md).
 
-## 6.2.0 Candidate Gate
+## 6.3.0 Candidate Gate
+
+- [x] Complete and verify all 30 original audit remediation children and both optional integrations; retain necessity and overlap dispositions in #1657.
+- [x] Align all seven source package versions and prepare full source-controlled 6.3.0 notes.
+- [x] Complete the exact compact/mobile browser and focused packaged task-link checks with isolated data and protocol restoration.
+- [x] Complete assembled local units, types, build, lint, critical coverage, browser matrix, dependency audit and ARM64 container contract.
+- [x] Complete composed Electron native acceptance.
+- [x] Complete signed/notarized exact candidate, 144 native states, six fault probes, large-board checks and original media capture.
+- [ ] Inspect all maintained media and bind the unchanged captured bytes to the clean publication checkout.
+- [ ] Pass full release validation with actual native app/report and media publication manifest; source-only preflight is separate.
+- [ ] Publish the exact reviewed notes, tag and retained artifacts; verify destination bytes and updater metadata.
+- [ ] Inspect the rendered releases index and tag page and verify applicable distribution-channel readback before closing the delivery tracker.
+
+## Historical 6.2.0 Candidate Gate
 
 - [x] Root, shared, server, web, CLI, MCP and desktop package versions are aligned at 6.2.0, with candidate release notes and compatibility guidance.
 - [x] Complete the appropriate local integration verification.
@@ -169,11 +179,7 @@ Documentation freshness: 2026-09-07 for the unpublished 6.2.0 candidate.
 
 ## Final Release Validation Commands
 
-The owner authorized the existing GitHub CI capacity for this candidate without a credit card,
-capacity purchase, or spending-limit change. Release publication still requires separate approval.
-Run verification locally and retain the actual command, revision and result. Group focused
-checks by completed feature and run the assembled integration gate once; repeat only for a
-relevant change, failure or unresolved concern.
+GitHub CI is prohibited for this release. Run the assembled local integration milestone once, retaining commands, revisions, counts, skips and limitations. Repeat only for changed behavior, a failure or unresolved evidence. Signed capture and promotion use the local path documented in [Desktop Release](DESKTOP-RELEASE.md); no workflow dispatch or hosted provenance substitute is allowed.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -197,7 +203,7 @@ pnpm desktop:package:mac:unsigned
 node scripts/native-ui/run.mjs /absolute/path/candidate.app /absolute/path/new-native-evidence
 node --import tsx scripts/native-ui/board-performance.mjs /absolute/path/candidate.app /absolute/path/new-board-evidence
 pnpm docs:capture-media /absolute/path/candidate.app /absolute/path/new-media-evidence
-pnpm validate:release -- --version 6.2.0 --skip-build-output --source-only
+pnpm validate:release -- --version 6.3.0 --skip-build-output --source-only
 ```
 
 The packaging command includes the workspace build. Source preflight is not release
@@ -212,7 +218,9 @@ and publication remain distinct evidence boundaries; do not infer them from loca
 
 ## Distribution And Post-Publication
 
-Version 6.2.0 is not published. The following is retained historical evidence.
+Version 6.3.0 is not published. Run full local validation with exact native and media evidence before promotion. Publish notes only from docs/releases/v6.3.0.md, download and hash every retained distribution asset, verify the tag and body, and inspect both rendered release surfaces. Confirm updater metadata and the applicable Homebrew channel separately; never infer installed-app acceptance from a packaged test.
+
+The following 6.1.7 record is historical evidence.
 
 The 6.1.7 release is published and verified. Annotated tag `v6.1.7` peels to
 `6befd39cbc1264b18fa272d25bc64642f2b60383`; the exact live release body,

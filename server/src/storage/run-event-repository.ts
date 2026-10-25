@@ -13,6 +13,7 @@ import { withFileLock } from '../services/file-lock.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
 import { getRuntimeDir } from '../utils/paths.js';
 import { RunEventEnvelopeSchema } from '../schemas/run-event-schemas.js';
+import { writeAll } from './fs-helpers.js';
 
 const MAX_EVENTS_PER_ATTEMPT = 50_000;
 const MAX_JOURNAL_BYTES = 128 * 1024 * 1024;
@@ -67,7 +68,7 @@ export class FileRunEventRepository implements RunEventRepository {
         0o600
       );
       try {
-        await handle.write(line, undefined, 'utf-8');
+        await writeAll(handle, line);
         await handle.sync();
       } finally {
         await handle.close();

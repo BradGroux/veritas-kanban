@@ -1,16 +1,53 @@
 # Veritas Kanban v6 Release Candidate Evidence Packet
 
-This packet tracks the unpublished 6.2.0 candidate and the completed 6.1.7 macOS UI and interaction release, and
-retains historical evidence for the completed 6.1.6, 6.1.5, 6.1.4, 6.1.3, 6.1.2, 6.1.1, and 6.1.0 releases, the quarantined 6.0.0 prerelease, the 6.0.1
-stabilization release, and the 6.0.2 desktop recovery hotfix. It separates
-merged implementation, deterministic conformance, local runtime proof, signed
-publication, and Homebrew availability.
+This packet records 6.3.0 preparation and retains historical release evidence. The latest published stable release is 6.2.1, verified from GitHub on 2026-10-25. Version 6.3.0 is not yet published; 6.0.0 remains quarantined. Historical candidate checkpoints below retain their original state and do not describe current publication.
 
-Veritas Kanban 6.1.7 is the active stable release. Do not use 6.0.0 for installation or upgrade validation.
+Documentation freshness: 2026-10-25. Implementation, focused proof, assembled integration, signed distribution, media and publication remain distinct boundaries.
 
-Documentation freshness: 2026-09-07. Local native and media acceptance passed. Audit fixes are merged; release and distribution acceptance remain separate.
+## 6.3.0 Issue And Pull Request Traceability
 
-## 6.2.0 candidate
+[Tracking PR #1657](https://github.com/BradGroux/veritas-kanban/pull/1657) holds the full necessity/overlap audit, priority plan and individual merge evidence. All 30 original remediation children of #1632 are closed. Optional identity sign-in #1639 and OrcaRouter #1708 are merged; the latter explicitly ships with live gateway compatibility unverified. Electron #1597 and local capture/promotion tooling #1711/#1712 are merged. Tooling implementation, focused verification and fresh signed/native/media capture are complete. Publication remains the final release milestone.
+
+## 6.3.0 Signed Distribution Candidate
+
+The exact signed Apple silicon candidate is built from `c83e72c355bdcc559997f9d9308bdbe3932c29bc`. App and DMG notarization, stapling, strict signatures and Gatekeeper passed using the existing Developer ID and App Store Connect API key. All 144 native states, six seeded fault probes, native evidence verification, and the 100/1,000/5,000-task board checks passed. All 14 maintained media assets, ten task-mode comparisons and the focused board image were freshly captured from that package. Stills and complete original GIF/video playback were reviewed; the two maintained demo-video copies retain the original bytes.
+
+The retained candidate manifest SHA-256 is `1862e64fc80098a0559f6c25129a535b3e4f7e54843248eaf3b7084e1754ac63`; the app package digest is `fe0d13dca773309815327fbb6166c40cb5b6b6a3d3a4dd53c1ed31eb26a33b9c`. Final protocol cleanup stopped on an earlier task-owned unsigned handler. The original failed record was preserved, exact backed-up protocol ownership and display settings were restored and read back, and package/native/signature/Gatekeeper checks passed again before sealing. No captured image, animation, video or original media manifest was edited. The original host display is restored to 1710×1107 logical / 3420×2214 pixels at 60 Hz.
+
+Historical-provenance correction #1743 passes 23 focused verifier/publication checks and preserves old version directories. This fresh capture includes that merged correction. Publication binding, full promotion validation, GitHub asset/tag/body/updater readback and rendered release inspection remain separate pending delivery steps. Existing installed-app replacement remains outside authorization.
+
+| Retained distribution                       |     Bytes | SHA-256                                                            |
+| ------------------------------------------- | --------: | ------------------------------------------------------------------ |
+| Veritas-Kanban-6.3.0-mac-arm64.dmg          | 301058896 | `3f08c1687bf77f19d0fc43643ddfabed8f26fffea4737dca610a79f5adcd3dec` |
+| Veritas-Kanban-6.3.0-mac-arm64.dmg.blockmap |    314600 | `2e1c845257434f7f1ae6f38ec2f07327754688d262780d1c77341f1f18143209` |
+| Veritas-Kanban-6.3.0-mac-arm64.zip          | 305664663 | `c636faf8c3d9dfa53424027842173e06d245f510a8778689d6955e2126971874` |
+| Veritas-Kanban-6.3.0-mac-arm64.zip.blockmap |    317486 | `a8132848c459595f6f62ed6874214d2e7f61e513eb7fcd47331c5d7a7ec5f8c0` |
+| latest-mac.yml                              |       530 | `d1043cb68f61d87c1621ee0d8c1009cb88402b1f77c3c6ceb521242ec1c2ab6b` |
+
+## 6.3.0 Verification Matrix
+
+| Boundary                      | Current evidence                                                                                                                                                                                           | Remaining gate                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Focused implementation        | All 30 original children and both optional implementations merged; individual review/readback in #1657                                                                                                     | Preserve verified results; rerun only affected checks                                                                     |
+| Electron refresh              | Electron 44.9.3, Node 24.22.0 and Chromium 152.0.7977.167 reported by the actual Apple Silicon binary in Node mode; 139 desktop tests, types and build pass                                                | Exact c83 signed candidate native matrix passed; installed-app replacement remains separate                               |
+| Canonical integration         | Source f263b410: 5,351 units pass, 32 expected gated skips, types, complete build and zero-error lint budget; source 53ee7cd0: all seven critical coverage ratchets pass                                   | Exact c83 signed candidate passed; source checks retain their recorded revision boundaries                                |
+| Browser matrix                | Source 53ee7cd0: all 234 desktop/mobile Chromium and mobile WebKit cases pass in 13.4 minutes, original 30-second budgets, zero retries                                                                    | Exact c83 native matrix and original media review passed; publication binding remains                                     |
+| Dependencies                  | Refreshed complete graph including merged Electron reports zero findings at every severity; 503 production names, none added or removed                                                                    | Hosted alert reconciliation is distinct from this audit                                                                   |
+| ARM64 container               | Exact f263b410 production archive: 238,236,315 bytes under approved 250,000,000-byte budget; non-root, version, storage, SQLite, backup, auth, web assets, health, bcrypt and clean shutdown pass          | AMD64 budget stays 600,000,000 bytes; no fresh AMD64 measurement claimed                                                  |
+| Capture and promotion tooling | Eighteen capture/retention checks and thirteen promotion/release-boundary checks pass, including regression failures on original code; annotated tags verified only against a disposable local bare remote | Fresh c83 signed/native/media candidate retained; final promotion remains                                                 |
+| Native task links             | Build e760432a: five packaged cases, four inspected screenshots, package digest 006d66f956746757bc491e091cf4e41dd11a8c6ef4a1924869672c6e6ef9aa2b; exact protocol restoration verified                      | Focused proof retains its original boundary; composed c83 signed native matrix now passed                                 |
+| Optional integrations         | Identity source/security and local auth/UI checks; five real-executable synthetic gateway checks                                                                                                           | Live identity needs approved client/callback; live gateway compatibility explicitly unverified                            |
+| Signed native/media           | Installed Developer ID passes corrected read-only preflight; notarization credentials remain unidentified                                                                                                  | Deferred native acceptance, sufficient display, signed exact package, matrix/fault probes, large-board and original media |
+
+The application and dependency inputs are unchanged from the successful source integration. Later changes update documentation and correct capture environment initialization, Chromium-cache handoff and promotion annotated-tag handling; targeted checks and current secret/new-secret, public-doc and source-preflight checks pass. Exact source boundaries and review evidence remain in #1657. No build, source check or local provenance seal establishes actual release acceptance.
+
+The last measured Mac display has 1710 by 1107 logical display points; full capture requires at least 1920 by 1080. A temporary existing-mode change and exact restoration require explicit permission. A valid Developer ID identity is installed; no private key was exported. The secure notarization reference is pending. No display change, signed capture, notarization upload or release was performed by this checkpoint.
+
+## 6.3.0 Publication Evidence
+
+No 6.3.0 tag, public asset upload, release publication, updater or Homebrew readback is accepted yet. Publication must use the reviewed source at docs/releases/v6.3.0.md, bind the retained signed/native/media candidate to the clean publication checkout, verify downloaded destination bytes and inspect both the rendered releases index and tag page. Existing installed-app replacement is separate.
+
+## Historical 6.2.0 candidate
 
 The candidate is prepared from the audit backlog delivered through individually reviewed public pull requests. No 6.2.0 release, installation replacement, or distribution update has occurred. The evidence below records the integrated delivery candidate. All 24 implemented audit fixes and the acceptance follow-ups are merged; #1544 is explicitly dispositioned as not reproducible. Tracker #1545 records the delivery readback.
 

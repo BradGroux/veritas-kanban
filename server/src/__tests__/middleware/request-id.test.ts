@@ -4,7 +4,7 @@
  * client-supplied IDs are preserved for distributed tracing.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response } from 'express';
 import { requestIdMiddleware } from '../../middleware/request-id.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

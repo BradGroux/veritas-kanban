@@ -461,6 +461,7 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled();
       expect(req.auth?.role).toBe('admin');
       expect(req.auth?.keyName).toBe('session');
+      expect(req.auth?.installationOwner).toBe(true);
       expect(req.auth?.actorType).toBe('user');
       expect(req.auth?.authMethod).toBe('session');
       expect(req.auth?.workspaceId).toBe('local');

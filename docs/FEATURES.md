@@ -3,11 +3,15 @@
 Complete feature reference for Veritas Kanban, including the v6 release surfaces. Every feature, every API endpoint, every configuration option.
 
 For a quick overview, see the [README](../README.md#-what-makes-veritas-kanban-different).
-For candidate screenshots and GIFs captured from 6.2.0, see the
+For candidate screenshots and GIFs captured from 6.3.0, see the
 [v6 Visual Tour](V6-VISUAL-TOUR.md). For troubleshooting, see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
+
+## 6.3.0 Optional Integrations
+
+[ChatGPT identity sign-in](guides/SIGN_IN_WITH_CHATGPT.md) links an existing user and follows current workspace membership. [OrcaRouter](guides/ORCAROUTER.md) is an opt-in profile for the pinned existing CLI, with managed launch controls and a server-side credential reference. Both are disabled by default; real gateway compatibility remains unverified. Full audit, upgrade and activation details are in [the 6.3.0 notes](releases/v6.3.0.md).
 
 ## Table of Contents
 
@@ -89,27 +93,28 @@ For candidate screenshots and GIFs captured from 6.2.0, see the
 
 The Kanban board is the central interface — a drag-and-drop workspace that reflects your project's state in real time.
 
-![6.2.0 board to task-workspace tour](assets/v6.2.0/board-to-workspace.gif)
+![6.3.0 board to task-workspace tour](assets/v6.3.0/board-to-workspace.gif)
 
 | Settings navigation                                      | Board overview                                   |
 | -------------------------------------------------------- | ------------------------------------------------ |
-| ![6.2.0 settings](assets/v6.2.0/settings-navigation.png) | ![6.2.0 board](assets/v6.2.0/board-overview.png) |
+| ![6.3.0 settings](assets/v6.3.0/settings-navigation.png) | ![6.3.0 board](assets/v6.3.0/board-overview.png) |
 
 | Workbench panel                                       | Mobile/PWA board                                      |
 | ----------------------------------------------------- | ----------------------------------------------------- |
-| ![6.2.0 Workbench](assets/v6.2.0/workbench-panel.png) | ![6.2.0 mobile board](assets/v6.2.0/mobile-board.png) |
+| ![6.3.0 Workbench](assets/v6.3.0/workbench-panel.png) | ![6.3.0 mobile board](assets/v6.3.0/mobile-board.png) |
 
 - **Kanban columns** — Four default columns for compatibility: To Do, In Progress, Blocked, Done; board columns and the default create status can be customized in Settings -> Board & Display
 - **Drag-and-drop** — Move tasks between configured columns with [@dnd-kit](https://dndkit.com/); reorder within columns; keyboard users press Space to pick up or drop, use spatial arrow-key movement across populated or empty columns, and press Escape to cancel; custom collision detection (pointerWithin + rectIntersection fallback) supports pointer and keyboard moves; tooltips are suppressed during drag; local state provides real-time column updates
 
 - **Task CRUD** — Create, read, update, and delete tasks through the UI or API
+- **Task autosave recovery** — Pending edits stay with their task when switching tasks, closing the workspace, or navigating away. Dismissal flushes pending writes; failed or conflicted drafts remain available when reopening that task during the current app session. Use Retry task save after a failed write, or the existing conflict controls after reviewing a newer server revision. Reloading the app or ending the authenticated session clears unsaved drafts.
 - **Create task dialog** — Quick-create with title, type, priority, project, sprint, and description
 
-  ![Task workspace](assets/v6.2.0/task-workspace.png)
+  ![Task workspace](assets/v6.3.0/task-workspace.png)
 
 - **Progressive task workspace** — A quick drawer and full-width expanded presentation share Overview, Plan, Run, Results, and History navigation without losing the selected section, attempt, event, edits, scroll position, or board focus
 
-  ![Task workspace details](assets/v6.2.0/task-workspace.png)
+  ![Task workspace details](assets/v6.3.0/task-workspace.png)
 
 - **Task types** — Configurable type system with icons and color-coded card borders (code, research, content, automation, and custom types)
 - **Priority levels** — Low, medium, and high with visual indicators on cards
@@ -280,9 +285,9 @@ Integrated git workflow from branch creation to merge.
 
 First-class support for autonomous coding agents.
 
-![Task workspace demo](assets/v6.2.0/task-workspace.png)
+![Task workspace demo](assets/v6.3.0/task-workspace.png)
 
-![Agent provider settings](assets/v6.2.0/agent-providers.png)
+![Agent provider settings](assets/v6.3.0/agent-providers.png)
 
 - **Agent orchestration** — Start, stop, and monitor AI agents on code tasks from the UI or API
 - **Multi-agent support** — Ships with Codex CLI, Codex SDK, Codex app-server, Codex Cloud, Hermes Agent, Claude Code, a generic ACP stdio provider, Amp, Copilot, Gemini, Ollama Local, Ollama Cloud, LM Studio Local, and Veritas profiles; add completely custom agents via Settings → Agents
@@ -635,7 +640,7 @@ Real-time agent-to-agent communication channel for multi-agent collaboration. Sh
 
 | Threaded Squad Chat coordination                               | Human reply adapter settings                                                      |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| ![6.2.0 Squad Chat coordination](assets/v6.2.0/squad-chat.png) | ![6.2.0 notification and reply adapters](assets/v6.2.0/notification-adapters.png) |
+| ![6.3.0 Squad Chat coordination](assets/v6.3.0/squad-chat.png) | ![6.3.0 notification and reply adapters](assets/v6.3.0/notification-adapters.png) |
 
 - **WebSocket-powered chat** — Messages broadcast in real time to all connected clients
 - **Resizable Workbench dock** — Board Chat and Squad Chat share one bounded right-side dock that isolates chat scrolling and keeps Close, Escape, Back, and Reset Layout recovery available
@@ -2087,7 +2092,7 @@ Settings edits are batched across sections and continue saving when you switch t
 
 Modular settings system with focused, permission-aware sections.
 
-![6.2.0 Maintenance Center settings surface](assets/v6.2.0/maintenance-center.png)
+![6.3.0 Maintenance Center settings surface](assets/v6.3.0/maintenance-center.png)
 
 The Maintenance API and CLI include governed SQLite journal conversion:
 non-mutating previews, admin scheduling, restart-time exclusive execution,

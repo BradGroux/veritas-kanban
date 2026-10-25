@@ -1,3 +1,4 @@
+import { TASK_PRIORITIES } from '@veritas-kanban/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -5,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   findTask: vi.fn(),
 }));
 
-vi.mock('../utils/api.js', () => ({
+vi.mock('../utils/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/api.js')>()),
   api: mocks.api,
 }));
 
@@ -35,6 +37,50 @@ describe('MCP write response contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  for (const name of ['create_task', 'update_task'] as const) {
+    it(`${name} advertises the shared task priorities`, () => {
+      expect(taskTools.find((tool) => tool.name === name)?.inputSchema.properties).toHaveProperty(
+        'priority.enum',
+        [...TASK_PRIORITIES]
+      );
+    });
+
+    it.each(TASK_PRIORITIES)(
+      `${name} forwards supported priority %s unchanged`,
+      async (priority) => {
+        if (name === 'update_task') mocks.findTask.mockResolvedValueOnce(task());
+        mocks.api.mockResolvedValueOnce(task({ priority }));
+        const result = await handleTaskTool(
+          name,
+          name === 'create_task'
+            ? { title: 'Priority fixture', priority }
+            : { id: 'abc123', priority }
+        );
+        expect(result.isError).not.toBe(true);
+        expect(mocks.api).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(mocks.api.mock.calls[0]?.[1].body)).toMatchObject({ priority });
+        if (name === 'create_task')
+          expect(result.content[0].text).toContain(`Priority: ${priority}`);
+      }
+    );
+
+    it.each(['urgent', 'CRITICAL', ''])(
+      `${name} rejects unsupported priority %j before lookup/write`,
+      async (priority) => {
+        await expect(
+          handleTaskTool(
+            name,
+            name === 'create_task'
+              ? { title: 'Invalid priority fixture', priority }
+              : { id: 'abc123', priority }
+          )
+        ).rejects.toThrow();
+        expect(mocks.api).not.toHaveBeenCalled();
+        expect(mocks.findTask).not.toHaveBeenCalled();
+      }
+    );
+  }
 
   it('returns a concise create_task confirmation instead of full task JSON', async () => {
     mocks.api.mockResolvedValueOnce(

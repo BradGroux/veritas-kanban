@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { chatApi } from '@/lib/api/chat';
 import { chatEventTarget } from '@/hooks/useTaskSync';
@@ -130,6 +130,17 @@ export function useChatStream(sessionId: string | undefined) {
  * ============================================================
  */
 
+/** Refresh only the typed list keys; the server owns filtering, order and bounded history. */
+function refreshSquadMessageLists(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({
+    queryKey: ['chat', 'squad'],
+    predicate: ({ queryKey }) =>
+      queryKey.length === 3 &&
+      (queryKey[2] === undefined ||
+        (queryKey[2] !== null && typeof queryKey[2] === 'object' && !Array.isArray(queryKey[2]))),
+  });
+}
+
 /**
  * Get squad messages with optional filters
  */
@@ -154,17 +165,8 @@ export function useSendSquadMessage() {
 
   return useMutation({
     mutationFn: (input: SquadMessageInput) => chatApi.sendSquadMessage(input),
-    onSuccess: (newMessage) => {
-      // Optimistically update all matching query cache entries
-      queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) => {
-        if (old === undefined) return [newMessage];
-        if (!Array.isArray(old)) return old;
-        // Add new message if not already present
-        const exists = old.some((m) => m.id === newMessage.id);
-        return exists ? old : [...old, newMessage];
-      });
-
-      // No invalidation needed — optimistic update + staleTime: 10_000 handles eventual consistency
+    onSuccess: () => {
+      refreshSquadMessageLists(queryClient);
     },
   });
 }
@@ -259,16 +261,7 @@ export function useSquadStream() {
         const incomingMessage = msg.message as SquadMessage;
         setNewMessage(incomingMessage);
 
-        // Optimistically add the message to cache immediately
-        queryClient.setQueriesData({ queryKey: ['chat', 'squad'] }, (old: unknown) => {
-          if (old === undefined) return [incomingMessage];
-          if (!Array.isArray(old)) return old;
-          // Add message if not already present
-          const exists = old.some((m) => m.id === incomingMessage.id);
-          return exists ? old : [...old, incomingMessage];
-        });
-
-        // No invalidation needed — optimistic update + staleTime: 10_000 handles eventual consistency
+        refreshSquadMessageLists(queryClient);
 
         // Clear the new message notification after a short delay
         setTimeout(() => setNewMessage(null), 3000);

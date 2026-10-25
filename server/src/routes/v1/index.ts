@@ -20,11 +20,8 @@ import {
   activityAccess,
   admissionAccess,
   adminAccess,
-  agentPermissionAccess,
-  agentRegistryAccess,
-  agentRoutingAccess,
+  agentEndpointAccess,
   agentStatusAccess,
-  agentTaskAccess,
   backupAccess,
   broadcastAccess,
   configAccess,
@@ -53,6 +50,7 @@ import {
   settingsAccess,
   statusHistoryAccess,
   taskAccess,
+  taskEndpointAccess,
   taskCommentAccess,
   taskReadAccess,
   telemetryAccess,
@@ -169,15 +167,16 @@ v1Router.use((req: Request, _res, next) => {
 });
 
 // ── Task routes (order-sensitive) ────────────────────────────
-v1Router.use('/tasks', taskAccess, taskArchiveRoutes);
-v1Router.use('/tasks', taskAccess, taskTimeRoutes);
-v1Router.use('/tasks', taskAccess, taskRoutes);
-v1Router.use('/tasks', taskCommentAccess, taskCommentRoutes);
-v1Router.use('/tasks', taskAccess, taskObservationRoutes);
-v1Router.use('/tasks', taskAccess, taskSubtaskRoutes);
-v1Router.use('/tasks', taskAccess, taskVerificationRoutes);
-v1Router.use('/tasks', taskAccess, taskDeliverableRoutes);
-v1Router.use('/tasks', workProductAccess, taskWorkProductRoutes);
+v1Router.use('/tasks', taskEndpointAccess);
+v1Router.use('/tasks', taskArchiveRoutes);
+v1Router.use('/tasks', taskTimeRoutes);
+v1Router.use('/tasks', taskRoutes);
+v1Router.use('/tasks', taskCommentRoutes);
+v1Router.use('/tasks', taskObservationRoutes);
+v1Router.use('/tasks', taskSubtaskRoutes);
+v1Router.use('/tasks', taskVerificationRoutes);
+v1Router.use('/tasks', taskDeliverableRoutes);
+v1Router.use('/tasks', taskWorkProductRoutes);
 
 // Attachment routes get the stricter upload rate limit (20 req/min)
 // applied BEFORE the route handler for upload (POST) requests.
@@ -190,7 +189,6 @@ v1Router.use(
     }
     next();
   },
-  taskAccess,
   attachmentRoutes
 );
 
@@ -204,10 +202,11 @@ v1Router.use('/observations', taskReadAccess, observationSearchRouter);
 v1Router.use('/config', configAccess, configRoutes);
 v1Router.use('/changes', taskReadAccess, changesRoutes); // Efficient agent polling endpoint
 v1Router.use('/chat', taskCommentAccess, chatRoutes); // Chat interface - must be before agent routes
-v1Router.use('/agents/register', agentRegistryAccess, agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
-v1Router.use('/agents/permissions', agentPermissionAccess, agentPermissionRoutes);
-v1Router.use('/agents', agentRoutingAccess, agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
-v1Router.use('/agents', agentTaskAccess, agentRoutes);
+v1Router.use('/agents', agentEndpointAccess);
+v1Router.use('/agents/register', agentRegistryRoutes); // Before agentRoutes (/:taskId catches "register")
+v1Router.use('/agents/permissions', agentPermissionRoutes);
+v1Router.use('/agents', agentRoutingRoutes); // Must be before agentRoutes (/:taskId would match "route"/"routing")
+v1Router.use('/agents', agentRoutes);
 v1Router.use('/admission', admissionAccess, admissionRoutes);
 v1Router.use('/goals', goalAccess, goalRoutes);
 v1Router.use('/knowledge/collections', knowledgeAccess, knowledgeCollectionRoutes);

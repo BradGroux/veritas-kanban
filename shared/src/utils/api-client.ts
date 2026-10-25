@@ -93,11 +93,38 @@ export function buildApiHeaders(headers?: HeadersInit, apiKey = getEnv('VK_API_K
   };
 }
 
+/** Preserve an identifier as one URL path segment without decoding caller input. */
+export function encodeApiPathSegment(id: string): string {
+  if (!id || id === '.' || id === '..') {
+    throw new ApiError('Invalid API resource identifier.', { code: 'INVALID_REQUEST' });
+  }
+  return encodeURIComponent(id);
+}
+
+/** Authenticated API requests must use the configured endpoint directly. */
+export function buildApiRequestOptions(
+  options: RequestInit = {},
+  apiKey = getEnv('VK_API_KEY')
+): RequestInit {
+  const headers = buildApiHeaders(options.headers, apiKey);
+  return {
+    ...options,
+    headers,
+    ...('authorization' in headers || 'x-api-key' in headers ? { redirect: 'error' as const } : {}),
+  };
+}
+
 export interface ApiClientOptions {
   timeoutMs?: number;
 }
 export interface ApiRequestOptions extends RequestInit {
   timeoutMs?: number;
+  /** Consume non-JSON bodies before releasing the same request deadline. */
+  responseType?: 'json' | 'text' | 'binary';
+}
+export interface ApiBinaryResponse {
+  body: ArrayBuffer;
+  headers: Headers;
 }
 export const DEFAULT_API_TIMEOUT_MS = 30_000;
 
@@ -148,7 +175,12 @@ export function createApiClient(
 ) {
   const defaultTimeout = requestTimeout(defaults.timeoutMs);
   return async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-    const { timeoutMs: override, ...request } = options;
+    // URL parsers normalize literal and percent-encoded dot segments before dispatch.
+    const pathname = path.split(/[?#]/, 1)[0];
+    if (pathname.split(/[\\/]/).some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment))) {
+      throw new ApiError('Invalid API resource path.', { code: 'INVALID_REQUEST' });
+    }
+    const { timeoutMs: override, responseType = 'json', ...request } = options;
     const headers = buildApiHeaders(options.headers, apiKey);
     const secrets = Object.entries(headers)
       .filter(([key]) => key === 'x-api-key' || key === 'authorization')
@@ -156,7 +188,10 @@ export function createApiClient(
     return withDeadline(options, requestTimeout(override ?? defaultTimeout), async (signal) => {
       let res: Response;
       try {
-        res = await fetch(`${baseUrl}${path}`, { ...request, signal, headers });
+        res = await fetch(
+          `${baseUrl}${path}`,
+          buildApiRequestOptions({ ...request, signal, headers }, apiKey)
+        );
       } catch (error) {
         if (signal.aborted) throw error;
         throw new ApiError(
@@ -164,7 +199,20 @@ export function createApiClient(
           { code: 'NETWORK_ERROR' }
         );
       }
-      if (res.status === 204) return undefined as T;
+      if (res.status === 204 && responseType === 'json') return undefined as T;
+      if (res.ok && responseType !== 'json') {
+        try {
+          if (responseType === 'text') return (await res.text()) as T;
+          const body = await res.arrayBuffer();
+          return { body, headers: res.headers } as T;
+        } catch (error) {
+          if (signal.aborted) throw error;
+          throw new ApiError('API response body could not be read.', {
+            status: res.status,
+            code: 'INVALID_RESPONSE',
+          });
+        }
+      }
       let body: unknown;
       try {
         body = await res.json();

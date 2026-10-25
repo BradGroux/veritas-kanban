@@ -1,6 +1,6 @@
 {
   "name": "@veritas-kanban/cli",
-  "version": "6.2.1",
+  "version": "6.3.0",
   "description": "CLI for Veritas Kanban task management",
   "type": "module",
   "bin": {
@@ -15,12 +15,12 @@
   "dependencies": {
     "@veritas-kanban/shared": "workspace:*",
     "commander": "^15.0.0",
-    "chalk": "^6.0.0"
+    "chalk": "^6.0.1"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.6.5",
     "typescript": "^6.0.3",
-    "tsx": "^4.23.13"
+    "tsx": "^4.23.15"
   },
   "license": "MIT",
   "author": "Brad Groux <brad@digitalmeld.io>",

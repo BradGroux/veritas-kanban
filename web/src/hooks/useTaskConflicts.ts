@@ -106,6 +106,10 @@ export function registerOpenTaskConflictSurface(taskId: string): () => void {
   };
 }
 
+export function getTaskConflict(taskId: string): TaskConflict | null {
+  return conflicts.get(taskId) ?? null;
+}
+
 export function useTaskConflict(taskId: string | undefined): TaskConflict | null {
   const subscribe = useCallback((listener: () => void) => {
     listeners.add(listener);

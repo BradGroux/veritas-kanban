@@ -7,6 +7,19 @@ Use it when `/Applications/Veritas Kanban.app` should become the only owner of
 `localhost:3001`. The Homebrew cask installs the app, but it does not stop an old
 development server, disable an old watchdog, or update automation credentials.
 
+## Interrupted Legacy Path Migration
+
+Desktop startup initializes each profile/workspace once from the retained legacy desktop home. The completion record is `config/desktop-path-migration.json` inside that workspace. Later launches preserve files deleted from the workspace and do not import files subsequently added to the legacy home. Earlier unversioned completed records are recognized. A first initialization with no legacy files also records completion.
+
+An interrupted copy, unreadable or malformed record, unsupported state, or mismatched source/workspace stops startup before the local server starts. The startup error identifies both directories and the manifest. Startup preserves both copies and requires explicit operator recovery.
+
+1. Quit every desktop instance and verify that no process owns the affected database, following the inventory below. Back up both the legacy home and the current workspace, including the existing manifest.
+2. Compare the retained copies and reconcile the workspace deliberately. Preserve authoritative workspace changes and deletions. Validate the chosen database and files before accepting them; the legacy source remains available for recovery.
+3. For a valid `schemaVersion: 1` in-progress record, keep its exact `from` and `to` values, set `state` to `completed`, list only the reconciled copied entry names in `copiedEntries`, and set `migrated` to whether that list is nonempty. Allowed entry names are `config`, `data`, `logs`, `exports`, `backups`, and `debug-bundles`. Save the record only after validating the selected workspace.
+4. Reopen the desktop app and verify the workspace. Keep the original backups. If the record itself is invalid or belongs to another workspace, establish the correct source and destination before repairing it; preserve the original record for diagnosis.
+
+Keep the completion record in place. If it is removed, a later launch treats the workspace as uninitialized and may copy legacy files again. This path-layout record does not perform the separate file-to-SQLite conversion described below. Manifest files are synced and completion uses atomic replacement; copying the directory trees does not create a transactional filesystem snapshot.
+
 ## Choose The Correct Path
 
 Run the inventory on the Mac that will own the desktop workspace. Record each
@@ -91,6 +104,14 @@ After cutover, the process tree should resolve through:
 ```
 
 Only one VK server should accept active writes during the cutover.
+
+## Task Links
+
+A `veritas://task/<encoded-task-id>` link opens the referenced task through the same navigation used by search. Existing `tab`, `attempt` and `event` targets select the requested section and timeline context. For example, `?tab=work-products` opens Results and `?tab=timeline&attempt=<encoded-attempt-id>` opens History for that attempt.
+
+Links received during startup, setup, login or a locked workspace wait for the authenticated main window. The app restores or reopens its main window when a link arrives. Missing tasks, unavailable permissions, unsupported sections and failed delivery produce a visible message; an uncertain delivery is not automatically repeated. The ordinary Command Center menu action is unchanged.
+
+The focused native check is `node scripts/native-ui/task-deep-links.mjs --app /absolute/path/Veritas\ Kanban.app --commit <reviewed-commit> --version <candidate-version> --output /absolute/path/new-evidence-directory`. It creates a disposable profile and synthetic login. Record the current `veritas://` application handler before launching a candidate and restore it after testing, because Electron registers that handler at startup. This targeted check does not replace final native release acceptance.
 
 ## Wait For The Desktop Server
 
