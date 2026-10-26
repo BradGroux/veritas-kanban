@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@veritas-kanban/shared": "workspace:*",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
