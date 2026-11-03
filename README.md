@@ -91,6 +91,12 @@ When the board is working, use [Setup Paths](docs/SETUP-PATHS.md) to choose the 
 
 ---
 
+## 🚀 One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Veritas%20Kanban/)
+
+---
+
 ## 📚 Documentation Map
 
 - [Setup Paths](docs/SETUP-PATHS.md) — start here for board-only, CLI, MCP, OpenClaw, and self-hosted paths without mixing optional layers into first-run setup.
