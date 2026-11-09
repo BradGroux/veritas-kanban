@@ -63,7 +63,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/ws": "^8.18.2",
     "@vitest/coverage-v8": "^4.1.12",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "supertest": "^7.3.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
